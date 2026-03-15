@@ -1,0 +1,35 @@
+{
+  "name": "ארנק שוברים",
+  "short_name": "שוברים",
+  "description": "ניהול שוברים, מתנה קארד וגיפט קארד",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#22c55e",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["finance", "utilities"],
+  "shortcuts": [
+    {
+      "name": "הוסף שובר",
+      "url": "/",
+      "description": "הוספת שובר חדש"
+    }
+  ]
+}

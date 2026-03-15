@@ -1,0 +1,336 @@
+import { useEffect, useRef, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useVouchers } from '../contexts/VoucherContext'
+import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
+import JsBarcode from 'jsbarcode'
+import QRCode from 'qrcode'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+const QUICK_AMOUNTS = [50, 100]
+
+export default function CheckoutPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { vouchers, archivedVouchers, superVouchers, updateVoucher, archiveVoucher, isOnline } = useVouchers()
+
+  const voucher = [...vouchers, ...archivedVouchers].find(v => v.id === id)
+  const sv = superVouchers.find(s => s.id === voucher?.super_voucher_id)
+
+  const barcodeRef = useRef<SVGSVGElement>(null)
+  const qrRef = useRef<HTMLCanvasElement>(null)
+  const [showCvv, setShowCvv] = useState(false)
+  const [customAmount, setCustomAmount] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [wakeLock, setWakeLock] = useState<any>(null)
+
+  // WakeLock
+  useEffect(() => {
+    async function acquireWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          const wl = await (navigator as any).wakeLock.request('screen')
+          setWakeLock(wl)
+        }
+      } catch {}
+    }
+    acquireWakeLock()
+    return () => {
+      if (wakeLock) {
+        try { wakeLock.release() } catch {}
+      }
+    }
+  }, [])
+
+  // Generate barcode or QR
+  useEffect(() => {
+    if (!voucher?.code) return
+    const isAlpha = isAlphanumeric(voucher.code)
+
+    if (!isAlpha && barcodeRef.current) {
+      try {
+        JsBarcode(barcodeRef.current, voucher.code, {
+          format: 'CODE128',
+          width: 2,
+          height: 80,
+          displayValue: true,
+          fontSize: 14,
+          margin: 10,
+        })
+      } catch {}
+    }
+
+    if (isAlpha && qrRef.current) {
+      QRCode.toCanvas(qrRef.current, voucher.code, {
+        width: 220,
+        margin: 2,
+        color: { dark: '#1e293b', light: '#ffffff' },
+      }).catch(() => {})
+    }
+  }, [voucher?.code])
+
+  async function copyCode() {
+    if (!voucher?.code) return
+    await navigator.clipboard.writeText(voucher.code).catch(() => {})
+    setCopied(true)
+    toast.success('קוד הועתק!')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function updateBalance(newBalance: number) {
+    if (!voucher) return
+    if (!isOnline && voucher.is_shared) {
+      toast.error('אין חיבור לאינטרנט — לא ניתן לעדכן שובר משותף')
+      return
+    }
+    await updateVoucher(voucher.id, { balance: Math.max(0, newBalance) })
+    if (newBalance <= 0) {
+      toast.success('יתרה אופסה!')
+    } else {
+      toast.success('יתרה עודכנה')
+    }
+  }
+
+  if (!voucher) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500">שובר לא נמצא</p>
+          <button onClick={() => navigate(-1)} className="mt-4 text-green-600 underline text-sm">חזור</button>
+        </div>
+      </div>
+    )
+  }
+
+  const isAlpha = isAlphanumeric(voucher.code)
+  const expiryStatus = getExpiryStatus(voucher.expiry_date)
+  const expiryLabel = getExpiryLabel(voucher.expiry_date)
+  const isArchived = archivedVouchers.some(v => v.id === id)
+
+  return (
+    <div className="flex-1 bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-20">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100">
+            <ArrowRight className="w-5 h-5" />
+          </button>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              {sv && <Star className="w-4 h-4 text-amber-400 fill-amber-400" />}
+              <h1 className="font-bold text-gray-900">{sv?.name || voucher.store_name}</h1>
+            </div>
+            {sv && <p className="text-xs text-gray-500">{voucher.store_name}</p>}
+          </div>
+          {!isArchived && (
+            <button
+              onClick={() => archiveVoucher(voucher.id).then(() => { toast.success('הועבר לארכיון'); navigate(-1) })}
+              className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
+            >
+              <Archive className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4 pb-8">
+        {/* Offline warning for shared */}
+        {!isOnline && voucher.is_shared && (
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center gap-2 text-sm text-orange-700">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            מצב אופליין — לא ניתן לעדכן שובר משותף
+          </div>
+        )}
+
+        {/* Notes */}
+        {voucher.notes && (
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-sm text-gray-700">
+            {voucher.notes}
+          </div>
+        )}
+
+        {/* Barcode / QR */}
+        <div className="bg-white rounded-3xl shadow-sm p-6 text-center">
+          <div className="flex items-center justify-center mb-4">
+            {isAlpha ? (
+              <canvas ref={qrRef} className="rounded-xl" />
+            ) : (
+              <svg ref={barcodeRef} className="max-w-full" />
+            )}
+          </div>
+
+          <div className="font-mono text-lg font-bold tracking-widest text-gray-800 mb-3 break-all">
+            {voucher.code}
+          </div>
+
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={copyCode}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all ${
+                copied ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'הועתק!' : 'העתק קוד'}
+            </button>
+
+            {voucher.code && (
+              <a
+                href={`https://otp.co.il/${voucher.code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
+              >
+                <ExternalLink className="w-4 h-4" />
+                OTP
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* CVV */}
+        {voucher.cvv && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-center justify-between">
+            <span className="text-sm font-medium text-yellow-800">CVV / קוד אבטחה</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-yellow-900 text-lg">
+                {showCvv ? voucher.cvv : '•'.repeat(voucher.cvv.length)}
+              </span>
+              <button onClick={() => setShowCvv(!showCvv)} className="text-yellow-600">
+                {showCvv ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Balance Card */}
+        <div className="bg-white rounded-3xl shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm text-gray-500">יתרה נוכחית</span>
+            <span className="text-3xl font-bold text-gray-900">{formatCurrency(voucher.balance)}</span>
+          </div>
+
+          {voucher.amount > 0 && (
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>₪0</span>
+                <span>{formatCurrency(voucher.amount)}</span>
+              </div>
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all"
+                  style={{ width: `${Math.min(100, (voucher.balance / voucher.amount) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Expiry */}
+          {expiryLabel && (
+            <div className={`flex items-center gap-1.5 text-sm mb-4 ${
+              expiryStatus === 'expired' ? 'text-gray-400' :
+              expiryStatus === 'critical' ? 'text-red-600' :
+              expiryStatus === 'warning' ? 'text-yellow-600' :
+              'text-gray-500'
+            }`}>
+              {(expiryStatus === 'critical' || expiryStatus === 'warning') &&
+                <AlertTriangle className="w-4 h-4" />
+              }
+              <span>{expiryLabel}</span>
+              {voucher.expiry_date && <span className="text-xs text-gray-400">({formatDate(voucher.expiry_date)})</span>}
+            </div>
+          )}
+
+          {/* Quick amounts */}
+          {!isArchived && (
+            <>
+              <div className="text-xs font-medium text-gray-500 mb-2">עדכן יתרה — ניכוי מהירה</div>
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                {QUICK_AMOUNTS.map(amt => (
+                  <button
+                    key={amt}
+                    onClick={() => updateBalance(voucher.balance - amt)}
+                    disabled={voucher.balance < amt}
+                    className="py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 disabled:opacity-40 transition-all"
+                  >
+                    -{amt}
+                  </button>
+                ))}
+                <button
+                  onClick={() => updateBalance(voucher.balance / 2)}
+                  className="py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all"
+                >
+                  מחצית
+                </button>
+                <button
+                  onClick={() => updateBalance(0)}
+                  className="py-2 bg-red-50 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-all"
+                >
+                  מלא
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={customAmount}
+                  onChange={e => setCustomAmount(e.target.value)}
+                  placeholder="יתרה חדשה..."
+                  className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+                <button
+                  onClick={() => {
+                    const amt = parseFloat(customAmount)
+                    if (!isNaN(amt)) { updateBalance(amt); setCustomAmount('') }
+                  }}
+                  disabled={!customAmount || isNaN(parseFloat(customAmount))}
+                  className="px-5 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
+                >
+                  עדכן
+                </button>
+              </div>
+
+              {/* Auto archive at 0 */}
+              {voucher.balance <= 0 && !isArchived && (
+                <button
+                  onClick={() => archiveVoucher(voucher.id).then(() => { toast.success('הועבר לארכיון'); navigate(-1) })}
+                  className="mt-3 w-full flex items-center justify-center gap-2 py-3 bg-gray-100 text-gray-600 rounded-2xl text-sm font-medium hover:bg-gray-200 transition-all"
+                >
+                  <Archive className="w-4 h-4" />
+                  יתרה אופסה — העבר לארכיון
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Super voucher stores */}
+        {sv && sv.stores.length > 0 && (
+          <div className="bg-white rounded-3xl shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+              חנויות המכבדות את {sv.name}
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {sv.stores.map((s, i) => (
+                <span key={i} className="text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tags */}
+        {voucher.tags?.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {voucher.tags.map((tag, i) => (
+              <span key={i} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">#{tag}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

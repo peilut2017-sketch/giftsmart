@@ -1,0 +1,328 @@
+import { useState } from 'react'
+import type { Voucher } from '../types'
+import { useVouchers } from '../contexts/VoucherContext'
+import { defaultExpiryDate } from '../utils/helpers'
+import { extractFromSMS } from '../utils/smsExtractor'
+import { X, Clipboard, Plus } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+interface Props {
+  voucher?: Voucher
+  onClose: () => void
+  onSave: (v: any) => void
+}
+
+export default function VoucherForm({ voucher, onClose, onSave }: Props) {
+  const { categories, stores, superVouchers, addStore, addCategory } = useVouchers()
+
+  const [storeName, setStoreName] = useState(voucher?.store_name || '')
+  const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
+  const [showStoreDropdown, setShowStoreDropdown] = useState(false)
+  const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
+  const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
+  const [code, setCode] = useState(voucher?.code || '')
+  const [cvv, setCvv] = useState(voucher?.cvv || '')
+  const [expiryDate, setExpiryDate] = useState(voucher?.expiry_date || defaultExpiryDate())
+  const [selectedCats, setSelectedCats] = useState<string[]>(voucher?.categories || [])
+  const [tags, setTags] = useState(voucher?.tags?.join(', ') || '')
+  const [notes, setNotes] = useState(voucher?.notes || '')
+  const [newCatName, setNewCatName] = useState('')
+  const [showCatInput, setShowCatInput] = useState(false)
+  const [showSMSInput, setShowSMSInput] = useState(false)
+  const [smsText, setSmsText] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const filteredStores = [
+    ...stores.filter(s => s.name.toLowerCase().includes(storeSearch.toLowerCase())),
+    ...superVouchers.filter(sv => sv.name.toLowerCase().includes(storeSearch.toLowerCase())).map(sv => ({ id: sv.id, name: sv.name })),
+  ].filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i)
+
+  function handleSMSExtract() {
+    const extracted = extractFromSMS(smsText)
+    if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name) }
+    if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()) }
+    if (extracted.code) setCode(extracted.code)
+    if (extracted.cvv) setCvv(extracted.cvv)
+    if (extracted.expiry_date) setExpiryDate(extracted.expiry_date)
+    setShowSMSInput(false)
+    toast.success('פרטים חולצו בהצלחה!')
+  }
+
+  function toggleCat(cat: string) {
+    setSelectedCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
+  }
+
+  async function handleAddStore() {
+    if (!storeSearch.trim()) return
+    const newStore = await addStore(storeSearch.trim())
+    setStoreName(newStore.name)
+    setShowStoreDropdown(false)
+  }
+
+  async function handleAddCat() {
+    if (!newCatName.trim()) return
+    await addCategory(newCatName.trim())
+    setSelectedCats(prev => [...prev, newCatName.trim()])
+    setNewCatName('')
+    setShowCatInput(false)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!storeName) return toast.error('יש לבחור שם חנות')
+    if (!code) return toast.error('יש להזין קוד שובר')
+
+    setLoading(true)
+    try {
+      const v = {
+        store_name: storeName,
+        amount: parseFloat(amount) || 0,
+        balance: parseFloat(balance) || parseFloat(amount) || 0,
+        code: code.trim(),
+        cvv: cvv.trim() || undefined,
+        expiry_date: expiryDate || undefined,
+        categories: selectedCats,
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        notes: notes.trim() || undefined,
+        is_archived: false,
+        is_shared: false,
+      }
+      await onSave(v)
+      onClose()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div
+        className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92dvh] flex flex-col animate-slide-up"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-bold">{voucher ? 'עריכת שובר' : 'הוספת שובר'}</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSMSInput(!showSMSInput)}
+              className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-medium"
+              type="button"
+            >
+              <Clipboard className="w-3.5 h-3.5" /> הדבק SMS
+            </button>
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* SMS Input */}
+        {showSMSInput && (
+          <div className="p-4 bg-blue-50 border-b">
+            <textarea
+              value={smsText}
+              onChange={e => setSmsText(e.target.value)}
+              placeholder="הדבק כאן את הודעת ה-SMS או המייל עם פרטי השובר..."
+              className="w-full p-3 rounded-xl border border-blue-200 text-sm bg-white resize-none h-24 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              dir="auto"
+            />
+            <button
+              onClick={handleSMSExtract}
+              disabled={!smsText.trim()}
+              className="mt-2 w-full bg-blue-500 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50"
+              type="button"
+            >
+              חלץ פרטים
+            </button>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-4 space-y-4">
+          {/* Store */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">שם חנות *</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={storeSearch}
+                onChange={e => { setStoreSearch(e.target.value); setStoreName(e.target.value); setShowStoreDropdown(true) }}
+                onFocus={() => setShowStoreDropdown(true)}
+                placeholder="חפש או הזן שם חנות"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+              />
+              {showStoreDropdown && storeSearch && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-gray-100 rounded-2xl shadow-lg max-h-48 overflow-y-auto">
+                  {filteredStores.slice(0, 6).map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { setStoreName(s.name); setStoreSearch(s.name); setShowStoreDropdown(false) }}
+                      className="w-full text-right px-4 py-2.5 text-sm hover:bg-gray-50 border-b last:border-0"
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={handleAddStore}
+                    className="w-full text-right px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    הוסף "{storeSearch}" כחנות חדשה
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Amount + Balance */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">סכום מקורי (₪)</label>
+              <input
+                type="number"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">יתרה (₪)</label>
+              <input
+                type="number"
+                value={balance}
+                onChange={e => setBalance(e.target.value)}
+                placeholder="0"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                dir="ltr"
+              />
+            </div>
+          </div>
+
+          {/* Code */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">קוד שובר *</label>
+            <input
+              type="text"
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              placeholder="הזן קוד שובר"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+              dir="ltr"
+            />
+          </div>
+
+          {/* CVV */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">CVV / קוד אבטחה</label>
+              <input
+                type="text"
+                value={cvv}
+                onChange={e => setCvv(e.target.value)}
+                placeholder="אופציונלי"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">תאריך תפוגה</label>
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={e => setExpiryDate(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                dir="ltr"
+              />
+            </div>
+          </div>
+
+          {/* Categories */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">קטגוריות</label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => toggleCat(cat.name)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    selectedCats.includes(cat.name)
+                      ? 'bg-green-100 text-green-700 border-2 border-green-400'
+                      : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                  }`}
+                >
+                  {cat.emoji} {cat.name}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setShowCatInput(!showCatInput)}
+                className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-50 text-gray-500 border-2 border-dashed border-gray-300 hover:bg-gray-100"
+              >
+                <Plus className="w-3.5 h-3.5 inline" /> הוסף קטגוריה
+              </button>
+            </div>
+            {showCatInput && (
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="text"
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  placeholder="שם קטגוריה חדשה"
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCat}
+                  className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-medium"
+                >
+                  הוסף
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">תגיות (מופרדות בפסיק)</label>
+            <input
+              type="text"
+              value={tags}
+              onChange={e => setTags(e.target.value)}
+              placeholder="מתנה, יום הולדת, קיץ..."
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">הערות</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="הערות נוספות..."
+              rows={3}
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
+            />
+          </div>
+        </form>
+
+        {/* Footer */}
+        <div className="p-4 border-t safe-area-bottom">
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3.5 rounded-2xl font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-70"
+          >
+            {loading ? 'שומר...' : voucher ? 'שמור שינויים' : 'הוסף שובר'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
