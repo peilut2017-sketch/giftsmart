@@ -200,7 +200,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }, [walletId, user, fetchData])
 
   async function addVoucher(v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>): Promise<Voucher | null> {
-    if (!user || !walletId) return null
+    if (!user || !walletId) throw new Error('נתוני משתמש לא נטענו, נסה שוב')
 
     // Check for super voucher match
     let superVoucherId: string | undefined
@@ -220,17 +220,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.from('vouchers').insert(payload).select().single()
     if (error) {
       console.error('Add voucher error:', error)
-      // Offline fallback
-      const fake: Voucher = {
-        id: `local-${Date.now()}`,
-        ...payload,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-      const newActive = [...vouchers, fake]
-      setVouchers(newActive)
-      saveToCache(newActive, archivedVouchers)
-      return fake
+      throw new Error(error.message)
     }
 
     const newActive = [...vouchers, data]

@@ -89,8 +89,13 @@ export default function HomePage() {
       await updateVoucher(editingVoucher.id, vData)
       toast.success('שובר עודכן')
     } else {
-      await addVoucher(vData)
-      toast.success('שובר נוסף!')
+      try {
+        await addVoucher(vData)
+        toast.success('שובר נוסף!')
+      } catch (err: any) {
+        toast.error(err?.message || 'שגיאה בשמירת השובר')
+        throw err
+      }
     }
   }
 

@@ -89,6 +89,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       }
       await onSave(v)
       onClose()
+    } catch {
+      // error already handled by caller (toast shown in handleSave)
     } finally {
       setLoading(false)
     }
