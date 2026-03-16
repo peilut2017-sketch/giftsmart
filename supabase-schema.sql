@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+
 CREATE POLICY "Users can read own profile"
   ON profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile"
@@ -48,6 +52,8 @@ CREATE TABLE IF NOT EXISTS wallets (
 
 ALTER TABLE wallets ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Wallet owners can manage" ON wallets;
+
 CREATE POLICY "Wallet owners can manage"
   ON wallets FOR ALL USING (auth.uid() = owner_id);
 
@@ -63,6 +69,10 @@ CREATE TABLE IF NOT EXISTS wallet_members (
 );
 
 ALTER TABLE wallet_members ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Members can view wallet memberships" ON wallet_members;
+DROP POLICY IF EXISTS "Owners can manage members" ON wallet_members;
+DROP POLICY IF EXISTS "Users can join wallets" ON wallet_members;
 
 CREATE POLICY "Members can view wallet memberships"
   ON wallet_members FOR SELECT
@@ -89,6 +99,9 @@ CREATE TABLE IF NOT EXISTS stores (
 
 ALTER TABLE stores ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read stores" ON stores;
+DROP POLICY IF EXISTS "Authenticated can insert stores" ON stores;
+
 CREATE POLICY "Anyone can read stores"
   ON stores FOR SELECT TO authenticated USING (TRUE);
 CREATE POLICY "Authenticated can insert stores"
@@ -107,6 +120,9 @@ CREATE TABLE IF NOT EXISTS super_vouchers (
 );
 
 ALTER TABLE super_vouchers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Wallet members can view super vouchers" ON super_vouchers;
+DROP POLICY IF EXISTS "Wallet owners can manage super vouchers" ON super_vouchers;
 
 CREATE POLICY "Wallet members can view super vouchers"
   ON super_vouchers FOR SELECT
@@ -128,6 +144,9 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Wallet members can read categories" ON categories;
+DROP POLICY IF EXISTS "Wallet members can insert categories" ON categories;
 
 CREATE POLICY "Wallet members can read categories"
   ON categories FOR SELECT
@@ -164,6 +183,11 @@ CREATE TABLE IF NOT EXISTS vouchers (
 );
 
 ALTER TABLE vouchers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Wallet members can view vouchers" ON vouchers;
+DROP POLICY IF EXISTS "Wallet members can insert vouchers" ON vouchers;
+DROP POLICY IF EXISTS "Wallet members can update vouchers" ON vouchers;
+DROP POLICY IF EXISTS "Voucher owner can delete" ON vouchers;
 
 CREATE POLICY "Wallet members can view vouchers"
   ON vouchers FOR SELECT
@@ -205,8 +229,3 @@ CREATE OR REPLACE TRIGGER vouchers_updated_at
 -- Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE vouchers;
 ALTER PUBLICATION supabase_realtime ADD TABLE wallet_members;
-
--- ============ SEED DEFAULT SUPER VOUCHERS ============
--- These will be inserted per-wallet by the app, but here's a reference:
--- INSERT INTO super_vouchers (wallet_id, name, stores) VALUES
--- (wallet_id, 'BuyMe', ARRAY['שופרסל', 'רמי לוי', 'ספייסר', ...]);
