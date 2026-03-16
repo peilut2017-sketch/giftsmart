@@ -12,7 +12,7 @@ import AdminPage from './pages/AdminPage'
 import BottomNav from './components/BottomNav'
 
 function AppRoutes() {
-  const { user, loading } = useAuth()
+  const { user, loading, passwordRecovery } = useAuth()
 
   if (loading) {
     return (
@@ -23,6 +23,10 @@ function AppRoutes() {
         </div>
       </div>
     )
+  }
+
+  if (passwordRecovery) {
+    return <AuthPage initialMode="newPassword" />
   }
 
   if (!user) {
