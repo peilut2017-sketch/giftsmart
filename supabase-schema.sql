@@ -218,6 +218,21 @@ CREATE OR REPLACE TRIGGER vouchers_updated_at
   BEFORE UPDATE ON vouchers
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- Enable Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE vouchers;
-ALTER PUBLICATION supabase_realtime ADD TABLE wallet_members;
+-- Enable Realtime (safe — only adds if not already member)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'vouchers'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE vouchers;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'wallet_members'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE wallet_members;
+  END IF;
+END;
+$$;
