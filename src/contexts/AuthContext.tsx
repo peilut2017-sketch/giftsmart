@@ -27,12 +27,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      setLoading(false)
-    })
+    // Safety timeout: if getSession() hangs (e.g. slow Supabase / token refresh),
+    // we must still clear loading so the app doesn't spin forever.
+    const safetyTimer = setTimeout(() => setLoading(false), 5000)
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session)
+        setUser(session?.user ?? null)
+        if (session?.user) fetchProfile(session.user.id)
+      })
+      .catch(() => {
+        // network error — treat as logged-out
+      })
+      .finally(() => {
+        clearTimeout(safetyTimer)
+        setLoading(false)
+      })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (_event === 'PASSWORD_RECOVERY') {
@@ -48,16 +59,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      clearTimeout(safetyTimer)
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    if (data) setProfile(data)
+    try {
+      const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 5000))
+      const query = Promise.resolve(supabase.from('profiles').select('*').eq('id', userId).single())
+        .then(r => r.data)
+        .catch(() => null)
+      const data = await Promise.race([query, timeout])
+      if (data) setProfile(data)
+    } catch {}
   }
 
   async function signIn(email: string, password: string) {
