@@ -1,19 +1,82 @@
-import { useState } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useNavigate } from 'react-router-dom'
 import { formatCurrency, formatDate } from '../utils/helpers'
-import { RotateCcw, Trash2, Archive } from 'lucide-react'
+import { RotateCcw, Trash2, Archive, SlidersHorizontal } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+type SortKey = 'added' | 'store' | 'balance' | 'expiry'
 
 export default function ArchivePage() {
   const navigate = useNavigate()
   const { archivedVouchers, unarchiveVoucher, deleteVoucher } = useVouchers()
   const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('added')
+  const [showSort, setShowSort] = useState(false)
 
-  const filtered = archivedVouchers.filter(v =>
-    v.store_name.toLowerCase().includes(search.toLowerCase()) ||
-    v.code.toLowerCase().includes(search.toLowerCase())
-  )
+  // Undo delete
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
+  const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  const sortedFiltered = useMemo(() => {
+    let result = archivedVouchers.filter(v =>
+      !hiddenIds.has(v.id) && (
+        v.store_name.toLowerCase().includes(search.toLowerCase()) ||
+        v.code.toLowerCase().includes(search.toLowerCase())
+      )
+    )
+    switch (sortKey) {
+      case 'store': result.sort((a, b) => a.store_name.localeCompare(b.store_name, 'he')); break
+      case 'balance': result.sort((a, b) => b.balance - a.balance); break
+      case 'expiry':
+        result.sort((a, b) => {
+          if (!a.expiry_date) return 1
+          if (!b.expiry_date) return -1
+          return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+        })
+        break
+      default: // added - newest first
+        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    }
+    return result
+  }, [archivedVouchers, search, sortKey, hiddenIds])
+
+  async function handleDelete(id: string) {
+    setHiddenIds(prev => new Set([...prev, id]))
+    const timer = setTimeout(async () => {
+      await deleteVoucher(id)
+      setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
+      pendingDeletesRef.current.delete(id)
+    }, 5000)
+    pendingDeletesRef.current.set(id, timer)
+
+    toast(
+      (t) => (
+        <span>
+          שובר נמחק{' '}
+          <button
+            onClick={() => {
+              clearTimeout(pendingDeletesRef.current.get(id))
+              pendingDeletesRef.current.delete(id)
+              setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
+              toast.dismiss(t.id)
+            }}
+            className="underline font-semibold text-blue-600 mr-1"
+          >
+            ביטול
+          </button>
+        </span>
+      ),
+      { duration: 5000, icon: '🗑️' }
+    )
+  }
+
+  const sortLabels: Record<SortKey, string> = {
+    added: '🕐 חדש→ישן',
+    store: '🏪 חנות א-ב',
+    balance: '₪ יתרה',
+    expiry: '📅 תפוגה',
+  }
 
   return (
     <div className="flex-1">
@@ -23,7 +86,34 @@ export default function ArchivePage() {
           <Archive className="w-5 h-5 text-gray-400" />
           <h1 className="text-xl font-bold text-gray-900">ארכיון</h1>
           <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">{archivedVouchers.length}</span>
+          <div className="flex-1" />
+          <button
+            onClick={() => setShowSort(!showSort)}
+            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+              showSort ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            {sortLabels[sortKey]}
+          </button>
         </div>
+
+        {showSort && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {(Object.keys(sortLabels) as SortKey[]).map(key => (
+              <button
+                key={key}
+                onClick={() => { setSortKey(key); setShowSort(false) }}
+                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                  sortKey === key ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                {sortLabels[key]}
+              </button>
+            ))}
+          </div>
+        )}
+
         <input
           type="search"
           value={search}
@@ -34,14 +124,14 @@ export default function ArchivePage() {
       </div>
 
       <div className="p-4 pb-24">
-        {filtered.length === 0 ? (
+        {sortedFiltered.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-5xl mb-3">🗄️</div>
             <p className="text-gray-500">{search ? 'לא נמצאו שוברים' : 'הארכיון ריק'}</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(v => (
+            {sortedFiltered.map(v => (
               <div
                 key={v.id}
                 onClick={() => navigate(`/checkout/${v.id}`)}
@@ -56,6 +146,13 @@ export default function ArchivePage() {
                         תוקף: {formatDate(v.expiry_date)}
                       </p>
                     )}
+                    {v.categories?.length > 0 && (
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {v.categories.slice(0, 2).map(cat => (
+                          <span key={cat} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{cat}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 mr-2">
                     <div className="text-left">
@@ -69,10 +166,7 @@ export default function ArchivePage() {
                       <RotateCcw className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={e => {
-                        e.stopPropagation()
-                        if (confirm('למחוק לצמיתות?')) deleteVoucher(v.id).then(() => toast.success('נמחק'))
-                      }}
+                      onClick={e => { e.stopPropagation(); handleDelete(v.id) }}
                       className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
                       title="מחיקה"
                     >

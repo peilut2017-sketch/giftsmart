@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { VoucherProvider } from './contexts/VoucherContext'
+import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
+import { useExpiryNotifications } from './hooks/useNotifications'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
 import CheckoutPage from './pages/CheckoutPage'
@@ -10,6 +11,12 @@ import StatsPage from './pages/StatsPage'
 import SettingsPage from './pages/SettingsPage'
 import AdminPage from './pages/AdminPage'
 import BottomNav from './components/BottomNav'
+
+function NotificationBridge() {
+  const { vouchers } = useVouchers()
+  useExpiryNotifications(vouchers)
+  return null
+}
 
 function AppRoutes() {
   const { user, loading, passwordRecovery } = useAuth()
@@ -35,6 +42,7 @@ function AppRoutes() {
 
   return (
     <VoucherProvider>
+      <NotificationBridge />
       <div className="flex flex-col min-h-dvh max-w-2xl mx-auto">
         <Routes>
           <Route path="/" element={<HomePage />} />

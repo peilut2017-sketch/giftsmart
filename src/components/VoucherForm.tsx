@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
-import { X, Clipboard, Plus } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { Html5Qrcode } from 'html5-qrcode'
 
 interface Props {
   voucher?: Voucher
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
-  const { categories, stores, superVouchers, addStore, addCategory } = useVouchers()
+  const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
@@ -31,11 +32,72 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showSMSInput, setShowSMSInput] = useState(false)
   const [smsText, setSmsText] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
+  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const scannerDivId = 'qr-scanner-div'
+
+  // Existing tags from all vouchers for autocomplete
+  const existingTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    ;[...vouchers, ...archivedVouchers].forEach(v => v.tags?.forEach(t => tagSet.add(t)))
+    return [...tagSet].sort()
+  }, [vouchers, archivedVouchers])
+
+  const currentTagInput = tags.split(',').pop()?.trim() || ''
+  const addedTagsList = tags.split(',').map(t => t.trim()).filter(Boolean)
+  const tagSuggestions = currentTagInput.length >= 1
+    ? existingTags.filter(t =>
+        t.toLowerCase().includes(currentTagInput.toLowerCase()) &&
+        !addedTagsList.includes(t)
+      ).slice(0, 5)
+    : []
+
+  function addTagSuggestion(tag: string) {
+    const parts = tags.split(',')
+    parts[parts.length - 1] = tag
+    setTags(parts.map(t => t.trim()).filter(Boolean).join(', ') + ', ')
+    setShowTagSuggestions(false)
+  }
 
   const filteredStores = [
     ...stores.filter(s => s.name.toLowerCase().includes(storeSearch.toLowerCase())),
     ...superVouchers.filter(sv => sv.name.toLowerCase().includes(storeSearch.toLowerCase())).map(sv => ({ id: sv.id, name: sv.name })),
   ].filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i)
+
+  async function startScanner() {
+    setShowScanner(true)
+    setTimeout(async () => {
+      try {
+        const scanner = new Html5Qrcode(scannerDivId)
+        scannerRef.current = scanner
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 150 } },
+          (decodedText) => {
+            setCode(decodedText)
+            stopScanner()
+            toast.success('קוד נסרק!')
+          },
+          () => {}
+        )
+      } catch {
+        toast.error('לא ניתן לפתוח מצלמה')
+        setShowScanner(false)
+      }
+    }, 100)
+  }
+
+  async function stopScanner() {
+    try {
+      if (scannerRef.current?.isScanning) {
+        await scannerRef.current.stop()
+        scannerRef.current.clear()
+      }
+    } catch {}
+    scannerRef.current = null
+    setShowScanner(false)
+  }
 
   function handleSMSExtract() {
     const extracted = extractFromSMS(smsText)
@@ -71,6 +133,17 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     e.preventDefault()
     if (!storeName) return toast.error('יש לבחור שם חנות')
     if (!code) return toast.error('יש להזין קוד שובר')
+
+    // Duplicate check
+    const allVouchers = [...vouchers, ...archivedVouchers]
+    const duplicate = allVouchers.find(v =>
+      v.code.toLowerCase().trim() === code.toLowerCase().trim() &&
+      (!voucher || v.id !== voucher.id)
+    )
+    if (duplicate) {
+      const proceed = confirm(`קוד שובר זה כבר קיים (${duplicate.store_name}). האם להמשיך בכל זאת?`)
+      if (!proceed) return
+    }
 
     setLoading(true)
     try {
@@ -140,6 +213,20 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           </div>
         )}
 
+        {/* Camera Scanner */}
+        {showScanner && (
+          <div className="p-4 bg-gray-900 border-b relative">
+            <div id={scannerDivId} className="w-full rounded-xl overflow-hidden" />
+            <button
+              onClick={stopScanner}
+              className="mt-2 w-full bg-red-500 text-white py-2 rounded-xl text-sm font-medium"
+              type="button"
+            >
+              סגור מצלמה
+            </button>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-4 space-y-4">
           {/* Store */}
@@ -205,17 +292,27 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
           </div>
 
-          {/* Code */}
+          {/* Code + Camera */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1 block">קוד שובר *</label>
-            <input
-              type="text"
-              value={code}
-              onChange={e => setCode(e.target.value)}
-              placeholder="הזן קוד שובר"
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
-              dir="ltr"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                placeholder="הזן קוד שובר"
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+                dir="ltr"
+              />
+              <button
+                type="button"
+                onClick={showScanner ? stopScanner : startScanner}
+                className={`px-3 py-3 rounded-2xl border transition-colors ${showScanner ? 'bg-red-50 border-red-200 text-red-500' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                title="סרוק ברקוד/QR"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* CVV */}
@@ -289,16 +386,54 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             )}
           </div>
 
-          {/* Tags */}
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">תגיות (מופרדות בפסיק)</label>
+          {/* Tags with autocomplete */}
+          <div className="relative">
+            <label className="text-sm font-medium text-gray-700 mb-1 block flex items-center gap-1">
+              <Tag className="w-3.5 h-3.5" />
+              תגיות (מופרדות בפסיק)
+            </label>
             <input
               type="text"
               value={tags}
-              onChange={e => setTags(e.target.value)}
+              onChange={e => { setTags(e.target.value); setShowTagSuggestions(true) }}
+              onFocus={() => setShowTagSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
               placeholder="מתנה, יום הולדת, קיץ..."
               className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
             />
+            {showTagSuggestions && tagSuggestions.length > 0 && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden">
+                {tagSuggestions.map(tag => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onMouseDown={() => addTagSuggestion(tag)}
+                    className="w-full text-right px-4 py-2 text-sm hover:bg-gray-50 border-b last:border-0 flex items-center gap-2"
+                  >
+                    <Tag className="w-3 h-3 text-gray-400" />
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Existing tags as chips */}
+            {existingTags.length > 0 && currentTagInput === '' && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {existingTags.filter(t => !addedTagsList.includes(t)).slice(0, 8).map(tag => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const current = tags.trim()
+                      setTags(current ? current + ', ' + tag + ', ' : tag + ', ')
+                    }}
+                    className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full hover:bg-gray-200"
+                  >
+                    +{tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Notes */}

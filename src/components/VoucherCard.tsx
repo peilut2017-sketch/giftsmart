@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
-import { Edit2, Trash2, Archive, AlertTriangle, Star } from 'lucide-react'
+import { Edit2, Trash2, Archive, AlertTriangle, Star, Check } from 'lucide-react'
 
 interface Props {
   voucher: Voucher
@@ -10,9 +10,12 @@ interface Props {
   onDelete: () => void
   onArchive: () => void
   superVoucherName?: string
+  isSelectMode?: boolean
+  isSelected?: boolean
+  onSelect?: () => void
 }
 
-export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArchive, superVoucherName }: Props) {
+export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArchive, superVoucherName, isSelectMode, isSelected, onSelect }: Props) {
   const [hovered, setHovered] = useState(false)
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
@@ -28,15 +31,32 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
     pct > 25 ? 'bg-yellow-400' :
     'bg-red-400'
 
+  function handleClick() {
+    if (isSelectMode) {
+      onSelect?.()
+    } else {
+      onClick()
+    }
+  }
+
   return (
     <div
-      className={`relative voucher-card rounded-2xl border ${cardBg} shadow-sm overflow-hidden cursor-pointer`}
-      onClick={onClick}
+      className={`relative voucher-card rounded-2xl border ${cardBg} ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''} shadow-sm overflow-hidden cursor-pointer transition-all`}
+      onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Hover actions */}
-      {hovered && (
+      {/* Select checkbox (select mode) */}
+      {isSelectMode && (
+        <div className="absolute top-2 right-2 z-10">
+          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+            {isSelected && <Check className="w-3 h-3 text-white" />}
+          </div>
+        </div>
+      )}
+
+      {/* Hover actions (non-select mode) */}
+      {hovered && !isSelectMode && (
         <div className="absolute top-2 left-2 flex gap-1 z-10 animate-fade-in">
           <button
             onClick={e => { e.stopPropagation(); onEdit() }}
