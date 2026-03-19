@@ -80,8 +80,13 @@ export default function SettingsPage() {
         vouchers_list,
       })
       toast.success(`תזכורת נשלחה ל-${user.email}`)
-    } catch {
-      toast.error('שגיאה בשליחת התזכורת — בדוק הגדרות EmailJS')
+    } catch (err: any) {
+      const msg = err?.message || ''
+      if (msg.includes('non-2xx') || msg.includes('FunctionsFetchError')) {
+        toast.error('שגיאה בשליחת המייל — בדוק שה-Edge Function פרוסה ושה-GMAIL_USER / GMAIL_APP_PASSWORD מוגדרים ב-Supabase')
+      } else {
+        toast.error('שגיאה בשליחת התזכורת — ' + (msg || 'בדוק חיבור לאינטרנט'))
+      }
     } finally {
       setSendingReminder(false)
     }
