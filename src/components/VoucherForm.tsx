@@ -3,7 +3,7 @@ import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
-import { X, Clipboard, Plus, Camera, Tag, Link } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
 
@@ -35,7 +35,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [loading, setLoading] = useState(false)
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
+  const [ocrLoading, setOcrLoading] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const scannerDivId = 'qr-scanner-div'
 
   // Existing tags from all vouchers for autocomplete
@@ -98,6 +100,43 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     } catch {}
     scannerRef.current = null
     setShowScanner(false)
+  }
+
+  async function handleImageOCR(file: File) {
+    if (!file.type.startsWith('image/')) return toast.error('יש לבחור קובץ תמונה')
+    setOcrLoading(true)
+    const toastId = toast.loading('מנתח תמונה... (עד 15 שניות)')
+    try {
+      // Lazy-load Tesseract to avoid bloating the main bundle
+      const { createWorker } = await import('tesseract.js')
+      const worker = await createWorker(['heb', 'eng'])
+      const url = URL.createObjectURL(file)
+      const { data: { text } } = await worker.recognize(url)
+      URL.revokeObjectURL(url)
+      await worker.terminate()
+
+      if (!text.trim()) {
+        toast.dismiss(toastId)
+        return toast.error('לא ניתן לחלץ טקסט מהתמונה')
+      }
+
+      const extracted = extractFromSMS(text)
+      let found = 0
+      if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name); found++ }
+      if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()); found++ }
+      if (extracted.code) { setCode(extracted.code); found++ }
+      if (extracted.cvv) { setCvv(extracted.cvv); found++ }
+      if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); found++ }
+
+      toast.dismiss(toastId)
+      if (found > 0) toast.success(`חולצו ${found} פרטים מהתמונה`)
+      else toast('זוהה טקסט אך לא נמצאו פרטי שובר — נסה תמונה ברורה יותר', { icon: '🔍' })
+    } catch (err) {
+      toast.dismiss(toastId)
+      toast.error('שגיאה בניתוח התמונה')
+    } finally {
+      setOcrLoading(false)
+    }
   }
 
   function handleSMSExtract() {
@@ -188,6 +227,24 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             >
               <Clipboard className="w-3.5 h-3.5" /> הדבק SMS
             </button>
+            <button
+              type="button"
+              disabled={ocrLoading}
+              onClick={() => imageInputRef.current?.click()}
+              className="flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-full font-medium disabled:opacity-50"
+              title="העלה תמונה של השובר"
+            >
+              <ImagePlus className="w-3.5 h-3.5" />
+              {ocrLoading ? 'מנתח...' : 'סרוק תמונה'}
+            </button>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleImageOCR(f); e.target.value = '' }}
+            />
             <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
               <X className="w-5 h-5" />
             </button>

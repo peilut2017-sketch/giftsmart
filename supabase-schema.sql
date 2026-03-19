@@ -213,6 +213,29 @@ CREATE OR REPLACE TRIGGER vouchers_updated_at
 
 -- Realtime already enabled for vouchers and wallet_members
 
+-- ============ SHARED VOUCHER TOKENS ============
+CREATE TABLE IF NOT EXISTS shared_voucher_tokens (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  token TEXT NOT NULL UNIQUE,
+  voucher_id UUID REFERENCES vouchers(id) ON DELETE CASCADE NOT NULL,
+  created_by UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  expires_at TIMESTAMPTZ,
+  view_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE shared_voucher_tokens ENABLE ROW LEVEL SECURITY;
+
+-- Owner can manage their shared tokens
+CREATE POLICY "Owner can manage shared tokens"
+  ON shared_voucher_tokens FOR ALL
+  USING (created_by = auth.uid());
+
+-- Anyone can read shared tokens (for public voucher view)
+CREATE POLICY "Anyone can read shared tokens"
+  ON shared_voucher_tokens FOR SELECT
+  USING (TRUE);
+
 -- ============ MIGRATIONS ============
 -- Add link column if not exists (run on existing databases)
 ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS link TEXT;

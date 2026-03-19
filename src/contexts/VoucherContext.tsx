@@ -31,6 +31,9 @@ interface VoucherContextType {
   removeMember: (userId: string) => Promise<void>
   updateWalletName: (name: string) => Promise<void>
   refreshVouchers: () => Promise<void>
+  createShareToken: (voucherId: string, expiresInDays?: number) => Promise<string>
+  deleteShareToken: (token: string) => Promise<void>
+  getShareTokens: (voucherId: string) => Promise<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>
 }
 
 const VoucherContext = createContext<VoucherContextType | undefined>(undefined)
@@ -409,6 +412,38 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     await fetchData()
   }
 
+  async function createShareToken(voucherId: string, expiresInDays?: number): Promise<string> {
+    if (!user) throw new Error('לא מחובר')
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(18)))
+      .map(b => b.toString(36).padStart(2, '0'))
+      .join('')
+      .slice(0, 24)
+    const expires_at = expiresInDays
+      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+      : null
+    const { error } = await supabase.from('shared_voucher_tokens').insert({
+      token,
+      voucher_id: voucherId,
+      created_by: user.id,
+      expires_at,
+    })
+    if (error) throw new Error(error.message)
+    return token
+  }
+
+  async function deleteShareToken(token: string) {
+    await supabase.from('shared_voucher_tokens').delete().eq('token', token)
+  }
+
+  async function getShareTokens(voucherId: string) {
+    const { data } = await supabase
+      .from('shared_voucher_tokens')
+      .select('token, expires_at, view_count, created_at')
+      .eq('voucher_id', voucherId)
+      .order('created_at', { ascending: false })
+    return data || []
+  }
+
   return (
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores,
@@ -416,7 +451,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       addVoucher, updateVoucher, deleteVoucher, archiveVoucher, unarchiveVoucher,
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
-      updateWalletName, refreshVouchers,
+      updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
     }}>
       {children}
     </VoucherContext.Provider>

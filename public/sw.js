@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3'
+const CACHE_VERSION = 'v4'
 const CACHE_NAME = `voucher-wallet-${CACHE_VERSION}`
 
 self.addEventListener('install', () => {
@@ -26,7 +26,6 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
   // HTML / navigation requests: network-first
-  // This ensures new deployments are always picked up immediately
   if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
     event.respondWith(
       fetch(event.request)
@@ -40,8 +39,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Static assets with content hash (JS/CSS/images): cache-first
-  // Vite adds hashes to filenames, so stale cache is never an issue here
+  // Static assets with content hash: cache-first
   if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/)) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
@@ -59,5 +57,44 @@ self.addEventListener('fetch', (event) => {
   // Everything else: network-first
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
+  )
+})
+
+// Handle notification click — open the app
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // If app is already open, focus it
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      // Otherwise open a new window
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(url)
+      }
+    })
+  )
+})
+
+// Handle push events (for future server-side push support)
+self.addEventListener('push', (event) => {
+  let data = { title: '⚠️ ארנק שוברים', body: 'יש לך שוברים שעומדים לפוג', url: '/' }
+  try {
+    if (event.data) data = { ...data, ...event.data.json() }
+  } catch {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: 'push-expiry',
+      requireInteraction: true,
+      data: { url: data.url },
+    })
   )
 })

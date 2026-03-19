@@ -1,11 +1,32 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Eye, EyeOff, Wallet, Mail, Lock, User, ArrowRight } from 'lucide-react'
+import { Eye, EyeOff, Wallet, Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const APP_VERSION = '1.0.0'
 
 type Mode = 'login' | 'register' | 'forgot' | 'newPassword'
+
+interface PasswordStrength {
+  score: number // 0-4
+  label: string
+  color: string
+  checks: { label: string; ok: boolean }[]
+}
+
+function getPasswordStrength(password: string): PasswordStrength {
+  const checks = [
+    { label: 'לפחות 8 תווים', ok: password.length >= 8 },
+    { label: 'אותיות גדולות (A-Z)', ok: /[A-Z]/.test(password) },
+    { label: 'אותיות קטנות (a-z)', ok: /[a-z]/.test(password) },
+    { label: 'מספרים (0-9)', ok: /\d/.test(password) },
+    { label: 'תווים מיוחדים (!@#$...)', ok: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) },
+  ]
+  const score = checks.filter(c => c.ok).length
+  const labels = ['חלשה מאוד', 'חלשה', 'בינונית', 'חזקה', 'חזקה מאוד']
+  const colors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-green-600']
+  return { score, label: labels[score] ?? labels[0], color: colors[score] ?? colors[0], checks }
+}
 
 export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode }) {
   const { signIn, signUp, signInWithGoogle, resetPassword, updatePassword } = useAuth()
@@ -17,6 +38,19 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const [name, setName] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [showStrength, setShowStrength] = useState(false)
+
+  const strength = useMemo(() => getPasswordStrength(password), [password])
+  const isRegisterOrNew = mode === 'register' || mode === 'newPassword'
+
+  function validatePasswordStrong(): boolean {
+    if (strength.score < 3) {
+      toast.error('הסיסמה חלשה מדי — צריך לפחות ציון "חזקה"')
+      setShowStrength(true)
+      return false
+    }
+    return true
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -36,7 +70,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       if (mode === 'newPassword') {
         if (!password) return toast.error('יש להזין סיסמה חדשה')
         if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
-        if (password.length < 6) return toast.error('הסיסמה חייבת להכיל לפחות 6 תווים')
+        if (!validatePasswordStrong()) return
         const { error } = await updatePassword(password)
         if (error) toast.error('שגיאה בעדכון הסיסמה')
         else toast.success('הסיסמה עודכנה בהצלחה!')
@@ -50,7 +84,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
         if (error) toast.error('אימייל או סיסמה שגויים')
       } else {
         if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
-        if (password.length < 6) return toast.error('הסיסמה חייבת להכיל לפחות 6 תווים')
+        if (!validatePasswordStrong()) return
         const { error } = await signUp(email, password, name)
         if (error) toast.error('שגיאה בהרשמה: ' + error.message)
         else toast.success('נרשמת בהצלחה!')
@@ -149,28 +183,60 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             )}
 
             {mode !== 'forgot' && (
-              <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type={showPass ? 'text' : 'password'}
-                  placeholder={mode === 'newPassword' ? 'סיסמה חדשה' : 'סיסמה'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  dir="ltr"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                >
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div>
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    placeholder={mode === 'newPassword' ? 'סיסמה חדשה' : 'סיסמה'}
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); if (isRegisterOrNew) setShowStrength(true) }}
+                    className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  >
+                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Password strength meter */}
+                {isRegisterOrNew && showStrength && password.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {/* Bar */}
+                    <div className="flex gap-1">
+                      {[0,1,2,3,4].map(i => (
+                        <div
+                          key={i}
+                          className={`flex-1 h-1.5 rounded-full transition-all ${i < strength.score ? strength.color : 'bg-gray-100'}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-medium ${strength.score >= 3 ? 'text-green-600' : 'text-orange-500'}`}>
+                        {strength.label}
+                      </span>
+                      {strength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                    </div>
+                    {/* Requirements */}
+                    <div className="grid grid-cols-1 gap-0.5">
+                      {strength.checks.map(c => (
+                        <div key={c.label} className={`flex items-center gap-1.5 text-xs ${c.ok ? 'text-green-600' : 'text-gray-400'}`}>
+                          <span>{c.ok ? '✓' : '○'}</span>
+                          {c.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {(mode === 'register' || mode === 'newPassword') && (
+            {isRegisterOrNew && (
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -219,7 +285,6 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   setGoogleLoading(true)
                   const { error } = await signInWithGoogle()
                   if (error) { toast.error('שגיאה בהתחברות עם Google'); setGoogleLoading(false) }
-                  // On success the page redirects — no need to reset loading
                 }}
                 className="w-full flex items-center justify-center gap-3 py-3 border border-gray-200 rounded-2xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60"
               >

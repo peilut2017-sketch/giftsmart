@@ -4,7 +4,7 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Download, Link2, Trash2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -13,7 +13,7 @@ const QUICK_AMOUNTS = [50, 100]
 export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { vouchers, archivedVouchers, superVouchers, updateVoucher, archiveVoucher, isOnline } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, updateVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens } = useVouchers()
 
   const voucher = [...vouchers, ...archivedVouchers].find(v => v.id === id)
   const sv = superVouchers.find(s => s.id === voucher?.super_voucher_id)
@@ -25,6 +25,10 @@ export default function CheckoutPage() {
   const [copied, setCopied] = useState(false)
   const [wakeLock, setWakeLock] = useState<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
+  const [shareLoading, setShareLoading] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   // WakeLock
   useEffect(() => {
@@ -91,6 +95,115 @@ export default function CheckoutPage() {
     } else {
       toast.success('יתרה עודכנה')
     }
+  }
+
+  async function openShareModal() {
+    if (!voucher) return
+    setShareLoading(true)
+    setShowShareModal(true)
+    const tokens = await getShareTokens(voucher.id)
+    setShareTokens(tokens)
+    setShareLoading(false)
+  }
+
+  async function handleCreateShareLink(days?: number) {
+    if (!voucher) return
+    setShareLoading(true)
+    try {
+      const token = await createShareToken(voucher.id, days)
+      const url = `${window.location.origin}/s/${token}`
+      await navigator.clipboard.writeText(url)
+      toast.success('לינק שיתוף הועתק!')
+      const tokens = await getShareTokens(voucher.id)
+      setShareTokens(tokens)
+    } catch {
+      toast.error('שגיאה ביצירת לינק')
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  async function handleDeleteShareToken(token: string) {
+    await deleteShareToken(token)
+    setShareTokens(prev => prev.filter(t => t.token !== token))
+    toast.success('לינק נמחק')
+  }
+
+  async function downloadWalletCard() {
+    if (!voucher) return
+    const canvas = document.createElement('canvas')
+    canvas.width = 800
+    canvas.height = 450
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, 800, 450)
+    grad.addColorStop(0, '#22c55e')
+    grad.addColorStop(1, '#059669')
+    ctx.fillStyle = grad
+    ctx.roundRect(0, 0, 800, 450, 36)
+    ctx.fill()
+
+    // White card overlay
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'
+    ctx.roundRect(30, 30, 740, 390, 24)
+    ctx.fill()
+
+    // Store name
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 42px Arial, sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(voucher.store_name, 750, 110)
+
+    // Balance
+    ctx.font = 'bold 68px Arial, sans-serif'
+    ctx.fillText(`₪${voucher.balance.toLocaleString()}`, 750, 200)
+
+    // "יתרה" label
+    ctx.font = '24px Arial, sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.8)'
+    ctx.fillText('יתרה זמינה', 750, 235)
+
+    // Divider
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(60, 270)
+    ctx.lineTo(740, 270)
+    ctx.stroke()
+
+    // Code label
+    ctx.font = '20px Arial, sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.textAlign = 'right'
+    ctx.fillText('קוד שובר', 750, 310)
+
+    // Code value
+    ctx.font = 'bold 32px monospace, Arial'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(voucher.code, 750, 350)
+
+    // Expiry
+    if (voucher.expiry_date) {
+      ctx.font = '20px Arial, sans-serif'
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'
+      ctx.textAlign = 'left'
+      ctx.fillText(`תוקף: ${formatDate(voucher.expiry_date)}`, 60, 410)
+    }
+
+    // Watermark
+    ctx.font = '16px Arial, sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.textAlign = 'center'
+    ctx.fillText('ארנק שוברים', 400, 420)
+
+    // Download
+    const link = document.createElement('a')
+    link.download = `${voucher.store_name}-voucher.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+    toast.success('כרטיס השובר הורד!')
   }
 
   if (!voucher) {
@@ -176,7 +289,7 @@ export default function CheckoutPage() {
             {voucher.code}
           </div>
 
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center flex-wrap gap-2">
             <button
               onClick={copyCode}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all ${
@@ -198,6 +311,24 @@ export default function CheckoutPage() {
                 OTP
               </a>
             )}
+
+            {!isArchived && (
+              <button
+                onClick={openShareModal}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-purple-50 text-purple-600 hover:bg-purple-100"
+              >
+                <Share2 className="w-4 h-4" />
+                שתף
+              </button>
+            )}
+
+            <button
+              onClick={downloadWalletCard}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+            >
+              <Download className="w-4 h-4" />
+              כרטיס
+            </button>
           </div>
         </div>
 
@@ -344,6 +475,83 @@ export default function CheckoutPage() {
           </div>
         )}
       </div>
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowShareModal(false)}>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-gray-800">שיתוף שובר</h3>
+              <button onClick={() => setShowShareModal(false)} className="p-2 rounded-full hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-4">
+              צור לינק ייחודי לשיתוף השובר. מי שיקבל את הלינק יוכל לראות את הקוד.
+            </p>
+
+            {/* Create link buttons */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: 'יום אחד', days: 1 },
+                { label: 'שבוע', days: 7 },
+                { label: 'ללא הגבלה', days: undefined },
+              ].map(opt => (
+                <button
+                  key={opt.label}
+                  onClick={() => handleCreateShareLink(opt.days)}
+                  disabled={shareLoading}
+                  className="flex flex-col items-center gap-1 py-3 rounded-2xl bg-purple-50 text-purple-700 text-xs font-medium hover:bg-purple-100 disabled:opacity-50 transition-all"
+                >
+                  <Link2 className="w-4 h-4" />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Existing tokens */}
+            {shareTokens.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-500">לינקים פעילים:</p>
+                {shareTokens.map(t => {
+                  const url = `${window.location.origin}/s/${t.token}`
+                  const expired = t.expires_at && new Date(t.expires_at) < new Date()
+                  return (
+                    <div key={t.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200'}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-mono text-gray-600 truncate">{url}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {expired ? '⛔ פג תוקף' : t.expires_at ? `עד ${new Date(t.expires_at).toLocaleDateString('he-IL')}` : 'ללא הגבלת זמן'}
+                          {' · '}{t.view_count} צפיות
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => { await navigator.clipboard.writeText(url); toast.success('הועתק!') }}
+                        className="p-2 text-purple-500 hover:bg-purple-50 rounded-lg"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteShareToken(t.token)}
+                        className="p-2 text-red-400 hover:bg-red-50 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {shareLoading && (
+              <div className="text-center py-4">
+                <div className="w-6 h-6 border-2 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
