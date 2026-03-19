@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X } from 'lucide-react'
+import { getExpiryStatus, formatDate } from '../utils/helpers'
+import { sendExpiryReminderEmail } from '../lib/emailService'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
-  const { syncToCloud, isOnline, refreshVouchers } = useVouchers()
+  const { syncToCloud, isOnline, refreshVouchers, vouchers } = useVouchers()
 
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
@@ -18,6 +20,7 @@ export default function SettingsPage() {
   const [newPass2, setNewPass2] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [sendingReminder, setSendingReminder] = useState(false)
 
   async function saveProfile() {
     await updateProfile({ name, phone })
@@ -44,6 +47,29 @@ export default function SettingsPage() {
       toast.error('שגיאה בסנכרון')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleSendExpiryReminder() {
+    if (!user?.email) return
+    const expiring = vouchers.filter(v => ['critical', 'warning'].includes(getExpiryStatus(v.expiry_date)))
+    if (expiring.length === 0) return toast('אין שוברים שעומדים לפוג בקרוב', { icon: '✅' })
+    setSendingReminder(true)
+    try {
+      const vouchers_list = expiring
+        .map(v => `• ${v.store_name} — יתרה ₪${v.balance}${v.expiry_date ? `, תוקף: ${formatDate(v.expiry_date)}` : ''}`)
+        .join('\n')
+      await sendExpiryReminderEmail({
+        to_email: user.email,
+        to_name: profile?.name || user.email,
+        count: expiring.length,
+        vouchers_list,
+      })
+      toast.success(`תזכורת נשלחה ל-${user.email}`)
+    } catch {
+      toast.error('שגיאה בשליחת התזכורת — בדוק הגדרות EmailJS')
+    } finally {
+      setSendingReminder(false)
     }
   }
 
@@ -188,6 +214,13 @@ export default function SettingsPage() {
               desc={isOnline ? 'העלה שוברים מ-cache לסופאבייס' : 'אין חיבור לאינטרנט'}
               onClick={handleSync}
               right={syncing ? <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /> : undefined}
+            />
+            <MenuItem
+              icon={Bell}
+              label="שלח תזכורת תוקף"
+              desc="מייל עם רשימת שוברים שפגי תוקף בקרוב"
+              onClick={handleSendExpiryReminder}
+              right={sendingReminder ? <div className="w-5 h-5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /> : undefined}
             />
             <MenuItem
               icon={Wifi}

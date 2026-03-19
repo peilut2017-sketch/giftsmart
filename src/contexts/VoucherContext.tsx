@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { Voucher, SuperVoucher, Category, Store } from '../types'
 import { DEFAULT_CATEGORIES } from '../types'
+import { sendInviteEmail } from '../lib/emailService'
 
 interface VoucherContextType {
   vouchers: Voucher[]
@@ -366,7 +367,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     // Find user by email
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, name')
       .eq('email', email)
       .single()
     if (!profile) throw new Error('משתמש לא נמצא')
@@ -376,6 +377,13 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       email,
       role: 'member',
     })
+    // Send invitation email (non-blocking — failure doesn't break the invite)
+    sendInviteEmail({
+      to_email: email,
+      to_name: (profile as any).name || email,
+      from_name: user?.email || 'מישהו',
+      wallet_name: walletName,
+    }).catch(() => {})
   }
 
   async function removeMember(userId: string) {
