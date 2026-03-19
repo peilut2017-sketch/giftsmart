@@ -4,9 +4,10 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Download, Link2, Trash2, X } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { supabase } from '../lib/supabase'
 
 const QUICK_AMOUNTS = [50, 100]
 
@@ -115,8 +116,12 @@ export default function CheckoutPage() {
       toast.success('לינק שיתוף הועתק!')
       const tokens = await getShareTokens(voucher.id)
       setShareTokens(tokens)
-    } catch {
-      toast.error('שגיאה ביצירת לינק')
+    } catch (err: any) {
+      if (err?.message === 'TABLE_MISSING') {
+        toast.error('טבלת shared_voucher_tokens חסרה — הרץ את ה-SQL מקובץ supabase-schema.sql', { duration: 6000 })
+      } else {
+        toast.error('שגיאה ביצירת לינק: ' + (err?.message || ''))
+      }
     } finally {
       setShareLoading(false)
     }
@@ -128,81 +133,71 @@ export default function CheckoutPage() {
     toast.success('לינק נמחק')
   }
 
-  async function downloadWalletCard() {
+  async function saveToGoogleWallet() {
     if (!voucher) return
-    const canvas = document.createElement('canvas')
-    canvas.width = 800
-    canvas.height = 450
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    // Background gradient
-    const grad = ctx.createLinearGradient(0, 0, 800, 450)
-    grad.addColorStop(0, '#22c55e')
-    grad.addColorStop(1, '#059669')
-    ctx.fillStyle = grad
-    ctx.roundRect(0, 0, 800, 450, 36)
-    ctx.fill()
-
-    // White card overlay
-    ctx.fillStyle = 'rgba(255,255,255,0.12)'
-    ctx.roundRect(30, 30, 740, 390, 24)
-    ctx.fill()
-
-    // Store name
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 42px Arial, sans-serif'
-    ctx.textAlign = 'right'
-    ctx.fillText(voucher.store_name, 750, 110)
-
-    // Balance
-    ctx.font = 'bold 68px Arial, sans-serif'
-    ctx.fillText(`₪${voucher.balance.toLocaleString()}`, 750, 200)
-
-    // "יתרה" label
-    ctx.font = '24px Arial, sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.8)'
-    ctx.fillText('יתרה זמינה', 750, 235)
-
-    // Divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(60, 270)
-    ctx.lineTo(740, 270)
-    ctx.stroke()
-
-    // Code label
-    ctx.font = '20px Arial, sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.7)'
-    ctx.textAlign = 'right'
-    ctx.fillText('קוד שובר', 750, 310)
-
-    // Code value
-    ctx.font = 'bold 32px monospace, Arial'
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText(voucher.code, 750, 350)
-
-    // Expiry
-    if (voucher.expiry_date) {
-      ctx.font = '20px Arial, sans-serif'
-      ctx.fillStyle = 'rgba(255,255,255,0.7)'
-      ctx.textAlign = 'left'
-      ctx.fillText(`תוקף: ${formatDate(voucher.expiry_date)}`, 60, 410)
+    const toastId = toast.loading('מכין כרטיס Google Wallet...')
+    try {
+      const { data, error } = await supabase.functions.invoke('google-wallet', {
+        body: {
+          storeName: voucher.store_name,
+          balance: voucher.balance,
+          code: voucher.code,
+          expiryDate: voucher.expiry_date || null,
+          notes: voucher.notes || null,
+        },
+      })
+      toast.dismiss(toastId)
+      if (error || data?.error) {
+        const msg: string = data?.message || error?.message || ''
+        if (msg.includes('WALLET_NOT_CONFIGURED') || msg.includes('not set')) {
+          toast.error('Google Wallet לא מוגדר — ראה הוראות ב-supabase/functions/google-wallet/index.ts', { duration: 7000 })
+        } else {
+          toast.error('שגיאה: ' + (msg || 'לא ניתן ליצור כרטיס'))
+        }
+        return
+      }
+      window.open(data.url, '_blank')
+    } catch (err: any) {
+      toast.dismiss(toastId)
+      toast.error('שגיאה בחיבור ל-Edge Function')
     }
+  }
 
-    // Watermark
-    ctx.font = '16px Arial, sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'
-    ctx.textAlign = 'center'
-    ctx.fillText('ארנק שוברים', 400, 420)
-
-    // Download
-    const link = document.createElement('a')
-    link.download = `${voucher.store_name}-voucher.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
-    toast.success('כרטיס השובר הורד!')
+  async function saveToAppleWallet() {
+    if (!voucher) return
+    const toastId = toast.loading('מכין כרטיס Apple Wallet...')
+    try {
+      const { data: blob, error } = await supabase.functions.invoke('apple-wallet', {
+        body: {
+          storeName: voucher.store_name,
+          balance: voucher.balance,
+          code: voucher.code,
+          expiryDate: voucher.expiry_date || null,
+          notes: voucher.notes || null,
+        },
+      })
+      toast.dismiss(toastId)
+      if (error) {
+        const msg: string = error?.message || ''
+        if (msg.includes('WALLET_NOT_CONFIGURED') || msg.includes('not set')) {
+          toast.error('Apple Wallet לא מוגדר — ראה הוראות ב-supabase/functions/apple-wallet/index.ts', { duration: 7000 })
+        } else {
+          toast.error('שגיאה: ' + (msg || 'לא ניתן ליצור כרטיס'))
+        }
+        return
+      }
+      // Download .pkpass file
+      const url = URL.createObjectURL(new Blob([blob], { type: 'application/vnd.apple.pkpass' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${voucher.store_name}.pkpass`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('קובץ Apple Wallet הורד!')
+    } catch (err: any) {
+      toast.dismiss(toastId)
+      toast.error('שגיאה בחיבור ל-Edge Function')
+    }
   }
 
   if (!voucher) {
@@ -322,11 +317,19 @@ export default function CheckoutPage() {
             )}
 
             <button
-              onClick={downloadWalletCard}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+              onClick={saveToGoogleWallet}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
             >
-              <Download className="w-4 h-4" />
-              כרטיס
+              <Wallet className="w-4 h-4" />
+              Google Wallet
+            </button>
+
+            <button
+              onClick={saveToAppleWallet}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800"
+            >
+              <Wallet className="w-4 h-4" />
+              Apple Wallet
             </button>
           </div>
         </div>

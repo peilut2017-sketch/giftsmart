@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useVouchers, type ActivityLogEntry } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
-import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle } from 'lucide-react'
+import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { formatCurrency } from '../utils/helpers'
 
 const ACTION_META: Record<ActivityLogEntry['action'], { label: string; Icon: any; color: string; bg: string }> = {
@@ -54,15 +54,15 @@ const PAGE = 30
 export default function ActivityLog() {
   const { getActivityLog } = useVouchers()
   const [entries, setEntries] = useState<ActivityLogEntry[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [tableError, setTableError] = useState(false)
   const [limit, setLimit] = useState(PAGE)
+  const [expanded, setExpanded] = useState(false)
 
   async function load(l = limit) {
     setLoading(true)
     setTableError(false)
     try {
-      // Detect if table exists before calling getActivityLog
       const { error: checkErr } = await supabase
         .from('activity_log')
         .select('id')
@@ -83,44 +83,61 @@ export default function ActivityLog() {
     }
   }
 
-  // Load immediately on mount
-  useEffect(() => { load() }, [])
+  // Load when expanded for the first time
+  useEffect(() => {
+    if (expanded && entries.length === 0 && !tableError) load()
+  }, [expanded])
 
   return (
     <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">לוג פעולות</p>
-        <div className="flex items-center gap-3">
-          {!loading && !tableError && (
-            <span className="text-xs text-gray-400">{entries.length} רשומות</span>
-          )}
-          <button
-            onClick={() => load(limit)}
-            disabled={loading}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 disabled:opacity-40"
-          >
-            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-            רענן
-          </button>
+      {/* Collapsible header */}
+      <button
+        className="w-full flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition-colors"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+          <History className="w-5 h-5 text-gray-600" />
         </div>
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div className="py-12 flex flex-col items-center justify-center gap-2">
-          <div className="w-7 h-7 border-2 border-green-200 border-t-green-500 rounded-full animate-spin" />
-          <p className="text-xs text-gray-400">טוען פעולות...</p>
+        <div className="flex-1 text-right">
+          <p className="text-sm font-medium text-gray-800">לוג פעולות</p>
+          <p className="text-xs text-gray-400">
+            {expanded && entries.length > 0 ? `${entries.length} רשומות` : 'הוספה, עריכה, ארכיון, מחיקה'}
+          </p>
         </div>
+        {expanded
+          ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        }
+      </button>
 
-      ) : tableError ? (
-        <div className="py-8 px-5 flex flex-col items-center gap-3 text-center">
-          <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-orange-500" />
+      {expanded && (
+        <div className="border-t">
+          {/* Refresh */}
+          <div className="flex justify-end px-4 pt-2 pb-1">
+            <button
+              onClick={() => load(limit)}
+              disabled={loading}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 disabled:opacity-40"
+            >
+              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+              רענן
+            </button>
           </div>
-          <p className="text-sm font-medium text-gray-700">טבלת הלוג לא קיימת ב-Supabase</p>
-          <p className="text-xs text-gray-400">הרץ את ה-SQL הבא בדשבורד של Supabase:</p>
-          <pre className="w-full text-left bg-gray-50 rounded-xl p-3 text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
+
+          {loading ? (
+            <div className="py-10 flex flex-col items-center justify-center gap-2">
+              <div className="w-7 h-7 border-2 border-green-200 border-t-green-500 rounded-full animate-spin" />
+              <p className="text-xs text-gray-400">טוען פעולות...</p>
+            </div>
+
+          ) : tableError ? (
+            <div className="py-6 px-5 flex flex-col items-center gap-3 text-center">
+              <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-orange-500" />
+              </div>
+              <p className="text-sm font-medium text-gray-700">טבלת הלוג לא קיימת ב-Supabase</p>
+              <p className="text-xs text-gray-400">הרץ את ה-SQL הבא ב-SQL Editor של Supabase:</p>
+              <pre className="w-full text-left bg-gray-50 rounded-xl p-3 text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
 {`CREATE TABLE activity_log (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -137,49 +154,49 @@ ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage own activity log"
   ON activity_log FOR ALL
   USING (user_id = auth.uid());`}
-          </pre>
-        </div>
+              </pre>
+            </div>
 
-      ) : entries.length === 0 ? (
-        <div className="py-12 flex flex-col items-center gap-2 text-center">
-          <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-            <History className="w-5 h-5 text-gray-400" />
-          </div>
-          <p className="text-sm text-gray-500">אין פעולות עדיין</p>
-          <p className="text-xs text-gray-400">פעולות יירשמו כשתוסיף, תערוך, תארכב או תמחק שוברים</p>
-        </div>
+          ) : entries.length === 0 ? (
+            <div className="py-10 flex flex-col items-center gap-2 text-center">
+              <History className="w-8 h-8 text-gray-300" />
+              <p className="text-sm text-gray-500">אין פעולות עדיין</p>
+              <p className="text-xs text-gray-400">פעולות יירשמו כשתוסיף, תערוך, תארכב או תמחק שוברים</p>
+            </div>
 
-      ) : (
-        <div className="divide-y divide-gray-50">
-          {entries.map(entry => {
-            const meta = ACTION_META[entry.action]
-            const subtitle = buildSubtitle(entry)
-            return (
-              <div key={entry.id} className="flex items-start gap-3 px-4 py-3">
-                <div className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
-                  <meta.Icon className={`w-4 h-4 ${meta.color}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-medium text-gray-800 truncate">{entry.voucher_name}</span>
-                    <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{timeAgo(entry.created_at)}</span>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {entries.map(entry => {
+                const meta = ACTION_META[entry.action]
+                const subtitle = buildSubtitle(entry)
+                return (
+                  <div key={entry.id} className="flex items-start gap-3 px-4 py-3">
+                    <div className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                      <meta.Icon className={`w-4 h-4 ${meta.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-800 truncate">{entry.voucher_name}</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{timeAgo(entry.created_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={`text-xs font-medium ${meta.color}`}>{meta.label}</span>
+                        {subtitle && <span className="text-xs text-gray-400">· {subtitle}</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className={`text-xs font-medium ${meta.color}`}>{meta.label}</span>
-                    {subtitle && <span className="text-xs text-gray-400">· {subtitle}</span>}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+                )
+              })}
 
-          {entries.length >= limit && (
-            <button
-              onClick={() => { const next = limit + PAGE; setLimit(next); load(next) }}
-              className="w-full py-3 text-xs text-green-600 hover:bg-green-50 transition-colors"
-            >
-              טען עוד
-            </button>
+              {entries.length >= limit && (
+                <button
+                  onClick={() => { const next = limit + PAGE; setLimit(next); load(next) }}
+                  className="w-full py-3 text-xs text-green-600 hover:bg-green-50 transition-colors"
+                >
+                  טען עוד
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

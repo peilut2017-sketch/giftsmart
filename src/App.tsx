@@ -14,8 +14,7 @@ import SharedVoucherPage from './pages/SharedVoucherPage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
 import BiometricGate from './components/BiometricGate'
-import BiometricSetupPrompt from './components/BiometricSetupPrompt'
-import { isBiometricEnabled, isBiometricSupported } from './lib/passkey'
+import { isBiometricEnabled } from './lib/passkey'
 import { useState, useEffect } from 'react'
 
 function NotificationBridge() {
@@ -24,22 +23,13 @@ function NotificationBridge() {
   return null
 }
 
-const BIOMETRIC_PROMPTED_KEY = 'biometric_prompted'
-
 function AppRoutes() {
-  const { user, loading, passwordRecovery, profile, signOut } = useAuth()
+  const { user, loading, passwordRecovery, signOut } = useAuth()
   const [biometricLocked, setBiometricLocked] = useState(false)
-  const [showBiometricSetup, setShowBiometricSetup] = useState(false)
 
   useEffect(() => {
     if (user && isBiometricEnabled()) {
       setBiometricLocked(true)
-    } else if (user && isBiometricSupported() && !isBiometricEnabled()) {
-      // Offer biometric setup once after first login
-      const prompted = localStorage.getItem(BIOMETRIC_PROMPTED_KEY)
-      if (!prompted) {
-        setShowBiometricSetup(true)
-      }
     }
   }, [user])
 
@@ -54,13 +44,8 @@ function AppRoutes() {
     )
   }
 
-  if (passwordRecovery) {
-    return <AuthPage initialMode="newPassword" />
-  }
-
-  if (!user) {
-    return <AuthPage />
-  }
+  if (passwordRecovery) return <AuthPage initialMode="newPassword" />
+  if (!user) return <AuthPage />
 
   if (biometricLocked) {
     return (
@@ -75,16 +60,6 @@ function AppRoutes() {
     <VoucherProvider>
       <NotificationBridge />
       <WelcomeModal userId={user!.id} />
-      {showBiometricSetup && (
-        <BiometricSetupPrompt
-          userId={user!.id}
-          userName={profile?.name || user!.email || ''}
-          onDone={() => {
-            setShowBiometricSetup(false)
-            localStorage.setItem(BIOMETRIC_PROMPTED_KEY, 'true')
-          }}
-        />
-      )}
       <div className="flex flex-col min-h-dvh max-w-2xl mx-auto">
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -106,7 +81,6 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public shared voucher route — no auth needed */}
           <Route path="/s/:token" element={<SharedVoucherPage />} />
           <Route path="/*" element={<AppRoutes />} />
         </Routes>

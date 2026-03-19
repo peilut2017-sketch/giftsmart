@@ -11,9 +11,8 @@ interface SharedVoucher {
   balance: number
   amount: number
   code: string
-  cvv?: string
-  expiry_date?: string
-  notes?: string
+  expiry_date?: string | null
+  notes?: string | null
 }
 
 export default function SharedVoucherPage() {
@@ -30,32 +29,32 @@ export default function SharedVoucherPage() {
 
   async function loadSharedVoucher() {
     try {
-      // Fetch token record
       const { data: tokenRecord, error: tokenError } = await supabase
         .from('shared_voucher_tokens')
-        .select('voucher_id, expires_at, view_count')
+        .select('voucher_snapshot, expires_at, view_count')
         .eq('token', token)
         .single()
 
-      if (tokenError || !tokenRecord) { setError('לינק לא נמצא או שפג תוקפו'); setLoading(false); return }
+      if (tokenError || !tokenRecord) {
+        setError('לינק לא נמצא או שפג תוקפו')
+        setLoading(false)
+        return
+      }
 
-      // Check expiry
       if (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date()) {
         setError('פג תוקף הלינק')
         setLoading(false)
         return
       }
 
-      // Fetch voucher
-      const { data: v, error: vError } = await supabase
-        .from('vouchers')
-        .select('store_name, balance, amount, code, cvv, expiry_date, notes')
-        .eq('id', tokenRecord.voucher_id)
-        .single()
+      const snapshot = tokenRecord.voucher_snapshot as SharedVoucher | null
+      if (!snapshot || !snapshot.code) {
+        setError('נתוני השובר אינם זמינים')
+        setLoading(false)
+        return
+      }
 
-      if (vError || !v) { setError('השובר לא נמצא'); setLoading(false); return }
-
-      setVoucher(v)
+      setVoucher(snapshot)
 
       // Increment view count (fire and forget)
       supabase
@@ -79,8 +78,8 @@ export default function SharedVoucherPage() {
     })
   }
 
-  const expiryStatus = voucher ? getExpiryStatus(voucher.expiry_date) : 'none'
-  const expiryLabel = voucher ? getExpiryLabel(voucher.expiry_date) : ''
+  const expiryStatus = voucher ? getExpiryStatus(voucher.expiry_date ?? undefined) : 'none'
+  const expiryLabel = voucher ? getExpiryLabel(voucher.expiry_date ?? undefined) : ''
   const pct = voucher && voucher.amount > 0 ? (voucher.balance / voucher.amount) * 100 : 0
   const barColor = pct > 60 ? 'bg-green-500' : pct > 25 ? 'bg-yellow-400' : 'bg-red-400'
 
@@ -88,7 +87,6 @@ export default function SharedVoucherPage() {
     <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
       <Toaster position="top-center" toastOptions={{ duration: 2000, style: { borderRadius: '16px', fontSize: '14px' } }} />
 
-      {/* Header */}
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl shadow-lg mb-3">
           <Wallet className="w-7 h-7 text-white" />
@@ -117,7 +115,6 @@ export default function SharedVoucherPage() {
             expiryStatus === 'critical' ? 'border-red-200' :
             expiryStatus === 'warning' ? 'border-yellow-200' : 'border-gray-100'
           }`}>
-            {/* Store name + balance */}
             <div className="p-6 pb-4">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -126,8 +123,7 @@ export default function SharedVoucherPage() {
                     <div className={`flex items-center gap-1 mt-1 ${
                       expiryStatus === 'expired' ? 'text-gray-400' :
                       expiryStatus === 'critical' ? 'text-red-600' :
-                      expiryStatus === 'warning' ? 'text-yellow-600' :
-                      'text-gray-400'
+                      expiryStatus === 'warning' ? 'text-yellow-600' : 'text-gray-400'
                     }`}>
                       {(expiryStatus === 'critical' || expiryStatus === 'warning') && (
                         <AlertTriangle className="w-3.5 h-3.5" />
@@ -144,23 +140,19 @@ export default function SharedVoucherPage() {
                 </div>
               </div>
 
-              {/* Progress bar */}
               {voucher.amount > 0 && (
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-4">
                   <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
                 </div>
               )}
 
-              {/* Code */}
               <div className="bg-gray-50 rounded-2xl p-4 text-center">
                 <p className="text-xs text-gray-400 mb-1">קוד שובר</p>
                 <p className="text-2xl font-mono font-bold text-gray-800 tracking-wider mb-3">{voucher.code}</p>
                 <button
                   onClick={copyCode}
                   className={`flex items-center gap-2 mx-auto px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
-                    copied
-                      ? 'bg-green-500 text-white'
-                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    copied ? 'bg-green-500 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'
                   }`}
                 >
                   <Copy className="w-4 h-4" />
@@ -168,14 +160,11 @@ export default function SharedVoucherPage() {
                 </button>
               </div>
 
-              {/* Expiry date */}
               {voucher.expiry_date && (
                 <p className="text-xs text-gray-400 text-center mt-3">
                   תוקף עד: {formatDate(voucher.expiry_date)}
                 </p>
               )}
-
-              {/* Notes */}
               {voucher.notes && (
                 <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3 mt-3">{voucher.notes}</p>
               )}

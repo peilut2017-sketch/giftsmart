@@ -260,3 +260,6 @@ DROP POLICY IF EXISTS "Users can manage own activity log" ON activity_log;
 CREATE POLICY "Users can manage own activity log"
   ON activity_log FOR ALL
   USING (user_id = auth.uid());
+
+-- Add voucher_snapshot column to shared_voucher_tokens (run on existing databases)
+ALTER TABLE shared_voucher_tokens ADD COLUMN IF NOT EXISTS voucher_snapshot JSONB DEFAULT '{}';

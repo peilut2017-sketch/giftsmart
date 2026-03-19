@@ -4,9 +4,10 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
+import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
 
 export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
@@ -22,6 +23,8 @@ export default function SettingsPage() {
   const [syncing, setSyncing] = useState(false)
   const [checking, setChecking] = useState(false)
   const [sendingReminder, setSendingReminder] = useState(false)
+  const [biometricEnabled, setBiometricEnabled] = useState(isBiometricEnabled)
+  const [biometricLoading, setBiometricLoading] = useState(false)
 
   const reminderKey = `reminder_days_${user?.id}`
   const [reminderDays, setReminderDays] = useState(() =>
@@ -91,6 +94,20 @@ export default function SettingsPage() {
     } finally {
       setSendingReminder(false)
     }
+  }
+
+  async function handleEnableBiometric() {
+    setBiometricLoading(true)
+    const ok = await registerBiometric(user?.id || '', profile?.name || user?.email || '')
+    setBiometricLoading(false)
+    if (ok) { setBiometricEnabled(true); toast.success('נעילה ביומטרית הופעלה!') }
+    else toast.error('לא ניתן לרשום אימות ביומטרי')
+  }
+
+  function handleDisableBiometric() {
+    disableBiometric()
+    setBiometricEnabled(false)
+    toast.success('נעילה ביומטרית בוטלה')
   }
 
   async function handleCheckConnection() {
@@ -217,6 +234,39 @@ export default function SettingsPage() {
                 <button onClick={() => setEditPass(false)} className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium">
                   ביטול
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Biometric */}
+          {isBiometricSupported() && (
+            <div className="border-t">
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                  <Fingerprint className="w-5 h-5 text-gray-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">נעילה ביומטרית</p>
+                  <p className="text-xs text-gray-400">
+                    {biometricEnabled ? 'פעיל — Face ID / טביעת אצבע' : 'כבוי'}
+                  </p>
+                </div>
+                {biometricEnabled ? (
+                  <button
+                    onClick={handleDisableBiometric}
+                    className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl"
+                  >
+                    בטל
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleEnableBiometric}
+                    disabled={biometricLoading}
+                    className="text-xs text-green-600 font-medium px-3 py-1.5 bg-green-50 rounded-xl disabled:opacity-50"
+                  >
+                    {biometricLoading ? '...' : 'הפעל'}
+                  </button>
+                )}
               </div>
             </div>
           )}
