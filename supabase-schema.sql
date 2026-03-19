@@ -130,9 +130,7 @@ ALTER TABLE super_vouchers ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Wallet members can view super vouchers"
   ON super_vouchers FOR SELECT
-  USING (wallet_id IN (
-    SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
-  ));
+  USING (wallet_id IN (SELECT get_my_wallet_ids()));
 
 CREATE POLICY "Wallet owners can manage super vouchers"
   ON super_vouchers FOR ALL
@@ -151,15 +149,11 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Wallet members can read categories"
   ON categories FOR SELECT
-  USING (wallet_id IS NULL OR wallet_id IN (
-    SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
-  ));
+  USING (wallet_id IS NULL OR wallet_id IN (SELECT get_my_wallet_ids()));
 
 CREATE POLICY "Wallet members can insert categories"
   ON categories FOR INSERT
-  WITH CHECK (wallet_id IN (
-    SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
-  ));
+  WITH CHECK (wallet_id IN (SELECT get_my_wallet_ids()));
 
 -- ============ VOUCHERS ============
 CREATE TABLE IF NOT EXISTS vouchers (
@@ -187,21 +181,15 @@ ALTER TABLE vouchers ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Wallet members can view vouchers"
   ON vouchers FOR SELECT
-  USING (wallet_id IN (
-    SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
-  ));
+  USING (wallet_id IN (SELECT get_my_wallet_ids()));
 
 CREATE POLICY "Wallet members can insert vouchers"
   ON vouchers FOR INSERT
-  WITH CHECK (wallet_id IN (
-    SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
-  ));
+  WITH CHECK (wallet_id IN (SELECT get_my_wallet_ids()));
 
 CREATE POLICY "Wallet members can update vouchers"
   ON vouchers FOR UPDATE
-  USING (wallet_id IN (
-    SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
-  ));
+  USING (wallet_id IN (SELECT get_my_wallet_ids()));
 
 CREATE POLICY "Voucher owner can delete"
   ON vouchers FOR DELETE
