@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
-import { Edit2, Trash2, Archive, AlertTriangle, Star, Check } from 'lucide-react'
+import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink } from 'lucide-react'
 
 interface Props {
   voucher: Voucher
@@ -13,9 +13,10 @@ interface Props {
   isSelectMode?: boolean
   isSelected?: boolean
   onSelect?: () => void
+  rowMode?: boolean
 }
 
-export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArchive, superVoucherName, isSelectMode, isSelected, onSelect }: Props) {
+export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArchive, superVoucherName, isSelectMode, isSelected, onSelect, rowMode }: Props) {
   const [hovered, setHovered] = useState(false)
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
@@ -37,6 +38,86 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
     } else {
       onClick()
     }
+  }
+
+  if (rowMode) {
+    return (
+      <div
+        className={`relative voucher-card rounded-2xl border ${cardBg} ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''} shadow-sm overflow-hidden cursor-pointer transition-all`}
+        onClick={handleClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <div className="px-4 py-3 flex items-center gap-3">
+          {/* Select checkbox */}
+          {isSelectMode && (
+            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${isSelected ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+              {isSelected && <Check className="w-3 h-3 text-white" />}
+            </div>
+          )}
+
+          {/* Store name */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              {superVoucherName && <Star className="w-3 h-3 text-amber-400 fill-amber-400 flex-shrink-0" />}
+              <span className="font-semibold text-gray-800 text-sm truncate">
+                {superVoucherName || voucher.store_name}
+              </span>
+              {superVoucherName && (
+                <span className="text-xs text-gray-400 truncate">({voucher.store_name})</span>
+              )}
+            </div>
+            {voucher.categories.length > 0 && (
+              <span className="text-xs text-gray-400">{voucher.categories[0]}</span>
+            )}
+          </div>
+
+          {/* Progress bar (compact) */}
+          {voucher.amount > 0 && (
+            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
+              <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+            </div>
+          )}
+
+          {/* Expiry + link */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {voucher.link && (
+              <a href={voucher.link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1 rounded-full text-blue-500 hover:bg-blue-50" title="פתח קישור">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+            {(expiryStatus === 'critical' || expiryStatus === 'warning') && (
+              <AlertTriangle className={`w-3.5 h-3.5 ${expiryStatus === 'critical' ? 'text-red-500' : 'text-yellow-500'}`} />
+            )}
+            {expiryLabel && (
+              <span className={`text-xs font-medium ${expiryStatus === 'expired' ? 'text-gray-400' : expiryStatus === 'critical' ? 'text-red-600' : expiryStatus === 'warning' ? 'text-yellow-600' : 'text-gray-400'}`}>
+                {expiryLabel}
+              </span>
+            )}
+          </div>
+
+          {/* Balance */}
+          <div className="text-left flex-shrink-0">
+            <div className="text-base font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
+          </div>
+
+          {/* Hover actions */}
+          {hovered && !isSelectMode && (
+            <div className="flex gap-1">
+              <button onClick={e => { e.stopPropagation(); onEdit() }} className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50" title="עריכה">
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={e => { e.stopPropagation(); onArchive() }} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50" title="ארכיון">
+                <Archive className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={e => { e.stopPropagation(); onDelete() }} className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50" title="מחיקה">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -125,7 +206,19 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
               </span>
             ))}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            {voucher.link && (
+              <a
+                href={voucher.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="p-1 rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
+                title="פתח קישור"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
             {(expiryStatus === 'critical' || expiryStatus === 'warning') && (
               <AlertTriangle className={`w-3.5 h-3.5 ${expiryStatus === 'critical' ? 'text-red-500' : 'text-yellow-500'}`} />
             )}

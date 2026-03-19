@@ -3,7 +3,7 @@ import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
-import { X, Clipboard, Plus, Camera, Tag } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
 
@@ -27,6 +27,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [selectedCats, setSelectedCats] = useState<string[]>(voucher?.categories || [])
   const [tags, setTags] = useState(voucher?.tags?.join(', ') || '')
   const [notes, setNotes] = useState(voucher?.notes || '')
+  const [link, setLink] = useState(voucher?.link || '')
   const [newCatName, setNewCatName] = useState('')
   const [showCatInput, setShowCatInput] = useState(false)
   const [showSMSInput, setShowSMSInput] = useState(false)
@@ -157,6 +158,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         categories: selectedCats,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         notes: notes.trim() || undefined,
+        link: link.trim() || undefined,
         is_archived: false,
         is_shared: false,
       }
@@ -445,6 +447,22 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               placeholder="הערות נוספות..."
               rows={3}
               className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
+            />
+          </div>
+
+          {/* Link */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5 block">
+              <Link className="w-3.5 h-3.5" />
+              קישור לשובר
+            </label>
+            <input
+              type="url"
+              value={link}
+              onChange={e => setLink(e.target.value)}
+              placeholder="https://..."
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+              dir="ltr"
             />
           </div>
         </form>

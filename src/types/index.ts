@@ -13,6 +13,7 @@ export interface Voucher {
   categories: string[]
   tags: string[]
   notes?: string
+  link?: string
   is_archived: boolean
   is_shared: boolean
   created_at: string

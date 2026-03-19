@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
   categories TEXT[] DEFAULT '{}',
   tags TEXT[] DEFAULT '{}',
   notes TEXT,
+  link TEXT,
   is_archived BOOLEAN DEFAULT FALSE,
   is_shared BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -211,3 +212,7 @@ CREATE OR REPLACE TRIGGER vouchers_updated_at
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Realtime already enabled for vouchers and wallet_members
+
+-- ============ MIGRATIONS ============
+-- Add link column if not exists (run on existing databases)
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS link TEXT;

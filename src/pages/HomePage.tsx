@@ -3,7 +3,7 @@ import { useVouchers } from '../contexts/VoucherContext'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
-import { Plus, Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square } from 'lucide-react'
+import { Plus, Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
 import { useNavigate } from 'react-router-dom'
@@ -11,6 +11,8 @@ import ConfirmDialog from '../components/ConfirmDialog'
 
 type SortKey = 'expiry' | 'balance' | 'store' | 'added'
 type FilterTab = 'all' | 'expiring' | 'shared'
+type ViewMode = 'grid' | 'rows'
+type SortDir = 'asc' | 'desc'
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -22,6 +24,8 @@ export default function HomePage() {
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
   const [filterCats, setFilterCats] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   // Undo delete
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
@@ -73,24 +77,26 @@ export default function HomePage() {
       })
     }
 
+    const dir = sortDir === 'asc' ? 1 : -1
     result.sort((a, b) => {
       switch (sortKey) {
         case 'expiry':
-          if (!a.expiry_date) return 1
-          if (!b.expiry_date) return -1
-          return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+          if (!a.expiry_date && !b.expiry_date) return 0
+          if (!a.expiry_date) return dir
+          if (!b.expiry_date) return -dir
+          return dir * (new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
         case 'balance':
-          return b.balance - a.balance
+          return dir * (a.balance - b.balance)
         case 'store':
-          return a.store_name.localeCompare(b.store_name, 'he')
+          return dir * a.store_name.localeCompare(b.store_name, 'he')
         case 'added':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
         default:
           return 0
       }
     })
     return result
-  }, [vouchers, filterTab, filterCats, search, sortKey, superVouchers])
+  }, [vouchers, filterTab, filterCats, search, sortKey, sortDir, superVouchers])
 
   // Filter out pending-delete vouchers from display
   const displayVouchers = useMemo(
@@ -337,6 +343,13 @@ export default function HomePage() {
             ))}
             <div className="flex-1" />
             <button
+              onClick={() => setViewMode(v => v === 'grid' ? 'rows' : 'grid')}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-gray-200"
+              title={viewMode === 'grid' ? 'עבור לתצוגת שורות' : 'עבור לתצוגת רשת'}
+            >
+              {viewMode === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+            </button>
+            <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
                 showFilters || filterCats.length > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
@@ -377,9 +390,17 @@ export default function HomePage() {
                 >
                   <option value="expiry">📅 תפוגה</option>
                   <option value="balance">₪ יתרה</option>
-                  <option value="store">🏪 חנות א-ב</option>
-                  <option value="added">🕐 חדש→ישן</option>
+                  <option value="store">🏪 חנות</option>
+                  <option value="added">🕐 הוספה</option>
                 </select>
+                <button
+                  onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all ${sortDir === 'desc' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-gray-200 text-gray-500'}`}
+                  title={sortDir === 'asc' ? 'סדר עולה' : 'סדר יורד'}
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  {sortDir === 'asc' ? '↑' : '↓'}
+                </button>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -426,7 +447,7 @@ export default function HomePage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'flex flex-col gap-2'}>
             {displayVouchers.map(v => {
               const sv = superVouchers.find(s => s.id === v.super_voucher_id)
               return (
@@ -441,6 +462,7 @@ export default function HomePage() {
                   isSelectMode={isSelectMode}
                   isSelected={selectedIds.has(v.id)}
                   onSelect={() => toggleSelect(v.id)}
+                  rowMode={viewMode === 'rows'}
                 />
               )
             })}
