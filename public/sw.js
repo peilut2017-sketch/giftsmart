@@ -1,15 +1,7 @@
-const CACHE_NAME = 'voucher-wallet-v1'
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-]
+const CACHE_VERSION = 'v3'
+const CACHE_NAME = `voucher-wallet-${CACHE_VERSION}`
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS)
-    })
-  )
+self.addEventListener('install', () => {
   self.skipWaiting()
 })
 
@@ -21,39 +13,51 @@ self.addEventListener('activate', (event) => {
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       )
-    )
+    ).then(() => self.clients.claim())
   )
-  self.clients.claim()
 })
 
 self.addEventListener('fetch', (event) => {
-  // Only cache GET requests
   if (event.request.method !== 'GET') return
 
-  // Skip Supabase API calls
+  // Never cache Supabase API calls
   if (event.request.url.includes('supabase.co')) return
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached
+  const url = new URL(event.request.url)
 
-      return fetch(event.request)
+  // HTML / navigation requests: network-first
+  // This ensures new deployments are always picked up immediately
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response
-          }
           const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone)
-          })
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
           return response
         })
-        .catch(() => {
-          // Return cached index.html for navigation requests (SPA)
-          if (event.request.mode === 'navigate') {
-            return caches.match('/')
-          }
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+    )
+    return
+  }
+
+  // Static assets with content hash (JS/CSS/images): cache-first
+  // Vite adds hashes to filenames, so stale cache is never an issue here
+  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached
+        return fetch(event.request).then((response) => {
+          const clone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          return response
         })
-    })
+      })
+    )
+    return
+  }
+
+  // Everything else: network-first
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match(event.request))
   )
 })
