@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { Voucher, SuperVoucher, Category, Store } from '../types'
@@ -53,6 +53,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES)
   const [stores, setStores] = useState<Store[]>([])
   const [walletId, setWalletId] = useState<string | null>(null)
+  const walletIdRef = useRef<string | null>(null)
   const [walletName, setWalletName] = useState('ארנק השוברים שלי')
   const [loading, setLoading] = useState(true)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -98,39 +99,47 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (!navigator.onLine) return
 
     try {
-      // Get or create wallet — wrapped in timeout so a hung query never freezes the app
-      type MembershipResult = { data: { wallet_id: string; wallets: any } | null }
-      const { data: membership } = await withTimeout<MembershipResult>(
-        supabase
-          .from('wallet_members')
-          .select('wallet_id, wallets(id, name)')
-          .eq('user_id', user.id)
-          .order('created_at')
-          .limit(1)
-          .single() as any
-      ).catch(() => ({ data: null } as MembershipResult))
-
       let wId: string
-      if (!membership) {
-        // Create new wallet
-        const { data: wallet } = await withTimeout<{ data: any }>(
-          supabase.from('wallets').insert({ name: 'ארנק השוברים שלי', owner_id: user.id }).select().single() as any
-        ).catch(() => ({ data: null }))
-        if (!wallet) return
-        wId = wallet.id
-        setWalletName(wallet.name)
-        await (supabase.from('wallet_members').insert({
-          wallet_id: wId,
-          user_id: user.id,
-          email: user.email,
-          role: 'owner',
-        }) as any as Promise<any>).catch(() => {})
+
+      // If we already know the wallet, skip the lookup to avoid RLS recursion issues
+      if (walletIdRef.current) {
+        wId = walletIdRef.current
       } else {
-        wId = membership.wallet_id
-        const walletData = membership.wallets as any
-        if (walletData?.name) setWalletName(walletData.name)
+        // Get or create wallet — wrapped in timeout so a hung query never freezes the app
+        type MembershipResult = { data: { wallet_id: string; wallets: any } | null }
+        const { data: membership } = await withTimeout<MembershipResult>(
+          supabase
+            .from('wallet_members')
+            .select('wallet_id, wallets(id, name)')
+            .eq('user_id', user.id)
+            .order('created_at')
+            .limit(1)
+            .single() as any
+        ).catch(() => ({ data: null } as MembershipResult))
+
+        if (!membership) {
+          // Create new wallet
+          const { data: wallet } = await withTimeout<{ data: any }>(
+            supabase.from('wallets').insert({ name: 'ארנק השוברים שלי', owner_id: user.id }).select().single() as any
+          ).catch(() => ({ data: null }))
+          if (!wallet) return
+          wId = wallet.id
+          setWalletName(wallet.name)
+          await (supabase.from('wallet_members').insert({
+            wallet_id: wId,
+            user_id: user.id,
+            email: user.email,
+            role: 'owner',
+          }) as any as Promise<any>).catch(() => {})
+        } else {
+          wId = membership.wallet_id
+          const walletData = membership.wallets as any
+          if (walletData?.name) setWalletName(walletData.name)
+        }
+
+        walletIdRef.current = wId
+        setWalletId(wId)
       }
-      setWalletId(wId)
 
       // Fetch all data in parallel for speed
       type QueryResult = { data: any[] | null }
@@ -160,10 +169,33 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [user, loadFromCache, saveToCache])
 
+  // Lightweight refresh: only re-fetches vouchers using the already-known walletId.
+  // Used by the realtime subscription so we never re-query wallet_members after each action.
+  const refreshVouchersOnly = useCallback(async () => {
+    const wId = walletIdRef.current
+    if (!wId || !navigator.onLine) return
+    try {
+      type QueryResult = { data: any[] | null }
+      const { data: vData } = await withTimeout<QueryResult>(
+        supabase.from('vouchers').select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any
+      ).catch(() => ({ data: null }))
+      if (vData) {
+        const active = vData.filter((v: any) => !v.is_archived)
+        const archived = vData.filter((v: any) => v.is_archived)
+        setVouchers(active)
+        setArchivedVouchers(archived)
+        saveToCache(active, archived)
+      }
+    } catch (err) {
+      console.error('Refresh error:', err)
+    }
+  }, [saveToCache])
+
   useEffect(() => {
     if (user) {
       fetchData()
     } else {
+      walletIdRef.current = null
       setVouchers([])
       setArchivedVouchers([])
       setWalletId(null)
@@ -171,7 +203,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchData])
 
-  // Realtime subscription
+  // Realtime subscription — uses lightweight refresh to avoid re-querying wallet_members
   useEffect(() => {
     if (!walletId || !user) return
     const channel = supabase
@@ -182,11 +214,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         table: 'vouchers',
         filter: `wallet_id=eq.${walletId}`,
       }, () => {
-        fetchData()
+        refreshVouchersOnly()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [walletId, user, fetchData])
+  }, [walletId, user, refreshVouchersOnly])
 
   async function addVoucher(v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>): Promise<Voucher | null> {
     if (!user || !walletId) throw new Error('נתוני משתמש לא נטענו, נסה שוב')
