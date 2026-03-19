@@ -34,6 +34,16 @@ interface VoucherContextType {
   createShareToken: (voucherId: string, expiresInDays?: number) => Promise<string>
   deleteShareToken: (token: string) => Promise<void>
   getShareTokens: (voucherId: string) => Promise<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>
+  getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
+}
+
+export interface ActivityLogEntry {
+  id: string
+  action: 'add' | 'edit' | 'balance_update' | 'archive' | 'unarchive' | 'delete'
+  voucher_id: string | null
+  voucher_name: string
+  details: Record<string, any>
+  created_at: string
 }
 
 const VoucherContext = createContext<VoucherContextType | undefined>(undefined)
@@ -285,6 +295,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const newActive = [...vouchers, data]
     setVouchers(newActive)
     if (user) saveToCache(user.id, newActive, archivedVouchers)
+    logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
     return data
   }
 
@@ -292,6 +303,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (!isOnline && vouchers.find(v => v.id.startsWith('local-'))) {
       throw new Error('אין חיבור לאינטרנט')
     }
+    const existing = [...vouchers, ...archivedVouchers].find(v => v.id === id)
     const updated = { ...vData, updated_at: new Date().toISOString() }
     setVouchers(prev => prev.map(v => v.id === id ? { ...v, ...updated } : v))
 
@@ -300,9 +312,23 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
     const newActive = vouchers.map(v => v.id === id ? { ...v, ...updated } : v)
     if (user) saveToCache(user.id, newActive, archivedVouchers)
+
+    if (existing) {
+      const keys = Object.keys(vData)
+      if (keys.length === 1 && keys[0] === 'balance') {
+        logAction('balance_update', existing.store_name, id, {
+          from: existing.balance, to: vData.balance,
+        })
+      } else {
+        const changed: Record<string, any> = {}
+        keys.forEach(k => { changed[k] = { from: (existing as any)[k], to: (vData as any)[k] } })
+        logAction('edit', existing.store_name, id, changed)
+      }
+    }
   }
 
   async function deleteVoucher(id: string) {
+    const target = [...vouchers, ...archivedVouchers].find(v => v.id === id)
     setVouchers(prev => prev.filter(v => v.id !== id))
     setArchivedVouchers(prev => prev.filter(v => v.id !== id))
     if (!id.startsWith('local-')) {
@@ -310,6 +336,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
     const newActive = vouchers.filter(v => v.id !== id)
     if (user) saveToCache(user.id, newActive, archivedVouchers.filter(v => v.id !== id))
+    if (target) logAction('delete', target.store_name, id, { balance: target.balance })
   }
 
   async function archiveVoucher(id: string) {
@@ -324,6 +351,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       await supabase.from('vouchers').update({ is_archived: true }).eq('id', id)
     }
     if (user) saveToCache(user.id, newActive, newArchived)
+    logAction('archive', voucher.store_name, id, { balance: voucher.balance })
   }
 
   async function unarchiveVoucher(id: string) {
@@ -338,6 +366,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
     }
     if (user) saveToCache(user.id, newActive, newArchived)
+    logAction('unarchive', voucher.store_name, id)
   }
 
   async function archiveExpired() {
@@ -470,6 +499,34 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     return data || []
   }
 
+  async function logAction(
+    action: ActivityLogEntry['action'],
+    voucherName: string,
+    voucherId?: string,
+    details: Record<string, any> = {}
+  ) {
+    if (!user) return
+    // Fire and forget — don't block the main operation on logging
+    supabase.from('activity_log').insert({
+      user_id: user.id,
+      wallet_id: walletIdRef.current,
+      action,
+      voucher_id: voucherId || null,
+      voucher_name: voucherName,
+      details,
+    }).then(() => {}).catch(() => {})
+  }
+
+  async function getActivityLog(limit = 100): Promise<ActivityLogEntry[]> {
+    const { data } = await supabase
+      .from('activity_log')
+      .select('id, action, voucher_id, voucher_name, details, created_at')
+      .eq('user_id', user?.id ?? '')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    return (data || []) as ActivityLogEntry[]
+  }
+
   return (
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores,
@@ -478,6 +535,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
       updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
+      getActivityLog,
     }}>
       {children}
     </VoucherContext.Provider>

@@ -6,6 +6,7 @@ import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
 import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
+import ActivityLog from '../components/ActivityLog'
 
 export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
@@ -283,6 +284,9 @@ export default function SettingsPage() {
             />
           </div>
         </div>
+
+        {/* Activity log */}
+        <ActivityLog />
 
         {/* Sign out */}
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">

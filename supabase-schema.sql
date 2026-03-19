@@ -239,3 +239,24 @@ CREATE POLICY "Anyone can read shared tokens"
 -- ============ MIGRATIONS ============
 -- Add link column if not exists (run on existing databases)
 ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS link TEXT;
+
+-- ============ ACTIVITY LOG ============
+CREATE TABLE IF NOT EXISTS activity_log (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  wallet_id UUID REFERENCES wallets(id) ON DELETE SET NULL,
+  action TEXT NOT NULL, -- 'add' | 'edit' | 'balance_update' | 'archive' | 'unarchive' | 'delete'
+  voucher_id UUID,
+  voucher_name TEXT NOT NULL,
+  details JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS activity_log_user_idx ON activity_log(user_id, created_at DESC);
+
+ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage own activity log" ON activity_log;
+CREATE POLICY "Users can manage own activity log"
+  ON activity_log FOR ALL
+  USING (user_id = auth.uid());
