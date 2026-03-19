@@ -83,7 +83,7 @@ export default function AdminPage() {
     await addSuperVoucher({
       name: svName,
       description: svDesc,
-      stores: svStores.split(',').map(s => s.trim()).filter(Boolean),
+      stores: svStores.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
     })
     toast.success('שובר-על נוסף')
     setSvName(''); setSvStores(''); setSvDesc('')
@@ -225,7 +225,7 @@ export default function AdminPage() {
             <div className="bg-gray-50 rounded-2xl p-4 mb-3 space-y-2">
               <input value={svName} onChange={e => setSvName(e.target.value)} placeholder="שם שובר-על" className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
               <input value={svDesc} onChange={e => setSvDesc(e.target.value)} placeholder="תיאור (אופציונלי)" className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
-              <textarea value={svStores} onChange={e => setSvStores(e.target.value)} placeholder="חנויות מכבדות (מופרדות בפסיק)" rows={3} className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none" />
+              <textarea value={svStores} onChange={e => setSvStores(e.target.value)} placeholder="חנויות מכבדות (כל חנות בשורה נפרדת או מופרדות בפסיק)" rows={3} className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-y" />
               <div className="flex gap-2">
                 <button onClick={handleAddSV} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-sm">הוסף</button>
                 <button onClick={() => setShowAddSV(false)} className="flex-1 bg-gray-200 py-2 rounded-xl text-sm">ביטול</button>
@@ -244,8 +244,8 @@ export default function AdminPage() {
                       className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
                     />
                     <textarea
-                      value={editingSV.stores.join(', ')}
-                      onChange={e => setEditingSV({ ...editingSV, stores: e.target.value.split(',').map(s => s.trim()) })}
+                      value={editingSV.stores.join('\n')}
+                      onChange={e => setEditingSV({ ...editingSV, stores: e.target.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean) })}
                       rows={3}
                       className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                     />
