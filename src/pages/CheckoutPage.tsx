@@ -28,7 +28,6 @@ export default function CheckoutPage() {
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
   const [shareLoading, setShareLoading] = useState(false)
-  const cardRef = useRef<HTMLDivElement>(null)
 
   // WakeLock
   useEffect(() => {

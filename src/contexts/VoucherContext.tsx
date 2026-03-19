@@ -507,14 +507,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   ) {
     if (!user) return
     // Fire and forget — don't block the main operation on logging
-    supabase.from('activity_log').insert({
+    Promise.resolve(supabase.from('activity_log').insert({
       user_id: user.id,
       wallet_id: walletIdRef.current,
       action,
       voucher_id: voucherId || null,
       voucher_name: voucherName,
       details,
-    }).then(() => {}).catch(() => {})
+    })).then(() => {}).catch(() => {})
   }
 
   async function getActivityLog(limit = 100): Promise<ActivityLogEntry[]> {

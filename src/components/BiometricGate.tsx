@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Fingerprint, ShieldCheck, X } from 'lucide-react'
-import { isBiometricEnabled, verifyBiometric, disableBiometric } from '../lib/passkey'
+import { verifyBiometric, disableBiometric } from '../lib/passkey'
 import toast from 'react-hot-toast'
 
 interface Props {

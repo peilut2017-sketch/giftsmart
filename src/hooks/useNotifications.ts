@@ -4,8 +4,6 @@ import type { Voucher } from '../types'
 const NOTIF_KEY = 'last_expiry_notification'
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
-// Days thresholds for staged notifications
-const THRESHOLDS = [1, 3, 7, 14]
 
 export function useExpiryNotifications(vouchers: Voucher[]) {
   useEffect(() => {
@@ -88,7 +86,7 @@ export async function requestPushPermission(): Promise<NotificationPermission> {
 }
 
 // Force a notification check (ignores throttle)
-export async function forceNotificationCheck(vouchers: Voucher[]) {
+export async function forceNotificationCheck(_vouchers?: Voucher[]) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return
   localStorage.removeItem(NOTIF_KEY)
   // Re-trigger by re-invoking — just clear the key, the hook will pick it up on next render

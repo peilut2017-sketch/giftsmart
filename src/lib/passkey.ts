@@ -87,7 +87,7 @@ export async function verifyBiometric(): Promise<boolean> {
         rpId: window.location.hostname,
         allowCredentials: [
           {
-            id: base64urlToUint8Array(credId),
+            id: base64urlToUint8Array(credId).buffer as ArrayBuffer,
             type: 'public-key',
             transports: ['internal'],
           },
