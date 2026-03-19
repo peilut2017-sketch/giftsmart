@@ -38,7 +38,7 @@ interface VoucherContextType {
 
 const VoucherContext = createContext<VoucherContextType | undefined>(undefined)
 
-const CACHE_KEY = 'vouchers_cache'
+const CACHE_KEY_PREFIX = 'vouchers_cache_'
 const QUERY_TIMEOUT_MS = 8000
 
 // Wraps a thenable (Supabase query) with a timeout so a hung query never freezes the app
@@ -73,9 +73,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const loadFromCache = useCallback(() => {
+  const loadFromCache = useCallback((userId: string) => {
     try {
-      const cached = localStorage.getItem(CACHE_KEY)
+      const cached = localStorage.getItem(CACHE_KEY_PREFIX + userId)
       if (cached) {
         const data = JSON.parse(cached)
         setVouchers(data.active || [])
@@ -84,9 +84,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [])
 
-  const saveToCache = useCallback((active: Voucher[], archived: Voucher[]) => {
+  const saveToCache = useCallback((userId: string, active: Voucher[], archived: Voucher[]) => {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ active, archived }))
+      localStorage.setItem(CACHE_KEY_PREFIX + userId, JSON.stringify({ active, archived }))
     } catch {}
   }, [])
 
@@ -97,7 +97,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
 
     // Show cache immediately so the UI is never blank/stuck
-    loadFromCache()
+    loadFromCache(user.id)
     setLoading(false)
 
     if (!navigator.onLine) return
@@ -167,7 +167,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         const archived = vRes.value.data.filter((v: any) => v.is_archived)
         setVouchers(active)
         setArchivedVouchers(archived)
-        saveToCache(active, archived)
+        saveToCache(user.id, active, archived)
       }
       if (svRes.status === 'fulfilled' && svRes.value.data) setSuperVouchers(svRes.value.data)
       if (storeRes.status === 'fulfilled' && storeRes.value.data) setStores(storeRes.value.data)
@@ -185,7 +185,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   // Used by the realtime subscription so we never re-query wallet_members after each action.
   const refreshVouchersOnly = useCallback(async () => {
     const wId = walletIdRef.current
-    if (!wId || !navigator.onLine) return
+    if (!wId || !navigator.onLine || !user) return
     try {
       type QueryResult = { data: any[] | null }
       const { data: vData } = await withTimeout<QueryResult>(
@@ -196,21 +196,33 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         const archived = vData.filter((v: any) => v.is_archived)
         setVouchers(active)
         setArchivedVouchers(archived)
-        saveToCache(active, archived)
+        saveToCache(user.id, active, archived)
       }
     } catch (err) {
       console.error('Refresh error:', err)
     }
-  }, [saveToCache])
+  }, [user, saveToCache])
 
   useEffect(() => {
     if (user) {
+      // Reset all state before fetching for the new user to avoid showing stale data
+      setVouchers([])
+      setArchivedVouchers([])
+      setSuperVouchers([])
+      setCategories(DEFAULT_CATEGORIES)
+      setStores([])
+      setWalletId(null)
+      walletIdRef.current = null
       fetchData()
     } else {
       walletIdRef.current = null
       setVouchers([])
       setArchivedVouchers([])
+      setSuperVouchers([])
+      setCategories(DEFAULT_CATEGORIES)
+      setStores([])
       setWalletId(null)
+      setWalletName('ארנק השוברים שלי')
       setLoading(false)
     }
   }, [user, fetchData])
@@ -243,14 +255,28 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     )
     if (matchingSV) superVoucherId = matchingSV.id
 
-    const payload = {
+    const payload: Record<string, any> = {
       ...v,
       user_id: user.id,
       wallet_id: walletId,
       super_voucher_id: superVoucherId,
     }
+    // Remove undefined values to avoid sending null for columns that may not exist
+    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
 
-    const { data, error } = await supabase.from('vouchers').insert(payload).select().single()
+    let { data, error } = await supabase.from('vouchers').insert(payload).select().single()
+
+    // If schema cache error for a specific column, retry without it
+    if (error?.message?.includes("column") && error.message.includes("schema cache")) {
+      const colMatch = error.message.match(/column[s]?\s+"?(\w+)"?/i)
+      if (colMatch) {
+        delete payload[colMatch[1]]
+        const retry = await supabase.from('vouchers').insert(payload).select().single()
+        data = retry.data
+        error = retry.error
+      }
+    }
+
     if (error) {
       console.error('Add voucher error:', error)
       throw new Error(error.message)
@@ -258,7 +284,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
     const newActive = [...vouchers, data]
     setVouchers(newActive)
-    saveToCache(newActive, archivedVouchers)
+    if (user) saveToCache(user.id, newActive, archivedVouchers)
     return data
   }
 
@@ -273,7 +299,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       await supabase.from('vouchers').update(updated).eq('id', id)
     }
     const newActive = vouchers.map(v => v.id === id ? { ...v, ...updated } : v)
-    saveToCache(newActive, archivedVouchers)
+    if (user) saveToCache(user.id, newActive, archivedVouchers)
   }
 
   async function deleteVoucher(id: string) {
@@ -283,7 +309,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       await supabase.from('vouchers').delete().eq('id', id)
     }
     const newActive = vouchers.filter(v => v.id !== id)
-    saveToCache(newActive, archivedVouchers.filter(v => v.id !== id))
+    if (user) saveToCache(user.id, newActive, archivedVouchers.filter(v => v.id !== id))
   }
 
   async function archiveVoucher(id: string) {
@@ -297,7 +323,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (!id.startsWith('local-')) {
       await supabase.from('vouchers').update({ is_archived: true }).eq('id', id)
     }
-    saveToCache(newActive, newArchived)
+    if (user) saveToCache(user.id, newActive, newArchived)
   }
 
   async function unarchiveVoucher(id: string) {
@@ -311,7 +337,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (!id.startsWith('local-')) {
       await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
     }
-    saveToCache(newActive, newArchived)
+    if (user) saveToCache(user.id, newActive, newArchived)
   }
 
   async function archiveExpired() {
@@ -324,7 +350,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setVouchers(newActive)
     setArchivedVouchers(newArchived)
     await supabase.from('vouchers').update({ is_archived: true }).in('id', ids.filter(id => !id.startsWith('local-')))
-    saveToCache(newActive, newArchived)
+    if (user) saveToCache(user.id, newActive, newArchived)
   }
 
   async function syncToCloud() {
