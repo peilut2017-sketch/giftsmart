@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
-import { getExpiryStatus, formatDate } from '../utils/helpers'
+import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
 import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -21,6 +21,16 @@ export default function SettingsPage() {
   const [syncing, setSyncing] = useState(false)
   const [checking, setChecking] = useState(false)
   const [sendingReminder, setSendingReminder] = useState(false)
+
+  const reminderKey = `reminder_days_${user?.id}`
+  const [reminderDays, setReminderDays] = useState(() =>
+    parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
+  )
+  function saveReminderDays(days: number) {
+    const val = Math.max(1, Math.min(90, days))
+    setReminderDays(val)
+    localStorage.setItem(reminderKey, String(val))
+  }
 
   async function saveProfile() {
     await updateProfile({ name, phone })
@@ -52,8 +62,12 @@ export default function SettingsPage() {
 
   async function handleSendExpiryReminder() {
     if (!user?.email) return
-    const expiring = vouchers.filter(v => ['critical', 'warning'].includes(getExpiryStatus(v.expiry_date)))
-    if (expiring.length === 0) return toast('אין שוברים שעומדים לפוג בקרוב', { icon: '✅' })
+    const expiring = vouchers.filter(v => {
+      if (!v.expiry_date) return false
+      const days = getDaysUntilExpiry(v.expiry_date)
+      return days !== null && days >= 0 && days <= reminderDays
+    })
+    if (expiring.length === 0) return toast(`אין שוברים שפגים ב-${reminderDays} הימים הקרובים`, { icon: '✅' })
     setSendingReminder(true)
     try {
       const vouchers_list = expiring
@@ -200,6 +214,39 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Reminder days */}
+        <div className="bg-white rounded-3xl shadow-sm p-4">
+          <div className="px-0 pb-3 border-b mb-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">תזכורת תוקף</p>
+          </div>
+          <p className="text-sm text-gray-700 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={1}
+              max={90}
+              value={reminderDays}
+              onChange={e => saveReminderDays(parseInt(e.target.value))}
+              className="flex-1 accent-green-500"
+            />
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={reminderDays}
+                onChange={e => saveReminderDays(parseInt(e.target.value) || 1)}
+                className="w-14 text-center px-2 py-1.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+              />
+              <span className="text-sm text-gray-500">ימים</span>
+            </div>
+          </div>
+          <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
+            <span>1 יום</span>
+            <span>90 ימים</span>
+          </div>
         </div>
 
         {/* Tools */}

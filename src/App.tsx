@@ -11,6 +11,7 @@ import StatsPage from './pages/StatsPage'
 import SettingsPage from './pages/SettingsPage'
 import AdminPage from './pages/AdminPage'
 import BottomNav from './components/BottomNav'
+import WelcomeModal from './components/WelcomeModal'
 
 function NotificationBridge() {
   const { vouchers } = useVouchers()
@@ -43,6 +44,7 @@ function AppRoutes() {
   return (
     <VoucherProvider>
       <NotificationBridge />
+      <WelcomeModal userId={user!.id} />
       <div className="flex flex-col min-h-dvh max-w-2xl mx-auto">
         <Routes>
           <Route path="/" element={<HomePage />} />

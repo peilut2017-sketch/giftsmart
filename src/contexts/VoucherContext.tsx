@@ -146,7 +146,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       type QueryResult = { data: any[] | null }
       const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
         withTimeout<QueryResult>(supabase.from('vouchers').select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any),
-        withTimeout<QueryResult>(supabase.from('super_vouchers').select('*').eq('wallet_id', wId) as any),
+        withTimeout<QueryResult>(supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`) as any),
         withTimeout<QueryResult>(supabase.from('stores').select('*').order('name') as any),
         withTimeout<QueryResult>(supabase.from('categories').select('*').or(`wallet_id.eq.${wId},wallet_id.is.null`) as any),
       ])

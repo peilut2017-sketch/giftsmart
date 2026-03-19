@@ -3,9 +3,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@example.com'
 
@@ -15,11 +16,14 @@ interface Member {
   role: string
 }
 
+type Confirm = { title: string; message?: string; onConfirm: () => void }
+
 export default function AdminPage() {
   const { user } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, walletId, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, inviteMember, removeMember, updateWalletName } = useVouchers()
 
   const [members, setMembers] = useState<Member[]>([])
+  const [usersCount, setUsersCount] = useState<number | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
   const [editingWalletName, setEditingWalletName] = useState(false)
   const [newWalletName, setNewWalletName] = useState(walletName)
@@ -28,6 +32,8 @@ export default function AdminPage() {
   const [svName, setSvName] = useState('')
   const [svStores, setSvStores] = useState('')
   const [svDesc, setSvDesc] = useState('')
+  const [svGlobal, setSvGlobal] = useState(false)
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
 
   const isAdmin = user?.email === ADMIN_EMAIL
 
@@ -35,6 +41,10 @@ export default function AdminPage() {
     if (!walletId || !isAdmin) return
     supabase.from('wallet_members').select('*').eq('wallet_id', walletId).then(({ data }) => {
       if (data) setMembers(data)
+    })
+    // Fetch total registered users count
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).then(({ count }) => {
+      setUsersCount(count ?? 0)
     })
   }, [walletId, isAdmin])
 
@@ -65,11 +75,17 @@ export default function AdminPage() {
     }
   }
 
-  async function handleRemoveMember(userId: string) {
-    if (!confirm('להסיר חבר?')) return
-    await removeMember(userId)
-    setMembers(prev => prev.filter(m => m.user_id !== userId))
-    toast.success('חבר הוסר')
+  function handleRemoveMember(userId: string, email: string) {
+    setConfirm({
+      title: 'הסרת חבר',
+      message: `להסיר את ${email} מהארנק?`,
+      onConfirm: async () => {
+        setConfirm(null)
+        await removeMember(userId)
+        setMembers(prev => prev.filter(m => m.user_id !== userId))
+        toast.success('חבר הוסר')
+      },
+    })
   }
 
   async function handleSaveWalletName() {
@@ -84,16 +100,23 @@ export default function AdminPage() {
       name: svName,
       description: svDesc,
       stores: svStores.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
+      is_global: svGlobal,
     })
-    toast.success('שובר-על נוסף')
-    setSvName(''); setSvStores(''); setSvDesc('')
+    toast.success(svGlobal ? 'שובר-על גלובלי נוסף' : 'שובר-על נוסף')
+    setSvName(''); setSvStores(''); setSvDesc(''); setSvGlobal(false)
     setShowAddSV(false)
   }
 
-  async function handleDeleteSV(id: string) {
-    if (!confirm('למחוק שובר-על?')) return
-    await deleteSuperVoucher(id)
-    toast.success('נמחק')
+  function handleDeleteSV(id: string, name: string) {
+    setConfirm({
+      title: 'מחיקת שובר-על',
+      message: `למחוק את "${name}"? הפעולה אינה ניתנת לביטול.`,
+      onConfirm: async () => {
+        setConfirm(null)
+        await deleteSuperVoucher(id)
+        toast.success('נמחק')
+      },
+    })
   }
 
   async function exportCSV() {
@@ -117,6 +140,16 @@ export default function AdminPage() {
 
   return (
     <div className="flex-1 bg-gray-50">
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          danger
+          onConfirm={confirm.onConfirm}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+
       <div className="bg-white border-b px-4 py-4">
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <Shield className="w-5 h-5 text-green-600" />
@@ -127,7 +160,7 @@ export default function AdminPage() {
       <div className="p-4 pb-24 space-y-4">
         {/* Stats */}
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-3xl p-5 text-white">
-          <h3 className="text-sm text-slate-300 mb-3">סטטיסטיקות ארנק</h3>
+          <h3 className="text-sm text-slate-300 mb-3">סטטיסטיקות</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-slate-400">יתרה כוללת</p>
@@ -145,6 +178,16 @@ export default function AdminPage() {
               <p className="text-xs text-slate-400">פגים בקרוב</p>
               <p className={`text-xl font-bold ${expiringSoon > 0 ? 'text-orange-300' : 'text-white'}`}>{expiringSoon}</p>
             </div>
+          </div>
+          {/* Registered users */}
+          <div className="mt-3 pt-3 border-t border-slate-600 flex items-center gap-2">
+            <Users className="w-4 h-4 text-slate-400" />
+            <span className="text-sm text-slate-300">
+              משתמשים רשומים:&nbsp;
+              <span className="font-bold text-white">
+                {usersCount === null ? '...' : usersCount}
+              </span>
+            </span>
           </div>
         </div>
 
@@ -165,12 +208,8 @@ export default function AdminPage() {
                 onChange={e => setNewWalletName(e.target.value)}
                 className="flex-1 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
               />
-              <button onClick={handleSaveWalletName} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm">
-                שמור
-              </button>
-              <button onClick={() => setEditingWalletName(false)} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm">
-                ביטול
-              </button>
+              <button onClick={handleSaveWalletName} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm">שמור</button>
+              <button onClick={() => setEditingWalletName(false)} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm">ביטול</button>
             </div>
           )}
         </div>
@@ -178,7 +217,7 @@ export default function AdminPage() {
         {/* Members */}
         <div className="bg-white rounded-3xl shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4" /> חברים ({members.length})
+            <Users className="w-4 h-4" /> חברים בארנק ({members.length})
           </h3>
           <div className="space-y-2 mb-3">
             {members.map(m => (
@@ -188,7 +227,7 @@ export default function AdminPage() {
                   <p className="text-xs text-gray-400">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
                 </div>
                 {m.role !== 'owner' && (
-                  <button onClick={() => handleRemoveMember(m.user_id)} className="text-red-500 p-1.5 rounded-lg hover:bg-red-50">
+                  <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="text-red-500 p-1.5 rounded-lg hover:bg-red-50">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
@@ -204,9 +243,7 @@ export default function AdminPage() {
               className="flex-1 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
               dir="ltr"
             />
-            <button onClick={handleInvite} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-medium">
-              הזמן
-            </button>
+            <button onClick={handleInvite} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-medium">הזמן</button>
           </div>
         </div>
 
@@ -226,6 +263,11 @@ export default function AdminPage() {
               <input value={svName} onChange={e => setSvName(e.target.value)} placeholder="שם שובר-על" className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
               <input value={svDesc} onChange={e => setSvDesc(e.target.value)} placeholder="תיאור (אופציונלי)" className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
               <textarea value={svStores} onChange={e => setSvStores(e.target.value)} placeholder="חנויות מכבדות (כל חנות בשורה נפרדת או מופרדות בפסיק)" rows={3} className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-y" />
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={svGlobal} onChange={e => setSvGlobal(e.target.checked)} className="w-4 h-4 accent-green-500" />
+                <Globe className="w-4 h-4 text-blue-500" />
+                גלובלי — יוצג לכל המשתמשים
+              </label>
               <div className="flex gap-2">
                 <button onClick={handleAddSV} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-sm">הוסף</button>
                 <button onClick={() => setShowAddSV(false)} className="flex-1 bg-gray-200 py-2 rounded-xl text-sm">ביטול</button>
@@ -249,6 +291,11 @@ export default function AdminPage() {
                       rows={3}
                       className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                     />
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" checked={editingSV.is_global ?? false} onChange={e => setEditingSV({ ...editingSV, is_global: e.target.checked })} className="w-4 h-4 accent-green-500" />
+                      <Globe className="w-4 h-4 text-blue-500" />
+                      גלובלי
+                    </label>
                     <div className="flex gap-2">
                       <button onClick={() => { updateSuperVoucher(sv.id, editingSV); setEditingSV(null); toast.success('עודכן') }} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-sm">שמור</button>
                       <button onClick={() => setEditingSV(null)} className="flex-1 bg-gray-100 py-2 rounded-xl text-sm">ביטול</button>
@@ -257,14 +304,17 @@ export default function AdminPage() {
                 ) : (
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-medium text-gray-800 text-sm">{sv.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-gray-800 text-sm">{sv.name}</p>
+                        {sv.is_global && <Globe className="w-3.5 h-3.5 text-blue-400" aria-label="גלובלי" />}
+                      </div>
                       <p className="text-xs text-gray-400 mt-0.5">{sv.stores.length} חנויות</p>
                     </div>
                     <div className="flex gap-1">
                       <button onClick={() => setEditingSV(sv)} className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDeleteSV(sv.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50">
+                      <button onClick={() => handleDeleteSV(sv.id, sv.name)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>

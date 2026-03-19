@@ -6,6 +6,7 @@ import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const QUICK_AMOUNTS = [50, 100]
 
@@ -23,6 +24,7 @@ export default function CheckoutPage() {
   const [customAmount, setCustomAmount] = useState('')
   const [copied, setCopied] = useState(false)
   const [wakeLock, setWakeLock] = useState<any>(null)
+  const [confirmArchive, setConfirmArchive] = useState(false)
 
   // WakeLock
   useEffect(() => {
@@ -109,6 +111,17 @@ export default function CheckoutPage() {
 
   return (
     <div className="flex-1 bg-gray-50">
+      {confirmArchive && (
+        <ConfirmDialog
+          title="העברה לארכיון"
+          message="להעביר את השובר לארכיון?"
+          onConfirm={() => {
+            setConfirmArchive(false)
+            archiveVoucher(voucher.id).then(() => { toast.success('הועבר לארכיון'); navigate(-1) })
+          }}
+          onCancel={() => setConfirmArchive(false)}
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -124,7 +137,7 @@ export default function CheckoutPage() {
           </div>
           {!isArchived && (
             <button
-              onClick={() => archiveVoucher(voucher.id).then(() => { toast.success('הועבר לארכיון'); navigate(-1) })}
+              onClick={() => setConfirmArchive(true)}
               className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
             >
               <Archive className="w-5 h-5" />
@@ -294,7 +307,7 @@ export default function CheckoutPage() {
               {/* Auto archive at 0 */}
               {voucher.balance <= 0 && !isArchived && (
                 <button
-                  onClick={() => archiveVoucher(voucher.id).then(() => { toast.success('הועבר לארכיון'); navigate(-1) })}
+                  onClick={() => setConfirmArchive(true)}
                   className="mt-3 w-full flex items-center justify-center gap-2 py-3 bg-gray-100 text-gray-600 rounded-2xl text-sm font-medium hover:bg-gray-200 transition-all"
                 >
                   <Archive className="w-4 h-4" />

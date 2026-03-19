@@ -7,6 +7,7 @@ import { Plus, Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Tras
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
 import { useNavigate } from 'react-router-dom'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 type SortKey = 'expiry' | 'balance' | 'store' | 'added'
 type FilterTab = 'all' | 'expiring' | 'shared'
@@ -29,6 +30,9 @@ export default function HomePage() {
   // Bulk select
   const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  type Confirm = { title: string; message?: string; onConfirm: () => void }
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
 
   const allCategories = useMemo(() => {
     const cats = new Set<string>()
@@ -140,9 +144,28 @@ export default function HomePage() {
     )
   }
 
-  async function handleArchiveExpired() {
-    await archiveExpired()
-    toast.success('שוברים פגי תוקף הועברו לארכיון')
+  function handleArchiveExpired() {
+    setConfirm({
+      title: 'ארכוב שוברים פגים',
+      message: `להעביר ${expiredCount} שוברים פגי תוקף לארכיון?`,
+      onConfirm: async () => { setConfirm(null); await archiveExpired(); toast.success('שוברים פגי תוקף הועברו לארכיון') },
+    })
+  }
+
+  function requestDelete(id: string) {
+    setConfirm({
+      title: 'מחיקת שובר',
+      message: 'פעולה זו אינה ניתנת לביטול.',
+      onConfirm: () => { setConfirm(null); handleDelete(id) },
+    })
+  }
+
+  function requestArchive(id: string) {
+    setConfirm({
+      title: 'העברה לארכיון',
+      message: 'להעביר את השובר לארכיון?',
+      onConfirm: async () => { setConfirm(null); await archiveVoucher(id); toast.success('הועבר לארכיון') },
+    })
   }
 
   // Bulk actions
@@ -163,16 +186,30 @@ export default function HomePage() {
     }
   }
 
-  async function bulkArchive() {
-    for (const id of selectedIds) {
-      await archiveVoucher(id)
-    }
-    toast.success(`${selectedIds.size} שוברים הועברו לארכיון`)
-    setSelectedIds(new Set())
-    setIsSelectMode(false)
+  function bulkArchive() {
+    const count = selectedIds.size
+    setConfirm({
+      title: 'ארכוב מרובה',
+      message: `להעביר ${count} שוברים לארכיון?`,
+      onConfirm: async () => {
+        setConfirm(null)
+        for (const id of selectedIds) await archiveVoucher(id)
+        toast.success(`${count} שוברים הועברו לארכיון`)
+        setSelectedIds(new Set()); setIsSelectMode(false)
+      },
+    })
   }
 
-  async function bulkDelete() {
+  function bulkDelete() {
+    const count = selectedIds.size
+    setConfirm({
+      title: 'מחיקה מרובה',
+      message: `למחוק ${count} שוברים? הפעולה אינה ניתנת לביטול.`,
+      onConfirm: () => { setConfirm(null); executeBulkDelete() },
+    })
+  }
+
+  async function executeBulkDelete() {
     const count = selectedIds.size
     setIsSelectMode(false)
     const ids = [...selectedIds]
@@ -223,6 +260,15 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 bg-gray-50">
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          danger
+          onConfirm={confirm.onConfirm}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-30">
         <div className="px-4 pt-4 pb-3">
@@ -390,8 +436,8 @@ export default function HomePage() {
                   superVoucherName={sv?.name}
                   onClick={() => navigate(`/checkout/${v.id}`)}
                   onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
-                  onDelete={() => handleDelete(v.id)}
-                  onArchive={() => archiveVoucher(v.id).then(() => toast.success('הועבר לארכיון'))}
+                  onDelete={() => requestDelete(v.id)}
+                  onArchive={() => requestArchive(v.id)}
                   isSelectMode={isSelectMode}
                   isSelected={selectedIds.has(v.id)}
                   onSelect={() => toggleSelect(v.id)}

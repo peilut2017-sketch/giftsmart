@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { formatCurrency, formatDate } from '../utils/helpers'
 import { RotateCcw, Trash2, Archive, SlidersHorizontal } from 'lucide-react'
 import toast from 'react-hot-toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 type SortKey = 'added' | 'store' | 'balance' | 'expiry'
 
@@ -17,6 +18,8 @@ export default function ArchivePage() {
   // Undo delete
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
   const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  type Confirm = { title: string; message?: string; onConfirm: () => void }
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
 
   const sortedFiltered = useMemo(() => {
     let result = archivedVouchers.filter(v =>
@@ -40,6 +43,14 @@ export default function ArchivePage() {
     }
     return result
   }, [archivedVouchers, search, sortKey, hiddenIds])
+
+  function requestDelete(id: string) {
+    setConfirm({
+      title: 'מחיקת שובר',
+      message: 'למחוק את השובר לצמיתות? הפעולה אינה ניתנת לביטול.',
+      onConfirm: () => { setConfirm(null); handleDelete(id) },
+    })
+  }
 
   async function handleDelete(id: string) {
     setHiddenIds(prev => new Set([...prev, id]))
@@ -80,6 +91,15 @@ export default function ArchivePage() {
 
   return (
     <div className="flex-1">
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          danger
+          onConfirm={confirm.onConfirm}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-20 px-4 py-4">
         <div className="flex items-center gap-2 mb-3">
@@ -166,7 +186,7 @@ export default function ArchivePage() {
                       <RotateCcw className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={e => { e.stopPropagation(); handleDelete(v.id) }}
+                      onClick={e => { e.stopPropagation(); requestDelete(v.id) }}
                       className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
                       title="מחיקה"
                     >

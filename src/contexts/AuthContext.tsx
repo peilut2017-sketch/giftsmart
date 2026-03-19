@@ -11,6 +11,7 @@ interface AuthContextType {
   passwordRecovery: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>
+  signInWithGoogle: () => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   updateProfile: (data: Partial<Profile>) => Promise<void>
   resetPassword: (email: string) => Promise<{ error: Error | null }>
@@ -81,6 +82,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error }
   }
 
+  async function signInWithGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: import.meta.env.VITE_APP_URL || window.location.origin },
+    })
+    return { error }
+  }
+
   async function signUp(email: string, password: string, name?: string) {
     const { data, error } = await supabase.auth.signUp({ email, password })
     if (!error && data.user) {
@@ -118,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, passwordRecovery, signIn, signUp, signOut, updateProfile, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, passwordRecovery, signIn, signUp, signInWithGoogle, signOut, updateProfile, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )
