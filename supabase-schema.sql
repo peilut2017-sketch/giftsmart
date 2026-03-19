@@ -80,11 +80,15 @@ CREATE TABLE IF NOT EXISTS wallet_members (
 
 ALTER TABLE wallet_members ENABLE ROW LEVEL SECURITY;
 
+-- Security-definer helper: returns wallet IDs for the current user without triggering RLS
+CREATE OR REPLACE FUNCTION get_my_wallet_ids()
+RETURNS SETOF UUID LANGUAGE SQL SECURITY DEFINER STABLE AS $$
+  SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
+$$;
+
 CREATE POLICY "Members can view wallet memberships"
   ON wallet_members FOR SELECT
-  USING (user_id = auth.uid() OR wallet_id IN (
-    SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
-  ));
+  USING (user_id = auth.uid() OR wallet_id IN (SELECT get_my_wallet_ids()));
 
 CREATE POLICY "Owners can manage members"
   ON wallet_members FOR ALL
