@@ -35,6 +35,15 @@ interface VoucherContextType {
 const VoucherContext = createContext<VoucherContextType | undefined>(undefined)
 
 const CACHE_KEY = 'vouchers_cache'
+const QUERY_TIMEOUT_MS = 8000
+
+// Wraps a thenable (Supabase query) with a timeout so a hung query never freezes the app
+function withTimeout<T>(thenable: PromiseLike<T>, ms = QUERY_TIMEOUT_MS): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Query timeout after ${ms}ms`)), ms)
+  )
+  return Promise.race([Promise.resolve(thenable), timeout])
+}
 
 export function VoucherProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -81,43 +90,41 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       return
     }
-    setLoading(true)
 
-    // Load from cache immediately
+    // Show cache immediately so the UI is never blank/stuck
     loadFromCache()
+    setLoading(false)
 
-    if (!navigator.onLine) {
-      setLoading(false)
-      return
-    }
+    if (!navigator.onLine) return
 
     try {
-      // Get or create wallet
-      let { data: membership } = await supabase
-        .from('wallet_members')
-        .select('wallet_id, wallets(id, name)')
-        .eq('user_id', user.id)
-        .order('created_at')
-        .limit(1)
-        .single()
+      // Get or create wallet — wrapped in timeout so a hung query never freezes the app
+      type MembershipResult = { data: { wallet_id: string; wallets: any } | null }
+      const { data: membership } = await withTimeout<MembershipResult>(
+        supabase
+          .from('wallet_members')
+          .select('wallet_id, wallets(id, name)')
+          .eq('user_id', user.id)
+          .order('created_at')
+          .limit(1)
+          .single() as any
+      ).catch(() => ({ data: null } as MembershipResult))
 
       let wId: string
       if (!membership) {
         // Create new wallet
-        const { data: wallet } = await supabase
-          .from('wallets')
-          .insert({ name: 'ארנק השוברים שלי', owner_id: user.id })
-          .select()
-          .single()
-        if (!wallet) { setLoading(false); return }
+        const { data: wallet } = await withTimeout<{ data: any }>(
+          supabase.from('wallets').insert({ name: 'ארנק השוברים שלי', owner_id: user.id }).select().single() as any
+        ).catch(() => ({ data: null }))
+        if (!wallet) return
         wId = wallet.id
         setWalletName(wallet.name)
-        await supabase.from('wallet_members').insert({
+        await (supabase.from('wallet_members').insert({
           wallet_id: wId,
           user_id: user.id,
           email: user.email,
           role: 'owner',
-        })
+        }) as any as Promise<any>).catch(() => {})
       } else {
         wId = membership.wallet_id
         const walletData = membership.wallets as any
@@ -125,49 +132,31 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       }
       setWalletId(wId)
 
-      // Fetch vouchers
-      const { data: vData } = await supabase
-        .from('vouchers')
-        .select('*')
-        .eq('wallet_id', wId)
-        .order('expiry_date', { ascending: true })
+      // Fetch all data in parallel for speed
+      type QueryResult = { data: any[] | null }
+      const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
+        withTimeout<QueryResult>(supabase.from('vouchers').select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any),
+        withTimeout<QueryResult>(supabase.from('super_vouchers').select('*').eq('wallet_id', wId) as any),
+        withTimeout<QueryResult>(supabase.from('stores').select('*').order('name') as any),
+        withTimeout<QueryResult>(supabase.from('categories').select('*').or(`wallet_id.eq.${wId},wallet_id.is.null`) as any),
+      ])
 
-      if (vData) {
-        const active = vData.filter(v => !v.is_archived)
-        const archived = vData.filter(v => v.is_archived)
+      if (vRes.status === 'fulfilled' && vRes.value.data) {
+        const active = vRes.value.data.filter((v: any) => !v.is_archived)
+        const archived = vRes.value.data.filter((v: any) => v.is_archived)
         setVouchers(active)
         setArchivedVouchers(archived)
         saveToCache(active, archived)
       }
-
-      // Fetch super vouchers
-      const { data: svData } = await supabase
-        .from('super_vouchers')
-        .select('*')
-        .eq('wallet_id', wId)
-      if (svData) setSuperVouchers(svData)
-
-      // Fetch stores
-      const { data: storeData } = await supabase
-        .from('stores')
-        .select('*')
-        .order('name')
-      if (storeData) setStores(storeData)
-
-      // Fetch custom categories
-      const { data: catData } = await supabase
-        .from('categories')
-        .select('*')
-        .or(`wallet_id.eq.${wId},wallet_id.is.null`)
-      if (catData && catData.length > 0) {
-        const customCats = catData.filter(c => c.wallet_id === wId)
+      if (svRes.status === 'fulfilled' && svRes.value.data) setSuperVouchers(svRes.value.data)
+      if (storeRes.status === 'fulfilled' && storeRes.value.data) setStores(storeRes.value.data)
+      if (catRes.status === 'fulfilled' && catRes.value.data && catRes.value.data.length > 0) {
+        const customCats = catRes.value.data.filter((c: any) => c.wallet_id === wId)
         setCategories([...DEFAULT_CATEGORIES, ...customCats])
       }
 
     } catch (err) {
       console.error('Fetch error:', err)
-    } finally {
-      setLoading(false)
     }
   }, [user, loadFromCache, saveToCache])
 
