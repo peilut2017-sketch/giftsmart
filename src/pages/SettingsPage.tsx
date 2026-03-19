@@ -82,10 +82,12 @@ export default function SettingsPage() {
       toast.success(`תזכורת נשלחה ל-${user.email}`)
     } catch (err: any) {
       const msg = err?.message || ''
-      if (msg.includes('non-2xx') || msg.includes('FunctionsFetchError')) {
-        toast.error('שגיאה בשליחת המייל — בדוק שה-Edge Function פרוסה ושה-GMAIL_USER / GMAIL_APP_PASSWORD מוגדרים ב-Supabase')
+      if (msg.includes('resend_api_key not configured')) {
+        toast.error('מפתח Resend API חסר — הרץ את supabase-send-email-setup.sql והוסף את ה-API key')
+      } else if (msg.includes('pg_net') || msg.includes('net.http_post') || msg.includes('schema "net"')) {
+        toast.error('הרחבת pg_net לא פעילה — הפעל ב-Supabase Dashboard → Database → Extensions')
       } else {
-        toast.error('שגיאה בשליחת התזכורת — ' + (msg || 'בדוק חיבור לאינטרנט'))
+        toast.error('שגיאה בשליחת התזכורת' + (msg ? ': ' + msg : ''))
       }
     } finally {
       setSendingReminder(false)
