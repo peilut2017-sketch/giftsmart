@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, getExpiryStatus } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe } from 'lucide-react'
+import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { SUPER_VOUCHER_STORES } from '../types'
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@example.com'
 
@@ -16,6 +17,21 @@ interface Member {
   role: string
 }
 
+interface UserRow {
+  id: string
+  email: string
+  name?: string
+  created_at: string
+}
+
+interface SystemStats {
+  total_vouchers: number
+  total_archived: number
+  total_balance: number
+  total_wallets: number
+  total_users: number
+}
+
 type Confirm = { title: string; message?: string; onConfirm: () => void }
 
 export default function AdminPage() {
@@ -23,7 +39,9 @@ export default function AdminPage() {
   const { vouchers, archivedVouchers, superVouchers, walletId, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, inviteMember, removeMember, updateWalletName } = useVouchers()
 
   const [members, setMembers] = useState<Member[]>([])
-  const [usersCount, setUsersCount] = useState<number | null>(null)
+  const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
+  const [allUsers, setAllUsers] = useState<UserRow[]>([])
+  const [showUsers, setShowUsers] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [editingWalletName, setEditingWalletName] = useState(false)
   const [newWalletName, setNewWalletName] = useState(walletName)
@@ -33,6 +51,7 @@ export default function AdminPage() {
   const [svStores, setSvStores] = useState('')
   const [svDesc, setSvDesc] = useState('')
   const [svGlobal, setSvGlobal] = useState(false)
+  const [showQuickSV, setShowQuickSV] = useState(false)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
   const isAdmin = user?.email === ADMIN_EMAIL
@@ -42,9 +61,15 @@ export default function AdminPage() {
     supabase.from('wallet_members').select('*').eq('wallet_id', walletId).then(({ data }) => {
       if (data) setMembers(data)
     })
-    // Fetch total registered users count
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).then(({ count }) => {
-      setUsersCount(count ?? 0)
+    // Use RPC to bypass RLS
+    supabase.rpc('get_registered_users_count').then(({ data }) => {
+      if (data !== null) setSystemStats(prev => ({ ...(prev as any), total_users: data }))
+    })
+    supabase.rpc('get_system_stats').then(({ data }) => {
+      if (data) setSystemStats(data)
+    })
+    supabase.rpc('get_all_users').then(({ data }) => {
+      if (data) setAllUsers(data)
     })
   }, [walletId, isAdmin])
 
@@ -59,9 +84,6 @@ export default function AdminPage() {
     )
   }
 
-  const totalBalance = vouchers.reduce((s, v) => s + v.balance, 0)
-  const totalAmount = vouchers.reduce((s, v) => s + v.amount, 0)
-  const totalUsed = totalAmount - totalBalance
   const expiringSoon = vouchers.filter(v => ['warning', 'critical'].includes(getExpiryStatus(v.expiry_date))).length
 
   async function handleInvite() {
@@ -107,6 +129,13 @@ export default function AdminPage() {
     setShowAddSV(false)
   }
 
+  async function handleQuickAddSV(name: string, stores: string[]) {
+    const alreadyExists = superVouchers.some(sv => sv.name === name)
+    if (alreadyExists) return toast(`"${name}" כבר קיים`, { icon: 'ℹ️' })
+    await addSuperVoucher({ name, stores, is_global: true })
+    toast.success(`"${name}" נוסף כשובר-על גלובלי`)
+  }
+
   function handleDeleteSV(id: string, name: string) {
     setConfirm({
       title: 'מחיקת שובר-על',
@@ -138,6 +167,23 @@ export default function AdminPage() {
     toast.success('קובץ CSV הורד!')
   }
 
+  async function exportUsersCSV() {
+    if (!allUsers.length) return toast.error('אין נתוני משתמשים')
+    const rows = [
+      ['מייל', 'שם', 'תאריך הרשמה'],
+      ...allUsers.map(u => [u.email, u.name || '', formatDate(u.created_at)])
+    ]
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'users.csv'; a.click()
+    URL.revokeObjectURL(url)
+    toast.success('רשימת משתמשים הורדה!')
+  }
+
+  const usersCount = systemStats?.total_users ?? null
+
   return (
     <div className="flex-1 bg-gray-50">
       {confirm && (
@@ -158,37 +204,88 @@ export default function AdminPage() {
       </div>
 
       <div className="p-4 pb-24 space-y-4">
-        {/* Stats */}
+
+        {/* System Stats */}
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-3xl p-5 text-white">
-          <h3 className="text-sm text-slate-300 mb-3">סטטיסטיקות</h3>
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart2 className="w-4 h-4 text-slate-300" />
+            <h3 className="text-sm text-slate-300 font-medium">סטטיסטיקות מערכת</h3>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-slate-400">יתרה כוללת</p>
-              <p className="text-xl font-bold">{formatCurrency(totalBalance)}</p>
+              <p className="text-xs text-slate-400">יתרה כוללת (כל הארנקים)</p>
+              <p className="text-xl font-bold">
+                {systemStats ? formatCurrency(systemStats.total_balance) : '...'}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-slate-400">שווי רכישות</p>
-              <p className="text-xl font-bold">{formatCurrency(totalAmount)}</p>
+              <p className="text-xs text-slate-400">שוברים פעילים</p>
+              <p className="text-xl font-bold">{systemStats?.total_vouchers ?? '...'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-400">סה"כ נוצל</p>
-              <p className="text-xl font-bold">{formatCurrency(totalUsed)}</p>
+              <p className="text-xs text-slate-400">ארכיון</p>
+              <p className="text-xl font-bold">{systemStats?.total_archived ?? '...'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-400">פגים בקרוב</p>
-              <p className={`text-xl font-bold ${expiringSoon > 0 ? 'text-orange-300' : 'text-white'}`}>{expiringSoon}</p>
+              <p className="text-xs text-slate-400">ארנקים</p>
+              <p className="text-xl font-bold">{systemStats?.total_wallets ?? '...'}</p>
             </div>
           </div>
-          {/* Registered users */}
-          <div className="mt-3 pt-3 border-t border-slate-600 flex items-center gap-2">
-            <Users className="w-4 h-4 text-slate-400" />
-            <span className="text-sm text-slate-300">
-              משתמשים רשומים:&nbsp;
-              <span className="font-bold text-white">
-                {usersCount === null ? '...' : usersCount}
+          <div className="mt-3 pt-3 border-t border-slate-600 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-slate-400" />
+              <span className="text-sm text-slate-300">
+                משתמשים רשומים:&nbsp;
+                <span className="font-bold text-white">{usersCount === null ? '...' : usersCount}</span>
               </span>
-            </span>
+            </div>
+            {expiringSoon > 0 && (
+              <span className="text-xs bg-orange-400/20 text-orange-300 px-2 py-1 rounded-lg">
+                ⚠️ {expiringSoon} פגים בקרוב
+              </span>
+            )}
           </div>
+        </div>
+
+        {/* Registered Users List */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-4"
+            onClick={() => setShowUsers(v => !v)}
+          >
+            <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Users className="w-4 h-4 text-blue-500" />
+              רשימת משתמשים ({allUsers.length || usersCount || '...'})
+            </span>
+            <div className="flex items-center gap-2">
+              {allUsers.length > 0 && (
+                <button
+                  onClick={e => { e.stopPropagation(); exportUsersCSV() }}
+                  className="text-xs text-green-600 bg-green-50 px-2.5 py-1 rounded-lg"
+                >
+                  ייצוא
+                </button>
+              )}
+              {showUsers ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </div>
+          </button>
+          {showUsers && (
+            <div className="border-t divide-y divide-gray-50 max-h-72 overflow-y-auto">
+              {allUsers.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-6">
+                  הרץ את <code className="bg-gray-100 px-1 rounded text-xs">supabase-admin-functions.sql</code> כדי לראות נתונים
+                </p>
+              ) : allUsers.map(u => (
+                <div key={u.id} className="flex items-center justify-between px-4 py-2.5">
+                  <div>
+                    <p className="text-sm text-gray-800">{u.email}</p>
+                    {u.name && <p className="text-xs text-gray-400">{u.name}</p>}
+                  </div>
+                  <p className="text-xs text-gray-400">{formatDate(u.created_at)}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Wallet name */}
@@ -203,11 +300,7 @@ export default function AdminPage() {
             </div>
           ) : (
             <div className="flex gap-2">
-              <input
-                value={newWalletName}
-                onChange={e => setNewWalletName(e.target.value)}
-                className="flex-1 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-              />
+              <input value={newWalletName} onChange={e => setNewWalletName(e.target.value)} className="flex-1 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
               <button onClick={handleSaveWalletName} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm">שמור</button>
               <button onClick={() => setEditingWalletName(false)} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm">ביטול</button>
             </div>
@@ -253,10 +346,44 @@ export default function AdminPage() {
             <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <Star className="w-4 h-4 text-amber-400" /> שוברי-על ({superVouchers.length})
             </h3>
-            <button onClick={() => setShowAddSV(true)} className="text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-xl flex items-center gap-1">
-              <Plus className="w-3.5 h-3.5" /> הוסף
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowQuickSV(v => !v)}
+                className="text-sm text-blue-600 bg-blue-50 px-3 py-1.5 rounded-xl flex items-center gap-1"
+              >
+                <Zap className="w-3.5 h-3.5" /> מהיר
+              </button>
+              <button onClick={() => setShowAddSV(true)} className="text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-xl flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5" /> הוסף
+              </button>
+            </div>
           </div>
+
+          {/* Quick add from presets */}
+          {showQuickSV && (
+            <div className="bg-blue-50 rounded-2xl p-3 mb-3">
+              <p className="text-xs text-blue-700 font-medium mb-2">הוסף שוברי-על ידועים (גלובלי אוטומטי):</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(SUPER_VOUCHER_STORES).map(([name, stores]) => {
+                  const exists = superVouchers.some(sv => sv.name === name)
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => handleQuickAddSV(name, stores)}
+                      disabled={exists}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+                        exists
+                          ? 'bg-gray-200 text-gray-400 cursor-default'
+                          : 'bg-white border border-blue-200 text-blue-700 hover:bg-blue-100'
+                      }`}
+                    >
+                      {exists ? '✓ ' : ''}{name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {showAddSV && (
             <div className="bg-gray-50 rounded-2xl p-4 mb-3 space-y-2">
@@ -325,14 +452,24 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Export */}
-        <button
-          onClick={exportCSV}
-          className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-3xl py-4 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"
-        >
-          <Download className="w-5 h-5 text-green-600" />
-          ייצוא CSV
-        </button>
+        {/* Exports */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={exportCSV}
+            className="flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-3xl py-4 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"
+          >
+            <Download className="w-4 h-4 text-green-600" />
+            ייצוא שוברים
+          </button>
+          <button
+            onClick={exportUsersCSV}
+            className="flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-3xl py-4 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"
+          >
+            <Download className="w-4 h-4 text-blue-500" />
+            ייצוא משתמשים
+          </button>
+        </div>
+
       </div>
     </div>
   )
