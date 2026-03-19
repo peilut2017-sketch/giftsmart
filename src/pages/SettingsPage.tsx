@@ -82,10 +82,8 @@ export default function SettingsPage() {
       toast.success(`תזכורת נשלחה ל-${user.email}`)
     } catch (err: any) {
       const msg = err?.message || ''
-      if (msg.includes('resend_api_key not configured')) {
-        toast.error('מפתח Resend API חסר — הרץ את supabase-send-email-setup.sql והוסף את ה-API key')
-      } else if (msg.includes('pg_net') || msg.includes('net.http_post') || msg.includes('schema "net"')) {
-        toast.error('הרחבת pg_net לא פעילה — הפעל ב-Supabase Dashboard → Database → Extensions')
+      if (msg.includes('Failed to send') || msg.includes('FunctionsFetchError')) {
+        toast.error('Edge Function לא פרוסה — הרץ: npx supabase functions deploy send-email')
       } else {
         toast.error('שגיאה בשליחת התזכורת' + (msg ? ': ' + msg : ''))
       }
