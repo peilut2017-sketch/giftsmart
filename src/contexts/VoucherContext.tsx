@@ -477,7 +477,6 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   async function createShareToken(voucherId: string, expiresInDays?: number): Promise<string> {
     if (!user) throw new Error('לא מחובר')
-    const v = [...vouchers, ...archivedVouchers].find(v => v.id === voucherId)
     const token = Array.from(crypto.getRandomValues(new Uint8Array(18)))
       .map(b => b.toString(36).padStart(2, '0'))
       .join('')
@@ -485,21 +484,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const expires_at = expiresInDays
       ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
       : null
-    // Store a snapshot of the voucher so the public page can display without auth
-    const voucher_snapshot = v ? {
-      store_name: v.store_name,
-      balance: v.balance,
-      amount: v.amount,
-      code: v.code,
-      expiry_date: v.expiry_date ?? null,
-      notes: v.notes ?? null,
-    } : {}
     const { error } = await supabase.from('shared_voucher_tokens').insert({
       token,
       voucher_id: voucherId,
       created_by: user.id,
       expires_at,
-      voucher_snapshot,
     })
     if (error) {
       if (error.code === '42P01' || error.message?.includes('schema cache')) throw new Error('TABLE_MISSING')

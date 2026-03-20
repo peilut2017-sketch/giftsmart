@@ -15,6 +15,7 @@ interface SharedVoucher {
   code: string
   expiry_date?: string | null
   notes?: string | null
+  is_expired?: boolean
 }
 
 export default function SharedVoucherPage() {
@@ -60,32 +61,30 @@ export default function SharedVoucherPage() {
 
   async function loadSharedVoucher() {
     try {
-      const { data: tokenRecord, error: tokenError } = await supabase
-        .from('shared_voucher_tokens')
-        .select('voucher_snapshot, expires_at, view_count')
-        .eq('token', token)
-        .single()
+      const { data, error: rpcError } = await supabase
+        .rpc('get_shared_voucher_live', { p_token: token })
 
-      if (tokenError || !tokenRecord) {
+      if (rpcError || !data || data.length === 0) {
         setError('לינק לא נמצא או שפג תוקפו')
         setLoading(false)
         return
       }
 
-      if (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date()) {
+      const row = data[0] as SharedVoucher
+
+      if (row.is_expired) {
         setError('פג תוקף הלינק')
         setLoading(false)
         return
       }
 
-      const snapshot = tokenRecord.voucher_snapshot as SharedVoucher | null
-      if (!snapshot || !snapshot.code) {
+      if (!row.code) {
         setError('נתוני השובר אינם זמינים')
         setLoading(false)
         return
       }
 
-      setVoucher(snapshot)
+      setVoucher(row)
 
       // Increment view count atomically via RPC (direct UPDATE is blocked by RLS for unauthenticated users)
       supabase.rpc('increment_share_view_count', { p_token: token }).then(() => {})
