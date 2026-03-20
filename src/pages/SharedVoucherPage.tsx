@@ -56,12 +56,8 @@ export default function SharedVoucherPage() {
 
       setVoucher(snapshot)
 
-      // Increment view count (fire and forget)
-      supabase
-        .from('shared_voucher_tokens')
-        .update({ view_count: (tokenRecord.view_count || 0) + 1 })
-        .eq('token', token)
-        .then(() => {})
+      // Increment view count atomically via RPC (direct UPDATE is blocked by RLS for unauthenticated users)
+      supabase.rpc('increment_share_view_count', { p_token: token }).then(() => {})
     } catch {
       setError('שגיאה בטעינת השובר')
     } finally {

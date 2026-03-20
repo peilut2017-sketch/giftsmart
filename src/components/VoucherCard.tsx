@@ -16,8 +16,19 @@ interface Props {
   rowMode?: boolean
 }
 
+function isSafeUrl(url: string | undefined): boolean {
+  if (!url) return false
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArchive, superVoucherName, isSelectMode, isSelected, onSelect, rowMode }: Props) {
   const [hovered, setHovered] = useState(false)
+  const safeLink = isSafeUrl(voucher.link) ? voucher.link : undefined
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
   const pct = voucher.amount > 0 ? (voucher.balance / voucher.amount) * 100 : 0
@@ -81,8 +92,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
 
           {/* Expiry + link */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {voucher.link && (
-              <a href={voucher.link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1 rounded-full text-blue-500 hover:bg-blue-50" title="פתח קישור">
+            {safeLink && (
+              <a href={safeLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1 rounded-full text-blue-500 hover:bg-blue-50" title="פתח קישור">
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}

@@ -225,6 +225,12 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       walletIdRef.current = null
       fetchData()
     } else {
+      // Clear all cached voucher data from localStorage on logout to prevent data leakage
+      try {
+        Object.keys(localStorage)
+          .filter(k => k.startsWith(CACHE_KEY_PREFIX))
+          .forEach(k => localStorage.removeItem(k))
+      } catch {}
       walletIdRef.current = null
       setVouchers([])
       setArchivedVouchers([])
@@ -430,13 +436,12 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   async function inviteMember(email: string) {
     if (!walletId) return
-    // Find user by email
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, name')
-      .eq('email', email)
-      .single()
-    if (!profile) throw new Error('משתמש לא נמצא')
+    // Use a SECURITY DEFINER RPC to look up the profile — direct SELECT on profiles
+    // is blocked by RLS for other users' rows.
+    const { data: rows, error: rpcError } = await supabase
+      .rpc('find_profile_by_email', { search_email: email })
+    const profile = rows?.[0]
+    if (rpcError || !profile) throw new Error('משתמש לא נמצא')
     await supabase.from('wallet_members').insert({
       wallet_id: walletId,
       user_id: profile.id,
@@ -494,7 +499,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       voucher_snapshot,
     })
     if (error) {
-      if (error.code === '42P01') throw new Error('TABLE_MISSING')
+      if (error.code === '42P01' || error.message?.includes('schema cache')) throw new Error('TABLE_MISSING')
       throw new Error(error.message)
     }
     return token

@@ -263,3 +263,31 @@ CREATE POLICY "Users can manage own activity log"
 
 -- Add voucher_snapshot column to shared_voucher_tokens (run on existing databases)
 ALTER TABLE shared_voucher_tokens ADD COLUMN IF NOT EXISTS voucher_snapshot JSONB DEFAULT '{}';
+
+-- ============ SECURITY FUNCTIONS ============
+
+-- Allow looking up a user by email without exposing all profiles via RLS.
+-- Used by the invite-member flow (SECURITY DEFINER bypasses RLS safely).
+CREATE OR REPLACE FUNCTION find_profile_by_email(search_email TEXT)
+RETURNS TABLE(id UUID, name TEXT) LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
+BEGIN
+  RETURN QUERY
+    SELECT p.id, p.name FROM profiles p WHERE p.email = search_email LIMIT 1;
+END;
+$$;
+
+-- Atomically increment the view_count on a shared token.
+-- Public (unauthenticated) callers on the shared-voucher page cannot UPDATE via RLS,
+-- so we use a SECURITY DEFINER function instead.
+CREATE OR REPLACE FUNCTION increment_share_view_count(p_token TEXT)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE shared_voucher_tokens
+  SET view_count = view_count + 1
+  WHERE token = p_token;
+END;
+$$;
+
+-- Force PostgREST to reload its schema cache so newly created tables are visible immediately.
+-- Run this if you get "Could not find the table in the schema cache" errors.
+SELECT pg_notify('pgrst', 'reload schema');

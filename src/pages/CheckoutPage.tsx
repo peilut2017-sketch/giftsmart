@@ -296,7 +296,7 @@ export default function CheckoutPage() {
 
             {voucher.code && (
               <a
-                href={`https://otp.co.il/${voucher.code}`}
+                href={`https://otp.co.il/${encodeURIComponent(voucher.code)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
