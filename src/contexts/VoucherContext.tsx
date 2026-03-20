@@ -49,9 +49,7 @@ export interface ActivityLogEntry {
 const VoucherContext = createContext<VoucherContextType | undefined>(undefined)
 
 const CACHE_KEY_PREFIX = 'vouchers_cache_'
-// Use the pgsodium-generated view so code/cvv are always decrypted transparently.
-// INSERT/UPDATE through this view lets pgsodium's INSTEAD OF triggers encrypt the values.
-const VOUCHERS_VIEW = 'decrypted_vouchers'
+const VOUCHERS_VIEW = 'vouchers'
 const QUERY_TIMEOUT_MS = 8000
 
 // Wraps a thenable (Supabase query) with a timeout so a hung query never freezes the app
