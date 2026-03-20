@@ -56,20 +56,22 @@ export default function AdminPage() {
 
   const isAdmin = user?.email === ADMIN_EMAIL
 
+  // Load system-wide stats immediately — no walletId needed
   useEffect(() => {
-    if (!walletId || !isAdmin) return
-    supabase.from('wallet_members').select('*').eq('wallet_id', walletId).then(({ data }) => {
-      if (data) setMembers(data)
-    })
-    // Use RPC to bypass RLS
-    supabase.rpc('get_registered_users_count').then(({ data }) => {
-      if (data !== null) setSystemStats(prev => ({ ...(prev as any), total_users: data }))
-    })
+    if (!isAdmin) return
     supabase.rpc('get_system_stats').then(({ data }) => {
       if (data) setSystemStats(data)
     })
     supabase.rpc('get_all_users').then(({ data }) => {
       if (data) setAllUsers(data)
+    })
+  }, [isAdmin])
+
+  // Load wallet members only once walletId is available
+  useEffect(() => {
+    if (!walletId || !isAdmin) return
+    supabase.from('wallet_members').select('*').eq('wallet_id', walletId).then(({ data }) => {
+      if (data) setMembers(data)
     })
   }, [walletId, isAdmin])
 
