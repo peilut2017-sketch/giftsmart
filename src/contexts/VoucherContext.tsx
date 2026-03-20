@@ -269,7 +269,6 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     // Check for super voucher match
     let superVoucherId: string | undefined
     const matchingSV = superVouchers.find(sv =>
-      sv.stores.some(s => s.toLowerCase() === v.store_name.toLowerCase()) ||
       sv.name.toLowerCase() === v.store_name.toLowerCase()
     )
     if (matchingSV) superVoucherId = matchingSV.id
