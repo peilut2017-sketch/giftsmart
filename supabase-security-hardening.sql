@@ -3,6 +3,7 @@
 --
 -- WHAT THIS DOES:
 --   1. Enforces RLS on decrypted_vouchers view (security_invoker = true)
+--      — skipped gracefully if pgsodium encryption was never set up
 --   2. Removes the public "scraping" read policy on shared_voucher_tokens
 --   3. Drops the voucher_snapshot column (replaced by live RPC)
 --   4. Creates get_shared_voucher_live() RPC for secure public voucher sharing
@@ -19,15 +20,30 @@
 
 
 -- =============================================
--- STEP 1: Enforce RLS on the decrypted_vouchers view
+-- STEP 1: Enforce RLS on the decrypted_vouchers view (if it exists)
 -- =============================================
 -- Without security_invoker=true the view runs as its owner (postgres = superuser)
--- which bypasses RLS entirely. This makes the existing wallet-based RLS policies
--- actually take effect when users query through the view.
+-- which bypasses RLS entirely.
+--
+-- This block is skipped safely if supabase-vault-encryption.sql was never run
+-- (i.e. decrypted_vouchers does not exist yet).
 --
 -- NOTE: decrypted_vouchers is auto-managed by pgsodium. If pgsodium ever
--- regenerates the view (e.g. after a SECURITY LABEL change), re-run this line.
-ALTER VIEW decrypted_vouchers SET (security_invoker = true);
+-- regenerates the view (e.g. after a SECURITY LABEL change), re-run this step.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_views
+    WHERE schemaname = 'public' AND viewname = 'decrypted_vouchers'
+  ) THEN
+    EXECUTE 'ALTER VIEW decrypted_vouchers SET (security_invoker = true)';
+    RAISE NOTICE 'decrypted_vouchers: security_invoker set to true';
+  ELSE
+    RAISE NOTICE 'decrypted_vouchers view not found — skipping (pgsodium not set up). '
+                 'If you enable pgsodium later, re-run this migration.';
+  END IF;
+END
+$$;
 
 
 -- =============================================
@@ -41,7 +57,7 @@ DROP POLICY IF EXISTS "Anyone can read shared tokens" ON shared_voucher_tokens;
 -- =============================================
 -- STEP 3: Drop the voucher_snapshot column
 -- =============================================
--- Snapshots are no longer needed — the RPC returns live data from decrypted_vouchers.
+-- Snapshots are no longer needed — the RPC returns live data from the vouchers table.
 -- Existing share links are unaffected: the RPC looks up voucher_id from the token row.
 ALTER TABLE shared_voucher_tokens DROP COLUMN IF EXISTS voucher_snapshot;
 
@@ -53,10 +69,14 @@ ALTER TABLE shared_voucher_tokens DROP COLUMN IF EXISTS voucher_snapshot;
 -- visitor can read exactly ONE voucher — only if they hold the exact token.
 -- SET search_path: prevents search_path injection attacks in SECURITY DEFINER fns.
 --
+-- The query uses the vouchers table directly. If pgsodium transparent encryption
+-- is enabled (supabase-vault-encryption.sql was run), change the FROM clause
+-- from "vouchers" to "decrypted_vouchers" so the code column is decrypted.
+--
 -- Return values:
---   • Normal row   → voucher found, token valid
---   • is_expired=true row → token exists but has expired (preserves UX error message)
---   • No rows      → token not found
+--   • Normal row        → voucher found, token valid
+--   • is_expired = true → token exists but has expired (preserves UX error message)
+--   • No rows           → token not found
 CREATE OR REPLACE FUNCTION get_shared_voucher_live(p_token TEXT)
 RETURNS TABLE (
   store_name   TEXT,
@@ -100,18 +120,19 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Token valid → return live voucher data from the decrypted view
+  -- Token valid → return live voucher data
+  -- NOTE: if pgsodium encryption is enabled, change "vouchers" → "decrypted_vouchers"
   RETURN QUERY
     SELECT
-      dv.store_name,
-      dv.balance::NUMERIC,
-      dv.amount::NUMERIC,
-      dv.code,
-      dv.expiry_date,
-      dv.notes,
+      v.store_name,
+      v.balance::NUMERIC,
+      v.amount::NUMERIC,
+      v.code,
+      v.expiry_date,
+      v.notes,
       FALSE AS is_expired
-    FROM decrypted_vouchers dv
-    WHERE dv.id = v_voucher_id;
+    FROM vouchers v
+    WHERE v.id = v_voucher_id;
 END;
 $$;
 
