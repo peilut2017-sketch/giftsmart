@@ -112,8 +112,13 @@ export default function CheckoutPage() {
     try {
       const token = await createShareToken(voucher.id, days)
       const url = `${window.location.origin}/s/${token}`
-      await navigator.clipboard.writeText(url)
-      toast.success('לינק שיתוף הועתק!')
+      // Clipboard write is best-effort — failure must not hide the success
+      try {
+        await navigator.clipboard.writeText(url)
+        toast.success('לינק שיתוף הועתק!')
+      } catch {
+        toast.success('לינק שיתוף נוצר! העתק אותו מרשימת הלינקים.')
+      }
       const tokens = await getShareTokens(voucher.id)
       setShareTokens(tokens)
     } catch (err: any) {

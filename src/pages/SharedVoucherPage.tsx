@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
+import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
 import { Copy, AlertTriangle, Wallet } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Toaster } from 'react-hot-toast'
+import JsBarcode from 'jsbarcode'
+import QRCode from 'qrcode'
 
 interface SharedVoucher {
   store_name: string
@@ -22,10 +24,39 @@ export default function SharedVoucherPage() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  const barcodeRef = useRef<SVGSVGElement>(null)
+  const qrRef = useRef<HTMLCanvasElement>(null)
+
   useEffect(() => {
     if (!token) { setError('לינק לא תקין'); setLoading(false); return }
     loadSharedVoucher()
   }, [token])
+
+  // Render barcode or QR once voucher data is ready
+  useEffect(() => {
+    if (!voucher?.code) return
+    const isAlpha = isAlphanumeric(voucher.code)
+
+    if (!isAlpha && barcodeRef.current) {
+      try {
+        JsBarcode(barcodeRef.current, voucher.code, {
+          format: 'CODE128',
+          width: 2,
+          height: 72,
+          displayValue: false,
+          margin: 8,
+        })
+      } catch {}
+    }
+
+    if (isAlpha && qrRef.current) {
+      QRCode.toCanvas(qrRef.current, voucher.code, {
+        width: 200,
+        margin: 2,
+        color: { dark: '#1e293b', light: '#ffffff' },
+      }).catch(() => {})
+    }
+  }, [voucher?.code])
 
   async function loadSharedVoucher() {
     try {
@@ -78,6 +109,7 @@ export default function SharedVoucherPage() {
   const expiryLabel = voucher ? getExpiryLabel(voucher.expiry_date ?? undefined) : ''
   const pct = voucher && voucher.amount > 0 ? (voucher.balance / voucher.amount) * 100 : 0
   const barColor = pct > 60 ? 'bg-green-500' : pct > 25 ? 'bg-yellow-400' : 'bg-red-400'
+  const isAlpha = voucher ? isAlphanumeric(voucher.code) : false
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
@@ -142,9 +174,17 @@ export default function SharedVoucherPage() {
                 </div>
               )}
 
-              <div className="bg-gray-50 rounded-2xl p-4 text-center">
+              {/* Barcode / QR */}
+              <div className="bg-gray-50 rounded-2xl p-4 text-center mb-3">
+                <div className="flex items-center justify-center mb-3">
+                  {isAlpha ? (
+                    <canvas ref={qrRef} className="rounded-xl" />
+                  ) : (
+                    <svg ref={barcodeRef} className="max-w-full" />
+                  )}
+                </div>
                 <p className="text-xs text-gray-400 mb-1">קוד שובר</p>
-                <p className="text-2xl font-mono font-bold text-gray-800 tracking-wider mb-3">{voucher.code}</p>
+                <p className="text-xl font-mono font-bold text-gray-800 tracking-wider mb-3">{voucher.code}</p>
                 <button
                   onClick={copyCode}
                   className={`flex items-center gap-2 mx-auto px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all ${

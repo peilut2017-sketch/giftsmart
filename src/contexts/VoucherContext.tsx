@@ -49,6 +49,9 @@ export interface ActivityLogEntry {
 const VoucherContext = createContext<VoucherContextType | undefined>(undefined)
 
 const CACHE_KEY_PREFIX = 'vouchers_cache_'
+// Use the pgsodium-generated view so code/cvv are always decrypted transparently.
+// INSERT/UPDATE through this view lets pgsodium's INSTEAD OF triggers encrypt the values.
+const VOUCHERS_VIEW = 'decrypted_vouchers'
 const QUERY_TIMEOUT_MS = 8000
 
 // Wraps a thenable (Supabase query) with a timeout so a hung query never freezes the app
@@ -158,7 +161,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       // Fetch all data in parallel for speed
       type QueryResult = { data: any[] | null }
       const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
-        withTimeout<QueryResult>(supabase.from('vouchers').select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any),
+        withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any),
         withTimeout<QueryResult>(
           supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).then(res => {
             // Fallback: if is_global column doesn't exist yet, fetch only wallet SVs
@@ -199,7 +202,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     try {
       type QueryResult = { data: any[] | null }
       const { data: vData } = await withTimeout<QueryResult>(
-        supabase.from('vouchers').select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any
+        supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any
       ).catch(() => ({ data: null }))
       if (vData) {
         const active = vData.filter((v: any) => !v.is_archived)
@@ -280,14 +283,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     // Remove undefined values to avoid sending null for columns that may not exist
     Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
 
-    let { data, error } = await supabase.from('vouchers').insert(payload).select().single()
+    let { data, error } = await supabase.from(VOUCHERS_VIEW).insert(payload).select().single()
 
     // If schema cache error for a specific column, retry without it
     if (error?.message?.includes("column") && error.message.includes("schema cache")) {
       const colMatch = error.message.match(/column[s]?\s+"?(\w+)"?/i)
       if (colMatch) {
         delete payload[colMatch[1]]
-        const retry = await supabase.from('vouchers').insert(payload).select().single()
+        const retry = await supabase.from(VOUCHERS_VIEW).insert(payload).select().single()
         data = retry.data
         error = retry.error
       }
@@ -314,7 +317,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setVouchers(prev => prev.map(v => v.id === id ? { ...v, ...updated } : v))
 
     if (!id.startsWith('local-')) {
-      await supabase.from('vouchers').update(updated).eq('id', id)
+      // Update through the view so pgsodium re-encrypts code/cvv if they changed
+      await supabase.from(VOUCHERS_VIEW).update(updated).eq('id', id)
     }
     const newActive = vouchers.map(v => v.id === id ? { ...v, ...updated } : v)
     if (user) saveToCache(user.id, newActive, archivedVouchers)
@@ -393,7 +397,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const localVouchers = vouchers.filter(v => v.id.startsWith('local-'))
     for (const v of localVouchers) {
       const { id, ...rest } = v
-      const { data } = await supabase.from('vouchers').insert({ ...rest, user_id: user.id, wallet_id: walletId }).select().single()
+      const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletId }).select().single()
       if (data) {
         setVouchers(prev => prev.map(pv => pv.id === id ? data : pv))
       }

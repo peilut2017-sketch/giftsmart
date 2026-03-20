@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Fingerprint, ShieldCheck, X } from 'lucide-react'
-import { verifyBiometric, disableBiometric } from '../lib/passkey'
+import { verifyBiometric } from '../lib/passkey'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -36,11 +36,6 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     }
   }
 
-  function handleDisable() {
-    disableBiometric()
-    onUnlock()
-  }
-
   return (
     <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center">
@@ -68,13 +63,6 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
           className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md disabled:opacity-50 mb-3"
         >
           {loading ? 'מאמת...' : 'אמת זהות'}
-        </button>
-
-        <button
-          onClick={handleDisable}
-          className="w-full text-sm text-gray-400 hover:text-gray-600 py-2"
-        >
-          בטל נעילה ביומטרית
         </button>
 
         <button
