@@ -53,6 +53,7 @@ export default function AdminPage() {
   const [svGlobal, setSvGlobal] = useState(false)
   const [showQuickSV, setShowQuickSV] = useState(false)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
 
   const isAdmin = user?.email === ADMIN_EMAIL
 
@@ -150,6 +151,22 @@ export default function AdminPage() {
     })
   }
 
+  async function handleClearUserData(u: UserRow) {
+    setDeleteTarget(null)
+    const { error } = await supabase.rpc('admin_clear_user_data', { target_user_id: u.id })
+    if (error) { toast.error('שגיאה: ' + error.message); return }
+    toast.success(`נתוני ${u.email} נמחקו`)
+  }
+
+  async function handleDeleteUser(u: UserRow) {
+    setDeleteTarget(null)
+    const { error } = await supabase.rpc('admin_delete_user', { target_user_id: u.id })
+    if (error) { toast.error('שגיאה: ' + error.message); return }
+    setAllUsers(prev => prev.filter(x => x.id !== u.id))
+    setSystemStats(prev => prev ? { ...prev, total_users: prev.total_users - 1 } : prev)
+    toast.success(`${u.email} נמחק`)
+  }
+
   async function exportCSV() {
     const all = [...vouchers, ...archivedVouchers]
     const rows = [
@@ -188,6 +205,36 @@ export default function AdminPage() {
 
   return (
     <div className="flex-1 bg-gray-50">
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4" onClick={() => setDeleteTarget(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">פעולה על משתמש</h3>
+            <p className="text-sm text-gray-500 mb-1">{deleteTarget.email}</p>
+            <p className="text-xs text-gray-400 mb-5">בחר פעולה — לא ניתן לשחזר</p>
+            <div className="space-y-2">
+              <button
+                onClick={() => handleClearUserData(deleteTarget)}
+                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-medium text-sm transition-colors"
+              >
+                מחק נתונים בלבד (שמור חשבון)
+              </button>
+              <button
+                onClick={() => handleDeleteUser(deleteTarget)}
+                className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-medium text-sm transition-colors"
+              >
+                מחק משתמש לגמרי כולל נתונים
+              </button>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-medium text-sm transition-colors"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirm && (
         <ConfirmDialog
           title={confirm.title}
@@ -283,7 +330,18 @@ export default function AdminPage() {
                     <p className="text-sm text-gray-800">{u.email}</p>
                     {u.name && <p className="text-xs text-gray-400">{u.name}</p>}
                   </div>
-                  <p className="text-xs text-gray-400">{formatDate(u.created_at)}</p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs text-gray-400">{formatDate(u.created_at)}</p>
+                    {u.email !== ADMIN_EMAIL && (
+                      <button
+                        onClick={() => setDeleteTarget(u)}
+                        className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        title="מחק משתמש"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
