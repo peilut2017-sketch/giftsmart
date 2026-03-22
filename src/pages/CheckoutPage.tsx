@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
+import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet } from 'lucide-react'
@@ -83,17 +84,22 @@ export default function CheckoutPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function updateBalance(newBalance: number) {
+  async function updateBalance(newBalance: number, usedAmount?: number) {
     if (!voucher) return
     if (!isOnline && voucher.is_shared) {
       toast.error('אין חיבור לאינטרנט — לא ניתן לעדכן שובר משותף')
       return
     }
-    await updateVoucher(voucher.id, { balance: Math.max(0, newBalance) })
-    if (newBalance <= 0) {
+    const clamped = Math.max(0, newBalance)
+    await updateVoucher(voucher.id, { balance: clamped })
+    if (clamped <= 0) {
       toast.success('יתרה אופסה!')
     } else {
       toast.success('יתרה עודכנה')
+    }
+    const used = usedAmount ?? (voucher.balance - clamped)
+    if (used > 0) {
+      sendUsageNotification(voucher.store_name, used, clamped)
     }
   }
 
@@ -421,25 +427,41 @@ export default function CheckoutPage() {
                 </button>
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={customAmount}
-                  onChange={e => setCustomAmount(e.target.value)}
-                  placeholder="יתרה חדשה..."
-                  className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                  dir="ltr"
-                />
-                <button
-                  onClick={() => {
-                    const amt = parseFloat(customAmount)
-                    if (!isNaN(amt)) { updateBalance(amt); setCustomAmount('') }
-                  }}
-                  disabled={!customAmount || isNaN(parseFloat(customAmount))}
-                  className="px-5 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
-                >
-                  עדכן
-                </button>
+              <div>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={customAmount}
+                    onChange={e => setCustomAmount(e.target.value)}
+                    placeholder="סכום שימוש..."
+                    min="0"
+                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                  <button
+                    onClick={() => {
+                      const used = parseFloat(customAmount)
+                      if (!isNaN(used) && used > 0) {
+                        updateBalance(voucher.balance - used, used)
+                        setCustomAmount('')
+                      }
+                    }}
+                    disabled={!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0}
+                    className="px-5 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
+                  >
+                    עדכן
+                  </button>
+                </div>
+                {(() => {
+                  const used = parseFloat(customAmount) || 0
+                  if (used <= 0) return null
+                  const newBal = Math.max(0, voucher.balance - used)
+                  return (
+                    <p className={`text-xs mt-1.5 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                      יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}
+                    </p>
+                  )
+                })()}
               </div>
 
               {/* Auto archive at 0 */}
