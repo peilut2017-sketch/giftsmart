@@ -35,6 +35,7 @@ interface VoucherContextType {
   deleteShareToken: (token: string) => Promise<void>
   getShareTokens: (voucherId: string) => Promise<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
+  getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
 }
 
 export interface ActivityLogEntry {
@@ -536,6 +537,16 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     return (data || []) as ActivityLogEntry[]
   }
 
+  async function getVoucherActivityLog(voucherId: string): Promise<ActivityLogEntry[]> {
+    const { data } = await supabase
+      .from('activity_log')
+      .select('id, action, voucher_id, voucher_name, details, created_at')
+      .eq('user_id', user?.id ?? '')
+      .eq('voucher_id', voucherId)
+      .order('created_at', { ascending: true })
+    return (data || []) as ActivityLogEntry[]
+  }
+
   return (
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores,
@@ -544,7 +555,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
       updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
-      getActivityLog,
+      getActivityLog, getVoucherActivityLog,
     }}>
       {children}
     </VoucherContext.Provider>
