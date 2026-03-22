@@ -290,7 +290,7 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          <div className="font-mono text-base font-bold tracking-wide text-gray-800 mb-3 break-all">
+          <div className="font-mono text-lg font-bold tracking-widest text-gray-800 mb-3 break-all">
             {voucher.code}
           </div>
 
@@ -435,7 +435,8 @@ export default function CheckoutPage() {
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
                     placeholder="סכום שימוש..."
-                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300"
+                    style={{ fontSize: '16px' }}
                     dir="ltr"
                   />
                   <button
