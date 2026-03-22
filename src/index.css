@@ -14,12 +14,14 @@ body {
   direction: rtl;
   background-color: #f8fafc;
   color: #1e293b;
+  overflow-x: hidden;
 }
 
 #root {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 /* Custom scrollbar */

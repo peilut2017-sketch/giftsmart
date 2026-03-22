@@ -290,7 +290,7 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          <div className="font-mono text-lg font-bold tracking-widest text-gray-800 mb-3 break-all">
+          <div className="font-mono text-base font-bold tracking-wide text-gray-800 mb-3 break-all">
             {voucher.code}
           </div>
 
