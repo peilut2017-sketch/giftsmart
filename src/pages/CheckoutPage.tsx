@@ -430,11 +430,11 @@ export default function CheckoutPage() {
               <div>
                 <div className="flex gap-2">
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
                     placeholder="סכום שימוש..."
-                    min="0"
                     className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     dir="ltr"
                   />
