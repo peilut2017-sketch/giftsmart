@@ -177,11 +177,12 @@ serve(async (req) => {
 
   const userId = tgUser.user_id
 
-  // Get user's wallet
+  // Get user's wallet — order by created_at to match the web app's wallet selection
   const { data: walletMember } = await sb
     .from('wallet_members')
     .select('wallet_id')
     .eq('user_id', userId)
+    .order('created_at')
     .limit(1)
     .single()
 
