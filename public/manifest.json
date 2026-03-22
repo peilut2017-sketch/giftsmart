@@ -1,7 +1,7 @@
 {
-  "name": "ארנק שוברים",
-  "short_name": "שוברים",
-  "description": "ניהול שוברים, מתנה קארד וגיפט קארד",
+  "name": "GiftSmart",
+  "short_name": "GiftSmart",
+  "description": "ניהול שוברים וכרטיסי מתנה בצורה חכמה",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -10,6 +10,12 @@
   "lang": "he",
   "dir": "rtl",
   "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",

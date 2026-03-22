@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Eye, EyeOff, Wallet, Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react'
+import { GiftSmartLogoFull } from '../components/GiftSmartLogo'
 import toast from 'react-hot-toast'
 
 const APP_VERSION = '1.0.0'
@@ -99,12 +100,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-600 rounded-3xl shadow-lg mb-4">
-            <Wallet className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">ארנק שוברים</h1>
-          <p className="text-sm text-gray-500 mt-1">נהל את השוברים שלך בקלות</p>
-          <span className="text-xs text-gray-400">גרסה {APP_VERSION}</span>
+          <GiftSmartLogoFull iconSize={72} />
+          <span className="text-xs text-gray-400 mt-2 block">גרסה {APP_VERSION}</span>
         </div>
 
         {/* Card */}

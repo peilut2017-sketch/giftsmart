@@ -15,6 +15,7 @@ import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
 import BiometricGate from './components/BiometricGate'
 import { isBiometricEnabled } from './lib/passkey'
+import { GiftSmartSplash } from './components/GiftSmartLogo'
 import { useState, useEffect } from 'react'
 
 function NotificationBridge() {
@@ -35,11 +36,9 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-green-200 border-t-green-500 rounded-full animate-spin" />
-          <p className="text-sm text-gray-500">טוען...</p>
-        </div>
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-gray-50">
+        <GiftSmartSplash />
+        <div className="w-8 h-8 border-3 border-green-200 border-t-green-500 rounded-full animate-spin" style={{ borderWidth: 3 }} />
       </div>
     )
   }
