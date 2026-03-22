@@ -281,12 +281,12 @@ export default function CheckoutPage() {
         )}
 
         {/* Barcode / QR */}
-        <div className="bg-white rounded-3xl shadow-sm p-6 text-center">
-          <div className="flex items-center justify-center mb-4">
+        <div className="bg-white rounded-3xl shadow-sm p-6 text-center overflow-hidden">
+          <div className="w-full overflow-hidden flex items-center justify-center mb-4">
             {isAlpha ? (
               <canvas ref={qrRef} className="rounded-xl" />
             ) : (
-              <svg ref={barcodeRef} className="max-w-full" />
+              <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />
             )}
           </div>
 
