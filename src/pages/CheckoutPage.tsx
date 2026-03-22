@@ -264,7 +264,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4 pb-8">
+      <div className="p-4 space-y-4 pb-32">
         {/* Offline warning for shared */}
         {!isOnline && voucher.is_shared && (
           <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center gap-2 text-sm text-orange-700">
@@ -433,6 +433,7 @@ export default function CheckoutPage() {
                     type="number"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
+                    onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
                     placeholder="סכום שימוש..."
                     min="0"
                     className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
