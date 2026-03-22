@@ -157,7 +157,10 @@ serve(async (req) => {
     }
 
     await sb.from('telegram_link_codes').update({ used: true }).eq('code', code)
-    await sb.from('telegram_users').upsert({ user_id: linkCode.user_id, chat_id: chatId, username })
+    await sb.from('telegram_users').upsert(
+      { user_id: linkCode.user_id, chat_id: chatId, username },
+      { onConflict: 'chat_id' }
+    )
 
     await send(chatId, `✅ <b>החשבון קושר בהצלחה!</b>\n\nשלום ${username}! כעת תוכל לנהל את השוברים שלך מכאן.\n\n${HELP}`)
     return new Response('ok')
@@ -186,7 +189,20 @@ serve(async (req) => {
     .limit(1)
     .single()
 
-  const walletId = walletMember?.wallet_id
+  let walletId = walletMember?.wallet_id
+
+  // Fallback: if wallet_members entry is missing (can happen if the insert was silently
+  // dropped during account creation), find a wallet owned directly by this user
+  if (!walletId) {
+    const { data: ownedWallet } = await sb
+      .from('wallets')
+      .select('id')
+      .eq('owner_id', userId)
+      .order('created_at')
+      .limit(1)
+      .single()
+    walletId = ownedWallet?.id
+  }
 
   if (!walletId) {
     await send(chatId, '❌ לא נמצא ארנק שוברים. נסה להיכנס לאפליקציה תחילה.')
