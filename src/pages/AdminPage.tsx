@@ -360,7 +360,7 @@ export default function AdminPage() {
             </div>
           ) : (
             <div className="flex gap-2">
-              <input value={newWalletName} onChange={e => setNewWalletName(e.target.value)} className="flex-1 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
+              <input value={newWalletName} onChange={e => setNewWalletName(e.target.value)} className="flex-1 px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" />
               <button onClick={handleSaveWalletName} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm">שמור</button>
               <button onClick={() => setEditingWalletName(false)} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm">ביטול</button>
             </div>
@@ -393,7 +393,7 @@ export default function AdminPage() {
               value={inviteEmail}
               onChange={e => setInviteEmail(e.target.value)}
               placeholder="אימייל לשליחת הזמנה"
-              className="flex-1 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+              className="flex-1 px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
               dir="ltr"
             />
             <button onClick={handleInvite} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-medium">הזמן</button>
@@ -447,9 +447,9 @@ export default function AdminPage() {
 
           {showAddSV && (
             <div className="bg-gray-50 rounded-2xl p-4 mb-3 space-y-2">
-              <input value={svName} onChange={e => setSvName(e.target.value)} placeholder="שם שובר-על" className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
-              <input value={svDesc} onChange={e => setSvDesc(e.target.value)} placeholder="תיאור (אופציונלי)" className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
-              <textarea value={svStores} onChange={e => setSvStores(e.target.value)} placeholder="חנויות מכבדות (כל חנות בשורה נפרדת או מופרדות בפסיק)" rows={3} className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-y" />
+              <input value={svName} onChange={e => setSvName(e.target.value)} placeholder="שם שובר-על" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" />
+              <input value={svDesc} onChange={e => setSvDesc(e.target.value)} placeholder="תיאור (אופציונלי)" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" />
+              <textarea value={svStores} onChange={e => setSvStores(e.target.value)} placeholder="חנויות מכבדות (כל חנות בשורה נפרדת או מופרדות בפסיק)" rows={3} className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-y" />
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={svGlobal} onChange={e => setSvGlobal(e.target.checked)} className="w-4 h-4 accent-green-500" />
                 <Globe className="w-4 h-4 text-blue-500" />
@@ -470,13 +470,13 @@ export default function AdminPage() {
                     <input
                       value={editingSV.name}
                       onChange={e => setEditingSV({ ...editingSV, name: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                      className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     />
                     <textarea
                       value={editingSV.stores.join('\n')}
                       onChange={e => setEditingSV({ ...editingSV, stores: e.target.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean) })}
                       rows={3}
-                      className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
+                      className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                     />
                     <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                       <input type="checkbox" checked={editingSV.is_global ?? false} onChange={e => setEditingSV({ ...editingSV, is_global: e.target.checked })} className="w-4 h-4 accent-green-500" />

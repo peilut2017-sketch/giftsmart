@@ -435,7 +435,7 @@ export default function CheckoutPage() {
                     onChange={e => setCustomAmount(e.target.value)}
                     placeholder="סכום שימוש..."
                     min="0"
-                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     dir="ltr"
                   />
                   <button

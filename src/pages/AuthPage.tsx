@@ -162,7 +162,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   placeholder="שם מלא"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 />
               </div>
             )}
@@ -175,7 +175,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   placeholder="כתובת אימייל"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   autoComplete="email"
                   dir="ltr"
                 />
@@ -191,7 +191,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                     placeholder={mode === 'newPassword' ? 'סיסמה חדשה' : 'סיסמה'}
                     value={password}
                     onChange={e => { setPassword(e.target.value); if (isRegisterOrNew) setShowStrength(true) }}
-                    className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                    className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                     dir="ltr"
                   />
@@ -244,7 +244,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   placeholder="אימות סיסמה"
                   value={password2}
                   onChange={e => setPassword2(e.target.value)}
-                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   autoComplete="new-password"
                   dir="ltr"
                 />

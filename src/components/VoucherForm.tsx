@@ -304,7 +304,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 onChange={e => { setStoreSearch(e.target.value); setStoreName(e.target.value); setShowStoreDropdown(true) }}
                 onFocus={() => setShowStoreDropdown(true)}
                 placeholder="חפש או הזן שם חנות"
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
               />
               {showStoreDropdown && storeSearch && (
                 <div className="absolute z-20 w-full mt-1 bg-white border border-gray-100 rounded-2xl shadow-lg max-h-48 overflow-y-auto">
@@ -340,7 +340,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder="0"
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
             </div>
@@ -354,7 +354,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   placeholder="0"
                   min="0"
                   max={voucher.balance}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   dir="ltr"
                 />
                 {(() => {
@@ -377,7 +377,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   value={balance}
                   onChange={e => setBalance(e.target.value)}
                   placeholder="0"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   dir="ltr"
                 />
               </div>
@@ -393,7 +393,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 value={code}
                 onChange={e => setCode(e.target.value)}
                 placeholder="הזן קוד שובר"
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
                 dir="ltr"
               />
               <button
@@ -416,7 +416,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 value={cvv}
                 onChange={e => setCvv(e.target.value)}
                 placeholder="אופציונלי"
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
                 dir="ltr"
               />
             </div>
@@ -426,7 +426,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 type="date"
                 value={expiryDate}
                 onChange={e => setExpiryDate(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
             </div>
@@ -465,7 +465,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   value={newCatName}
                   onChange={e => setNewCatName(e.target.value)}
                   placeholder="שם קטגוריה חדשה"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 />
                 <button
                   type="button"
@@ -491,7 +491,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               onFocus={() => setShowTagSuggestions(true)}
               onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
               placeholder="מתנה, יום הולדת, קיץ..."
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
             />
             {showTagSuggestions && tagSuggestions.length > 0 && (
               <div className="absolute z-20 w-full mt-1 bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden">
@@ -536,7 +536,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               onChange={e => setNotes(e.target.value)}
               placeholder="הערות נוספות..."
               rows={3}
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
             />
           </div>
 
@@ -551,7 +551,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               value={link}
               onChange={e => setLink(e.target.value)}
               placeholder="https://..."
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
               dir="ltr"
             />
           </div>

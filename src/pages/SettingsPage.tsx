@@ -179,14 +179,14 @@ export default function SettingsPage() {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="שם מלא"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
               />
               <input
                 type="tel"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 placeholder="מספר טלפון"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
               <div className="flex gap-2">
@@ -216,7 +216,7 @@ export default function SettingsPage() {
                 value={newPass}
                 onChange={e => setNewPass(e.target.value)}
                 placeholder="סיסמה חדשה"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
               <input
@@ -224,7 +224,7 @@ export default function SettingsPage() {
                 value={newPass2}
                 onChange={e => setNewPass2(e.target.value)}
                 placeholder="אימות סיסמה"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
               <div className="flex gap-2">
@@ -294,7 +294,7 @@ export default function SettingsPage() {
                 max={90}
                 value={reminderDays}
                 onChange={e => saveReminderDays(parseInt(e.target.value) || 1)}
-                className="w-14 text-center px-2 py-1.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-14 text-center px-2 py-1.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
               />
               <span className="text-sm text-gray-500">ימים</span>
             </div>
