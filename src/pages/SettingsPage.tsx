@@ -4,7 +4,7 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -25,6 +25,11 @@ export default function SettingsPage() {
   const [sendingReminder, setSendingReminder] = useState(false)
   const [biometricEnabled, setBiometricEnabled] = useState(isBiometricEnabled)
   const [biometricLoading, setBiometricLoading] = useState(false)
+
+  // Telegram
+  const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
+  const [telegramCode, setTelegramCode] = useState<string | null>(null)
+  const [telegramLoading, setTelegramLoading] = useState(false)
 
   const reminderKey = `reminder_days_${user?.id}`
   const [reminderDays, setReminderDays] = useState(() =>
@@ -108,6 +113,45 @@ export default function SettingsPage() {
     disableBiometric()
     setBiometricEnabled(false)
     toast.success('נעילה ביומטרית בוטלה')
+  }
+
+  // Check telegram link status on mount
+  useState(() => {
+    if (!user) return
+    supabase
+      .from('telegram_users')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setTelegramLinked(!!data))
+  })
+
+  async function handleGenerateTelegramCode() {
+    if (!user) return
+    setTelegramLoading(true)
+    try {
+      const code = Math.floor(100000 + Math.random() * 900000).toString()
+      const { error } = await supabase.from('telegram_link_codes').insert({
+        code,
+        user_id: user.id,
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      })
+      if (error) throw error
+      setTelegramCode(code)
+    } catch {
+      toast.error('שגיאה ביצירת קוד')
+    } finally {
+      setTelegramLoading(false)
+    }
+  }
+
+  async function handleDisconnectTelegram() {
+    if (!user) return
+    if (!confirm('לנתק את חיבור הטלגרם?')) return
+    await supabase.from('telegram_users').delete().eq('user_id', user.id)
+    setTelegramLinked(false)
+    setTelegramCode(null)
+    toast.success('טלגרם נותק')
   }
 
   async function handleCheckConnection() {
@@ -333,6 +377,87 @@ export default function SettingsPage() {
               right={checking ? <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : undefined}
             />
           </div>
+        </div>
+
+        {/* Telegram */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b bg-gray-50 flex items-center gap-2">
+            <Send className="w-3.5 h-3.5 text-sky-500" />
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">טלגרם</p>
+          </div>
+
+          {telegramLinked ? (
+            <div className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+                  <Send className="w-5 h-5 text-sky-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">מחובר לבוט טלגרם</p>
+                  <p className="text-xs text-gray-400">מקבל התראות ויכול לנהל שוברים</p>
+                </div>
+                <button
+                  onClick={handleDisconnectTelegram}
+                  className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl flex items-center gap-1"
+                >
+                  <Link2Off className="w-3.5 h-3.5" /> נתק
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                  <Send className="w-5 h-5 text-gray-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">קשר לטלגרם</p>
+                  <p className="text-xs text-gray-400">ניהול שוברים והתראות ישירות בטלגרם</p>
+                </div>
+                {!telegramCode && (
+                  <button
+                    onClick={handleGenerateTelegramCode}
+                    disabled={telegramLoading}
+                    className="text-xs text-sky-600 font-medium px-3 py-1.5 bg-sky-50 rounded-xl flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {telegramLoading
+                      ? <div className="w-3.5 h-3.5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                      : <Link className="w-3.5 h-3.5" />
+                    }
+                    קשר
+                  </button>
+                )}
+              </div>
+
+              {telegramCode && (
+                <div className="bg-sky-50 rounded-2xl p-4 space-y-2">
+                  <p className="text-xs text-sky-700 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
+                  <a
+                    href={`https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'YourBot'}?start=${telegramCode}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-sky-500 text-white py-2.5 rounded-xl text-sm font-medium"
+                  >
+                    פתח בוט טלגרם
+                  </a>
+                  <p className="text-xs text-sky-600 text-center">או שלח ידנית לבוט:</p>
+                  <div className="bg-white rounded-xl px-4 py-3 text-center">
+                    <p className="text-xs text-gray-400 mb-1">הפקודה לשליחה:</p>
+                    <p className="font-mono text-lg font-bold tracking-widest text-gray-800 select-all">
+                      /start {telegramCode}
+                    </p>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center">הקוד תקף ל-10 דקות</p>
+                  <button
+                    onClick={handleGenerateTelegramCode}
+                    className="w-full text-xs text-sky-600 py-1.5"
+                  >
+                    צור קוד חדש
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Activity log */}
