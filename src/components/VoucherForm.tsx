@@ -21,6 +21,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showStoreDropdown, setShowStoreDropdown] = useState(false)
   const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
   const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
+  const [usageAmount, setUsageAmount] = useState('')
   const [code, setCode] = useState(voucher?.code || '')
   const [cvv, setCvv] = useState(voucher?.cvv || '')
   const [expiryDate, setExpiryDate] = useState(voucher?.expiry_date || defaultExpiryDate())
@@ -187,10 +188,15 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
     setLoading(true)
     try {
+      const used = parseFloat(usageAmount) || 0
+      const newBalance = voucher
+        ? Math.max(0, (voucher.balance ?? 0) - used)
+        : (parseFloat(balance) || parseFloat(amount) || 0)
+
       const v = {
         store_name: storeName,
         amount: parseFloat(amount) || 0,
-        balance: parseFloat(balance) || parseFloat(amount) || 0,
+        balance: newBalance,
         code: code.trim(),
         cvv: cvv.trim() || undefined,
         expiry_date: expiryDate || undefined,
@@ -325,7 +331,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
           </div>
 
-          {/* Amount + Balance */}
+          {/* Amount + Balance / Usage */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">סכום מקורי (₪)</label>
@@ -338,17 +344,44 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 dir="ltr"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">יתרה (₪)</label>
-              <input
-                type="number"
-                value={balance}
-                onChange={e => setBalance(e.target.value)}
-                placeholder="0"
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
-              />
-            </div>
+            {voucher ? (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
+                <input
+                  type="number"
+                  value={usageAmount}
+                  onChange={e => setUsageAmount(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  max={voucher.balance}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+                {(() => {
+                  const used = parseFloat(usageAmount) || 0
+                  const newBal = Math.max(0, (voucher.balance ?? 0) - used)
+                  return used > 0 ? (
+                    <p className={`text-xs mt-1 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                      יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}
+                    </p>
+                  ) : (
+                    <p className="text-xs mt-1 text-gray-400">יתרה: ₪{(voucher.balance ?? 0).toLocaleString('he-IL')}</p>
+                  )
+                })()}
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">יתרה (₪)</label>
+                <input
+                  type="number"
+                  value={balance}
+                  onChange={e => setBalance(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+              </div>
+            )}
           </div>
 
           {/* Code + Camera */}

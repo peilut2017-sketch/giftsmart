@@ -6,6 +6,7 @@ import type { Voucher } from '../types'
 import { Plus, Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
+import { sendUsageNotification } from '../hooks/useNotifications'
 import { useNavigate } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -71,6 +72,7 @@ export default function HomePage() {
           v.code.toLowerCase().includes(q) ||
           v.categories.some(c => c.toLowerCase().includes(q)) ||
           v.tags.some(t => t.toLowerCase().includes(q)) ||
+          (v.notes && v.notes.toLowerCase().includes(q)) ||
           (sv && sv.name.toLowerCase().includes(q)) ||
           (sv && sv.stores.some(s => s.toLowerCase().includes(q)))
         )
@@ -106,8 +108,27 @@ export default function HomePage() {
 
   async function handleSave(vData: any) {
     if (editingVoucher) {
+      const usedAmount = editingVoucher.balance - vData.balance
       await updateVoucher(editingVoucher.id, vData)
       toast.success('שובר עודכן')
+
+      if (usedAmount > 0) {
+        sendUsageNotification(editingVoucher.store_name, usedAmount, vData.balance)
+      }
+
+      if (vData.balance <= 0) {
+        const vId = editingVoucher.id
+        const vName = editingVoucher.store_name
+        setConfirm({
+          title: 'השובר מומש במלואו',
+          message: `יתרת "${vName}" הגיעה לאפס. להעביר לארכיון?`,
+          onConfirm: async () => {
+            setConfirm(null)
+            await archiveVoucher(vId)
+            toast.success('שובר הועבר לארכיון')
+          },
+        })
+      }
     } else {
       try {
         await addVoucher(vData)

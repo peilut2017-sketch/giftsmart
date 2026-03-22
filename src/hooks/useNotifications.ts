@@ -92,6 +92,33 @@ export async function forceNotificationCheck(_vouchers?: Voucher[]) {
   // Re-trigger by re-invoking — just clear the key, the hook will pick it up on next render
 }
 
+// Send an immediate push notification when a voucher is used
+export async function sendUsageNotification(storeName: string, usedAmount: number, newBalance: number) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+
+  const fullyRedeemed = newBalance <= 0
+  const title = fullyRedeemed
+    ? `✅ שובר ${storeName} נוצל במלואו`
+    : `💳 שימוש בשובר ${storeName}`
+  const body = fullyRedeemed
+    ? `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')} — השובר נוצל`
+    : `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')} | יתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`
+
+  const options: NotificationOptions = {
+    body,
+    icon: '/pwa-192x192.png',
+    badge: '/pwa-192x192.png',
+    tag: 'voucher-usage',
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready
+    await reg.showNotification(title, options)
+  } catch {
+    new Notification(title, options)
+  }
+}
+
 // Get the notification status for UI display
 export function getNotificationStatus(): 'granted' | 'denied' | 'default' | 'unsupported' {
   if (!('Notification' in window)) return 'unsupported'
