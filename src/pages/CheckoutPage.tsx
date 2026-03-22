@@ -433,7 +433,6 @@ export default function CheckoutPage() {
                     type="number"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
-                    onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
                     placeholder="סכום שימוש..."
                     min="0"
                     className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
