@@ -141,12 +141,18 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
           if (!wallet) return
           wId = wallet.id
           setWalletName(wallet.name)
-          await (supabase.from('wallet_members').insert({
+          // Add user as owner — critical step; if this fails the user cannot save data
+          const { error: memberError } = await (supabase.from('wallet_members').insert({
             wallet_id: wId,
             user_id: user.id,
             email: user.email,
             role: 'owner',
-          }) as any as Promise<any>).catch(() => {})
+          }) as any as Promise<{ error: any }>).catch(() => ({ error: new Error('wallet_members insert failed') }))
+          if (memberError) {
+            // Wallet exists but user is not a member — cannot proceed
+            console.error('wallet_members insert failed:', memberError)
+            return
+          }
         } else {
           wId = membership.wallet_id
           const walletData = membership.wallets as any
@@ -296,6 +302,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Add voucher error:', error)
+      // RLS rejection usually means the wallet was deleted (e.g. admin reset).
+      // Clear wallet state so fetchData() re-creates it on next attempt.
+      if (error.code === '42501' || error.message?.includes('row-level security')) {
+        walletIdRef.current = null
+        setWalletId(null)
+        fetchData()
+        throw new Error('הארנק אופס — הרענן ונסה שוב')
+      }
       throw new Error(error.message)
     }
 
