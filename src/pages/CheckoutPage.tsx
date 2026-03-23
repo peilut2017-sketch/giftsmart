@@ -534,7 +534,7 @@ export default function CheckoutPage() {
               {/* Vertical line */}
               <div className="absolute right-[11px] top-3 bottom-3 w-px bg-gray-100" />
               <div className="space-y-4">
-                {voucherLog.map((entry, i) => {
+                {voucherLog.map((entry) => {
                   const dt = new Date(entry.created_at)
                   const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
                   const timeStr = dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
