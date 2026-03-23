@@ -12,6 +12,16 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>GiftSmart</title>
+    <script>
+      // Reset any stuck zoom to 1.0 on every page load (iOS Safari PWA)
+      ;(function() {
+        var m = document.querySelector('meta[name="viewport"]')
+        if (!m) return
+        var orig = m.getAttribute('content')
+        m.setAttribute('content', orig + ',maximum-scale=1.0')
+        requestAnimationFrame(function() { m.setAttribute('content', orig) })
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
