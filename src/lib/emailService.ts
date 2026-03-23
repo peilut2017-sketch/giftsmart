@@ -26,3 +26,20 @@ export async function sendExpiryReminderEmail(params: {
 }) {
   await invoke('expiry', params)
 }
+
+export async function sendVoucherSharedEmail(params: {
+  to_email: string
+  to_name: string
+  from_name: string
+  store_name: string
+}) {
+  await invoke('share', params)
+}
+
+export async function sendVoucherShareInviteEmail(params: {
+  to_email: string
+  from_name: string
+  store_name: string
+}) {
+  await invoke('share_invite', params)
+}

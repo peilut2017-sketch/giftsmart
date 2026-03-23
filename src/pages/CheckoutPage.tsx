@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useVouchers, type ActivityLogEntry, type VoucherShare } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
+import { sendVoucherSharedEmail, sendVoucherShareInviteEmail } from '../lib/emailService'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
@@ -159,15 +160,12 @@ export default function CheckoutPage() {
         toast('שובר זה כבר שותף עם משתמש זה', { icon: 'ℹ️' })
       } else {
         // Send notification email (non-blocking)
-        supabase.rpc('send_voucher_shared_email', {
-          p_to_email: shareEmail.trim(),
-          p_to_name: shareEmail.trim(),
-          p_from_name: profile?.name || user?.email || '',
-          p_store_name: voucher.store_name,
-          p_app_url: APP_URL,
-        }).then(({ error }) => {
-          if (error) console.error('שגיאה בשליחת מייל שיתוף:', error.message)
-        })
+        sendVoucherSharedEmail({
+          to_email: shareEmail.trim(),
+          to_name: shareEmail.trim(),
+          from_name: profile?.name || user?.email || '',
+          store_name: voucher.store_name,
+        }).catch((err) => console.error('שגיאה בשליחת מייל שיתוף:', err))
         toast.success(`שובר שותף עם ${shareEmail.trim()}`)
         setShareEmail('')
         const shares = await getVoucherShares(voucher.id)
@@ -183,11 +181,10 @@ export default function CheckoutPage() {
   async function handleSendVoucherInvite() {
     if (!voucher || !pendingShareEmail) return
     try {
-      await supabase.rpc('send_voucher_share_invite_email', {
-        p_to_email: pendingShareEmail,
-        p_from_name: profile?.name || user?.email || '',
-        p_store_name: voucher.store_name,
-        p_app_url: APP_URL,
+      await sendVoucherShareInviteEmail({
+        to_email: pendingShareEmail,
+        from_name: profile?.name || user?.email || '',
+        store_name: voucher.store_name,
       })
       toast.success(`הזמנה נשלחה ל-${pendingShareEmail}`)
     } catch {
