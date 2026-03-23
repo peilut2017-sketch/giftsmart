@@ -109,4 +109,9 @@ body {
 
 input, select, textarea {
   font-family: 'Heebo', sans-serif;
+  font-size: 16px; /* prevents auto-zoom on iOS/Android */
+}
+
+html {
+  overflow-x: hidden;
 }
