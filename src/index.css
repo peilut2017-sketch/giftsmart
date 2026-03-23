@@ -109,9 +109,11 @@ body {
 
 input, select, textarea {
   font-family: 'Heebo', sans-serif;
-  font-size: 16px; /* prevents auto-zoom on iOS/Android */
+  font-size: 16px !important; /* prevents iOS auto-zoom — must override Tailwind text-xs/text-sm */
 }
 
-html {
+html, body {
   overflow-x: hidden;
+  /* prevent double-tap zoom without breaking single taps */
+  touch-action: manipulation;
 }

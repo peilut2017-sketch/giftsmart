@@ -3,17 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
-// Prevent iOS Safari pinch-zoom (keeps layout stable in RTL)
+// Prevent iOS Safari pinch-zoom (gesturestart/gesturechange are Safari-specific events)
 document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false })
 document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false })
-
-// Prevent double-tap zoom on iOS
-let _lastTap = 0
-document.addEventListener('touchend', e => {
-  const now = Date.now()
-  if (now - _lastTap < 300) e.preventDefault()
-  _lastTap = now
-}, { passive: false })
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
