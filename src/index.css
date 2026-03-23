@@ -117,3 +117,7 @@ html, body {
   /* prevent double-tap zoom without breaking single taps */
   touch-action: manipulation;
 }
+
+/* hide scrollbar in tabs row while preserving scroll */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

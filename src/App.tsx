@@ -59,7 +59,7 @@ function AppRoutes() {
     <VoucherProvider>
       <NotificationBridge />
       <WelcomeModal userId={user!.id} />
-      <div className="flex flex-col min-h-dvh max-w-2xl mx-auto">
+      <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto overflow-x-hidden">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/checkout/:id" element={<CheckoutPage />} />
