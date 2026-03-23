@@ -189,9 +189,17 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setLoading(true)
     try {
       const used = parseFloat(usageAmount) || 0
+      const parsedAmount = parseFloat(amount) || 0
       const newBalance = voucher
         ? Math.max(0, (voucher.balance ?? 0) - used)
-        : (parseFloat(balance) || parseFloat(amount) || 0)
+        : (parseFloat(balance) || parsedAmount || 0)
+
+      // Validate balance ≤ original amount
+      if (parsedAmount > 0 && newBalance > parsedAmount) {
+        toast.error(`היתרה (₪${newBalance.toLocaleString('he-IL')}) לא יכולה להיות גבוהה מהסכום המקורי (₪${parsedAmount.toLocaleString('he-IL')})`)
+        setLoading(false)
+        return
+      }
 
       const v = {
         store_name: storeName,
@@ -377,9 +385,17 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   value={balance}
                   onChange={e => setBalance(e.target.value)}
                   placeholder="0"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  max={parseFloat(amount) > 0 ? amount : undefined}
+                  className={`w-full px-4 py-3 border rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 ${
+                    parseFloat(amount) > 0 && parseFloat(balance) > parseFloat(amount)
+                      ? 'border-red-400 bg-red-50'
+                      : 'border-gray-200'
+                  }`}
                   dir="ltr"
                 />
+                {parseFloat(amount) > 0 && parseFloat(balance) > parseFloat(amount) && (
+                  <p className="text-xs mt-1 text-red-500">לא יכולה לעלות על הסכום המקורי</p>
+                )}
               </div>
             )}
           </div>
