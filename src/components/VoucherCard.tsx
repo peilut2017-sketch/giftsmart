@@ -175,8 +175,14 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
       )}
 
       <div className="p-4">
-        {/* Header */}
+        {/* Header: balance first in DOM = RIGHT side in RTL (always visible even when zoomed) */}
         <div className="flex items-start justify-between mb-3">
+          <div className="flex-shrink-0 ms-2">
+            <div className="text-lg font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
+            {voucher.amount !== voucher.balance && (
+              <div className="text-xs text-gray-400">מתוך {formatCurrency(voucher.amount)}</div>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-0.5">
               {superVoucherName && <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />}
@@ -186,12 +192,6 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
             </div>
             {superVoucherName && (
               <p className="text-xs text-gray-500 truncate">{voucher.store_name}</p>
-            )}
-          </div>
-          <div className="text-left flex-shrink-0">
-            <div className="text-lg font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
-            {voucher.amount !== voucher.balance && (
-              <div className="text-xs text-gray-400">מתוך {formatCurrency(voucher.amount)}</div>
             )}
           </div>
         </div>
