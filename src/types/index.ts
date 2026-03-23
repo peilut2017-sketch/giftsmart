@@ -38,6 +38,7 @@ export interface SuperVoucher {
   stores: string[] // store names
   logo_url?: string
   is_global?: boolean
+  balance_check_url?: string
   created_at: string
   updated_at: string
 }

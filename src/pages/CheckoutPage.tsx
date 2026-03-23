@@ -7,7 +7,7 @@ import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpirySt
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { supabase } from '../lib/supabase'
@@ -42,6 +42,7 @@ export default function CheckoutPage() {
   const [pendingShareEmail, setPendingShareEmail] = useState<string | null>(null)
   const [voucherLog, setVoucherLog] = useState<ActivityLogEntry[]>([])
   const [logLoading, setLogLoading] = useState(true)
+  const [showStores, setShowStores] = useState(false)
 
   // Load voucher activity log
   useEffect(() => {
@@ -508,7 +509,7 @@ export default function CheckoutPage() {
                   מחצית
                 </button>
                 <button
-                  onClick={() => updateBalance(0)}
+                  onClick={async () => { await updateBalance(0); setConfirmArchive(true) }}
                   className="py-2 bg-red-50 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-all"
                 >
                   מלא
@@ -523,7 +524,7 @@ export default function CheckoutPage() {
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
                     placeholder="סכום שימוש..."
-                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300"
+                    className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300"
                     style={{ fontSize: '16px' }}
                     dir="ltr"
                   />
@@ -536,7 +537,7 @@ export default function CheckoutPage() {
                       }
                     }}
                     disabled={!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0}
-                    className="px-5 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
+                    className="shrink-0 px-3 py-2 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
                   >
                     עדכן
                   </button>
@@ -553,34 +554,43 @@ export default function CheckoutPage() {
                 })()}
               </div>
 
-              {/* Auto archive at 0 */}
-              {voucher.balance <= 0 && !isArchived && (
-                <button
-                  onClick={() => setConfirmArchive(true)}
-                  className="mt-3 w-full flex items-center justify-center gap-2 py-3 bg-gray-100 text-gray-600 rounded-2xl text-sm font-medium hover:bg-gray-200 transition-all"
-                >
-                  <Archive className="w-4 h-4" />
-                  יתרה אופסה — העבר לארכיון
-                </button>
-              )}
             </>
           )}
         </div>
 
         {/* Super voucher stores */}
-        {sv && sv.stores.length > 0 && (
+        {sv && (sv.stores.length > 0 || sv.balance_check_url) && (
           <div className="bg-white rounded-3xl shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-              חנויות המכבדות את {sv.name}
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {sv.stores.map((s, i) => (
-                <span key={i} className="text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
-                  {s}
-                </span>
-              ))}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setShowStores(s => !s)}
+                className="flex items-center gap-1.5 text-sm font-semibold text-gray-700"
+              >
+                <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                חנויות המכבדות את {sv.name}
+                {showStores ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              </button>
+              {sv.balance_check_url && (
+                <a
+                  href={sv.balance_check_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  בדיקת יתרה
+                </a>
+              )}
             </div>
+            {showStores && sv.stores.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {sv.stores.map((s, i) => (
+                  <span key={i} className="text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,9 +1,9 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
-import { Plus, Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
+import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
@@ -21,12 +21,12 @@ export default function HomePage() {
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('expiry')
+  const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('hpSortKey') as SortKey) || 'store')
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
   const [filterCats, setFilterCats] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('hpViewMode') as ViewMode) || 'grid')
+  const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('hpSortDir') as SortDir) || 'asc')
 
   // Undo delete
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
@@ -38,6 +38,11 @@ export default function HomePage() {
 
   type Confirm = { title: string; message?: string; onConfirm: () => void }
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+
+  // Persist display preferences
+  useEffect(() => { localStorage.setItem('hpViewMode', viewMode) }, [viewMode])
+  useEffect(() => { localStorage.setItem('hpSortKey', sortKey) }, [sortKey])
+  useEffect(() => { localStorage.setItem('hpSortDir', sortDir) }, [sortDir])
 
   const allCategories = useMemo(() => {
     const cats = new Set<string>()
@@ -91,8 +96,11 @@ export default function HomePage() {
           return dir * (new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
         case 'balance':
           return dir * (a.balance - b.balance)
-        case 'store':
-          return dir * a.store_name.localeCompare(b.store_name, 'he')
+        case 'store': {
+          const cmp = a.store_name.localeCompare(b.store_name, 'he')
+          if (cmp !== 0) return dir * cmp
+          return a.balance - b.balance // secondary: balance ascending
+        }
         case 'added':
           return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
         default:
@@ -529,12 +537,18 @@ export default function HomePage() {
 
       {/* FAB */}
       {!isSelectMode && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-40">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-40">
           <button
             onClick={() => { setEditingVoucher(undefined); setShowForm(true) }}
             className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full shadow-xl flex items-center justify-center hover:shadow-2xl transition-all active:scale-95"
           >
-            <Plus className="w-7 h-7 text-white" />
+            <svg viewBox="0 0 28 28" className="w-7 h-7" fill="none">
+              {/* diamond / gift-tag frame */}
+              <rect x="6" y="6" width="16" height="16" rx="3" transform="rotate(45 14 14)" stroke="white" strokeWidth="2" fill="none"/>
+              {/* plus sign */}
+              <line x1="14" y1="9" x2="14" y2="19" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="9" y1="14" x2="19" y2="14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
           </button>
         </div>
       )}

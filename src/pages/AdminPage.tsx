@@ -43,6 +43,7 @@ export default function AdminPage() {
   const [svStores, setSvStores] = useState('')
   const [svDesc, setSvDesc] = useState('')
   const [svGlobal, setSvGlobal] = useState(false)
+  const [svBalanceUrl, setSvBalanceUrl] = useState('')
   const [showQuickSV, setShowQuickSV] = useState(false)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
@@ -86,9 +87,10 @@ export default function AdminPage() {
       description: svDesc,
       stores: svStores.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
       is_global: svGlobal,
+      balance_check_url: svBalanceUrl.trim() || undefined,
     })
     toast.success(svGlobal ? 'שובר-על גלובלי נוסף' : 'שובר-על נוסף')
-    setSvName(''); setSvStores(''); setSvDesc(''); setSvGlobal(false)
+    setSvName(''); setSvStores(''); setSvDesc(''); setSvGlobal(false); setSvBalanceUrl('')
     setShowAddSV(false)
   }
 
@@ -377,6 +379,7 @@ export default function AdminPage() {
               <input value={svName} onChange={e => setSvName(e.target.value)} placeholder="שם שובר-על" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" />
               <input value={svDesc} onChange={e => setSvDesc(e.target.value)} placeholder="תיאור (אופציונלי)" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" />
               <textarea value={svStores} onChange={e => setSvStores(e.target.value)} placeholder="חנויות מכבדות (כל חנות בשורה נפרדת או מופרדות בפסיק)" rows={3} className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-y" />
+              <input value={svBalanceUrl} onChange={e => setSvBalanceUrl(e.target.value)} placeholder="לינק לבדיקת יתרה (אופציונלי)" type="url" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" dir="ltr" />
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={svGlobal} onChange={e => setSvGlobal(e.target.checked)} className="w-4 h-4 accent-green-500" />
                 <Globe className="w-4 h-4 text-blue-500" />
@@ -404,6 +407,14 @@ export default function AdminPage() {
                       onChange={e => setEditingSV({ ...editingSV, stores: e.target.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean) })}
                       rows={3}
                       className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
+                    />
+                    <input
+                      type="url"
+                      value={editingSV.balance_check_url || ''}
+                      onChange={e => setEditingSV({ ...editingSV, balance_check_url: e.target.value })}
+                      placeholder="לינק לבדיקת יתרה (אופציונלי)"
+                      className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
                     />
                     <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                       <input type="checkbox" checked={editingSV.is_global ?? false} onChange={e => setEditingSV({ ...editingSV, is_global: e.target.checked })} className="w-4 h-4 accent-green-500" />
