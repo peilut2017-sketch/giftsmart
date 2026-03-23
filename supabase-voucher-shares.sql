@@ -38,15 +38,20 @@ BEGIN
       SELECT id FROM wallets WHERE owner_id = dup.owner_id AND id <> primary_wallet_id
     );
 
-    -- Re-point wallet_members (skip if already exists for primary)
+    -- Re-point wallet_members:
+    -- Step 1: delete rows from duplicate wallets that already exist in the primary wallet
+    DELETE FROM wallet_members
+    WHERE wallet_id IN (
+      SELECT id FROM wallets WHERE owner_id = dup.owner_id AND id <> primary_wallet_id
+    )
+    AND user_id IN (
+      SELECT user_id FROM wallet_members WHERE wallet_id = primary_wallet_id
+    );
+    -- Step 2: move the rest to the primary wallet
     UPDATE wallet_members
     SET wallet_id = primary_wallet_id
     WHERE wallet_id IN (
       SELECT id FROM wallets WHERE owner_id = dup.owner_id AND id <> primary_wallet_id
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM wallet_members wm2
-      WHERE wm2.wallet_id = primary_wallet_id AND wm2.user_id = wallet_members.user_id
     );
 
     -- Re-point categories
