@@ -12,8 +12,6 @@ import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { supabase } from '../lib/supabase'
 
-const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
-
 const QUICK_AMOUNTS = [50, 100]
 
 export default function CheckoutPage() {
