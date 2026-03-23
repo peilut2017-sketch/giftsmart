@@ -113,51 +113,83 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     // Show cache immediately so the UI is never blank/stuck
     loadFromCache(user.id)
     setLoading(false)
+    setWalletError(null)
 
     if (!navigator.onLine) return
 
     try {
       let wId: string
 
-      // If we already know the wallet, skip the lookup
       if (walletIdRef.current) {
         wId = walletIdRef.current
       } else {
-        // Use a SECURITY DEFINER RPC that atomically gets-or-creates the wallet
-        // and the wallet_members row, bypassing any RLS issues entirely.
-        const { data: fetchedWalletId, error: walletError } = await withTimeout<{ data: string | null; error: any }>(
+        // ── Step 1: try the SECURITY DEFINER RPC (atomic get-or-create) ──
+        let resolvedId: string | null = null
+        const { data: rpcId, error: rpcErr } = await withTimeout<{ data: string | null; error: any }>(
           supabase.rpc('get_or_create_user_wallet') as any
         ).catch(() => ({ data: null, error: new Error('timeout') }))
 
-        if (walletError || !fetchedWalletId) {
-          console.error('Wallet setup failed:', walletError)
-          const msg = walletError?.message || ''
-          if (msg.includes('does not exist') || msg.includes('42883')) {
-            setWalletError('הגדרת הארנק חסרה — יש להריץ את supabase-wallet-setup.sql ב-Supabase')
-          } else if (msg === 'timeout') {
-            setWalletError('תם הזמן בחיבור ל-Supabase — בדוק את ה-URL/KEY ב-env')
+        if (!rpcErr && rpcId) {
+          resolvedId = rpcId
+        } else {
+          // ── Step 2: RPC missing/failed — try direct wallet_members SELECT ──
+          console.warn('RPC get_or_create_user_wallet failed, trying direct query:', rpcErr?.message)
+          const { data: memberRows, error: memberErr } = await (supabase
+            .from('wallet_members')
+            .select('wallet_id')
+            .eq('user_id', user.id)
+            .order('created_at')
+            .limit(1) as any)
+
+          if (!memberErr && memberRows?.[0]?.wallet_id) {
+            resolvedId = memberRows[0].wallet_id
           } else {
-            setWalletError('שגיאה בטעינת הארנק: ' + (msg || 'לא ידוע'))
+            // ── Step 3: no wallet at all — create one via direct insert ──
+            console.warn('No wallet_members row found, creating wallet directly')
+            const { data: newWallet, error: walletCreateErr } = await (supabase
+              .from('wallets')
+              .insert({ name: 'ארנק השוברים שלי', owner_id: user.id })
+              .select('id')
+              .single() as any)
+
+            if (walletCreateErr || !newWallet?.id) {
+              const msg = rpcErr?.message || walletCreateErr?.message || 'לא ידוע'
+              if (msg.includes('does not exist') || msg.includes('42883')) {
+                setWalletError('הפונקציה get_or_create_user_wallet חסרה — הרץ את supabase-complete-fix.sql ב-Supabase')
+              } else {
+                setWalletError('שגיאה בהגדרת הארנק: ' + msg + ' — הרץ את supabase-complete-fix.sql ב-Supabase')
+              }
+              return
+            }
+            resolvedId = newWallet.id
+            // Best-effort: add user to wallet_members
+            await (supabase.from('wallet_members').insert({
+              wallet_id: resolvedId,
+              user_id: user.id,
+              email: user.email ?? '',
+              role: 'owner',
+            }) as any).catch(() => {})
           }
+        }
+
+        if (!resolvedId) {
+          setWalletError('לא ניתן לאתחל ארנק — הרץ את supabase-complete-fix.sql ב-Supabase')
           return
         }
-        wId = fetchedWalletId
 
-        // Fetch wallet name (best-effort; owner can always SELECT their own wallet)
+        wId = resolvedId
         const { data: walletRow } = await (supabase.from('wallets').select('name').eq('id', wId).single() as any).catch(() => ({ data: null }))
         if (walletRow?.name) setWalletName(walletRow.name)
-
         walletIdRef.current = wId
         setWalletId(wId)
       }
 
-      // Fetch all data in parallel for speed
-      type QueryResult = { data: any[] | null }
+      // ── Fetch vouchers, super-vouchers, stores, categories in parallel ──
+      type QueryResult = { data: any[] | null; error?: any }
       const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
         withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any),
         withTimeout<QueryResult>(
           supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).then(res => {
-            // Fallback: if is_global column doesn't exist yet, fetch only wallet SVs
             if (res.error?.code === '42703') {
               return supabase.from('super_vouchers').select('*').eq('wallet_id', wId)
             }
@@ -168,12 +200,36 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         withTimeout<QueryResult>(supabase.from('categories').select('*').or(`wallet_id.eq.${wId},wallet_id.is.null`) as any),
       ])
 
-      if (vRes.status === 'fulfilled' && vRes.value.data) {
-        const active = vRes.value.data.filter((v: any) => !v.is_archived)
-        const archived = vRes.value.data.filter((v: any) => v.is_archived)
-        setVouchers(active)
-        setArchivedVouchers(archived)
-        saveToCache(user.id, active, archived)
+      if (vRes.status === 'fulfilled') {
+        const vData = vRes.value.data
+        const vErr = (vRes.value as any).error
+        if (vData) {
+          const active = vData.filter((v: any) => !v.is_archived)
+          const archived = vData.filter((v: any) => v.is_archived)
+          setVouchers(active)
+          setArchivedVouchers(archived)
+          saveToCache(user.id, active, archived)
+
+          // ── Fallback: if 0 results and no explicit error, also search by user_id ──
+          // (catches pre-wallet-migration data where wallet_id was different)
+          if (vData.length === 0 && !vErr) {
+            const { data: byUserId } = await (supabase
+              .from(VOUCHERS_VIEW)
+              .select('*')
+              .eq('user_id', user.id)
+              .order('expiry_date', { ascending: true }) as any).catch(() => ({ data: null }))
+            if (byUserId && byUserId.length > 0) {
+              const active2 = byUserId.filter((v: any) => !v.is_archived)
+              const archived2 = byUserId.filter((v: any) => v.is_archived)
+              setVouchers(active2)
+              setArchivedVouchers(archived2)
+              saveToCache(user.id, active2, archived2)
+            }
+          }
+        } else if (vErr) {
+          console.error('Vouchers fetch error:', vErr)
+          setWalletError('שגיאה בטעינת שוברים: ' + (vErr.message || vErr.code || 'RLS') + ' — הרץ את supabase-complete-fix.sql')
+        }
       }
       if (svRes.status === 'fulfilled' && svRes.value.data) setSuperVouchers(svRes.value.data)
       if (storeRes.status === 'fulfilled' && storeRes.value.data) setStores(storeRes.value.data)
@@ -182,8 +238,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         setCategories([...DEFAULT_CATEGORIES, ...customCats])
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Fetch error:', err)
+      setWalletError('שגיאת טעינה: ' + (err?.message || 'לא ידוע'))
     }
   }, [user, loadFromCache, saveToCache])
 
@@ -257,7 +314,15 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }, [walletId, user, refreshVouchersOnly])
 
   async function addVoucher(v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>): Promise<Voucher | null> {
-    if (!user || !walletId) throw new Error('נתוני משתמש לא נטענו, נסה שוב')
+    if (!user) throw new Error('לא מחובר')
+
+    // If walletId not loaded yet, try to get it now
+    let wId = walletId ?? walletIdRef.current
+    if (!wId) {
+      await fetchData()
+      wId = walletIdRef.current
+      if (!wId) throw new Error('לא ניתן לאתחל ארנק — הרץ את supabase-complete-fix.sql ב-Supabase')
+    }
 
     // Check for super voucher match
     let superVoucherId: string | undefined
@@ -269,7 +334,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const payload: Record<string, any> = {
       ...v,
       user_id: user.id,
-      wallet_id: walletId,
+      wallet_id: wId,
       super_voucher_id: superVoucherId,
     }
     // Remove undefined values to avoid sending null for columns that may not exist
