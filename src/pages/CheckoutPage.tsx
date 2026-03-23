@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useVouchers } from '../contexts/VoucherContext'
+import { useVouchers, type ActivityLogEntry } from '../contexts/VoucherContext'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { supabase } from '../lib/supabase'
@@ -15,7 +15,7 @@ const QUICK_AMOUNTS = [50, 100]
 export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { vouchers, archivedVouchers, superVouchers, updateVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, updateVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, getVoucherActivityLog } = useVouchers()
 
   const voucher = [...vouchers, ...archivedVouchers].find(v => v.id === id)
   const sv = superVouchers.find(s => s.id === voucher?.super_voucher_id)
@@ -30,6 +30,18 @@ export default function CheckoutPage() {
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
   const [shareLoading, setShareLoading] = useState(false)
+  const [voucherLog, setVoucherLog] = useState<ActivityLogEntry[]>([])
+  const [logLoading, setLogLoading] = useState(true)
+
+  // Load voucher activity log
+  useEffect(() => {
+    if (!voucher?.id) return
+    setLogLoading(true)
+    getVoucherActivityLog(voucher.id)
+      .then(setVoucherLog)
+      .catch(() => {})
+      .finally(() => setLogLoading(false))
+  }, [voucher?.id])
 
   // WakeLock
   useEffect(() => {
@@ -504,6 +516,95 @@ export default function CheckoutPage() {
             ))}
           </div>
         )}
+
+        {/* Activity Timeline */}
+        <div className="bg-white rounded-3xl shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-gray-400" />
+            היסטוריית פעילות
+          </h3>
+          {logLoading ? (
+            <div className="flex justify-center py-4">
+              <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin" />
+            </div>
+          ) : voucherLog.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">אין פעילות רשומה</p>
+          ) : (
+            <div className="relative">
+              {/* Vertical line */}
+              <div className="absolute right-[11px] top-3 bottom-3 w-px bg-gray-100" />
+              <div className="space-y-4">
+                {voucherLog.map((entry, i) => {
+                  const dt = new Date(entry.created_at)
+                  const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                  const timeStr = dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+
+                  let icon: React.ReactNode
+                  let dotColor: string
+                  let label: string
+                  let detail: string | null = null
+
+                  switch (entry.action) {
+                    case 'add':
+                      icon = <PlusCircle className="w-3.5 h-3.5" />
+                      dotColor = 'bg-green-500 text-white'
+                      label = 'נוסף לארנק'
+                      if (entry.details?.amount != null)
+                        detail = `סכום: ₪${Number(entry.details.amount).toLocaleString('he-IL')}`
+                      break
+                    case 'balance_update':
+                      icon = <MinusCircle className="w-3.5 h-3.5" />
+                      dotColor = 'bg-blue-500 text-white'
+                      label = 'עדכון יתרה'
+                      if (entry.details?.from != null && entry.details?.to != null)
+                        detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
+                      break
+                    case 'edit':
+                      icon = <Pencil className="w-3.5 h-3.5" />
+                      dotColor = 'bg-indigo-500 text-white'
+                      label = 'פרטים עודכנו'
+                      break
+                    case 'archive':
+                      icon = <PackageCheck className="w-3.5 h-3.5" />
+                      dotColor = 'bg-orange-400 text-white'
+                      label = 'הועבר לארכיון'
+                      if (entry.details?.balance != null)
+                        detail = `יתרה: ₪${Number(entry.details.balance).toLocaleString('he-IL')}`
+                      break
+                    case 'unarchive':
+                      icon = <Undo2 className="w-3.5 h-3.5" />
+                      dotColor = 'bg-teal-500 text-white'
+                      label = 'הוחזר לארנק'
+                      break
+                    default:
+                      icon = <Clock className="w-3.5 h-3.5" />
+                      dotColor = 'bg-gray-400 text-white'
+                      label = entry.action
+                  }
+
+                  return (
+                    <div key={entry.id} className="flex items-start gap-3 relative">
+                      {/* Dot */}
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 z-10 ${dotColor}`}>
+                        {icon}
+                      </div>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 pt-0.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-medium text-gray-800">{label}</span>
+                          <span className="text-xs text-gray-400 flex-shrink-0">{dateStr} {timeStr}</span>
+                        </div>
+                        {detail && (
+                          <p className="text-xs text-gray-500 mt-0.5">{detail}</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Share Modal */}

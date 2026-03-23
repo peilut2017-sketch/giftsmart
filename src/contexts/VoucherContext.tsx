@@ -35,6 +35,7 @@ interface VoucherContextType {
   deleteShareToken: (token: string) => Promise<void>
   getShareTokens: (voucherId: string) => Promise<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
+  getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
 }
 
 export interface ActivityLogEntry {
@@ -116,41 +117,25 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     try {
       let wId: string
 
-      // If we already know the wallet, skip the lookup to avoid RLS recursion issues
+      // If we already know the wallet, skip the lookup
       if (walletIdRef.current) {
         wId = walletIdRef.current
       } else {
-        // Get or create wallet — wrapped in timeout so a hung query never freezes the app
-        type MembershipResult = { data: { wallet_id: string; wallets: any } | null }
-        const { data: membership } = await withTimeout<MembershipResult>(
-          supabase
-            .from('wallet_members')
-            .select('wallet_id, wallets(id, name)')
-            .eq('user_id', user.id)
-            .order('created_at')
-            .limit(1)
-            .single() as any
-        ).catch(() => ({ data: null } as MembershipResult))
+        // Use a SECURITY DEFINER RPC that atomically gets-or-creates the wallet
+        // and the wallet_members row, bypassing any RLS issues entirely.
+        const { data: fetchedWalletId, error: walletError } = await withTimeout<{ data: string | null; error: any }>(
+          supabase.rpc('get_or_create_user_wallet') as any
+        ).catch(() => ({ data: null, error: new Error('timeout') }))
 
-        if (!membership) {
-          // Create new wallet
-          const { data: wallet } = await withTimeout<{ data: any }>(
-            supabase.from('wallets').insert({ name: 'ארנק השוברים שלי', owner_id: user.id }).select().single() as any
-          ).catch(() => ({ data: null }))
-          if (!wallet) return
-          wId = wallet.id
-          setWalletName(wallet.name)
-          await (supabase.from('wallet_members').insert({
-            wallet_id: wId,
-            user_id: user.id,
-            email: user.email,
-            role: 'owner',
-          }) as any as Promise<any>).catch(() => {})
-        } else {
-          wId = membership.wallet_id
-          const walletData = membership.wallets as any
-          if (walletData?.name) setWalletName(walletData.name)
+        if (walletError || !fetchedWalletId) {
+          console.error('Wallet setup failed:', walletError)
+          return
         }
+        wId = fetchedWalletId
+
+        // Fetch wallet name (best-effort; owner can always SELECT their own wallet)
+        const { data: walletRow } = await (supabase.from('wallets').select('name').eq('id', wId).single() as any).catch(() => ({ data: null }))
+        if (walletRow?.name) setWalletName(walletRow.name)
 
         walletIdRef.current = wId
         setWalletId(wId)
@@ -295,6 +280,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Add voucher error:', error)
+      // RLS rejection usually means the wallet was deleted (e.g. admin reset).
+      // Clear wallet state so fetchData() re-creates it on next attempt.
+      if (error.code === '42501' || error.message?.includes('row-level security')) {
+        walletIdRef.current = null
+        setWalletId(null)
+        fetchData()
+        throw new Error('הארנק אופס — הרענן ונסה שוב')
+      }
       throw new Error(error.message)
     }
 
@@ -536,6 +529,16 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     return (data || []) as ActivityLogEntry[]
   }
 
+  async function getVoucherActivityLog(voucherId: string): Promise<ActivityLogEntry[]> {
+    const { data } = await supabase
+      .from('activity_log')
+      .select('id, action, voucher_id, voucher_name, details, created_at')
+      .eq('user_id', user?.id ?? '')
+      .eq('voucher_id', voucherId)
+      .order('created_at', { ascending: true })
+    return (data || []) as ActivityLogEntry[]
+  }
+
   return (
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores,
@@ -544,7 +547,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
       updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
-      getActivityLog,
+      getActivityLog, getVoucherActivityLog,
     }}>
       {children}
     </VoucherContext.Provider>

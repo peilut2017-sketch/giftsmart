@@ -155,7 +155,7 @@ export default function AdminPage() {
     setDeleteTarget(null)
     const { error } = await supabase.rpc('admin_clear_user_data', { target_user_id: u.id })
     if (error) { toast.error('שגיאה: ' + error.message); return }
-    toast.success(`נתוני ${u.email} נמחקו`)
+    toast.success(`נתוני ${u.email} נמחקו — המשתמש צריך להתנתק ולהתחבר מחדש`, { duration: 5000 })
   }
 
   async function handleDeleteUser(u: UserRow) {
