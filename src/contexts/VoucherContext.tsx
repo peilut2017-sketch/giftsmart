@@ -13,6 +13,7 @@ interface VoucherContextType {
   stores: Store[]
   walletId: string | null
   walletName: string
+  walletError: string | null
   loading: boolean
   isOnline: boolean
   addVoucher: (v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>) => Promise<Voucher | null>
@@ -71,6 +72,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const [walletId, setWalletId] = useState<string | null>(null)
   const walletIdRef = useRef<string | null>(null)
   const [walletName, setWalletName] = useState('ארנק השוברים שלי')
+  const [walletError, setWalletError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
@@ -129,6 +131,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
         if (walletError || !fetchedWalletId) {
           console.error('Wallet setup failed:', walletError)
+          const msg = walletError?.message || ''
+          if (msg.includes('does not exist') || msg.includes('42883')) {
+            setWalletError('הגדרת הארנק חסרה — יש להריץ את supabase-wallet-setup.sql ב-Supabase')
+          } else if (msg === 'timeout') {
+            setWalletError('תם הזמן בחיבור ל-Supabase — בדוק את ה-URL/KEY ב-env')
+          } else {
+            setWalletError('שגיאה בטעינת הארנק: ' + (msg || 'לא ידוע'))
+          }
           return
         }
         wId = fetchedWalletId
@@ -542,7 +552,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   return (
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores,
-      walletId, walletName, loading, isOnline,
+      walletId, walletName, walletError, loading, isOnline,
       addVoucher, updateVoucher, deleteVoucher, archiveVoucher, unarchiveVoucher,
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,

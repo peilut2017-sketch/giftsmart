@@ -17,7 +17,7 @@ type SortDir = 'asc' | 'desc'
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const { vouchers, superVouchers, loading, isOnline, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
+  const { vouchers, superVouchers, loading, walletError, isOnline, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [search, setSearch] = useState('')
@@ -451,6 +451,12 @@ export default function HomePage() {
 
       {/* Voucher Grid */}
       <div className="p-4 pb-36">
+        {walletError && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
+            <p className="font-semibold mb-1">שגיאה בהגדרת הארנק</p>
+            <p>{walletError}</p>
+          </div>
+        )}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[1,2,3,4].map(i => (
