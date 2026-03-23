@@ -163,12 +163,12 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
             }
             resolvedId = newWallet.id
             // Best-effort: add user to wallet_members
-            await (supabase.from('wallet_members').insert({
+            await Promise.resolve(supabase.from('wallet_members').insert({
               wallet_id: resolvedId,
               user_id: user.id,
               email: user.email ?? '',
               role: 'owner',
-            }) as any).catch(() => {})
+            })).catch(() => {})
           }
         }
 
@@ -178,7 +178,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         }
 
         wId = resolvedId
-        const { data: walletRow } = await (supabase.from('wallets').select('name').eq('id', wId).single() as any).catch(() => ({ data: null }))
+        const { data: walletRow } = await Promise.resolve(supabase.from('wallets').select('name').eq('id', wId).single()).catch(() => ({ data: null }))
         if (walletRow?.name) setWalletName(walletRow.name)
         walletIdRef.current = wId
         setWalletId(wId)
@@ -213,11 +213,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
           // ── Fallback: if 0 results and no explicit error, also search by user_id ──
           // (catches pre-wallet-migration data where wallet_id was different)
           if (vData.length === 0 && !vErr) {
-            const { data: byUserId } = await (supabase
+            const { data: byUserId } = await Promise.resolve(supabase
               .from(VOUCHERS_VIEW)
               .select('*')
               .eq('user_id', user.id)
-              .order('expiry_date', { ascending: true }) as any).catch(() => ({ data: null }))
+              .order('expiry_date', { ascending: true })).catch(() => ({ data: null }))
             if (byUserId && byUserId.length > 0) {
               const active2 = byUserId.filter((v: any) => !v.is_archived)
               const archived2 = byUserId.filter((v: any) => v.is_archived)
