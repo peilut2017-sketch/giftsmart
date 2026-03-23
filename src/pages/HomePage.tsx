@@ -11,13 +11,13 @@ import { useNavigate } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 type SortKey = 'expiry' | 'balance' | 'store' | 'added'
-type FilterTab = 'all' | 'expiring' | 'shared'
+type FilterTab = 'all' | 'expiring' | 'shared' | 'shared_with_me'
 type ViewMode = 'grid' | 'rows'
 type SortDir = 'asc' | 'desc'
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const { vouchers, superVouchers, loading, walletError, isOnline, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
+  const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [search, setSearch] = useState('')
@@ -48,6 +48,8 @@ export default function HomePage() {
   const expiredCount = vouchers.filter(v => getExpiryStatus(v.expiry_date) === 'expired').length
 
   const filtered = useMemo(() => {
+    if (filterTab === 'shared_with_me') return [...sharedWithMe]
+
     let result = [...vouchers]
 
     if (filterTab === 'expiring') {
@@ -350,16 +352,21 @@ export default function HomePage() {
 
         {/* Tabs */}
         {!isSelectMode && (
-          <div className="flex items-center px-4 pb-2 gap-2">
-            {(['all', 'expiring', 'shared'] as FilterTab[]).map(tab => (
+          <div className="flex items-center px-4 pb-2 gap-2 overflow-x-auto no-scrollbar">
+            {([
+              { key: 'all', label: `הכל (${vouchers.length})` },
+              { key: 'expiring', label: '⚠️ פג בקרוב' },
+              { key: 'shared', label: '👥 משותף' },
+              { key: 'shared_with_me', label: `🤝 שותף איתי${sharedWithMe.length > 0 ? ` (${sharedWithMe.length})` : ''}` },
+            ] as { key: FilterTab; label: string }[]).map(({ key, label }) => (
               <button
-                key={tab}
-                onClick={() => setFilterTab(tab)}
-                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-                  filterTab === tab ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                key={key}
+                onClick={() => setFilterTab(key)}
+                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+                  filterTab === key ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
-                {tab === 'all' ? `הכל (${vouchers.length})` : tab === 'expiring' ? '⚠️ פג בקרוב' : '👥 משותף'}
+                {label}
               </button>
             ))}
             <div className="flex-1" />

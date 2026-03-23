@@ -1,23 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useVouchers, type ActivityLogEntry } from '../contexts/VoucherContext'
+import { useVouchers, type ActivityLogEntry, type VoucherShare } from '../contexts/VoucherContext'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { supabase } from '../lib/supabase'
+
+const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
 
 const QUICK_AMOUNTS = [50, 100]
 
 export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { vouchers, archivedVouchers, superVouchers, updateVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, getVoucherActivityLog } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog } = useVouchers()
 
-  const voucher = [...vouchers, ...archivedVouchers].find(v => v.id === id)
+  const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
+  const isSharedVoucher = sharedWithMe.some(v => v.id === id)
   const sv = superVouchers.find(s => s.id === voucher?.super_voucher_id)
 
   const barcodeRef = useRef<SVGSVGElement>(null)
@@ -30,6 +33,12 @@ export default function CheckoutPage() {
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
   const [shareLoading, setShareLoading] = useState(false)
+  const [shareTab, setShareTab] = useState<'link' | 'user'>('link')
+  const [shareEmail, setShareEmail] = useState('')
+  const [shareEmailLoading, setShareEmailLoading] = useState(false)
+  const [voucherShares, setVoucherShares] = useState<VoucherShare[]>([])
+  const [sharesLoaded, setSharesLoaded] = useState(false)
+  const [pendingShareEmail, setPendingShareEmail] = useState<string | null>(null)
   const [voucherLog, setVoucherLog] = useState<ActivityLogEntry[]>([])
   const [logLoading, setLogLoading] = useState(true)
 
@@ -98,12 +107,16 @@ export default function CheckoutPage() {
 
   async function updateBalance(newBalance: number, usedAmount?: number) {
     if (!voucher) return
-    if (!isOnline && voucher.is_shared) {
-      toast.error('אין חיבור לאינטרנט — לא ניתן לעדכן שובר משותף')
+    if (!isOnline) {
+      toast.error('אין חיבור לאינטרנט')
       return
     }
     const clamped = Math.max(0, newBalance)
-    await updateVoucher(voucher.id, { balance: clamped })
+    if (isSharedVoucher) {
+      await updateSharedVoucherBalance(voucher.id, clamped)
+    } else {
+      await updateVoucher(voucher.id, { balance: clamped })
+    }
     if (clamped <= 0) {
       toast.success('יתרה אופסה!')
     } else {
@@ -119,9 +132,73 @@ export default function CheckoutPage() {
     if (!voucher) return
     setShareLoading(true)
     setShowShareModal(true)
+    setShareTab('link')
+    setShareEmail('')
+    setPendingShareEmail(null)
     const tokens = await getShareTokens(voucher.id)
     setShareTokens(tokens)
     setShareLoading(false)
+    if (!isSharedVoucher) {
+      getVoucherShares(voucher.id).then(shares => {
+        setVoucherShares(shares)
+        setSharesLoaded(true)
+      }).catch(() => setSharesLoaded(true))
+    }
+  }
+
+  async function handleShareWithUser() {
+    if (!voucher || !shareEmail.trim()) return
+    setShareEmailLoading(true)
+    try {
+      const result = await shareVoucherWithUser(voucher.id, shareEmail.trim())
+      if (result === 'not_found') {
+        setPendingShareEmail(shareEmail.trim())
+      } else if (result === 'already_shared') {
+        toast('שובר זה כבר שותף עם משתמש זה', { icon: 'ℹ️' })
+      } else {
+        // Send notification email (non-blocking)
+        Promise.resolve(supabase.rpc('send_voucher_shared_email', {
+          p_to_email: shareEmail.trim(),
+          p_to_name: shareEmail.trim(),
+          p_from_name: '',
+          p_store_name: voucher.store_name,
+          p_app_url: APP_URL,
+        })).catch(() => {})
+        toast.success(`שובר שותף עם ${shareEmail.trim()}`)
+        setShareEmail('')
+        const shares = await getVoucherShares(voucher.id)
+        setVoucherShares(shares)
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'שגיאה בשיתוף')
+    } finally {
+      setShareEmailLoading(false)
+    }
+  }
+
+  async function handleSendVoucherInvite() {
+    if (!voucher || !pendingShareEmail) return
+    try {
+      await supabase.rpc('send_voucher_share_invite_email', {
+        p_to_email: pendingShareEmail,
+        p_from_name: '',
+        p_store_name: voucher.store_name,
+        p_app_url: APP_URL,
+      })
+      toast.success(`הזמנה נשלחה ל-${pendingShareEmail}`)
+    } catch {
+      toast.error('שגיאה בשליחת הזמנה')
+    } finally {
+      setPendingShareEmail(null)
+      setShareEmail('')
+    }
+  }
+
+  async function handleUnshare(email: string) {
+    if (!voucher) return
+    await unshareVoucher(voucher.id, email)
+    setVoucherShares(prev => prev.filter(s => s.shared_with_email !== email))
+    toast.success('שיתוף הוסר')
   }
 
   async function handleCreateShareLink(days?: number) {
@@ -610,7 +687,7 @@ export default function CheckoutPage() {
       {/* Share Modal */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowShareModal(false)}>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 animate-slide-up max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-gray-800">שיתוף שובר</h3>
               <button onClick={() => setShowShareModal(false)} className="p-2 rounded-full hover:bg-gray-100">
@@ -618,66 +695,164 @@ export default function CheckoutPage() {
               </button>
             </div>
 
-            <p className="text-sm text-gray-500 mb-4">
-              צור לינק ייחודי לשיתוף השובר. מי שיקבל את הלינק יוכל לראות את הקוד.
-            </p>
-
-            {/* Create link buttons */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {[
-                { label: 'יום אחד', days: 1 },
-                { label: 'שבוע', days: 7 },
-                { label: 'ללא הגבלה', days: undefined },
-              ].map(opt => (
+            {/* Tabs */}
+            {!isSharedVoucher && (
+              <div className="flex gap-1 bg-gray-100 rounded-2xl p-1 mb-4">
                 <button
-                  key={opt.label}
-                  onClick={() => handleCreateShareLink(opt.days)}
-                  disabled={shareLoading}
-                  className="flex flex-col items-center gap-1 py-3 rounded-2xl bg-purple-50 text-purple-700 text-xs font-medium hover:bg-purple-100 disabled:opacity-50 transition-all"
+                  onClick={() => setShareTab('link')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'link' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}
                 >
-                  <Link2 className="w-4 h-4" />
-                  {opt.label}
+                  <Link2 className="w-3.5 h-3.5" /> שיתוף בלינק
                 </button>
-              ))}
-            </div>
-
-            {/* Existing tokens */}
-            {shareTokens.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-gray-500">לינקים פעילים:</p>
-                {shareTokens.map(t => {
-                  const url = `${window.location.origin}/s/${t.token}`
-                  const expired = t.expires_at && new Date(t.expires_at) < new Date()
-                  return (
-                    <div key={t.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200'}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-mono text-gray-600 truncate">{url}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {expired ? '⛔ פג תוקף' : t.expires_at ? `עד ${new Date(t.expires_at).toLocaleDateString('he-IL')}` : 'ללא הגבלת זמן'}
-                          {' · '}{t.view_count} צפיות
-                        </p>
-                      </div>
-                      <button
-                        onClick={async () => { await navigator.clipboard.writeText(url); toast.success('הועתק!') }}
-                        className="p-2 text-purple-500 hover:bg-purple-50 rounded-lg"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteShareToken(t.token)}
-                        className="p-2 text-red-400 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )
-                })}
+                <button
+                  onClick={() => setShareTab('user')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'user' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}
+                >
+                  <Users className="w-3.5 h-3.5" /> שתף עם משתמש
+                </button>
               </div>
             )}
 
-            {shareLoading && (
-              <div className="text-center py-4">
-                <div className="w-6 h-6 border-2 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto" />
+            {/* ── Link tab ── */}
+            {shareTab === 'link' && (
+              <>
+                <p className="text-sm text-gray-500 mb-4">
+                  צור לינק ייחודי לשיתוף השובר. מי שיקבל את הלינק יוכל לראות את הקוד.
+                </p>
+
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {[
+                    { label: 'יום אחד', days: 1 },
+                    { label: 'שבוע', days: 7 },
+                    { label: 'ללא הגבלה', days: undefined },
+                  ].map(opt => (
+                    <button
+                      key={opt.label}
+                      onClick={() => handleCreateShareLink(opt.days)}
+                      disabled={shareLoading}
+                      className="flex flex-col items-center gap-1 py-3 rounded-2xl bg-purple-50 text-purple-700 text-xs font-medium hover:bg-purple-100 disabled:opacity-50 transition-all"
+                    >
+                      <Link2 className="w-4 h-4" />
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {shareTokens.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-gray-500">לינקים פעילים:</p>
+                    {shareTokens.map(t => {
+                      const url = `${window.location.origin}/s/${t.token}`
+                      const expired = t.expires_at && new Date(t.expires_at) < new Date()
+                      return (
+                        <div key={t.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200'}`}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-mono text-gray-600 truncate">{url}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {expired ? '⛔ פג תוקף' : t.expires_at ? `עד ${new Date(t.expires_at).toLocaleDateString('he-IL')}` : 'ללא הגבלת זמן'}
+                              {' · '}{t.view_count} צפיות
+                            </p>
+                          </div>
+                          <button
+                            onClick={async () => { await navigator.clipboard.writeText(url); toast.success('הועתק!') }}
+                            className="p-2 text-purple-500 hover:bg-purple-50 rounded-lg"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteShareToken(t.token)}
+                            className="p-2 text-red-400 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {shareLoading && (
+                  <div className="text-center py-4">
+                    <div className="w-6 h-6 border-2 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto" />
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── User tab ── */}
+            {shareTab === 'user' && !isSharedVoucher && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">
+                  שתף שובר זה עם משתמש רשום — הם יראו אותו בלשונית "שותף איתי" ויוכלו לעדכן יתרה.
+                </p>
+
+                {/* "User not found" confirm */}
+                {pendingShareEmail && (
+                  <div className="bg-orange-50 rounded-2xl p-3 space-y-2">
+                    <p className="text-sm text-orange-700">
+                      המשתמש <strong>{pendingShareEmail}</strong> אינו רשום באפליקציה.
+                      לשלוח הזמנה?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSendVoucherInvite}
+                        className="flex-1 bg-orange-500 text-white py-2 rounded-xl text-sm font-medium"
+                      >
+                        שלח הזמנה
+                      </button>
+                      <button
+                        onClick={() => { setPendingShareEmail(null); setShareEmail('') }}
+                        className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium"
+                      >
+                        ביטול
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!pendingShareEmail && (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <UserPlus className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="email"
+                        value={shareEmail}
+                        onChange={e => setShareEmail(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleShareWithUser()}
+                        placeholder="כתובת מייל"
+                        className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-purple-300"
+                        dir="ltr"
+                      />
+                    </div>
+                    <button
+                      onClick={handleShareWithUser}
+                      disabled={shareEmailLoading || !shareEmail.trim()}
+                      className="px-4 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                    >
+                      {shareEmailLoading
+                        ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        : 'שתף'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Existing user shares */}
+                {sharesLoaded && voucherShares.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-gray-500">שותף עם:</p>
+                    {voucherShares.map(s => (
+                      <div key={s.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                        <p className="text-sm text-gray-700">{s.shared_with_email}</p>
+                        <button
+                          onClick={() => handleUnshare(s.shared_with_email)}
+                          className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

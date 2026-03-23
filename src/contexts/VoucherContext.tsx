@@ -5,12 +5,20 @@ import type { Voucher, SuperVoucher, Category, Store } from '../types'
 import { DEFAULT_CATEGORIES } from '../types'
 import { sendInviteEmail } from '../lib/emailService'
 
+export interface VoucherShare {
+  id: string
+  shared_with_email: string
+  shared_with_user_id: string | null
+  created_at: string
+}
+
 interface VoucherContextType {
   vouchers: Voucher[]
   archivedVouchers: Voucher[]
   superVouchers: SuperVoucher[]
   categories: Category[]
   stores: Store[]
+  sharedWithMe: Voucher[]
   walletId: string | null
   walletName: string
   walletError: string | null
@@ -28,13 +36,17 @@ interface VoucherContextType {
   updateSuperVoucher: (id: string, data: Partial<SuperVoucher>) => Promise<void>
   deleteSuperVoucher: (id: string) => Promise<void>
   addCategory: (name: string, emoji?: string) => Promise<void>
-  inviteMember: (email: string) => Promise<void>
+  inviteMember: (email: string) => Promise<'added' | 'not_found'>
   removeMember: (userId: string) => Promise<void>
   updateWalletName: (name: string) => Promise<void>
   refreshVouchers: () => Promise<void>
   createShareToken: (voucherId: string, expiresInDays?: number) => Promise<string>
   deleteShareToken: (token: string) => Promise<void>
   getShareTokens: (voucherId: string) => Promise<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>
+  shareVoucherWithUser: (voucherId: string, email: string) => Promise<'shared' | 'already_shared' | 'not_found'>
+  getVoucherShares: (voucherId: string) => Promise<VoucherShare[]>
+  unshareVoucher: (voucherId: string, email: string) => Promise<void>
+  updateSharedVoucherBalance: (voucherId: string, newBalance: number) => Promise<void>
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
   getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
 }
@@ -69,6 +81,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const [superVouchers, setSuperVouchers] = useState<SuperVoucher[]>([])
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES)
   const [stores, setStores] = useState<Store[]>([])
+  const [sharedWithMe, setSharedWithMe] = useState<Voucher[]>([])
   const [walletId, setWalletId] = useState<string | null>(null)
   const walletIdRef = useRef<string | null>(null)
   const [walletName, setWalletName] = useState('ארנק השוברים שלי')
@@ -238,6 +251,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         setCategories([...DEFAULT_CATEGORIES, ...customCats])
       }
 
+      // ── Fetch vouchers shared with me by others ──
+      Promise.resolve(supabase.rpc('get_vouchers_shared_with_me'))
+        .then(({ data }) => { if (data) setSharedWithMe(data as Voucher[]) })
+        .catch(() => {})
+
     } catch (err: any) {
       console.error('Fetch error:', err)
       setWalletError('שגיאת טעינה: ' + (err?.message || 'לא ידוע'))
@@ -274,6 +292,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       setSuperVouchers([])
       setCategories(DEFAULT_CATEGORIES)
       setStores([])
+      setSharedWithMe([])
       setWalletId(null)
       walletIdRef.current = null
       fetchData()
@@ -503,32 +522,58 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setCategories(prev => [...prev, newCat])
   }
 
-  async function inviteMember(email: string) {
-    if (!walletId) return
-    // Use a SECURITY DEFINER RPC to look up the profile — direct SELECT on profiles
-    // is blocked by RLS for other users' rows.
-    const { data: rows, error: rpcError } = await supabase
-      .rpc('find_profile_by_email', { search_email: email })
+  async function inviteMember(email: string): Promise<'added' | 'not_found'> {
+    if (!walletId) return 'not_found'
+    const { data: rows } = await supabase.rpc('find_profile_by_email', { search_email: email })
     const profile = rows?.[0]
-    if (rpcError || !profile) throw new Error('משתמש לא נמצא')
-    await supabase.from('wallet_members').insert({
+    if (!profile) return 'not_found'
+    const { error } = await supabase.from('wallet_members').insert({
       wallet_id: walletId,
       user_id: profile.id,
       email,
       role: 'member',
     })
-    // Send invitation email (non-blocking — failure doesn't break the invite)
+    if (error && error.code !== '23505') throw error
     sendInviteEmail({
       to_email: email,
       to_name: (profile as any).name || email,
       from_name: user?.email || 'מישהו',
       wallet_name: walletName,
     }).catch(() => {})
+    return 'added'
   }
 
   async function removeMember(userId: string) {
     if (!walletId) return
     await supabase.from('wallet_members').delete().eq('wallet_id', walletId).eq('user_id', userId)
+  }
+
+  async function shareVoucherWithUser(voucherId: string, email: string): Promise<'shared' | 'already_shared' | 'not_found'> {
+    const { data, error } = await supabase.rpc('share_voucher_with_email', {
+      p_voucher_id: voucherId,
+      p_email: email,
+    })
+    if (error) throw error
+    return data as 'shared' | 'already_shared' | 'not_found'
+  }
+
+  async function getVoucherShares(voucherId: string): Promise<VoucherShare[]> {
+    const { data } = await supabase.rpc('get_voucher_shares', { p_voucher_id: voucherId })
+    return (data || []) as VoucherShare[]
+  }
+
+  async function unshareVoucher(voucherId: string, email: string) {
+    await supabase.rpc('unshare_voucher', { p_voucher_id: voucherId, p_email: email })
+    setSharedWithMe(prev => prev.filter(v => v.id !== voucherId))
+  }
+
+  async function updateSharedVoucherBalance(voucherId: string, newBalance: number) {
+    const { error } = await supabase.rpc('update_shared_voucher_balance', {
+      p_voucher_id: voucherId,
+      p_new_balance: newBalance,
+    })
+    if (error) throw error
+    setSharedWithMe(prev => prev.map(v => v.id === voucherId ? { ...v, balance: newBalance } : v))
   }
 
   async function updateWalletName(name: string) {
@@ -616,12 +661,13 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   return (
     <VoucherContext.Provider value={{
-      vouchers, archivedVouchers, superVouchers, categories, stores,
+      vouchers, archivedVouchers, superVouchers, categories, stores, sharedWithMe,
       walletId, walletName, walletError, loading, isOnline,
       addVoucher, updateVoucher, deleteVoucher, archiveVoucher, unarchiveVoucher,
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
       updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
+      shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance,
       getActivityLog, getVoucherActivityLog,
     }}>
       {children}

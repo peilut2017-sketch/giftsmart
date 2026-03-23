@@ -1,17 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Users, Trash2, UserPlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
 
+const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+
+interface WalletMemberRow {
+  user_id: string
+  email: string
+  role: string
+}
+
 export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
-  const { syncToCloud, isOnline, refreshVouchers, vouchers } = useVouchers()
+  const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember } = useVouchers()
 
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
@@ -25,6 +33,12 @@ export default function SettingsPage() {
   const [sendingReminder, setSendingReminder] = useState(false)
   const [biometricEnabled, setBiometricEnabled] = useState(isBiometricEnabled)
   const [biometricLoading, setBiometricLoading] = useState(false)
+
+  // Wallet sharing
+  const [members, setMembers] = useState<WalletMemberRow[]>([])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [pendingInviteEmail, setPendingInviteEmail] = useState<string | null>(null)
 
   // Telegram
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
@@ -113,6 +127,61 @@ export default function SettingsPage() {
     disableBiometric()
     setBiometricEnabled(false)
     toast.success('נעילה ביומטרית בוטלה')
+  }
+
+  // Load wallet members
+  useEffect(() => {
+    if (!walletId) return
+    supabase.from('wallet_members').select('user_id, email, role').eq('wallet_id', walletId)
+      .then(({ data }) => { if (data) setMembers(data) })
+  }, [walletId])
+
+  async function handleInvite() {
+    if (!inviteEmail.trim()) return
+    setInviteLoading(true)
+    try {
+      const result = await inviteMember(inviteEmail.trim())
+      if (result === 'not_found') {
+        setPendingInviteEmail(inviteEmail.trim())
+      } else {
+        toast.success('החבר נוסף לארנק!')
+        setInviteEmail('')
+        // Reload members
+        if (walletId) {
+          const { data } = await supabase.from('wallet_members').select('user_id, email, role').eq('wallet_id', walletId)
+          if (data) setMembers(data)
+        }
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'שגיאה בהוספת חבר')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  async function handleSendNotFoundInvite() {
+    if (!pendingInviteEmail) return
+    try {
+      await supabase.rpc('send_wallet_invite_to_new_user', {
+        p_to_email: pendingInviteEmail,
+        p_from_name: profile?.name || user?.email || 'מישהו',
+        p_wallet_name: walletName,
+        p_app_url: APP_URL,
+      })
+      toast.success(`הזמנה נשלחה ל-${pendingInviteEmail}`)
+    } catch {
+      toast.error('שגיאה בשליחת הזמנה')
+    } finally {
+      setPendingInviteEmail(null)
+      setInviteEmail('')
+    }
+  }
+
+  async function handleRemoveMember(userId: string, email: string) {
+    if (!confirm(`להסיר את ${email} מהארנק?`)) return
+    await removeMember(userId)
+    setMembers(prev => prev.filter(m => m.user_id !== userId))
+    toast.success('חבר הוסר מהארנק')
   }
 
   // Check telegram link status on mount
@@ -458,6 +527,93 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Wallet sharing */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b bg-gray-50 flex items-center gap-2">
+            <Users className="w-3.5 h-3.5 text-green-600" />
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">שיתוף הארנק שלי</p>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {/* Member list */}
+            {members.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {members.map(m => (
+                  <div key={m.user_id} className="flex items-center justify-between py-2 border-b last:border-0">
+                    <div>
+                      <p className="text-sm text-gray-700">{m.email}</p>
+                      <p className="text-xs text-gray-400">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
+                    </div>
+                    {m.role !== 'owner' && (
+                      <button
+                        onClick={() => handleRemoveMember(m.user_id, m.email)}
+                        className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* "User not found" confirm */}
+            {pendingInviteEmail && (
+              <div className="bg-orange-50 rounded-2xl p-3 space-y-2">
+                <p className="text-sm text-orange-700">
+                  המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה.
+                  לשלוח הזמנה להצטרף?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSendNotFoundInvite}
+                    className="flex-1 bg-orange-500 text-white py-2 rounded-xl text-sm font-medium"
+                  >
+                    שלח הזמנה
+                  </button>
+                  <button
+                    onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }}
+                    className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Invite input */}
+            {!pendingInviteEmail && (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <UserPlus className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                    placeholder="כתובת מייל לשיתוף"
+                    className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                </div>
+                <button
+                  onClick={handleInvite}
+                  disabled={inviteLoading || !inviteEmail.trim()}
+                  className="px-4 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
+                >
+                  {inviteLoading
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : 'הוסף'}
+                </button>
+              </div>
+            )}
+
+            <p className="text-xs text-gray-400">
+              חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.
+            </p>
+          </div>
         </div>
 
         {/* Activity log */}

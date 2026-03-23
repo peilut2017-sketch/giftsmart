@@ -11,12 +11,6 @@ import { SUPER_VOUCHER_STORES } from '../types'
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@example.com'
 
-interface Member {
-  user_id: string
-  email: string
-  role: string
-}
-
 interface UserRow {
   id: string
   email: string
@@ -36,13 +30,11 @@ type Confirm = { title: string; message?: string; onConfirm: () => void }
 
 export default function AdminPage() {
   const { user } = useAuth()
-  const { vouchers, archivedVouchers, superVouchers, walletId, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, inviteMember, removeMember, updateWalletName } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, updateWalletName } = useVouchers()
 
-  const [members, setMembers] = useState<Member[]>([])
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [allUsers, setAllUsers] = useState<UserRow[]>([])
   const [showUsers, setShowUsers] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
   const [editingWalletName, setEditingWalletName] = useState(false)
   const [newWalletName, setNewWalletName] = useState(walletName)
   const [editingSV, setEditingSV] = useState<SuperVoucher | null>(null)
@@ -68,14 +60,6 @@ export default function AdminPage() {
     })
   }, [isAdmin])
 
-  // Load wallet members only once walletId is available
-  useEffect(() => {
-    if (!walletId || !isAdmin) return
-    supabase.from('wallet_members').select('*').eq('wallet_id', walletId).then(({ data }) => {
-      if (data) setMembers(data)
-    })
-  }, [walletId, isAdmin])
-
   if (!isAdmin) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -88,30 +72,6 @@ export default function AdminPage() {
   }
 
   const expiringSoon = vouchers.filter(v => ['warning', 'critical'].includes(getExpiryStatus(v.expiry_date))).length
-
-  async function handleInvite() {
-    if (!inviteEmail) return
-    try {
-      await inviteMember(inviteEmail)
-      toast.success('הזמנה נשלחה!')
-      setInviteEmail('')
-    } catch (err: any) {
-      toast.error(err?.message || 'שגיאה בהזמנה')
-    }
-  }
-
-  function handleRemoveMember(userId: string, email: string) {
-    setConfirm({
-      title: 'הסרת חבר',
-      message: `להסיר את ${email} מהארנק?`,
-      onConfirm: async () => {
-        setConfirm(null)
-        await removeMember(userId)
-        setMembers(prev => prev.filter(m => m.user_id !== userId))
-        toast.success('חבר הוסר')
-      },
-    })
-  }
 
   async function handleSaveWalletName() {
     await updateWalletName(newWalletName)
@@ -365,39 +325,6 @@ export default function AdminPage() {
               <button onClick={() => setEditingWalletName(false)} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm">ביטול</button>
             </div>
           )}
-        </div>
-
-        {/* Members */}
-        <div className="bg-white rounded-3xl shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4" /> חברים בארנק ({members.length})
-          </h3>
-          <div className="space-y-2 mb-3">
-            {members.map(m => (
-              <div key={m.user_id} className="flex items-center justify-between py-2 border-b last:border-0">
-                <div>
-                  <p className="text-sm text-gray-700">{m.email}</p>
-                  <p className="text-xs text-gray-400">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
-                </div>
-                {m.role !== 'owner' && (
-                  <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="text-red-500 p-1.5 rounded-lg hover:bg-red-50">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              placeholder="אימייל לשליחת הזמנה"
-              className="flex-1 px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-              dir="ltr"
-            />
-            <button onClick={handleInvite} className="px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-medium">הזמן</button>
-          </div>
         </div>
 
         {/* Super Vouchers */}
