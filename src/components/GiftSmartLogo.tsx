@@ -7,7 +7,7 @@ interface IconProps {
 /** The GiftSmart icon mark (tag + checkmark + arrow + Z accent) */
 export function GiftSmartIcon({ size = 80, variant = 'color', className = '' }: IconProps) {
   const green = variant === 'white' ? 'white' : '#22c55e'
-  const purple = variant === 'white' ? 'rgba(255,255,255,0.75)' : '#a855f7'
+  const purple = variant === 'white' ? 'rgba(255,255,255,0.75)' : '#9333ea'
 
   return (
     <svg
@@ -22,24 +22,25 @@ export function GiftSmartIcon({ size = 80, variant = 'color', className = '' }: 
       <rect
         x="16" y="16" width="68" height="68" rx="12"
         transform="rotate(45 50 50)"
-        stroke={green} strokeWidth="6.5"
+        stroke={green} strokeWidth="6"
       />
 
-      {/* Tag hole — upper-left of diamond */}
-      <circle cx="35" cy="35" r="5.5" fill={green} />
+      {/* Two tag dots — upper-left of diamond */}
+      <circle cx="33" cy="33" r="4.5" fill={green} />
+      <circle cx="43" cy="33" r="4.5" fill={green} />
 
       {/* Checkmark */}
       <path
-        d="M30 51 L43 64 L70 37"
+        d="M30 52 L43 65 L70 38"
         stroke={green} strokeWidth="7"
         strokeLinecap="round" strokeLinejoin="round"
       />
 
-      {/* Arrow pointing upper-right (breaks out of the top-right corner) */}
-      <line x1="68" y1="28" x2="82" y2="14" stroke={green} strokeWidth="6" strokeLinecap="round" />
+      {/* Arrow pointing upper-right — purple, breaks out of corner */}
+      <line x1="70" y1="26" x2="86" y2="12" stroke={purple} strokeWidth="6" strokeLinecap="round" />
       <path
-        d="M76 13 L83 13 L83 20"
-        stroke={green} strokeWidth="6"
+        d="M78 10 L87 10 L87 19"
+        stroke={purple} strokeWidth="6"
         strokeLinecap="round" strokeLinejoin="round"
       />
 

@@ -20,7 +20,7 @@ export default function BottomNav() {
 
   return (
     <nav className="bottom-nav">
-      <div className="flex items-center">
+      <div className="flex items-center w-full">
         {items.map(item => {
           const active = path === item.path
           return (
