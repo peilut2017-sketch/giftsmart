@@ -3,9 +3,88 @@
 -- Run in Supabase SQL Editor (requires supabase-send-email-setup.sql first)
 -- ============================================================
 
--- ── Fix: prevent duplicate wallets per owner ─────────────────
+-- ── Fix: deduplicate wallets, then add UNIQUE constraint ─────
+-- For each owner with multiple wallets:
+--   1. Pick the primary wallet (oldest created_at, or the one with most vouchers)
+--   2. Re-point vouchers / wallet_members / categories / activity_log to primary
+--   3. Delete the duplicate wallet rows
+--   4. Add UNIQUE(owner_id) so this never happens again
 DO $$
+DECLARE
+  dup RECORD;
+  primary_wallet_id UUID;
 BEGIN
+  -- Loop over every owner_id that appears more than once
+  FOR dup IN
+    SELECT owner_id
+    FROM wallets
+    GROUP BY owner_id
+    HAVING COUNT(*) > 1
+  LOOP
+    -- Choose primary: wallet with the most vouchers; tie-break by oldest created_at
+    SELECT w.id INTO primary_wallet_id
+    FROM wallets w
+    LEFT JOIN (
+      SELECT wallet_id, COUNT(*) AS cnt FROM vouchers GROUP BY wallet_id
+    ) vc ON vc.wallet_id = w.id
+    WHERE w.owner_id = dup.owner_id
+    ORDER BY COALESCE(vc.cnt, 0) DESC, w.created_at ASC
+    LIMIT 1;
+
+    -- Re-point vouchers
+    UPDATE vouchers
+    SET wallet_id = primary_wallet_id
+    WHERE wallet_id IN (
+      SELECT id FROM wallets WHERE owner_id = dup.owner_id AND id <> primary_wallet_id
+    );
+
+    -- Re-point wallet_members (skip if already exists for primary)
+    UPDATE wallet_members
+    SET wallet_id = primary_wallet_id
+    WHERE wallet_id IN (
+      SELECT id FROM wallets WHERE owner_id = dup.owner_id AND id <> primary_wallet_id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM wallet_members wm2
+      WHERE wm2.wallet_id = primary_wallet_id AND wm2.user_id = wallet_members.user_id
+    );
+
+    -- Re-point categories
+    UPDATE categories
+    SET wallet_id = primary_wallet_id
+    WHERE wallet_id IN (
+      SELECT id FROM wallets WHERE owner_id = dup.owner_id AND id <> primary_wallet_id
+    );
+
+    -- Re-point activity_log (if column exists)
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'activity_log' AND column_name = 'wallet_id') THEN
+      EXECUTE '
+        UPDATE activity_log
+        SET wallet_id = $1
+        WHERE wallet_id IN (
+          SELECT id FROM wallets WHERE owner_id = $2 AND id <> $1
+        )
+      ' USING primary_wallet_id, dup.owner_id;
+    END IF;
+
+    -- Re-point super_vouchers (if wallet_id column exists)
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'super_vouchers' AND column_name = 'wallet_id') THEN
+      EXECUTE '
+        UPDATE super_vouchers
+        SET wallet_id = $1
+        WHERE wallet_id IN (
+          SELECT id FROM wallets WHERE owner_id = $2 AND id <> $1
+        )
+      ' USING primary_wallet_id, dup.owner_id;
+    END IF;
+
+    -- Delete duplicate wallets (cascades leftover wallet_members rows)
+    DELETE FROM wallets
+    WHERE owner_id = dup.owner_id AND id <> primary_wallet_id;
+
+  END LOOP;
+
+  -- Now safe to add the constraint
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conname = 'wallets_owner_id_unique' AND conrelid = 'wallets'::regclass
