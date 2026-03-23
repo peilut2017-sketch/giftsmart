@@ -630,7 +630,7 @@ export default function SettingsPage() {
           />
         </div>
 
-        <p className="text-center text-xs text-gray-400">ארנק שוברים v1.0.0</p>
+        <p className="text-center text-xs text-gray-400">GiftSmart v1.1.0</p>
       </div>
     </div>
   )
