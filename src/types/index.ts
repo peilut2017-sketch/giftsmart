@@ -7,6 +7,7 @@ export interface Voucher {
   super_voucher_id?: string
   amount: number
   balance: number
+  value_percent?: number
   code: string
   cvv?: string
   expiry_date?: string
@@ -65,6 +66,7 @@ export interface Profile {
   name?: string
   phone?: string
   avatar_url?: string
+  show_voucher_value?: boolean
 }
 
 export interface Category {

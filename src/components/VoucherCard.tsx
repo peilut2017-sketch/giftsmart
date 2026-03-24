@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
 import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
   voucher: Voucher
@@ -28,10 +29,14 @@ function isSafeUrl(url: string | undefined): boolean {
 
 export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArchive, superVoucherName, isSelectMode, isSelected, onSelect, rowMode }: Props) {
   const [hovered, setHovered] = useState(false)
+  const { profile } = useAuth()
   const safeLink = isSafeUrl(voucher.link) ? voucher.link : undefined
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
   const pct = voucher.amount > 0 ? (voucher.balance / voucher.amount) * 100 : 0
+
+  const showVoucherValue = profile?.show_voucher_value && voucher.value_percent != null && voucher.value_percent > 0 && voucher.value_percent < 100
+  const valueLessPercent = showVoucherValue ? (100 - voucher.value_percent!).toFixed(0) : null
 
   const cardBg =
     expiryStatus === 'critical' ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200' :
@@ -110,6 +115,9 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
           {/* Balance */}
           <div className="text-left flex-shrink-0">
             <div className="text-base font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
+            {valueLessPercent && (
+              <div className="text-xs text-gray-400">(ערך {valueLessPercent}% פחות)</div>
+            )}
           </div>
 
           {/* Hover actions */}
@@ -192,6 +200,9 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
             <div className="text-lg font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
             {voucher.amount !== voucher.balance && (
               <div className="text-xs text-gray-400">מתוך {formatCurrency(voucher.amount)}</div>
+            )}
+            {valueLessPercent && (
+              <div className="text-xs text-gray-400">(ערך {valueLessPercent}% פחות)</div>
             )}
           </div>
         </div>

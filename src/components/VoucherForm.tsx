@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useAuth } from '../contexts/AuthContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus } from 'lucide-react'
@@ -15,6 +16,8 @@ interface Props {
 
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
+  const { profile } = useAuth()
+  const showVoucherValue = profile?.show_voucher_value ?? false
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
@@ -22,6 +25,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
   const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
   const [usageAmount, setUsageAmount] = useState('')
+  const [valuePercent, setValuePercent] = useState(voucher?.value_percent?.toString() || '')
   const [code, setCode] = useState(voucher?.code || '')
   const [cvv, setCvv] = useState(voucher?.cvv || '')
   const [expiryDate, setExpiryDate] = useState(voucher?.expiry_date || defaultExpiryDate())
@@ -203,8 +207,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
       const v = {
         store_name: storeName,
-        amount: parseFloat(amount) || 0,
+        amount: parsedAmount,
         balance: newBalance,
+        value_percent: valuePercent ? parseFloat(valuePercent) : null,
         code: code.trim(),
         cvv: cvv.trim() || undefined,
         expiry_date: expiryDate || undefined,
@@ -399,6 +404,31 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               </div>
             )}
           </div>
+
+          {/* Value percent — only if feature enabled */}
+          {showVoucherValue && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">ערך שוק (%)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={valuePercent}
+                  onChange={e => setValuePercent(e.target.value)}
+                  placeholder="למשל 90"
+                  min="1"
+                  max="100"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+                <span className="text-sm text-gray-500 shrink-0">%</span>
+              </div>
+              {valuePercent && parseFloat(valuePercent) > 0 && parseFloat(valuePercent) < 100 && (
+                <p className="text-xs mt-1 text-gray-400">
+                  (ערך {(100 - parseFloat(valuePercent)).toFixed(0)}% פחות מהנקוב)
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Code + Camera */}
           <div>

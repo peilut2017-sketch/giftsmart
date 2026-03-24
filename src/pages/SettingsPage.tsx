@@ -418,6 +418,29 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Voucher value feature */}
+        <div className="bg-white rounded-3xl shadow-sm p-4">
+          <div className="pb-3 border-b mb-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">תצוגת ערך שובר</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex-1 ml-3">
+              <p className="text-sm font-medium text-gray-800">הצג ערך שוק של שוברים</p>
+              <p className="text-xs text-gray-400 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
+            </div>
+            <button
+              onClick={() => updateProfile({ show_voucher_value: !profile?.show_voucher_value })}
+              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
+                profile?.show_voucher_value ? 'bg-green-500' : 'bg-gray-200'
+              }`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                profile?.show_voucher_value ? 'translate-x-0.5' : 'right-0.5'
+              }`} />
+            </button>
+          </div>
+        </div>
+
         {/* Tools */}
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b bg-gray-50">

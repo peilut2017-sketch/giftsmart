@@ -453,7 +453,12 @@ export default function CheckoutPage() {
         <div className="bg-white rounded-3xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-gray-500">יתרה נוכחית</span>
-            <span className="text-3xl font-bold text-gray-900">{formatCurrency(voucher.balance)}</span>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
+              {profile?.show_voucher_value && voucher.value_percent != null && voucher.value_percent > 0 && voucher.value_percent < 100 && (
+                <div className="text-xs text-gray-400 mt-0.5">(ערך {(100 - voucher.value_percent).toFixed(0)}% פחות מהנקוב)</div>
+              )}
+            </div>
           </div>
 
           {voucher.amount > 0 && (
