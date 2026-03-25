@@ -211,9 +211,17 @@ html, body {
 
 /* ─────────────────────────────────────────────
    ACCESSIBILITY — grayscale
+   Using mix-blend-mode overlay instead of filter
+   to avoid breaking position:fixed stacking context
 ───────────────────────────────────────────── */
-.a11y-grayscale {
-  filter: grayscale(100%);
+.a11y-grayscale::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: #808080;
+  mix-blend-mode: saturation;
+  pointer-events: none;
+  z-index: 99998;
 }
 
 /* ─────────────────────────────────────────────
