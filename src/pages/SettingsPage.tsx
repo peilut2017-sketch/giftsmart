@@ -562,7 +562,7 @@ export default function SettingsPage() {
                 <div className="bg-sky-50 rounded-2xl p-4 space-y-2">
                   <p className="text-xs text-sky-700 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
                   <a
-                    href={`https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'YourBot'}?start=${telegramCode}`}
+                    href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block text-center bg-sky-500 text-white py-2.5 rounded-xl text-sm font-medium"
