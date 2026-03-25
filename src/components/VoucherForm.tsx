@@ -309,14 +309,17 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-4 space-y-4">
           {/* Store */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">שם חנות *</label>
+            <label htmlFor="vf-store" className="text-sm font-medium text-gray-700 mb-1 block">שם חנות *</label>
             <div className="relative">
               <input
+                id="vf-store"
                 type="text"
                 value={storeSearch}
                 onChange={e => { setStoreSearch(e.target.value); setStoreName(e.target.value); setShowStoreDropdown(true) }}
                 onFocus={() => setShowStoreDropdown(true)}
                 placeholder="חפש או הזן שם חנות"
+                aria-autocomplete="list"
+                aria-expanded={showStoreDropdown && !!storeSearch}
                 className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
               />
               {showStoreDropdown && storeSearch && (
@@ -347,8 +350,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           {/* Amount + Balance / Usage */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">סכום מקורי (₪)</label>
+              <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700 mb-1 block">סכום מקורי (₪)</label>
               <input
+                id="vf-amount"
                 type="number"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
@@ -359,8 +363,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
             {voucher ? (
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
+                <label htmlFor="vf-usage" className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
                 <input
+                  id="vf-usage"
                   type="number"
                   value={usageAmount}
                   onChange={e => setUsageAmount(e.target.value)}
@@ -384,8 +389,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               </div>
             ) : (
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">יתרה (₪)</label>
+                <label htmlFor="vf-balance" className="text-sm font-medium text-gray-700 mb-1 block">יתרה (₪)</label>
                 <input
+                  id="vf-balance"
                   type="number"
                   value={balance}
                   onChange={e => setBalance(e.target.value)}
@@ -432,9 +438,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
           {/* Code + Camera */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">קוד שובר *</label>
+            <label htmlFor="vf-code" className="text-sm font-medium text-gray-700 mb-1 block">קוד שובר *</label>
             <div className="flex gap-2">
               <input
+                id="vf-code"
                 type="text"
                 value={code}
                 onChange={e => setCode(e.target.value)}
@@ -445,10 +452,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <button
                 type="button"
                 onClick={showScanner ? stopScanner : startScanner}
+                aria-label={showScanner ? 'סגור מצלמה' : 'סרוק ברקוד / QR'}
                 className={`px-3 py-3 rounded-2xl border transition-colors ${showScanner ? 'bg-red-50 border-red-200 text-red-500' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                title="סרוק ברקוד/QR"
               >
-                <Camera className="w-5 h-5" />
+                <Camera className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -456,8 +463,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           {/* CVV */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">CVV / קוד אבטחה</label>
+              <label htmlFor="vf-cvv" className="text-sm font-medium text-gray-700 mb-1 block">CVV / קוד אבטחה</label>
               <input
+                id="vf-cvv"
                 type="text"
                 value={cvv}
                 onChange={e => setCvv(e.target.value)}
@@ -467,8 +475,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">תאריך תפוגה</label>
+              <label htmlFor="vf-expiry" className="text-sm font-medium text-gray-700 mb-1 block">תאריך תפוגה</label>
               <input
+                id="vf-expiry"
                 type="date"
                 value={expiryDate}
                 onChange={e => setExpiryDate(e.target.value)}

@@ -121,3 +121,114 @@ html, body {
 /* hide scrollbar in tabs row while preserving scroll */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─────────────────────────────────────────────
+   ACCESSIBILITY — skip link
+───────────────────────────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -9999px;
+  right: 0;
+  background: #166534;
+  color: #fff;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 0 0 8px 8px;
+  z-index: 9999;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* ─────────────────────────────────────────────
+   ACCESSIBILITY — enhanced focus ring
+   Applied via body class: .a11y-focus
+───────────────────────────────────────────── */
+.a11y-focus *:focus-visible {
+  outline: 3px solid #2563eb !important;
+  outline-offset: 3px !important;
+  border-radius: 4px;
+}
+
+/* ─────────────────────────────────────────────
+   ACCESSIBILITY — text size
+   Applied via body class: .a11y-text-md / .a11y-text-lg / .a11y-text-xl
+───────────────────────────────────────────── */
+.a11y-text-md { font-size: 106% !important; }
+.a11y-text-lg { font-size: 115% !important; }
+.a11y-text-xl { font-size: 130% !important; }
+
+.a11y-text-md *, .a11y-text-lg *, .a11y-text-xl * {
+  font-size: inherit;
+}
+
+/* ─────────────────────────────────────────────
+   ACCESSIBILITY — high contrast
+   Applied via body class: .a11y-contrast
+───────────────────────────────────────────── */
+.a11y-contrast {
+  background-color: #000 !important;
+  color: #fff !important;
+}
+
+.a11y-contrast .bg-white,
+.a11y-contrast .bg-gray-50,
+.a11y-contrast .bg-gray-100 {
+  background-color: #111 !important;
+  color: #fff !important;
+}
+
+.a11y-contrast .text-gray-400,
+.a11y-contrast .text-gray-500,
+.a11y-contrast .text-gray-600 {
+  color: #d1d5db !important;
+}
+
+.a11y-contrast .text-gray-800,
+.a11y-contrast .text-gray-900 {
+  color: #fff !important;
+}
+
+.a11y-contrast .border-gray-100,
+.a11y-contrast .border-gray-200 {
+  border-color: #4b5563 !important;
+}
+
+.a11y-contrast .bg-green-500,
+.a11y-contrast .bg-green-600 {
+  background-color: #16a34a !important;
+}
+
+.a11y-contrast input,
+.a11y-contrast textarea,
+.a11y-contrast select {
+  background-color: #1f2937 !important;
+  color: #fff !important;
+  border-color: #6b7280 !important;
+}
+
+/* ─────────────────────────────────────────────
+   ACCESSIBILITY — grayscale
+───────────────────────────────────────────── */
+.a11y-grayscale {
+  filter: grayscale(100%);
+}
+
+/* ─────────────────────────────────────────────
+   ACCESSIBILITY — reduce motion
+───────────────────────────────────────────── */
+.a11y-no-motion *,
+.a11y-no-motion *::before,
+.a11y-no-motion *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

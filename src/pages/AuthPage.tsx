@@ -150,13 +150,15 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {mode === 'register' && (
               <div className="relative">
-                <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                 <input
+                  id="auth-name"
                   type="text"
                   placeholder="שם מלא"
+                  aria-label="שם מלא"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -166,10 +168,12 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
 
             {mode !== 'newPassword' && (
               <div className="relative">
-                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                 <input
+                  id="auth-email"
                   type="email"
                   placeholder="כתובת אימייל"
+                  aria-label="כתובת אימייל"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -182,10 +186,12 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             {mode !== 'forgot' && (
               <div>
                 <div className="relative">
-                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                   <input
+                    id="auth-password"
                     type={showPass ? 'text' : 'password'}
                     placeholder={mode === 'newPassword' ? 'סיסמה חדשה' : 'סיסמה'}
+                    aria-label={mode === 'newPassword' ? 'סיסמה חדשה' : 'סיסמה'}
                     value={password}
                     onChange={e => { setPassword(e.target.value); if (isRegisterOrNew) setShowStrength(true) }}
                     className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -195,9 +201,10 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
+                    aria-label={showPass ? 'הסתר סיסמה' : 'הצג סיסמה'}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                   >
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPass ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                   </button>
                 </div>
 

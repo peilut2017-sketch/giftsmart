@@ -122,15 +122,15 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
 
           {/* Hover actions */}
           {hovered && !isSelectMode && (
-            <div className="flex gap-1">
-              <button onClick={e => { e.stopPropagation(); onEdit() }} className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50" title="עריכה">
-                <Edit2 className="w-3.5 h-3.5" />
+            <div className="flex gap-1" role="group" aria-label={`פעולות עבור ${voucher.store_name}`}>
+              <button onClick={e => { e.stopPropagation(); onEdit() }} aria-label={`ערוך ${voucher.store_name}`} className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50">
+                <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
-              <button onClick={e => { e.stopPropagation(); onArchive() }} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50" title="ארכיון">
-                <Archive className="w-3.5 h-3.5" />
+              <button onClick={e => { e.stopPropagation(); onArchive() }} aria-label={`העבר לארכיון: ${voucher.store_name}`} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50">
+                <Archive className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
-              <button onClick={e => { e.stopPropagation(); onDelete() }} className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50" title="מחיקה">
-                <Trash2 className="w-3.5 h-3.5" />
+              <button onClick={e => { e.stopPropagation(); onDelete() }} aria-label={`מחק ${voucher.store_name}`} className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50">
+                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -157,27 +157,27 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
 
       {/* Hover actions (non-select mode) */}
       {hovered && !isSelectMode && (
-        <div className="absolute top-2 left-2 flex gap-1 z-10 animate-fade-in">
+        <div className="absolute top-2 left-2 flex gap-1 z-10 animate-fade-in" role="group" aria-label={`פעולות עבור ${voucher.store_name}`}>
           <button
             onClick={e => { e.stopPropagation(); onEdit() }}
+            aria-label={`ערוך ${voucher.store_name}`}
             className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50 transition-colors"
-            title="עריכה"
           >
-            <Edit2 className="w-3.5 h-3.5" />
+            <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
           <button
             onClick={e => { e.stopPropagation(); onArchive() }}
+            aria-label={`העבר לארכיון: ${voucher.store_name}`}
             className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50 transition-colors"
-            title="ארכיון"
           >
-            <Archive className="w-3.5 h-3.5" />
+            <Archive className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
           <button
             onClick={e => { e.stopPropagation(); onDelete() }}
+            aria-label={`מחק ${voucher.store_name}`}
             className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50 transition-colors"
-            title="מחיקה"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
       )}

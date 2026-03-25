@@ -21,6 +21,9 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember } = useVouchers()
 
+  const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
+    () => localStorage.getItem('a11y_widget_enabled') !== 'false'
+  )
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
@@ -416,6 +419,40 @@ export default function SettingsPage() {
             <span>1 יום</span>
             <span>90 ימים</span>
           </div>
+        </div>
+
+        {/* Accessibility widget toggle */}
+        <div className="bg-white rounded-3xl shadow-sm p-4">
+          <div className="pb-3 border-b mb-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">נגישות</p>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-800">הצג כפתור נגישות</p>
+              <p className="text-xs text-gray-500 mt-0.5">כפתור צף לשינוי גודל טקסט, ניגודיות ועוד</p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={a11yWidgetEnabled}
+              onClick={() => {
+                const next = !a11yWidgetEnabled
+                setA11yWidgetEnabled(next)
+                localStorage.setItem('a11y_widget_enabled', String(next))
+                window.dispatchEvent(new Event('a11y-widget-toggle'))
+              }}
+              aria-label="הצג כפתור נגישות"
+              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
+                a11yWidgetEnabled ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                a11yWidgetEnabled ? 'translate-x-0.5' : 'right-0.5'
+              }`} />
+            </button>
+          </div>
+          <a href="/accessibility" className="block mt-3 text-xs text-blue-600 hover:underline">
+            הצהרת נגישות ←
+          </a>
         </div>
 
         {/* Voucher value feature */}
