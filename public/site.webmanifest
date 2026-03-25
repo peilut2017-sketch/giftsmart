@@ -1,34 +1,21 @@
 {
-  "name": "GiftSmart",
-  "short_name": "GiftSmart",
-  "description": "ניהול שוברים וכרטיסי מתנה בצורה חכמה",
-  "start_url": "/",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#f8fafc",
-  "theme_color": "#22c55e",
-  "lang": "he",
-  "dir": "rtl",
+  "name": "giftsmart",
+  "short_name": "gift",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     },
     {
       "src": "/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ],
-  "categories": ["finance", "utilities"],
-  "shortcuts": [
-    {
-      "name": "הוסף שובר",
-      "url": "/",
-      "description": "הוספת שובר חדש"
-    }
-  ]
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "display": "standalone"
 }
