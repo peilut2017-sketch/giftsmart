@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -41,8 +41,17 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
+  const [showImageMenu, setShowImageMenu] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
+  const imageCameraRef = useRef<HTMLInputElement>(null)
+  const imageFileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!showImageMenu) return
+    const close = () => setShowImageMenu(false)
+    document.addEventListener('pointerdown', close, { capture: true })
+    return () => document.removeEventListener('pointerdown', close, { capture: true })
+  }, [showImageMenu])
   const scannerDivId = 'qr-scanner-div'
 
   // Existing tags from all vouchers for autocomplete
@@ -246,24 +255,54 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             >
               <Clipboard className="w-3.5 h-3.5" /> הדבק SMS
             </button>
-            <button
-              type="button"
-              disabled={ocrLoading}
-              onClick={() => imageInputRef.current?.click()}
-              className="flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-full font-medium disabled:opacity-50"
-              title="העלה תמונה של השובר"
-            >
-              <ImagePlus className="w-3.5 h-3.5" />
-              {ocrLoading ? 'מנתח...' : 'סרוק תמונה'}
-            </button>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleImageOCR(f); e.target.value = '' }}
-            />
+            <div className="relative">
+              <button
+                type="button"
+                disabled={ocrLoading}
+                onClick={() => setShowImageMenu(v => !v)}
+                className="flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-full font-medium disabled:opacity-50"
+              >
+                <ImagePlus className="w-3.5 h-3.5" />
+                {ocrLoading ? 'מנתח...' : 'סרוק תמונה'}
+              </button>
+              {showImageMenu && (
+                <div className="absolute top-full mt-1 right-0 bg-white rounded-2xl shadow-lg border border-gray-100 py-1 z-50 min-w-[140px]">
+                  <button
+                    type="button"
+                    onClick={() => { setShowImageMenu(false); imageCameraRef.current?.click() }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Camera className="w-4 h-4 text-gray-500" />
+                    מצלמה
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowImageMenu(false); imageFileRef.current?.click() }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <ImagePlus className="w-4 h-4 text-gray-500" />
+                    גלריה / קבצים
+                  </button>
+                </div>
+              )}
+              {/* Camera input */}
+              <input
+                ref={imageCameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImageOCR(f); e.target.value = '' }}
+              />
+              {/* Gallery / files input */}
+              <input
+                ref={imageFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImageOCR(f); e.target.value = '' }}
+              />
+            </div>
             <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
               <X className="w-5 h-5" />
             </button>
