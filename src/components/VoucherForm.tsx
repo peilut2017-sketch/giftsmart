@@ -481,7 +481,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 type="date"
                 value={expiryDate}
                 onChange={e => setExpiryDate(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="w-full px-2 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
               <div className="flex gap-1.5 mt-1.5">
