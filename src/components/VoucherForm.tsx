@@ -45,12 +45,21 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const imageCameraRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
+  const imageMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!showImageMenu) return
-    const close = () => setShowImageMenu(false)
-    document.addEventListener('pointerdown', close, { capture: true })
-    return () => document.removeEventListener('pointerdown', close, { capture: true })
+    function onOutside(e: MouseEvent | TouchEvent) {
+      if (imageMenuRef.current && !imageMenuRef.current.contains(e.target as Node)) {
+        setShowImageMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', onOutside)
+    document.addEventListener('touchstart', onOutside)
+    return () => {
+      document.removeEventListener('mousedown', onOutside)
+      document.removeEventListener('touchstart', onOutside)
+    }
   }, [showImageMenu])
   const scannerDivId = 'qr-scanner-div'
 
@@ -255,7 +264,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             >
               <Clipboard className="w-3.5 h-3.5" /> הדבק SMS
             </button>
-            <div className="relative">
+            <div className="relative" ref={imageMenuRef}>
               <button
                 type="button"
                 disabled={ocrLoading}
