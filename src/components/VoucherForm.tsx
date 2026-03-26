@@ -460,21 +460,21 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
           </div>
 
-          {/* CVV */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* CVV + Expiry */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label htmlFor="vf-cvv" className="text-sm font-medium text-gray-700 mb-1 block">CVV / קוד אבטחה</label>
+              <label htmlFor="vf-cvv" className="text-sm font-medium text-gray-700 mb-1 block">CVV</label>
               <input
                 id="vf-cvv"
                 type="text"
                 value={cvv}
                 onChange={e => setCvv(e.target.value)}
                 placeholder="אופציונלי"
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+                className="w-full px-3 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
                 dir="ltr"
               />
             </div>
-            <div>
+            <div className="col-span-2">
               <label htmlFor="vf-expiry" className="text-sm font-medium text-gray-700 mb-1 block">תאריך תפוגה</label>
               <input
                 id="vf-expiry"

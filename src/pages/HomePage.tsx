@@ -75,6 +75,28 @@ export default function HomePage() {
       result = result.filter(v => filterCats.some(cat => v.categories.includes(cat)))
     }
 
+    const dir = sortDir === 'asc' ? 1 : -1
+    result.sort((a, b) => {
+      switch (sortKey) {
+        case 'expiry':
+          if (!a.expiry_date && !b.expiry_date) return 0
+          if (!a.expiry_date) return dir
+          if (!b.expiry_date) return -dir
+          return dir * (new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
+        case 'balance':
+          return dir * (a.balance - b.balance)
+        case 'store': {
+          const cmp = a.store_name.localeCompare(b.store_name, 'he')
+          if (cmp !== 0) return dir * cmp
+          return a.balance - b.balance
+        }
+        case 'added':
+          return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        default:
+          return 0
+      }
+    })
+
     if (search) {
       const q = search.toLowerCase()
       const withScore = result
@@ -93,31 +115,9 @@ export default function HomePage() {
           return { v, score: directMatch ? 0 : superMatch ? 1 : -1 }
         })
         .filter(x => x.score >= 0)
-      // Direct matches first, then super-voucher matches
+      // Stable sort: score is primary, regular sort order preserved within same score
       result = withScore.sort((a, b) => a.score - b.score).map(x => x.v)
     }
-
-    const dir = sortDir === 'asc' ? 1 : -1
-    result.sort((a, b) => {
-      switch (sortKey) {
-        case 'expiry':
-          if (!a.expiry_date && !b.expiry_date) return 0
-          if (!a.expiry_date) return dir
-          if (!b.expiry_date) return -dir
-          return dir * (new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
-        case 'balance':
-          return dir * (a.balance - b.balance)
-        case 'store': {
-          const cmp = a.store_name.localeCompare(b.store_name, 'he')
-          if (cmp !== 0) return dir * cmp
-          return a.balance - b.balance // secondary: balance ascending
-        }
-        case 'added':
-          return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        default:
-          return 0
-      }
-    })
     return result
   }, [vouchers, filterTab, filterCats, search, sortKey, sortDir, superVouchers])
 
@@ -485,7 +485,7 @@ export default function HomePage() {
       </div>
 
       {/* Voucher Grid */}
-      <div className="p-4 pb-36">
+      <div className="p-4 pb-36" onTouchStart={() => { (document.activeElement as HTMLElement)?.blur() }}>
         {walletError && (
           <div className="mb-4 bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
             <p className="font-semibold mb-1">שגיאה בהגדרת הארנק</p>
