@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react'
-import { GiftSmartLogoFull } from '../components/GiftSmartLogo'
 import toast from 'react-hot-toast'
 
 const APP_VERSION = '1.0.0'
@@ -100,8 +99,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <GiftSmartLogoFull iconSize={72} />
-          <span className="text-xs text-gray-400 mt-2 block">גרסה {APP_VERSION}</span>
+          <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+          <span className="text-xs text-gray-400 mt-1 block">גרסה {APP_VERSION}</span>
         </div>
 
         {/* Card */}

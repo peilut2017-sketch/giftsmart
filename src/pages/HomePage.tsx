@@ -20,10 +20,12 @@ export default function HomePage() {
   const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => localStorage.getItem('hpSearch') || '')
   const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('hpSortKey') as SortKey) || 'store')
-  const [filterTab, setFilterTab] = useState<FilterTab>('all')
-  const [filterCats, setFilterCats] = useState<string[]>([])
+  const [filterTab, setFilterTab] = useState<FilterTab>(() => (localStorage.getItem('hpFilterTab') as FilterTab) || 'all')
+  const [filterCats, setFilterCats] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('hpFilterCats') || '[]') } catch { return [] }
+  })
   const [showFilters, setShowFilters] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('hpViewMode') as ViewMode) || 'grid')
   const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('hpSortDir') as SortDir) || 'asc')
@@ -43,6 +45,9 @@ export default function HomePage() {
   useEffect(() => { localStorage.setItem('hpViewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('hpSortKey', sortKey) }, [sortKey])
   useEffect(() => { localStorage.setItem('hpSortDir', sortDir) }, [sortDir])
+  useEffect(() => { localStorage.setItem('hpSearch', search) }, [search])
+  useEffect(() => { localStorage.setItem('hpFilterTab', filterTab) }, [filterTab])
+  useEffect(() => { localStorage.setItem('hpFilterCats', JSON.stringify(filterCats)) }, [filterCats])
 
   const allCategories = useMemo(() => {
     const cats = new Set<string>()
@@ -72,18 +77,24 @@ export default function HomePage() {
 
     if (search) {
       const q = search.toLowerCase()
-      result = result.filter(v => {
-        const sv = superVouchers.find(s => s.id === v.super_voucher_id)
-        return (
-          v.store_name.toLowerCase().includes(q) ||
-          v.code.toLowerCase().includes(q) ||
-          v.categories.some(c => c.toLowerCase().includes(q)) ||
-          v.tags.some(t => t.toLowerCase().includes(q)) ||
-          (v.notes && v.notes.toLowerCase().includes(q)) ||
-          (sv && sv.name.toLowerCase().includes(q)) ||
-          (sv && sv.stores.some(s => s.toLowerCase().includes(q)))
-        )
-      })
+      const withScore = result
+        .map(v => {
+          const sv = superVouchers.find(s => s.id === v.super_voucher_id)
+          const directMatch =
+            v.store_name.toLowerCase().includes(q) ||
+            v.code.toLowerCase().includes(q) ||
+            v.categories.some(c => c.toLowerCase().includes(q)) ||
+            v.tags.some(t => t.toLowerCase().includes(q)) ||
+            (v.notes && v.notes.toLowerCase().includes(q))
+          const superMatch = !directMatch && sv && (
+            sv.name.toLowerCase().includes(q) ||
+            sv.stores.some(s => s.toLowerCase().includes(q))
+          )
+          return { v, score: directMatch ? 0 : superMatch ? 1 : -1 }
+        })
+        .filter(x => x.score >= 0)
+      // Direct matches first, then super-voucher matches
+      result = withScore.sort((a, b) => a.score - b.score).map(x => x.v)
     }
 
     const dir = sortDir === 'asc' ? 1 : -1
@@ -353,8 +364,17 @@ export default function HomePage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="חיפוש לפי חנות, קוד, קטגוריה..."
-              className="w-full pr-10 pl-4 py-2.5 bg-gray-100 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+              className="w-full pr-10 pl-9 py-2.5 bg-gray-100 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gray-400 text-white flex items-center justify-center hover:bg-gray-500 transition-colors"
+                aria-label="נקה חיפוש"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
 

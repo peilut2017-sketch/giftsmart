@@ -7,7 +7,8 @@ import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpirySt
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2 } from 'lucide-react'
+import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { supabase } from '../lib/supabase'
@@ -18,7 +19,7 @@ export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, profile } = useAuth()
-  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog } = useVouchers()
 
   const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
   const isSharedVoucher = sharedWithMe.some(v => v.id === id)
@@ -31,6 +32,8 @@ export default function CheckoutPage() {
   const [copied, setCopied] = useState(false)
   const [wakeLock, setWakeLock] = useState<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
   const [shareLoading, setShareLoading] = useState(false)
@@ -329,6 +332,30 @@ export default function CheckoutPage() {
           onCancel={() => setConfirmArchive(false)}
         />
       )}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="מחיקת שובר"
+          message="פעולה זו אינה ניתנת לביטול."
+          onConfirm={async () => {
+            setConfirmDelete(false)
+            await deleteVoucher(voucher.id)
+            toast.success('שובר נמחק')
+            navigate(-1)
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+      {showEditForm && (
+        <VoucherForm
+          voucher={voucher}
+          onSave={async (vData) => {
+            await updateVoucher(voucher.id, vData)
+            toast.success('שובר עודכן')
+            setShowEditForm(false)
+          }}
+          onClose={() => setShowEditForm(false)}
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -342,12 +369,31 @@ export default function CheckoutPage() {
             </div>
             {sv && <p className="text-xs text-gray-500">{voucher.store_name}</p>}
           </div>
+          {!isSharedVoucher && !isArchived && (
+            <button
+              onClick={() => setShowEditForm(true)}
+              className="p-2 rounded-full hover:bg-gray-100 text-blue-500"
+              aria-label="ערוך שובר"
+            >
+              <Edit2 className="w-5 h-5" />
+            </button>
+          )}
           {!isArchived && (
             <button
               onClick={() => setConfirmArchive(true)}
               className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
+              aria-label="העבר לארכיון"
             >
               <Archive className="w-5 h-5" />
+            </button>
+          )}
+          {!isSharedVoucher && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="p-2 rounded-full hover:bg-gray-100 text-red-500"
+              aria-label="מחק שובר"
+            >
+              <Trash2 className="w-5 h-5" />
             </button>
           )}
         </div>

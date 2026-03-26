@@ -484,6 +484,22 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
+              <div className="flex gap-1.5 mt-1.5">
+                {[{ label: '+1y', years: 1 }, { label: '+2y', years: 2 }, { label: '+5y', years: 5 }].map(({ label, years }) => (
+                  <button
+                    key={years}
+                    type="button"
+                    onClick={() => {
+                      const d = new Date()
+                      d.setFullYear(d.getFullYear() + years)
+                      setExpiryDate(d.toISOString().split('T')[0])
+                    }}
+                    className="flex-1 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-xl hover:bg-green-100 hover:text-green-700 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

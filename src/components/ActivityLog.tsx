@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useVouchers, type ActivityLogEntry } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
-import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Undo2 } from 'lucide-react'
 import { formatCurrency } from '../utils/helpers'
+import toast from 'react-hot-toast'
 
 const ACTION_META: Record<ActivityLogEntry['action'], { label: string; Icon: any; color: string; bg: string }> = {
   add:            { label: 'הוספת שובר',     Icon: Plus,           color: 'text-green-600',  bg: 'bg-green-50'  },
@@ -12,6 +13,8 @@ const ACTION_META: Record<ActivityLogEntry['action'], { label: string; Icon: any
   unarchive:      { label: 'החזרה מהארכיון',  Icon: ArchiveRestore, color: 'text-teal-600',   bg: 'bg-teal-50'   },
   delete:         { label: 'מחיקה',           Icon: Trash2,         color: 'text-red-600',    bg: 'bg-red-50'    },
 }
+
+const UNDOABLE: ActivityLogEntry['action'][] = ['edit', 'balance_update', 'archive', 'unarchive']
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -52,12 +55,13 @@ function buildSubtitle(entry: ActivityLogEntry): string {
 const PAGE = 30
 
 export default function ActivityLog() {
-  const { getActivityLog } = useVouchers()
+  const { getActivityLog, updateVoucher, archiveVoucher, unarchiveVoucher } = useVouchers()
   const [entries, setEntries] = useState<ActivityLogEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [tableError, setTableError] = useState(false)
   const [limit, setLimit] = useState(PAGE)
   const [expanded, setExpanded] = useState(false)
+  const [undoingId, setUndoingId] = useState<string | null>(null)
 
   async function load(l = limit) {
     setLoading(true)
@@ -83,10 +87,40 @@ export default function ActivityLog() {
     }
   }
 
-  // Load when expanded for the first time
   useEffect(() => {
     if (expanded && entries.length === 0 && !tableError) load()
   }, [expanded])
+
+  async function handleUndo(entry: ActivityLogEntry) {
+    if (!entry.voucher_id) return
+    setUndoingId(entry.id)
+    try {
+      if (entry.action === 'balance_update') {
+        await updateVoucher(entry.voucher_id, { balance: entry.details.from })
+        toast.success('יתרה שוחזרה')
+      } else if (entry.action === 'edit') {
+        const before: Record<string, any> = {}
+        Object.entries(entry.details).forEach(([k, v]: [string, any]) => {
+          if (v && typeof v === 'object' && 'from' in v) before[k] = v.from
+        })
+        if (Object.keys(before).length > 0) {
+          await updateVoucher(entry.voucher_id, before)
+          toast.success('עריכה שוחזרה')
+        }
+      } else if (entry.action === 'archive') {
+        await unarchiveVoucher(entry.voucher_id)
+        toast.success('שובר הוחזר מהארכיון')
+      } else if (entry.action === 'unarchive') {
+        await archiveVoucher(entry.voucher_id)
+        toast.success('שובר הועבר לארכיון')
+      }
+      await load(limit)
+    } catch {
+      toast.error('שחזור נכשל')
+    } finally {
+      setUndoingId(null)
+    }
+  }
 
   return (
     <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
@@ -112,7 +146,6 @@ export default function ActivityLog() {
 
       {expanded && (
         <div className="border-t">
-          {/* Refresh */}
           <div className="flex justify-end px-4 pt-2 pb-1">
             <button
               onClick={() => load(limit)}
@@ -169,9 +202,10 @@ CREATE POLICY "Users can manage own activity log"
               {entries.map(entry => {
                 const meta = ACTION_META[entry.action]
                 const subtitle = buildSubtitle(entry)
+                const canUndo = UNDOABLE.includes(entry.action) && !!entry.voucher_id
                 return (
-                  <div key={entry.id} className="flex items-start gap-3 px-4 py-3">
-                    <div className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                  <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
                       <meta.Icon className={`w-4 h-4 ${meta.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -184,6 +218,17 @@ CREATE POLICY "Users can manage own activity log"
                         {subtitle && <span className="text-xs text-gray-400">· {subtitle}</span>}
                       </div>
                     </div>
+                    {canUndo && (
+                      <button
+                        onClick={() => handleUndo(entry)}
+                        disabled={undoingId === entry.id}
+                        className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-green-700 disabled:opacity-40 transition-colors"
+                        aria-label={`שחזר פעולה: ${meta.label}`}
+                      >
+                        <Undo2 className={`w-3.5 h-3.5 ${undoingId === entry.id ? 'animate-spin' : ''}`} />
+                        שחזר
+                      </button>
+                    )}
                   </div>
                 )
               })}
