@@ -103,14 +103,15 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
         snapTo(0, null)
       }
     },
-    preventScrollOnSwipe: true,
+    preventScrollOnSwipe: false,
     trackMouse: false,
-    delta: 8,
+    delta: 10,
   })
 
   const slideStyle: React.CSSProperties = {
     transform: `translateX(${swipeX}px)`,
     transition: animating ? 'transform 200ms ease-out' : 'none',
+    touchAction: 'pan-y', // browser decides scroll vs. swipe based on angle — no JS conflict
   }
 
   // ── ROW MODE ───────────────────────────────────────────────────────────────
