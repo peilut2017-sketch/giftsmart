@@ -200,16 +200,16 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       // ── Fetch vouchers, super-vouchers, stores, categories in parallel ──
       type QueryResult = { data: any[] | null; error?: any }
       const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
-        withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any),
+        withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }).limit(500) as any),
         withTimeout<QueryResult>(
-          supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).then(res => {
+          supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).limit(100).then(res => {
             if (res.error?.code === '42703') {
-              return supabase.from('super_vouchers').select('*').eq('wallet_id', wId)
+              return supabase.from('super_vouchers').select('*').eq('wallet_id', wId).limit(100)
             }
             return res
           }) as any
         ),
-        withTimeout<QueryResult>(supabase.from('stores').select('*').order('name') as any),
+        withTimeout<QueryResult>(supabase.from('stores').select('id,name,logo_url,website').order('name').limit(500) as any),
         withTimeout<QueryResult>(supabase.from('categories').select('*').or(`wallet_id.eq.${wId},wallet_id.is.null`) as any),
       ])
 
@@ -230,7 +230,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
               .from(VOUCHERS_VIEW)
               .select('*')
               .eq('user_id', user.id)
-              .order('expiry_date', { ascending: true })).catch(() => ({ data: null }))
+              .order('expiry_date', { ascending: true })
+              .limit(500)).catch(() => ({ data: null }))
             if (byUserId && byUserId.length > 0) {
               const active2 = byUserId.filter((v: any) => !v.is_archived)
               const archived2 = byUserId.filter((v: any) => v.is_archived)
@@ -270,7 +271,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     try {
       type QueryResult = { data: any[] | null }
       const { data: vData } = await withTimeout<QueryResult>(
-        supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }) as any
+        supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }).limit(500) as any
       ).catch(() => ({ data: null }))
       if (vData) {
         const active = vData.filter((v: any) => !v.is_archived)
@@ -283,6 +284,32 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       console.error('Refresh error:', err)
     }
   }, [user, saveToCache])
+
+  // Fetch a single voucher row from the view (decrypts code/cvv) and merge into state
+  const mergeSingleVoucher = useCallback(async (id: string) => {
+    if (!navigator.onLine || !user) return
+    try {
+      const { data } = await supabase.from(VOUCHERS_VIEW).select('*').eq('id', id).single() as any
+      if (!data) return
+      if (data.is_archived) {
+        setArchivedVouchers(prev => {
+          const exists = prev.some((v: any) => v.id === id)
+          const next = exists ? prev.map((v: any) => v.id === id ? data : v) : [...prev, data]
+          return next
+        })
+        setVouchers(prev => prev.filter((v: any) => v.id !== id))
+      } else {
+        setVouchers(prev => {
+          const exists = prev.some((v: any) => v.id === id)
+          const next = exists ? prev.map((v: any) => v.id === id ? data : v) : [...prev, data]
+          return next
+        })
+        setArchivedVouchers(prev => prev.filter((v: any) => v.id !== id))
+      }
+    } catch (err) {
+      console.error('mergeSingleVoucher error:', err)
+    }
+  }, [user])
 
   useEffect(() => {
     if (user) {
@@ -315,22 +342,42 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchData])
 
-  // Realtime subscription — uses lightweight refresh to avoid re-querying wallet_members
+  // Realtime subscription — smart single-row merge to avoid full re-fetches
   useEffect(() => {
     if (!walletId || !user) return
     const channel = supabase
       .channel(`wallet-${walletId}`)
       .on('postgres_changes', {
-        event: '*',
+        event: 'INSERT',
         schema: 'public',
         table: 'vouchers',
         filter: `wallet_id=eq.${walletId}`,
-      }, () => {
-        refreshVouchersOnly()
+      }, (payload: any) => {
+        if (payload.new?.id) mergeSingleVoucher(payload.new.id)
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'vouchers',
+        filter: `wallet_id=eq.${walletId}`,
+      }, (payload: any) => {
+        // Fetch from view so code/cvv are decrypted; don't use payload.new directly
+        if (payload.new?.id) mergeSingleVoucher(payload.new.id)
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'vouchers',
+        filter: `wallet_id=eq.${walletId}`,
+      }, (payload: any) => {
+        const id = payload.old?.id
+        if (!id) return
+        setVouchers(prev => prev.filter((v: any) => v.id !== id))
+        setArchivedVouchers(prev => prev.filter((v: any) => v.id !== id))
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [walletId, user, refreshVouchersOnly])
+  }, [walletId, user, mergeSingleVoucher])
 
   async function addVoucher(v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>): Promise<Voucher | null> {
     if (!user) throw new Error('לא מחובר')

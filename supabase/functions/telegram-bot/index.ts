@@ -343,8 +343,10 @@ async function handleCallback(
   // archive
   if (cbData.startsWith('archive:')) {
     const voucherId = cbData.slice(8)
-    const { data: v } = await sb.from('vouchers').select('store_name').eq('id', voucherId).single()
-    await sb.from('vouchers').update({ is_archived: true }).eq('id', voucherId)
+    const [{ data: v }] = await Promise.all([
+      sb.from('vouchers').select('store_name').eq('id', voucherId).single(),
+      sb.from('vouchers').update({ is_archived: true }).eq('id', voucherId),
+    ])
     await editMsg(chatId, msgId,
       `📦 <b>${v?.store_name}</b> הועבר לארכיון.`,
       { reply_markup: { inline_keyboard: [[{ text: '📋 כל השוברים', callback_data: 'vouchers' }]] } }
@@ -507,9 +509,11 @@ serve(async (req) => {
     return new Response('ok')
   }
 
-  // Verify linked account
-  const { data: tgUser } = await sb
-    .from('telegram_users').select('user_id').eq('chat_id', chatId).single()
+  // Verify linked account + fetch session in parallel
+  const [{ data: tgUser }, { data: session }] = await Promise.all([
+    sb.from('telegram_users').select('user_id').eq('chat_id', chatId).single(),
+    sb.from('telegram_sessions').select('state, data').eq('chat_id', chatId).single(),
+  ])
 
   if (!tgUser) {
     await send(chatId,
@@ -530,9 +534,6 @@ serve(async (req) => {
   }
 
   // Active conversation state → continue flow
-  const { data: session } = await sb
-    .from('telegram_sessions').select('state, data').eq('chat_id', chatId).single()
-
   if (session?.state) {
     await handleConversation(sb, chatId, userId, walletId, text, session)
     return new Response('ok')
