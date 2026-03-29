@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Users, Trash2, UserPlus } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Users, Trash2, UserPlus, Zap, Crown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -19,6 +20,7 @@ interface WalletMemberRow {
 
 export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
+  const { isPro, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember } = useVouchers()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
@@ -273,22 +275,43 @@ export default function SettingsPage() {
 
           {!editName ? (
             <div className="p-4 flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center text-white font-bold text-lg">
-                {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
+              <div className="relative">
+                <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center text-white font-bold text-lg">
+                  {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
+                </div>
+                {isPro && (
+                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center shadow">
+                    <Crown className="w-3 h-3 text-white" />
+                  </div>
+                )}
               </div>
-              <div className="flex-1">
-                <p className="font-semibold text-gray-800">{profile?.name || 'ללא שם'}</p>
-                <p className="text-sm text-gray-500">{user?.email}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-gray-800">{profile?.name || 'ללא שם'}</p>
+                  {isPro ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      <Crown className="w-3 h-3" />
+                      Pro
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                      חינמי
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 truncate">{user?.email}</p>
                 {profile?.phone && <p className="text-xs text-gray-400">{profile.phone}</p>}
               </div>
               <button
                 onClick={() => setEditName(true)}
-                className="text-sm text-green-600 font-medium px-3 py-1.5 bg-green-50 rounded-xl"
+                className="text-sm text-green-600 font-medium px-3 py-1.5 bg-green-50 rounded-xl flex-shrink-0"
               >
                 עריכה
               </button>
             </div>
-          ) : (
+          ) : null}
+
+          {editName && (
             <div className="p-4 space-y-3">
               <input
                 type="text"
@@ -314,6 +337,22 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+          )}
+
+          {!editName && !isPro && (
+            <button
+              onClick={() => openUpgradeSheet('שדרג לחוויה מלאה ללא הגבלות')}
+              className="mx-4 mb-4 flex items-center justify-between gap-3 w-[calc(100%-2rem)] px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow active:scale-95 transition-transform"
+            >
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4" fill="white" />
+                <div className="text-right">
+                  <p className="text-sm font-bold">שדרג ל-Pro</p>
+                  <p className="text-xs text-white/80">שוברים ללא הגבלה · ₪9/חודש</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-80 rotate-180" />
+            </button>
           )}
         </div>
 
