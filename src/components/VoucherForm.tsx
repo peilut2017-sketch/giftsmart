@@ -144,7 +144,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   }
 
   async function handleImageOCR(file: File) {
-    if (!file.type.startsWith('image/')) return toast.error('יש לבחור קובץ תמונה')
+    if (file.type && !file.type.startsWith('image/')) return toast.error('יש לבחור קובץ תמונה')
     const scanKey = OCR_STORAGE_KEY()
     const scansThisMonth = parseInt(localStorage.getItem(scanKey) || '0')
     if (scansThisMonth >= limits.maxScansPerMonth) {
@@ -208,8 +208,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       // Show a hint if it's an HEIC file
       if (msg.includes('decode') || msg.includes('heic') || msg.includes('heif')) {
         toast.error('פורמט HEIC לא נתמך — שמור כ-JPEG/PNG ונסה שוב')
+      } else if (msg.includes('GEMINI_API_KEY')) {
+        toast.error('מפתח Gemini לא מוגדר בשרת — הגדר GEMINI_API_KEY ב-Supabase Secrets')
       } else {
-        toast.error('שגיאה בניתוח התמונה — בדוק את מפתח ה-API או נסה תמונה אחרת')
+        toast.error(`שגיאה בניתוח התמונה: ${msg}`)
       }
     } finally {
       setOcrLoading(false)

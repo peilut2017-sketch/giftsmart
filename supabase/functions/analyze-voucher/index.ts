@@ -77,21 +77,24 @@ Deno.serve(async (req: Request) => {
     return new Response('ok', { headers: CORS })
   }
 
+  // Always return HTTP 200 — errors go in the `error` field so supabase.functions.invoke
+  // puts the body in `data` instead of creating a FunctionsHttpError that swallows messages.
+  const ok = (payload: Record<string, unknown>) =>
+    new Response(JSON.stringify(payload), {
+      status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
+    })
+  const fail = (msg: string) => ok({ error: msg })
+
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
   if (!GEMINI_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: 'GEMINI_API_KEY secret is not configured in Supabase' }),
-      { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } },
-    )
+    return fail('GEMINI_API_KEY secret is not configured in Supabase — set it via: supabase secrets set GEMINI_API_KEY=AIza...')
   }
 
   let body: { image_base64?: string; mime_type?: string; text?: string }
   try {
     body = await req.json()
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
+    return fail('Invalid JSON body')
   }
 
   // Build Gemini request parts
@@ -104,29 +107,29 @@ Deno.serve(async (req: Request) => {
   } else if (body.text) {
     parts = [{ text: TEXT_PROMPT + body.text }]
   } else {
-    return new Response(JSON.stringify({ error: 'Provide image_base64 or text' }), {
-      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
+    return fail('Provide image_base64 or text')
   }
 
   // Call Gemini REST API
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts }] }),
-    },
-  )
-
-  const geminiData = await geminiRes.json()
+  let geminiRes: Response
+  let geminiData: unknown
+  try {
+    geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] }),
+      },
+    )
+    geminiData = await geminiRes.json()
+  } catch (e) {
+    return fail(`Network error calling Gemini: ${String(e)}`)
+  }
 
   if (!geminiRes.ok) {
-    const msg = (geminiData as { error?: { message?: string } })?.error?.message || 'Gemini API error'
-    return new Response(JSON.stringify({ error: msg }), {
-      status: geminiRes.status,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
+    const msg = (geminiData as { error?: { message?: string } })?.error?.message || `Gemini returned HTTP ${geminiRes.status}`
+    return fail(msg)
   }
 
   const rawText: string =
@@ -137,22 +140,17 @@ Deno.serve(async (req: Request) => {
   try {
     extracted = extractJson(rawText)
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
+    return fail(`Could not parse Gemini response: ${String(e)}`)
   }
 
   // Normalise and return
-  const result = {
+  return ok({
+    error: null,
     store_name:  (extracted.store_name  as string  | null) || null,
     code:        (extracted.code        as string  | null) || null,
     cvv:         (extracted.cvv         as string  | null) || null,
     amount:      typeof extracted.amount  === 'number' && extracted.amount  > 0 ? extracted.amount  : null,
     balance:     typeof extracted.balance === 'number' && extracted.balance > 0 ? extracted.balance : null,
     expiry_date: normaliseDate(extracted.expiry_date as string | null),
-  }
-
-  return new Response(JSON.stringify(result), {
-    headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 })
