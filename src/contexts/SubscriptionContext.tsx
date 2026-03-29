@@ -51,12 +51,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) { setPlan('free'); return }
-    supabase
-      .from('subscriptions')
-      .select('plan, status, current_period_end')
-      .eq('user_id', user.id)
-      .single()
-      .then(({ data }) => {
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('plan, status, current_period_end')
+          .eq('user_id', user.id)
+          .single()
         if (
           data?.plan === 'pro' &&
           data.status === 'active' &&
@@ -66,8 +67,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         } else {
           setPlan('free')
         }
-      })
-      .catch(() => setPlan('free'))
+      } catch {
+        setPlan('free')
+      }
+    })()
   }, [user])
 
   const isPro = plan === 'pro'

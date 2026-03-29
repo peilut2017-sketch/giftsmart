@@ -264,8 +264,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }, [user, loadFromCache, saveToCache])
 
   // Lightweight refresh: only re-fetches vouchers using the already-known walletId.
-  // Used by the realtime subscription so we never re-query wallet_members after each action.
-  const refreshVouchersOnly = useCallback(async () => {
+  const _refreshVouchersOnly = useCallback(async () => {
     const wId = walletIdRef.current
     if (!wId || !navigator.onLine || !user) return
     try {
