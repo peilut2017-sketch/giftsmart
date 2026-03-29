@@ -263,27 +263,6 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [user, loadFromCache, saveToCache])
 
-  // Lightweight refresh: only re-fetches vouchers using the already-known walletId.
-  const _refreshVouchersOnly = useCallback(async () => {
-    const wId = walletIdRef.current
-    if (!wId || !navigator.onLine || !user) return
-    try {
-      type QueryResult = { data: any[] | null }
-      const { data: vData } = await withTimeout<QueryResult>(
-        supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }).limit(500) as any
-      ).catch(() => ({ data: null }))
-      if (vData) {
-        const active = vData.filter((v: any) => !v.is_archived)
-        const archived = vData.filter((v: any) => v.is_archived)
-        setVouchers(active)
-        setArchivedVouchers(archived)
-        saveToCache(user.id, active, archived)
-      }
-    } catch (err) {
-      console.error('Refresh error:', err)
-    }
-  }, [user, saveToCache])
-
   // Fetch a single voucher row from the view (decrypts code/cvv) and merge into state
   const mergeSingleVoucher = useCallback(async (id: string) => {
     if (!navigator.onLine || !user) return
