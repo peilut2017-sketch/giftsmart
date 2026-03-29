@@ -119,8 +119,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
     return (
       <div className={`relative voucher-card rounded-2xl border ${cardBorderClass} ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''} shadow-sm overflow-hidden`}>
 
-        {/* Edit — left bg, revealed on swipe-right */}
-        <div className="absolute inset-y-0 left-0 flex items-center justify-center bg-blue-500" style={{ width: REVEAL_EDIT }}>
+        {/* Edit — left bg, revealed on swipe-right (mobile only) */}
+        <div className="sm:hidden absolute inset-y-0 left-0 flex items-center justify-center bg-blue-500" style={{ width: REVEAL_EDIT }}>
           <button
             onClick={e => { e.stopPropagation(); closeSwipe(); onEdit() }}
             className="flex flex-col items-center gap-0.5 text-white"
@@ -131,8 +131,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
           </button>
         </div>
 
-        {/* Archive + Delete — right bg, revealed on swipe-left */}
-        <div className="absolute inset-y-0 right-0 flex" style={{ width: REVEAL_DELETE }}>
+        {/* Archive + Delete — right bg, revealed on swipe-left (mobile only) */}
+        <div className="sm:hidden absolute inset-y-0 right-0 flex" style={{ width: REVEAL_DELETE }}>
           <div className="flex-1 bg-amber-500 flex items-center justify-center">
             <button
               onClick={e => { e.stopPropagation(); closeSwipe(); onArchive() }}
@@ -237,8 +237,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
   return (
     <div className={`relative voucher-card rounded-2xl border ${cardBorderClass} ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''} shadow-sm overflow-hidden`}>
 
-      {/* Edit — left bg */}
-      <div className="absolute inset-y-0 left-0 flex items-center justify-center bg-blue-500" style={{ width: REVEAL_EDIT }}>
+      {/* Edit — left bg (mobile only) */}
+      <div className="sm:hidden absolute inset-y-0 left-0 flex items-center justify-center bg-blue-500" style={{ width: REVEAL_EDIT }}>
         <button
           onClick={e => { e.stopPropagation(); closeSwipe(); onEdit() }}
           className="flex flex-col items-center gap-1 text-white"
@@ -249,8 +249,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
         </button>
       </div>
 
-      {/* Archive + Delete — right bg */}
-      <div className="absolute inset-y-0 right-0 flex" style={{ width: REVEAL_DELETE }}>
+      {/* Archive + Delete — right bg (mobile only) */}
+      <div className="sm:hidden absolute inset-y-0 right-0 flex" style={{ width: REVEAL_DELETE }}>
         <div className="flex-1 bg-amber-500 flex items-center justify-center">
           <button
             onClick={e => { e.stopPropagation(); closeSwipe(); onArchive() }}

@@ -21,6 +21,13 @@ interface SupportMessage {
   created_at: string
 }
 
+interface AdminBroadcast {
+  id: string
+  subject: string
+  body: string
+  created_at: string
+}
+
 const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
 
 interface WalletMemberRow {
@@ -64,6 +71,12 @@ export default function SettingsPage() {
   const [myMessages, setMyMessages] = useState<SupportMessage[]>([])
   const [showMyMessages, setShowMyMessages] = useState(false)
   const [supportSent, setSupportSent] = useState(false)
+
+  // Admin broadcasts
+  const [adminBroadcasts, setAdminBroadcasts] = useState<AdminBroadcast[]>([])
+  const [seenBroadcastIds] = useState<Set<string>>(
+    () => new Set(JSON.parse(localStorage.getItem('seen_broadcast_ids') || '[]'))
+  )
 
   // Telegram
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
@@ -246,6 +259,38 @@ export default function SettingsPage() {
       .maybeSingle()
       .then(({ data }) => setTelegramLinked(!!data))
   })
+
+  // Load admin broadcasts on mount
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('admin_broadcasts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => { if (data) setAdminBroadcasts(data) })
+  }, [user])
+
+  // Realtime: notify user when admin replies to their message
+  useEffect(() => {
+    if (!user) return
+    const channel = supabase
+      .channel(`replies-${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'support_messages',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        const updated = payload.new as SupportMessage
+        if (updated.status === 'replied' && updated.admin_reply) {
+          setMyMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
+          if (Notification.permission === 'granted') {
+            new Notification('תשובה מהמנהל', { body: updated.admin_reply, icon: '/logo.png' })
+          }
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
 
   async function handleGenerateTelegramCode() {
     if (!user) return
@@ -848,9 +893,7 @@ export default function SettingsPage() {
                             <p className="text-xs text-gray-700">{m.admin_reply}</p>
                           </div>
                         ) : (
-                          <p className="text-xs text-gray-400 mt-1">
-                            {m.status === 'unread' ? '⏳ ממתין לקריאה' : '👁 נקרא'}
-                          </p>
+                          <p className="text-xs text-gray-400 mt-1">בטיפול</p>
                         )}
                       </div>
                     ))}
@@ -858,6 +901,46 @@ export default function SettingsPage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Admin broadcasts */}
+        {adminBroadcasts.length > 0 && (
+          <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-blue-500" />
+                הודעות מערכת
+              </h3>
+              {adminBroadcasts.some(b => !seenBroadcastIds.has(b.id)) && (
+                <span className="text-xs font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
+                  {adminBroadcasts.filter(b => !seenBroadcastIds.has(b.id)).length}
+                </span>
+              )}
+            </div>
+            <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+              {adminBroadcasts.map(b => {
+                const isNew = !seenBroadcastIds.has(b.id)
+                return (
+                  <div
+                    key={b.id}
+                    className={`px-4 py-3 ${isNew ? 'bg-blue-50/50' : ''}`}
+                    onMouseEnter={() => {
+                      if (isNew) {
+                        seenBroadcastIds.add(b.id)
+                        localStorage.setItem('seen_broadcast_ids', JSON.stringify([...seenBroadcastIds]))
+                      }
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-sm font-medium ${isNew ? 'text-gray-900' : 'text-gray-700'}`}>{b.subject}</p>
+                      <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(b.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{b.body}</p>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 

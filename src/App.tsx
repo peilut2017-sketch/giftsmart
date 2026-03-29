@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { useExpiryNotifications } from './hooks/useNotifications'
+import { supabase } from './lib/supabase'
 import UpgradeSheet from './components/UpgradeSheet'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
@@ -24,10 +25,52 @@ import { useState, useEffect } from 'react'
 
 const A11Y_WIDGET_KEY = 'a11y_widget_enabled'
 
+const SEEN_PUSH_KEY = 'seen_push_broadcast_ids'
+
 function NotificationBridge() {
   const { vouchers } = useVouchers()
+  const { user } = useAuth()
   const { isPro } = useSubscription()
   useExpiryNotifications(vouchers, isPro)
+
+  // On mount: show any unseen push broadcasts + subscribe to future ones
+  useEffect(() => {
+    if (!user) return
+    const seenIds: Set<string> = new Set(JSON.parse(localStorage.getItem(SEEN_PUSH_KEY) || '[]'))
+
+    function showPush(id: string, title: string, body: string) {
+      if (seenIds.has(id)) return
+      seenIds.add(id)
+      localStorage.setItem(SEEN_PUSH_KEY, JSON.stringify([...seenIds]))
+      if (Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/logo.png' })
+      }
+    }
+
+    // Fetch recent unseen broadcasts
+    supabase
+      .from('push_broadcasts')
+      .select('*')
+      .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        data?.forEach(b => showPush(b.id, b.title, b.body))
+      })
+
+    // Realtime for future broadcasts
+    const channel = supabase
+      .channel('push-broadcasts')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'push_broadcasts',
+      }, (payload) => {
+        const b = payload.new as { id: string; title: string; body: string }
+        showPush(b.id, b.title, b.body)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
+
   return <UpgradeSheet />
 }
 

@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -103,6 +103,13 @@ export default function AdminPage() {
   const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null)
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
   const [sendingReply, setSendingReply] = useState<string | null>(null)
+  // Broadcasts
+  const [showBroadcasts, setShowBroadcasts] = useState(false)
+  const [broadcasts, setBroadcasts] = useState<{ id: string; subject: string; body: string; created_at: string }[]>([])
+  const [broadcastForm, setBroadcastForm] = useState({ subject: '', body: '' })
+  const [pushForm, setPushForm] = useState({ title: '', body: '' })
+  const [sendingBroadcast, setSendingBroadcast] = useState(false)
+  const [sendingPush, setSendingPush] = useState(false)
 
   const isAdmin = user?.email === ADMIN_EMAIL
 
@@ -111,6 +118,27 @@ export default function AdminPage() {
     supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
     supabase.rpc('get_all_users').then(({ data }) => { if (data) setAllUsers(data) })
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
+  }, [isAdmin])
+
+  // Realtime: notify admin when a new support message arrives
+  useEffect(() => {
+    if (!isAdmin) return
+    const channel = supabase
+      .channel('admin-incoming-messages')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'support_messages',
+      }, (payload) => {
+        const msg = payload.new as SupportMessage
+        setMessages(prev => [msg, ...prev])
+        if (Notification.permission === 'granted') {
+          new Notification('הודעה חדשה', {
+            body: `${msg.user_email || 'משתמש'}: ${msg.subject}`,
+            icon: '/logo.png',
+          })
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
   }, [isAdmin])
 
   useEffect(() => {
@@ -182,6 +210,39 @@ export default function AdminPage() {
     setReplyTexts(prev => ({ ...prev, [msg.id]: '' }))
     toast.success('תשובה נשלחה')
   }
+
+  async function handleCreateBroadcast() {
+    if (!broadcastForm.subject.trim() || !broadcastForm.body.trim()) return toast.error('נושא וגוף חובה')
+    setSendingBroadcast(true)
+    const { data, error } = await supabase.rpc('admin_create_broadcast', {
+      p_subject: broadcastForm.subject.trim(),
+      p_body: broadcastForm.body.trim(),
+    })
+    setSendingBroadcast(false)
+    if (error) return toast.error('שגיאה: ' + error.message)
+    setBroadcasts(prev => [data, ...prev])
+    setBroadcastForm({ subject: '', body: '' })
+    toast.success('הודעה נשלחה לכל המשתמשים!')
+  }
+
+  async function handleCreatePushBroadcast() {
+    if (!pushForm.title.trim() || !pushForm.body.trim()) return toast.error('כותרת וגוף חובה')
+    setSendingPush(true)
+    const { data, error } = await supabase.rpc('admin_create_push_broadcast', {
+      p_title: pushForm.title.trim(),
+      p_body: pushForm.body.trim(),
+    })
+    setSendingPush(false)
+    if (error) return toast.error('שגיאה: ' + error.message)
+    if (data) setBroadcasts(prev => prev) // push broadcasts are separate
+    setPushForm({ title: '', body: '' })
+    toast.success('התראת פוש נשלחה לכל המשתמשים!')
+  }
+
+  useEffect(() => {
+    if (!showBroadcasts || broadcasts.length > 0) return
+    supabase.rpc('admin_get_broadcasts').then(({ data }) => { if (data) setBroadcasts(data) })
+  }, [showBroadcasts])
 
   if (!isAdmin) {
     return (
@@ -845,6 +906,94 @@ export default function AdminPage() {
                       </div>
                     )
                   })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Broadcasts ── */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-4"
+            onClick={() => setShowBroadcasts(v => !v)}
+          >
+            <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Bell className="w-4 h-4 text-blue-500" />
+              שידורים לכלל המשתמשים
+            </span>
+            {showBroadcasts ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+
+          {showBroadcasts && (
+            <div className="border-t divide-y divide-gray-50">
+
+              {/* Push notification form */}
+              <div className="p-4 bg-amber-50 space-y-2">
+                <p className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                  <Bell className="w-3.5 h-3.5" /> שלח התראת פוש לכולם
+                </p>
+                <input
+                  value={pushForm.title}
+                  onChange={e => setPushForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="כותרת ההתראה"
+                  className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <textarea
+                  value={pushForm.body}
+                  onChange={e => setPushForm(f => ({ ...f, body: e.target.value }))}
+                  placeholder="גוף ההתראה"
+                  rows={2}
+                  className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                />
+                <button
+                  onClick={handleCreatePushBroadcast}
+                  disabled={sendingPush || !pushForm.title.trim() || !pushForm.body.trim()}
+                  className="w-full bg-amber-500 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-40"
+                >
+                  {sendingPush ? '...' : 'שלח התראה לכולם'}
+                </button>
+              </div>
+
+              {/* Message broadcast form */}
+              <div className="p-4 bg-blue-50 space-y-2">
+                <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" /> שלח הודעה למשתמשים
+                </p>
+                <input
+                  value={broadcastForm.subject}
+                  onChange={e => setBroadcastForm(f => ({ ...f, subject: e.target.value }))}
+                  placeholder="נושא ההודעה"
+                  className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+                <textarea
+                  value={broadcastForm.body}
+                  onChange={e => setBroadcastForm(f => ({ ...f, body: e.target.value }))}
+                  placeholder="גוף ההודעה"
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                />
+                <button
+                  onClick={handleCreateBroadcast}
+                  disabled={sendingBroadcast || !broadcastForm.subject.trim() || !broadcastForm.body.trim()}
+                  className="w-full bg-blue-500 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-40"
+                >
+                  {sendingBroadcast ? '...' : 'שלח לכל המשתמשים'}
+                </button>
+              </div>
+
+              {/* Broadcast history */}
+              {broadcasts.length > 0 && (
+                <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                  {broadcasts.map(b => (
+                    <div key={b.id} className="px-4 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-700 truncate">{b.subject}</p>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(b.created_at)}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{b.body}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
