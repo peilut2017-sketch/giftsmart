@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Clock, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -26,6 +26,42 @@ interface SystemStats {
   total_users: number
 }
 
+interface Coupon {
+  id: string
+  code: string
+  name: string
+  type: 'general' | 'private'
+  discount_value: number
+  max_uses: number | null
+  uses_count: number
+  valid_until: string | null
+  restricted_to_email: string | null
+  first_time_only: boolean
+  is_active: boolean
+  created_at: string
+}
+
+interface SupportMessage {
+  id: string
+  user_id: string
+  user_email: string | null
+  user_name: string | null
+  subject: string
+  body: string
+  category: string
+  status: 'unread' | 'read' | 'replied'
+  admin_reply: string | null
+  replied_at: string | null
+  created_at: string
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  billing: '💳 חיוב',
+  bug: '🐛 באג',
+  feature: '💡 פיצ\'ר',
+  general: '💬 כללי',
+}
+
 type Confirm = { title: string; message?: string; onConfirm: () => void }
 
 export default function AdminPage() {
@@ -33,6 +69,7 @@ export default function AdminPage() {
   const { vouchers, archivedVouchers, superVouchers, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, updateWalletName } = useVouchers()
 
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
+  const [proCount, setProCount] = useState<number | null>(null)
   const [allUsers, setAllUsers] = useState<UserRow[]>([])
   const [showUsers, setShowUsers] = useState(false)
   const [editingWalletName, setEditingWalletName] = useState(false)
@@ -47,19 +84,98 @@ export default function AdminPage() {
   const [showQuickSV, setShowQuickSV] = useState(false)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
+  // Coupons
+  const [coupons, setCoupons] = useState<Coupon[]>([])
+  const [showCoupons, setShowCoupons] = useState(false)
+  const [showAddCoupon, setShowAddCoupon] = useState(false)
+  const [couponForm, setCouponForm] = useState({
+    code: '', name: '', type: 'general' as 'general' | 'private',
+    discount_value: 1, max_uses: '', valid_until: '',
+    restricted_to_email: '', first_time_only: false,
+  })
+  // Messages
+  const [messages, setMessages] = useState<SupportMessage[]>([])
+  const [showMessages, setShowMessages] = useState(false)
+  const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null)
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
+  const [sendingReply, setSendingReply] = useState<string | null>(null)
 
   const isAdmin = user?.email === ADMIN_EMAIL
 
-  // Load system-wide stats immediately — no walletId needed
   useEffect(() => {
     if (!isAdmin) return
-    supabase.rpc('get_system_stats').then(({ data }) => {
-      if (data) setSystemStats(data)
-    })
-    supabase.rpc('get_all_users').then(({ data }) => {
-      if (data) setAllUsers(data)
-    })
+    supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
+    supabase.rpc('get_all_users').then(({ data }) => { if (data) setAllUsers(data) })
+    supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
   }, [isAdmin])
+
+  useEffect(() => {
+    if (!showCoupons || coupons.length > 0) return
+    supabase.rpc('admin_get_coupons').then(({ data }) => { if (data) setCoupons(data) })
+  }, [showCoupons])
+
+  useEffect(() => {
+    if (!showMessages || messages.length > 0) return
+    supabase.rpc('admin_get_messages').then(({ data }) => { if (data) setMessages(data) })
+  }, [showMessages])
+
+  async function handleCreateCoupon() {
+    if (!couponForm.code || !couponForm.name) return toast.error('קוד ושם הם שדות חובה')
+    const { data, error } = await supabase.rpc('admin_create_coupon', {
+      p_code: couponForm.code,
+      p_name: couponForm.name,
+      p_type: couponForm.type,
+      p_discount_value: couponForm.discount_value,
+      p_max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
+      p_valid_until: couponForm.valid_until ? new Date(couponForm.valid_until).toISOString() : null,
+      p_restricted_email: couponForm.restricted_to_email || null,
+      p_first_time_only: couponForm.first_time_only,
+    })
+    if (error) return toast.error('שגיאה: ' + error.message)
+    setCoupons(prev => [data, ...prev])
+    setShowAddCoupon(false)
+    setCouponForm({ code: '', name: '', type: 'general', discount_value: 1, max_uses: '', valid_until: '', restricted_to_email: '', first_time_only: false })
+    toast.success('קופון נוצר!')
+  }
+
+  async function handleToggleCoupon(id: string, active: boolean) {
+    await supabase.rpc('admin_toggle_coupon', { p_id: id, p_active: active })
+    setCoupons(prev => prev.map(c => c.id === id ? { ...c, is_active: active } : c))
+  }
+
+  async function handleDeleteCoupon(id: string, code: string) {
+    setConfirm({
+      title: 'מחיקת קופון',
+      message: `למחוק את הקופון "${code}"?`,
+      onConfirm: async () => {
+        setConfirm(null)
+        await supabase.rpc('admin_delete_coupon', { p_id: id })
+        setCoupons(prev => prev.filter(c => c.id !== id))
+        toast.success('קופון נמחק')
+      },
+    })
+  }
+
+  async function handleExpandMessage(msg: SupportMessage) {
+    const isNowOpen = expandedMsgId === msg.id
+    setExpandedMsgId(isNowOpen ? null : msg.id)
+    if (!isNowOpen && msg.status === 'unread') {
+      await supabase.rpc('admin_mark_message_read', { p_id: msg.id })
+      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'read' } : m))
+    }
+  }
+
+  async function handleSendReply(msg: SupportMessage) {
+    const reply = replyTexts[msg.id]?.trim()
+    if (!reply) return
+    setSendingReply(msg.id)
+    const { error } = await supabase.rpc('admin_reply_message', { p_id: msg.id, p_reply: reply })
+    setSendingReply(null)
+    if (error) return toast.error('שגיאה: ' + error.message)
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'replied', admin_reply: reply } : m))
+    setReplyTexts(prev => ({ ...prev, [msg.id]: '' }))
+    toast.success('תשובה נשלחה')
+  }
 
   if (!isAdmin) {
     return (
@@ -242,20 +358,29 @@ export default function AdminPage() {
               <p className="text-xl font-bold">{systemStats?.total_wallets ?? '...'}</p>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-600 flex items-center justify-between">
+          <div className="mt-3 pt-3 border-t border-slate-600 grid grid-cols-2 gap-3">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-slate-400" />
               <span className="text-sm text-slate-300">
-                משתמשים רשומים:&nbsp;
+                משתמשים:&nbsp;
                 <span className="font-bold text-white">{usersCount === null ? '...' : usersCount}</span>
               </span>
             </div>
-            {expiringSoon > 0 && (
-              <span className="text-xs bg-orange-400/20 text-orange-300 px-2 py-1 rounded-lg">
-                ⚠️ {expiringSoon} פגים בקרוב
+            <div className="flex items-center gap-2">
+              <Crown className="w-4 h-4 text-amber-400" />
+              <span className="text-sm text-slate-300">
+                מנויי Pro:&nbsp;
+                <span className="font-bold text-amber-300">{proCount === null ? '...' : proCount}</span>
               </span>
-            )}
+            </div>
           </div>
+          {expiringSoon > 0 && (
+            <div className="mt-2 pt-2 border-t border-slate-600">
+              <span className="text-xs bg-orange-400/20 text-orange-300 px-2 py-1 rounded-lg">
+                ⚠️ {expiringSoon} שוברים פגים בקרוב
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Registered Users List */}
@@ -448,6 +573,245 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ── Coupons ── */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-4"
+            onClick={() => setShowCoupons(v => !v)}
+          >
+            <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Ticket className="w-4 h-4 text-purple-500" />
+              קופונים ({coupons.length})
+            </span>
+            <div className="flex items-center gap-2">
+              {showCoupons && (
+                <button
+                  onClick={e => { e.stopPropagation(); setShowAddCoupon(v => !v) }}
+                  className="text-xs text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> קופון חדש
+                </button>
+              )}
+              {showCoupons ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </div>
+          </button>
+
+          {showCoupons && (
+            <div className="border-t">
+              {showAddCoupon && (
+                <div className="p-4 bg-purple-50 border-b space-y-2">
+                  <p className="text-xs font-semibold text-purple-700 mb-2">קופון חדש</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={couponForm.code}
+                      onChange={e => setCouponForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                      placeholder="קוד (SUMMER25)"
+                      className="px-3 py-2 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      dir="ltr"
+                    />
+                    <input
+                      value={couponForm.name}
+                      onChange={e => setCouponForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="שם פנימי"
+                      className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      value={couponForm.type}
+                      onChange={e => setCouponForm(f => ({ ...f, type: e.target.value as any }))}
+                      className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    >
+                      <option value="general">כללי</option>
+                      <option value="private">פרטי</option>
+                    </select>
+                    <div className="flex items-center gap-1 border rounded-xl px-3">
+                      <input
+                        type="number" min={1} max={36}
+                        value={couponForm.discount_value}
+                        onChange={e => setCouponForm(f => ({ ...f, discount_value: parseInt(e.target.value) || 1 }))}
+                        className="w-full text-sm focus:outline-none"
+                      />
+                      <span className="text-xs text-gray-400 whitespace-nowrap">חודשים</span>
+                    </div>
+                    <input
+                      type="number" min={1}
+                      value={couponForm.max_uses}
+                      onChange={e => setCouponForm(f => ({ ...f, max_uses: e.target.value }))}
+                      placeholder="מקס שימושים"
+                      className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={couponForm.valid_until}
+                      onChange={e => setCouponForm(f => ({ ...f, valid_until: e.target.value }))}
+                      className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    />
+                    {couponForm.type === 'private' && (
+                      <input
+                        value={couponForm.restricted_to_email}
+                        onChange={e => setCouponForm(f => ({ ...f, restricted_to_email: e.target.value }))}
+                        placeholder="אימייל מוגבל"
+                        type="email"
+                        className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                        dir="ltr"
+                      />
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" checked={couponForm.first_time_only}
+                      onChange={e => setCouponForm(f => ({ ...f, first_time_only: e.target.checked }))}
+                      className="w-4 h-4 accent-purple-500" />
+                    חדשים בלבד (למי שמעולם לא היה Pro)
+                  </label>
+                  <div className="flex gap-2">
+                    <button onClick={handleCreateCoupon} className="flex-1 bg-purple-600 text-white py-2 rounded-xl text-sm font-medium">
+                      צור קופון
+                    </button>
+                    <button onClick={() => setShowAddCoupon(false)} className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm">
+                      ביטול
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {coupons.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-6">אין קופונים עדיין</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {coupons.map(c => (
+                    <div key={c.id} className="px-4 py-3 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm font-bold text-purple-700">{c.code}</span>
+                          <span className="text-xs text-gray-500">{c.name}</span>
+                          {c.type === 'private' && (
+                            <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">פרטי</span>
+                          )}
+                          {c.first_time_only && (
+                            <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded-md">חדשים</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
+                          <span>🎁 {c.discount_value} חודשי Pro</span>
+                          <span>📊 {c.uses_count}{c.max_uses ? `/${c.max_uses}` : ''} שימושים</span>
+                          {c.valid_until && <span>⏰ עד {formatDate(c.valid_until)}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => handleToggleCoupon(c.id, !c.is_active)}
+                          className={`text-xs px-2.5 py-1 rounded-lg font-medium ${c.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}
+                        >
+                          {c.is_active ? 'פעיל' : 'כבוי'}
+                        </button>
+                        <button onClick={() => handleDeleteCoupon(c.id, c.code)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Support Messages ── */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-4"
+            onClick={() => setShowMessages(v => !v)}
+          >
+            <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-teal-500" />
+              הודעות תמיכה
+              {messages.filter(m => m.status === 'unread').length > 0 && (
+                <span className="text-xs font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                  {messages.filter(m => m.status === 'unread').length}
+                </span>
+              )}
+            </span>
+            {showMessages ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+
+          {showMessages && (
+            <div className="border-t">
+              {messages.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-6">אין הודעות עדיין</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {messages.map(msg => {
+                    const isExpanded = expandedMsgId === msg.id
+                    const statusIcon = msg.status === 'unread'
+                      ? <div className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0 mt-1.5" />
+                      : msg.status === 'replied'
+                      ? <CheckCheck className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                      : <Eye className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                    return (
+                      <div key={msg.id}>
+                        <button
+                          onClick={() => handleExpandMessage(msg)}
+                          className="w-full flex items-start gap-3 px-4 py-3 text-right hover:bg-gray-50 transition-colors"
+                        >
+                          {statusIcon}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 justify-between">
+                              <span className={`text-sm font-medium truncate ${msg.status === 'unread' ? 'text-gray-900' : 'text-gray-600'}`}>
+                                {msg.subject}
+                              </span>
+                              <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(msg.created_at)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs text-gray-400">{msg.user_email || msg.user_name || 'משתמש'}</span>
+                              <span className="text-xs text-gray-300">·</span>
+                              <span className="text-xs text-gray-400">{CATEGORY_LABELS[msg.category] || msg.category}</span>
+                            </div>
+                          </div>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-4 pb-4 space-y-3">
+                            <div className="bg-gray-50 rounded-2xl p-3">
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{msg.body}</p>
+                            </div>
+                            {msg.admin_reply && (
+                              <div className="bg-teal-50 rounded-2xl p-3">
+                                <p className="text-xs font-medium text-teal-600 mb-1">תשובתך:</p>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{msg.admin_reply}</p>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <textarea
+                                value={replyTexts[msg.id] || ''}
+                                onChange={e => setReplyTexts(prev => ({ ...prev, [msg.id]: e.target.value }))}
+                                placeholder="כתוב תשובה..."
+                                rows={2}
+                                className="flex-1 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+                              />
+                              <button
+                                onClick={() => handleSendReply(msg)}
+                                disabled={sendingReply === msg.id || !replyTexts[msg.id]?.trim()}
+                                className="px-3 py-2 bg-teal-500 text-white rounded-xl text-sm font-medium flex items-center gap-1 disabled:opacity-40"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                {sendingReply === msg.id ? '...' : 'שלח'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Exports */}

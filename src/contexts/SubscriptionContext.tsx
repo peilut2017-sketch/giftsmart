@@ -39,6 +39,7 @@ interface SubscriptionContextType {
   upgradeReason: string
   openUpgradeSheet: (reason?: string) => void
   closeUpgradeSheet: () => void
+  refreshPlan: () => Promise<void>
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined)
@@ -81,12 +82,35 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setUpgradeSheetOpen(true)
   }
 
+  async function refreshPlan() {
+    if (!user) { setPlan('free'); return }
+    try {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('plan, status, current_period_end')
+        .eq('user_id', user.id)
+        .single()
+      if (
+        data?.plan === 'pro' &&
+        data.status === 'active' &&
+        (!data.current_period_end || new Date(data.current_period_end) > new Date())
+      ) {
+        setPlan('pro')
+      } else {
+        setPlan('free')
+      }
+    } catch {
+      setPlan('free')
+    }
+  }
+
   return (
     <SubscriptionContext.Provider value={{
       plan, isPro, limits,
       upgradeSheetOpen, upgradeReason,
       openUpgradeSheet,
       closeUpgradeSheet: () => setUpgradeSheetOpen(false),
+      refreshPlan,
     }}>
       {children}
     </SubscriptionContext.Provider>

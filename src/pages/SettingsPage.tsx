@@ -5,10 +5,21 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Users, Trash2, UserPlus, Zap, Crown } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Users, Trash2, UserPlus, Zap, Crown, MessageSquare, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
+
+interface SupportMessage {
+  id: string
+  subject: string
+  body: string
+  category: string
+  status: 'unread' | 'read' | 'replied'
+  admin_reply: string | null
+  replied_at: string | null
+  created_at: string
+}
 
 const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
 
@@ -44,6 +55,15 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [pendingInviteEmail, setPendingInviteEmail] = useState<string | null>(null)
+
+  // Support messages
+  const [supportSubject, setSupportSubject] = useState('')
+  const [supportBody, setSupportBody] = useState('')
+  const [supportCategory, setSupportCategory] = useState('general')
+  const [sendingSupport, setSendingSupport] = useState(false)
+  const [myMessages, setMyMessages] = useState<SupportMessage[]>([])
+  const [showMyMessages, setShowMyMessages] = useState(false)
+  const [supportSent, setSupportSent] = useState(false)
 
   // Telegram
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
@@ -180,6 +200,33 @@ export default function SettingsPage() {
       setPendingInviteEmail(null)
       setInviteEmail('')
     }
+  }
+
+  async function sendSupportMessage() {
+    if (!supportSubject.trim() || !supportBody.trim()) return toast.error('נושא וגוף ההודעה הם שדות חובה')
+    setSendingSupport(true)
+    const { error } = await supabase.from('support_messages').insert({
+      user_id: user!.id,
+      user_email: user!.email,
+      user_name: profile?.name || null,
+      subject: supportSubject.trim(),
+      body: supportBody.trim(),
+      category: supportCategory,
+    })
+    setSendingSupport(false)
+    if (error) return toast.error('שגיאה בשליחה: ' + error.message)
+    setSupportSubject(''); setSupportBody(''); setSupportCategory('general')
+    setSupportSent(true)
+    toast.success('ההודעה נשלחה!')
+    // Reload my messages list
+    const { data } = await supabase.from('support_messages').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
+    if (data) setMyMessages(data)
+    setShowMyMessages(true)
+  }
+
+  async function loadMyMessages() {
+    const { data } = await supabase.from('support_messages').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
+    if (data) setMyMessages(data)
   }
 
   async function handleRemoveMember(userId: string, email: string) {
@@ -714,6 +761,105 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
+
+        {/* Support messages — Pro only */}
+        {isPro && (
+          <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5" /> תמיכה
+              </p>
+              <button
+                onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }}
+                className="text-xs text-teal-600 flex items-center gap-1"
+              >
+                ההודעות שלי
+                {showMyMessages ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+
+            {/* Send form */}
+            {!supportSent ? (
+              <div className="p-4 space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    value={supportSubject}
+                    onChange={e => setSupportSubject(e.target.value)}
+                    placeholder="נושא"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+                  />
+                  <select
+                    value={supportCategory}
+                    onChange={e => setSupportCategory(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+                  >
+                    <option value="general">💬 כללי</option>
+                    <option value="billing">💳 חיוב</option>
+                    <option value="bug">🐛 באג</option>
+                    <option value="feature">💡 פיצ'ר</option>
+                  </select>
+                </div>
+                <textarea
+                  value={supportBody}
+                  onChange={e => setSupportBody(e.target.value)}
+                  placeholder="תאר את הבעיה או הבקשה שלך..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+                />
+                <button
+                  onClick={sendSupportMessage}
+                  disabled={sendingSupport}
+                  className="w-full bg-teal-500 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Send className="w-4 h-4" />
+                  {sendingSupport ? 'שולח...' : 'שלח הודעה'}
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 flex flex-col items-center gap-2 text-center">
+                <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center">
+                  <Check className="w-5 h-5 text-teal-500" />
+                </div>
+                <p className="text-sm font-medium text-gray-800">ההודעה נשלחה!</p>
+                <p className="text-xs text-gray-500">נחזור אליך בהקדם</p>
+                <button onClick={() => setSupportSent(false)} className="text-xs text-teal-600 mt-1">שלח הודעה נוספת</button>
+              </div>
+            )}
+
+            {/* My messages history */}
+            {showMyMessages && (
+              <div className="border-t">
+                {myMessages.length === 0 ? (
+                  <p className="text-center text-xs text-gray-400 py-4">אין הודעות קודמות</p>
+                ) : (
+                  <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                    {myMessages.map(m => (
+                      <div key={m.id} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-gray-800">{m.subject}</p>
+                          <span className="text-xs text-gray-400 flex-shrink-0 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />{formatDate(m.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{m.body}</p>
+                        {m.admin_reply ? (
+                          <div className="mt-2 bg-teal-50 rounded-xl p-2.5">
+                            <p className="text-xs font-medium text-teal-600 mb-1">תשובת המנהל:</p>
+                            <p className="text-xs text-gray-700">{m.admin_reply}</p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {m.status === 'unread' ? '⏳ ממתין לקריאה' : '👁 נקרא'}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Activity log */}
         <ActivityLog />
