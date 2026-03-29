@@ -1,6 +1,7 @@
 export interface ExtractedVoucher {
   code?: string
   amount?: number
+  balance?: number
   store_name?: string
   expiry_date?: string
   cvv?: string
