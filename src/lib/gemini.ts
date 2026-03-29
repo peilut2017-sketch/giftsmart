@@ -1,45 +1,16 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+// Voucher analysis via Supabase Edge Function (analyze-voucher).
+// The Gemini API key lives in Supabase Secrets — never exposed to the browser.
+import { supabase } from './supabase'
 import type { ExtractedVoucher } from '../utils/smsExtractor'
 
-const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim() || undefined
-
-// ── Prompt ────────────────────────────────────────────────────────────────────
-
-const EXTRACTION_SCHEMA = `
-Return ONLY a JSON object (no markdown, no explanation) with these exact fields:
-{
-  "store_name": string | null,
-  "code": string | null,
-  "cvv": string | null,
-  "amount": number | null,
-  "balance": number | null,
-  "expiry_date": string | null
-}
-
-Rules:
-- store_name: official brand name, prefer Hebrew for Israeli brands
-- code: the main voucher/gift-card code — keep hyphens, strip spaces
-- cvv: security code / PIN (3–4 digits only), or null
-- amount: face value in ILS (numbers only, no currency symbol)
-- balance: remaining balance if shown separately, otherwise same as amount or null
-- expiry_date: always YYYY-MM-DD. "12/26" → "2026-12-31". "31/12/2026" → "2026-12-31"
-- For Israeli super-vouchers use the exact name: BuyMe | תו הזהב | תו פלוס | נופשונית | Fun Online | גיפט קארד ישראל
-- If a field is absent, return null — never an empty string
-`
-
-const IMAGE_PROMPT = `You are an expert at reading Israeli gift cards, vouchers, and store credit. Analyze this image carefully and extract all voucher details.\n${EXTRACTION_SCHEMA}`
-
-const TEXT_PROMPT = `You are an expert at parsing Israeli SMS messages, emails, and receipts about gift cards and vouchers. Extract voucher details from the following text.\n${EXTRACTION_SCHEMA}\n\nText:\n`
-
-// ── Image preparation ─────────────────────────────────────────────────────────
+// ── Image preparation (runs client-side) ──────────────────────────────────────
 
 /**
- * Convert any image file to a JPEG via canvas.
- * - Handles HEIC (Safari), WebP, PNG, etc.
- * - Resizes to at most 1600px on the longest side (Gemini works best ≤ 2MB).
- * - Always returns mimeType = 'image/jpeg'.
+ * Convert any image File to a JPEG via canvas.
+ * Handles HEIC (iPhone), WebP, PNG, etc.
+ * Resizes to max 1600px — keeps well under Gemini's inline-data limit.
  */
-function prepareImage(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' }> {
+export function prepareImage(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const objectUrl = URL.createObjectURL(file)
@@ -66,68 +37,57 @@ function prepareImage(file: File): Promise<{ base64: string; mimeType: 'image/jp
 
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl)
-      reject(new Error(`Cannot decode image (type: ${file.type || 'unknown'})`))
+      reject(new Error(`Cannot decode image — try saving as JPEG or PNG (type: ${file.type || 'unknown'})`))
     }
 
     img.src = objectUrl
   })
 }
 
-// ── JSON parsing ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function parseJsonResponse(raw: string): Partial<ExtractedVoucher> {
-  const cleaned = raw.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim()
-  try {
-    return JSON.parse(cleaned)
-  } catch {
-    const m = cleaned.match(/\{[\s\S]*\}/)
-    if (m) return JSON.parse(m[0])
-    throw new Error(`Gemini returned non-JSON: ${cleaned.slice(0, 120)}`)
-  }
-}
-
-function normaliseDate(d: string): string | undefined {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-  const ts = Date.parse(d)
-  return isNaN(ts) ? undefined : new Date(ts).toISOString().split('T')[0]
-}
-
-function normalise(raw: Partial<ExtractedVoucher>): ExtractedVoucher {
+function normalise(raw: Record<string, unknown>): ExtractedVoucher {
+  function str(v: unknown) { return typeof v === 'string' && v ? v : undefined }
+  function num(v: unknown) { return typeof v === 'number' && v > 0 ? v : undefined }
   return {
-    store_name:  raw.store_name  || undefined,
-    code:        raw.code        || undefined,
-    cvv:         raw.cvv         || undefined,
-    amount:      typeof raw.amount  === 'number' && raw.amount  > 0 ? raw.amount  : undefined,
-    balance:     typeof raw.balance === 'number' && raw.balance > 0 ? raw.balance : undefined,
-    expiry_date: raw.expiry_date ? normaliseDate(raw.expiry_date) : undefined,
+    store_name:  str(raw.store_name),
+    code:        str(raw.code),
+    cvv:         str(raw.cvv),
+    amount:      num(raw.amount),
+    balance:     num(raw.balance),
+    expiry_date: str(raw.expiry_date),
   }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/** Always true — the edge function is always deployed; key availability is server-side. */
 export function isGeminiAvailable(): boolean {
-  return !!GEMINI_API_KEY
+  return true
 }
 
-function getModel() {
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!)
-  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-}
-
+/**
+ * Send an image to the analyze-voucher Edge Function.
+ * The image is converted to JPEG client-side before upload.
+ */
 export async function analyzeVoucherImage(file: File): Promise<ExtractedVoucher> {
-  if (!GEMINI_API_KEY) throw new Error('Gemini API key not configured')
   const { base64, mimeType } = await prepareImage(file)
-  const model = getModel()
-  const result = await model.generateContent([
-    IMAGE_PROMPT,
-    { inlineData: { data: base64, mimeType } },
-  ])
-  return normalise(parseJsonResponse(result.response.text()))
+  const { data, error } = await supabase.functions.invoke('analyze-voucher', {
+    body: { image_base64: base64, mime_type: mimeType },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return normalise(data as Record<string, unknown>)
 }
 
+/**
+ * Send SMS / free text to the analyze-voucher Edge Function.
+ */
 export async function analyzeVoucherText(text: string): Promise<ExtractedVoucher> {
-  if (!GEMINI_API_KEY) throw new Error('Gemini API key not configured')
-  const model = getModel()
-  const result = await model.generateContent(TEXT_PROMPT + text)
-  return normalise(parseJsonResponse(result.response.text()))
+  const { data, error } = await supabase.functions.invoke('analyze-voucher', {
+    body: { text },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return normalise(data as Record<string, unknown>)
 }
