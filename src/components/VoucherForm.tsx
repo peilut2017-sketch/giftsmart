@@ -5,7 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus } from 'lucide-react'
+import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
 
@@ -45,7 +46,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
+  const [smsLoading, setSmsLoading] = useState(false)
   const [showImageMenu, setShowImageMenu] = useState(false)
+  const geminiAvailable = isGeminiAvailable()
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const imageCameraRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
@@ -129,9 +132,19 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setShowScanner(false)
   }
 
+  function applyExtracted(extracted: { store_name?: string; amount?: number; balance?: number; code?: string; cvv?: string; expiry_date?: string }) {
+    let found = 0
+    if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name); found++ }
+    if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()); found++ }
+    if (extracted.balance && !extracted.amount) { setBalance(extracted.balance.toString()); found++ }
+    if (extracted.code) { setCode(extracted.code); found++ }
+    if (extracted.cvv) { setCvv(extracted.cvv); found++ }
+    if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); found++ }
+    return found
+  }
+
   async function handleImageOCR(file: File) {
     if (!file.type.startsWith('image/')) return toast.error('יש לבחור קובץ תמונה')
-    // Check monthly scan limit
     const scanKey = OCR_STORAGE_KEY()
     const scansThisMonth = parseInt(localStorage.getItem(scanKey) || '0')
     if (scansThisMonth >= limits.maxScansPerMonth) {
@@ -139,37 +152,54 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       return
     }
     setOcrLoading(true)
-    const toastId = toast.loading('מנתח תמונה... (עד 15 שניות)')
+    const usingGemini = isGeminiAvailable()
+    const toastId = toast.loading(usingGemini ? 'מנתח תמונה עם AI...' : 'מנתח תמונה... (עד 15 שניות)')
     try {
-      // Lazy-load Tesseract to avoid bloating the main bundle
-      const { createWorker } = await import('tesseract.js')
-      const worker = await createWorker(['heb', 'eng'])
-      const url = URL.createObjectURL(file)
-      const { data: { text } } = await worker.recognize(url)
-      URL.revokeObjectURL(url)
-      await worker.terminate()
+      let extracted: ReturnType<typeof extractFromSMS>
 
-      if (!text.trim()) {
-        toast.dismiss(toastId)
-        return toast.error('לא ניתן לחלץ טקסט מהתמונה')
+      if (usingGemini) {
+        extracted = await analyzeVoucherImage(file)
+      } else {
+        // Fallback: Tesseract → regex
+        const { createWorker } = await import('tesseract.js')
+        const worker = await createWorker(['heb', 'eng'])
+        const url = URL.createObjectURL(file)
+        const { data: { text } } = await worker.recognize(url)
+        URL.revokeObjectURL(url)
+        await worker.terminate()
+        if (!text.trim()) {
+          toast.dismiss(toastId)
+          return toast.error('לא ניתן לחלץ טקסט מהתמונה')
+        }
+        extracted = extractFromSMS(text)
       }
 
-      const extracted = extractFromSMS(text)
-      let found = 0
-      if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name); found++ }
-      if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()); found++ }
-      if (extracted.code) { setCode(extracted.code); found++ }
-      if (extracted.cvv) { setCvv(extracted.cvv); found++ }
-      if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); found++ }
+      // Increment scan counter
+      localStorage.setItem(scanKey, (scansThisMonth + 1).toString())
 
-      // Count this scan against the monthly limit
-      const scanKey2 = OCR_STORAGE_KEY()
-      localStorage.setItem(scanKey2, (parseInt(localStorage.getItem(scanKey2) || '0') + 1).toString())
-
+      const found = applyExtracted(extracted)
       toast.dismiss(toastId)
-      if (found > 0) toast.success(`חולצו ${found} פרטים מהתמונה`)
-      else toast('זוהה טקסט אך לא נמצאו פרטי שובר — נסה תמונה ברורה יותר', { icon: '🔍' })
-    } catch (err) {
+      if (found > 0) toast.success(`זוהו ${found} פרטים${usingGemini ? ' (AI)' : ''}`)
+      else toast('לא זוהו פרטי שובר — נסה תמונה ברורה יותר', { icon: '🔍' })
+    } catch {
+      // Gemini failed — try Tesseract as last resort
+      if (isGeminiAvailable()) {
+        try {
+          const { createWorker } = await import('tesseract.js')
+          const worker = await createWorker(['heb', 'eng'])
+          const url = URL.createObjectURL(file)
+          const { data: { text } } = await worker.recognize(url)
+          URL.revokeObjectURL(url)
+          await worker.terminate()
+          const extracted = extractFromSMS(text)
+          localStorage.setItem(scanKey, (scansThisMonth + 1).toString())
+          const found = applyExtracted(extracted)
+          toast.dismiss(toastId)
+          if (found > 0) toast.success(`זוהו ${found} פרטים (OCR)`)
+          else toast.error('לא זוהו פרטי שובר')
+          return
+        } catch {}
+      }
       toast.dismiss(toastId)
       toast.error('שגיאה בניתוח התמונה')
     } finally {
@@ -177,15 +207,31 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     }
   }
 
-  function handleSMSExtract() {
-    const extracted = extractFromSMS(smsText)
-    if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name) }
-    if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()) }
-    if (extracted.code) setCode(extracted.code)
-    if (extracted.cvv) setCvv(extracted.cvv)
-    if (extracted.expiry_date) setExpiryDate(extracted.expiry_date)
+  async function handleSMSExtract() {
+    if (!smsText.trim()) return
+    if (geminiAvailable) {
+      setSmsLoading(true)
+      const toastId = toast.loading('מנתח טקסט עם AI...')
+      try {
+        const extracted = await analyzeVoucherText(smsText)
+        const found = applyExtracted(extracted)
+        toast.dismiss(toastId)
+        if (found > 0) toast.success(`זוהו ${found} פרטים (AI)`)
+        else toast('לא זוהו פרטי שובר — נסה להדביק טקסט אחר', { icon: '🔍' })
+      } catch {
+        toast.dismiss(toastId)
+        const extracted = extractFromSMS(smsText)
+        applyExtracted(extracted)
+        toast.success('פרטים חולצו')
+      } finally {
+        setSmsLoading(false)
+      }
+    } else {
+      const extracted = extractFromSMS(smsText)
+      applyExtracted(extracted)
+      toast.success('פרטים חולצו בהצלחה!')
+    }
     setShowSMSInput(false)
-    toast.success('פרטים חולצו בהצלחה!')
   }
 
   function toggleCat(cat: string) {
@@ -277,7 +323,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-medium"
               type="button"
             >
-              <Clipboard className="w-3.5 h-3.5" /> הדבק SMS
+              <Clipboard className="w-3.5 h-3.5" />
+              הדבק SMS
+              {geminiAvailable && <Sparkles className="w-3 h-3 text-purple-400" />}
             </button>
             <div className="relative" ref={imageMenuRef}>
               <button
@@ -288,6 +336,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               >
                 <ImagePlus className="w-3.5 h-3.5" />
                 {ocrLoading ? 'מנתח...' : 'סרוק תמונה'}
+                {geminiAvailable && !ocrLoading && <Sparkles className="w-3 h-3 text-purple-400" />}
               </button>
               {showImageMenu && (
                 <div className="absolute top-full mt-1 right-0 bg-white rounded-2xl shadow-lg border border-gray-100 py-1 z-50 min-w-[140px]">
@@ -345,11 +394,16 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             />
             <button
               onClick={handleSMSExtract}
-              disabled={!smsText.trim()}
-              className="mt-2 w-full bg-blue-500 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50"
+              disabled={!smsText.trim() || smsLoading}
+              className="mt-2 w-full bg-blue-500 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
               type="button"
             >
-              חלץ פרטים
+              {smsLoading ? 'מנתח...' : (
+                <>
+                  {geminiAvailable && <Sparkles className="w-3.5 h-3.5" />}
+                  חלץ פרטים {geminiAvailable ? '(AI)' : ''}
+                </>
+              )}
             </button>
           </div>
         )}
