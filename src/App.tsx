@@ -2,7 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
+import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { useExpiryNotifications } from './hooks/useNotifications'
+import UpgradeSheet from './components/UpgradeSheet'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
 import CheckoutPage from './pages/CheckoutPage'
@@ -24,8 +26,9 @@ const A11Y_WIDGET_KEY = 'a11y_widget_enabled'
 
 function NotificationBridge() {
   const { vouchers } = useVouchers()
-  useExpiryNotifications(vouchers)
-  return null
+  const { isPro } = useSubscription()
+  useExpiryNotifications(vouchers, isPro)
+  return <UpgradeSheet />
 }
 
 function AppRoutes() {
@@ -77,6 +80,7 @@ function AppRoutes() {
   }
 
   return (
+    <SubscriptionProvider>
     <VoucherProvider>
       <NotificationBridge />
       <WelcomeModal userId={user!.id} />
@@ -99,6 +103,7 @@ function AppRoutes() {
       </div>
       {widgetEnabled && <AccessibilityWidget />}
     </VoucherProvider>
+    </SubscriptionProvider>
   )
 }
 

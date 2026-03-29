@@ -3,12 +3,21 @@ import type { Voucher } from '../types'
 
 const NOTIF_KEY = 'last_expiry_notification'
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
+const EXPIRY_WINDOW_DAYS = 30
 
+async function showNotification(title: string, options: NotificationOptions) {
+  try {
+    const reg = await navigator.serviceWorker.ready
+    await reg.showNotification(title, options)
+  } catch {
+    new Notification(title, options)
+  }
+}
 
-export function useExpiryNotifications(vouchers: Voucher[]) {
+export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
   useEffect(() => {
+    if (!isPro) return
     if (!('Notification' in window)) return
-    if (vouchers.length === 0) return
 
     async function checkAndNotify() {
       // Throttle: don't re-notify within 24h
@@ -21,30 +30,38 @@ export function useExpiryNotifications(vouchers: Voucher[]) {
       }
       if (permission !== 'granted') return
 
-      const now = new Date()
-      const nowTime = now.getTime()
+      localStorage.setItem(NOTIF_KEY, Date.now().toString())
 
-      // Group vouchers by threshold buckets
+      const nowTime = Date.now()
       const expiring: Voucher[] = []
       for (const v of vouchers) {
         if (!v.expiry_date) continue
-        const exp = new Date(v.expiry_date)
-        const daysLeft = Math.ceil((exp.getTime() - nowTime) / (1000 * 60 * 60 * 24))
-        if (daysLeft >= 0 && daysLeft <= 14) expiring.push(v)
+        const daysLeft = Math.ceil((new Date(v.expiry_date).getTime() - nowTime) / (1000 * 60 * 60 * 24))
+        if (daysLeft >= 0 && daysLeft <= EXPIRY_WINDOW_DAYS) expiring.push(v)
       }
 
-      if (expiring.length === 0) return
+      const baseOptions: NotificationOptions = {
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        tag: 'expiry-warning',
+        data: { url: '/' },
+      }
 
-      localStorage.setItem(NOTIF_KEY, Date.now().toString())
+      if (expiring.length === 0) {
+        await showNotification('✅ אין שוברים שעומדים לפוג', {
+          ...baseOptions,
+          body: 'לא נמצאו שוברים שיפגו בחודש הקרוב',
+        })
+        return
+      }
 
-      const urgent = expiring.filter(v => {
-        const d = Math.ceil((new Date(v.expiry_date!).getTime() - nowTime) / (1000 * 60 * 60 * 24))
-        return d <= 3
-      })
+      const urgent = expiring.filter(v =>
+        Math.ceil((new Date(v.expiry_date!).getTime() - nowTime) / (1000 * 60 * 60 * 24)) <= 3
+      )
 
       const title = urgent.length > 0
         ? `🚨 ${urgent.length} שובר${urgent.length > 1 ? 'ים' : ''} פגים בקרוב!`
-        : `⚠️ ${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך 14 יום`
+        : `⚠️ ${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${EXPIRY_WINDOW_DAYS} יום`
 
       const body = expiring
         .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
@@ -55,27 +72,11 @@ export function useExpiryNotifications(vouchers: Voucher[]) {
         })
         .join('\n')
 
-      const notifOptions: NotificationOptions = {
-        body,
-        icon: '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
-        tag: 'expiry-warning',
-        requireInteraction: urgent.length > 0,
-        data: { url: '/' },
-      }
-
-      // Prefer SW notification (works in background on Android/desktop)
-      try {
-        const reg = await navigator.serviceWorker.ready
-        await reg.showNotification(title, notifOptions)
-      } catch {
-        // Fallback to regular Notification API
-        new Notification(title, notifOptions)
-      }
+      await showNotification(title, { ...baseOptions, body, requireInteraction: urgent.length > 0 })
     }
 
     checkAndNotify()
-  }, [vouchers])
+  }, [vouchers, isPro])
 }
 
 // Request push permission proactively (call from Settings page or first launch)

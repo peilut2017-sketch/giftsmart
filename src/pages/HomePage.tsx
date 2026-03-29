@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useSubscription } from '../contexts/SubscriptionContext'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
@@ -18,6 +19,7 @@ type SortDir = 'asc' | 'desc'
 export default function HomePage() {
   const navigate = useNavigate()
   const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
+  const { limits, openUpgradeSheet } = useSubscription()
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [search, setSearch] = useState(() => localStorage.getItem('hpSearch') || '')
@@ -557,9 +559,24 @@ export default function HomePage() {
 
       {/* FAB */}
       {!isSelectMode && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-40">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-40 flex flex-col items-center gap-1">
+          {limits.maxVouchers < Infinity && vouchers.length >= limits.maxVouchers - 3 && (
+            <button
+              onClick={() => openUpgradeSheet()}
+              className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 shadow"
+            >
+              {vouchers.length}/{limits.maxVouchers} שוברים
+            </button>
+          )}
           <button
-            onClick={() => { setEditingVoucher(undefined); setShowForm(true) }}
+            onClick={() => {
+              if (vouchers.length >= limits.maxVouchers) {
+                openUpgradeSheet(`הגעת למגבלת ${limits.maxVouchers} השוברים בחינמי`)
+                return
+              }
+              setEditingVoucher(undefined)
+              setShowForm(true)
+            }}
             className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full shadow-xl flex items-center justify-center hover:shadow-2xl transition-all active:scale-95"
           >
             <svg viewBox="0 0 28 28" className="w-7 h-7" fill="none">

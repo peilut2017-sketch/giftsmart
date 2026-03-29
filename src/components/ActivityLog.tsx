@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useVouchers, type ActivityLogEntry } from '../contexts/VoucherContext'
+import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
-import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Undo2 } from 'lucide-react'
+import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Undo2, Zap } from 'lucide-react'
 import { formatCurrency } from '../utils/helpers'
 import toast from 'react-hot-toast'
 
@@ -56,6 +57,7 @@ const PAGE = 30
 
 export default function ActivityLog() {
   const { getActivityLog, updateVoucher, archiveVoucher, unarchiveVoucher } = useVouchers()
+  const { limits, openUpgradeSheet } = useSubscription()
   const [entries, setEntries] = useState<ActivityLogEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [tableError, setTableError] = useState(false)
@@ -199,41 +201,57 @@ CREATE POLICY "Users can manage own activity log"
 
           ) : (
             <div className="divide-y divide-gray-50">
-              {entries.map(entry => {
-                const meta = ACTION_META[entry.action]
-                const subtitle = buildSubtitle(entry)
-                const canUndo = UNDOABLE.includes(entry.action) && !!entry.voucher_id
-                return (
-                  <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
-                      <meta.Icon className={`w-4 h-4 ${meta.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-sm font-medium text-gray-800 truncate">{entry.voucher_name}</span>
-                        <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{timeAgo(entry.created_at)}</span>
+              {entries
+                .filter(e => {
+                  if (limits.historyDays === Infinity) return true
+                  const cutoff = Date.now() - limits.historyDays * 24 * 60 * 60 * 1000
+                  return new Date(e.created_at).getTime() >= cutoff
+                })
+                .map(entry => {
+                  const meta = ACTION_META[entry.action]
+                  const subtitle = buildSubtitle(entry)
+                  const canUndo = UNDOABLE.includes(entry.action) && !!entry.voucher_id
+                  return (
+                    <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                        <meta.Icon className={`w-4 h-4 ${meta.color}`} />
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className={`text-xs font-medium ${meta.color}`}>{meta.label}</span>
-                        {subtitle && <span className="text-xs text-gray-400">· {subtitle}</span>}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-medium text-gray-800 truncate">{entry.voucher_name}</span>
+                          <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{timeAgo(entry.created_at)}</span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className={`text-xs font-medium ${meta.color}`}>{meta.label}</span>
+                          {subtitle && <span className="text-xs text-gray-400">· {subtitle}</span>}
+                        </div>
                       </div>
+                      {canUndo && (
+                        <button
+                          onClick={() => handleUndo(entry)}
+                          disabled={undoingId === entry.id}
+                          className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-green-700 disabled:opacity-40 transition-colors"
+                          aria-label={`שחזר פעולה: ${meta.label}`}
+                        >
+                          <Undo2 className={`w-3.5 h-3.5 ${undoingId === entry.id ? 'animate-spin' : ''}`} />
+                          שחזר
+                        </button>
+                      )}
                     </div>
-                    {canUndo && (
-                      <button
-                        onClick={() => handleUndo(entry)}
-                        disabled={undoingId === entry.id}
-                        className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-green-700 disabled:opacity-40 transition-colors"
-                        aria-label={`שחזר פעולה: ${meta.label}`}
-                      >
-                        <Undo2 className={`w-3.5 h-3.5 ${undoingId === entry.id ? 'animate-spin' : ''}`} />
-                        שחזר
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
+                  )
+                })}
 
-              {entries.length >= limit && (
+              {limits.historyDays < Infinity && (
+                <button
+                  onClick={() => openUpgradeSheet('שדרג לPro לצפייה בכל ההיסטוריה')}
+                  className="w-full flex items-center justify-center gap-2 py-3 text-xs text-amber-600 hover:bg-amber-50 transition-colors"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  מציג {limits.historyDays} ימים אחרונים בלבד — שדרג לצפייה בכל ההיסטוריה
+                </button>
+              )}
+
+              {limits.historyDays === Infinity && entries.length >= limit && (
                 <button
                   onClick={() => { const next = limit + PAGE; setLimit(next); load(next) }}
                   className="w-full py-3 text-xs text-green-600 hover:bg-green-50 transition-colors"

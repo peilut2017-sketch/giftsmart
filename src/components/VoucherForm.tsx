@@ -2,11 +2,14 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
+
+const OCR_STORAGE_KEY = () => `ocr_scans_${new Date().toISOString().slice(0, 7)}` // YYYY-MM
 
 interface Props {
   voucher?: Voucher
@@ -17,6 +20,7 @@ interface Props {
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
   const { profile } = useAuth()
+  const { limits, openUpgradeSheet } = useSubscription()
   const showVoucherValue = profile?.show_voucher_value ?? false
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
@@ -127,6 +131,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   async function handleImageOCR(file: File) {
     if (!file.type.startsWith('image/')) return toast.error('יש לבחור קובץ תמונה')
+    // Check monthly scan limit
+    const scanKey = OCR_STORAGE_KEY()
+    const scansThisMonth = parseInt(localStorage.getItem(scanKey) || '0')
+    if (scansThisMonth >= limits.maxScansPerMonth) {
+      openUpgradeSheet(`הגעת למגבלת ${limits.maxScansPerMonth} הסריקות לחודש זה`)
+      return
+    }
     setOcrLoading(true)
     const toastId = toast.loading('מנתח תמונה... (עד 15 שניות)')
     try {
@@ -150,6 +161,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       if (extracted.code) { setCode(extracted.code); found++ }
       if (extracted.cvv) { setCvv(extracted.cvv); found++ }
       if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); found++ }
+
+      // Count this scan against the monthly limit
+      const scanKey2 = OCR_STORAGE_KEY()
+      localStorage.setItem(scanKey2, (parseInt(localStorage.getItem(scanKey2) || '0') + 1).toString())
 
       toast.dismiss(toastId)
       if (found > 0) toast.success(`חולצו ${found} פרטים מהתמונה`)

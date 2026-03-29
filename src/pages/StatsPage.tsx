@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useSubscription } from '../contexts/SubscriptionContext'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
-import { BarChart2, TrendingUp, AlertTriangle, Archive, Users, Download, Wallet } from 'lucide-react'
+import { BarChart2, TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
@@ -9,6 +10,7 @@ import autoTable from 'jspdf-autotable'
 
 export default function StatsPage() {
   const { vouchers, archivedVouchers } = useVouchers()
+  const { limits, openUpgradeSheet } = useSubscription()
 
   const stats = useMemo(() => {
     const active = vouchers.filter(v => !v.is_archived)
@@ -186,13 +188,23 @@ export default function StatsPage() {
             <BarChart2 className="w-5 h-5" />
             סטטיסטיקות
           </h1>
-          <button
-            onClick={exportPDF}
-            className="flex items-center gap-1.5 text-sm bg-green-50 text-green-700 px-3 py-2 rounded-xl font-medium hover:bg-green-100 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            PDF
-          </button>
+          {limits.canExport ? (
+            <button
+              onClick={exportPDF}
+              className="flex items-center gap-1.5 text-sm bg-green-50 text-green-700 px-3 py-2 rounded-xl font-medium hover:bg-green-100 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              PDF
+            </button>
+          ) : (
+            <button
+              onClick={() => openUpgradeSheet('ייצוא PDF זמין במנוי Pro')}
+              className="flex items-center gap-1.5 text-sm bg-amber-50 text-amber-600 px-3 py-2 rounded-xl font-medium hover:bg-amber-100 transition-colors"
+            >
+              <Zap className="w-4 h-4" />
+              PDF · Pro
+            </button>
+          )}
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useVouchers, type ActivityLogEntry, type VoucherShare } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useSubscription } from '../contexts/SubscriptionContext'
 import { sendVoucherSharedEmail, sendVoucherShareInviteEmail } from '../lib/emailService'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
@@ -20,6 +21,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog } = useVouchers()
+  const { limits, openUpgradeSheet } = useSubscription()
 
   const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
   const isSharedVoucher = sharedWithMe.some(v => v.id === id)
@@ -153,6 +155,10 @@ export default function CheckoutPage() {
 
   async function handleShareWithUser() {
     if (!voucher || !shareEmail.trim()) return
+    if (voucherShares.length >= limits.maxSharedVouchers) {
+      openUpgradeSheet(`הגעת למגבלת ${limits.maxSharedVouchers} השיתופים בחינמי`)
+      return
+    }
     setShareEmailLoading(true)
     try {
       const result = await shareVoucherWithUser(voucher.id, shareEmail.trim())
