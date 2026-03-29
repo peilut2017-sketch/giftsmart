@@ -31,7 +31,9 @@ interface Coupon {
   code: string
   name: string
   type: 'general' | 'private'
+  discount_type: 'months_free' | 'days_free' | 'percent' | 'fixed'
   discount_value: number
+  stripe_coupon_code: string | null
   max_uses: number | null
   uses_count: number
   valid_until: string | null
@@ -90,8 +92,10 @@ export default function AdminPage() {
   const [showAddCoupon, setShowAddCoupon] = useState(false)
   const [couponForm, setCouponForm] = useState({
     code: '', name: '', type: 'general' as 'general' | 'private',
+    discount_type: 'months_free' as 'months_free' | 'days_free' | 'percent' | 'fixed',
     discount_value: 1, max_uses: '', valid_until: '',
     restricted_to_email: '', first_time_only: false,
+    stripe_coupon_code: '',
   })
   // Messages
   const [messages, setMessages] = useState<SupportMessage[]>([])
@@ -125,16 +129,18 @@ export default function AdminPage() {
       p_code: couponForm.code,
       p_name: couponForm.name,
       p_type: couponForm.type,
+      p_discount_type: couponForm.discount_type,
       p_discount_value: couponForm.discount_value,
       p_max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
       p_valid_until: couponForm.valid_until ? new Date(couponForm.valid_until).toISOString() : null,
       p_restricted_email: couponForm.restricted_to_email || null,
       p_first_time_only: couponForm.first_time_only,
+      p_stripe_coupon_code: couponForm.stripe_coupon_code || null,
     })
     if (error) return toast.error('שגיאה: ' + error.message)
     setCoupons(prev => [data, ...prev])
     setShowAddCoupon(false)
-    setCouponForm({ code: '', name: '', type: 'general', discount_value: 1, max_uses: '', valid_until: '', restricted_to_email: '', first_time_only: false })
+    setCouponForm({ code: '', name: '', type: 'general', discount_type: 'months_free', discount_value: 1, max_uses: '', valid_until: '', restricted_to_email: '', first_time_only: false, stripe_coupon_code: '' })
     toast.success('קופון נוצר!')
   }
 
@@ -618,7 +624,7 @@ export default function AdminPage() {
                       className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <select
                       value={couponForm.type}
                       onChange={e => setCouponForm(f => ({ ...f, type: e.target.value as any }))}
@@ -627,14 +633,30 @@ export default function AdminPage() {
                       <option value="general">כללי</option>
                       <option value="private">פרטי</option>
                     </select>
+                    <select
+                      value={couponForm.discount_type}
+                      onChange={e => setCouponForm(f => ({ ...f, discount_type: e.target.value as any }))}
+                      className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    >
+                      <option value="months_free">🎁 חודשים חינם</option>
+                      <option value="days_free">📅 ימים חינם</option>
+                      <option value="percent">% הנחה באחוזים</option>
+                      <option value="fixed">₪ הנחה קבועה</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-1 border rounded-xl px-3">
                       <input
-                        type="number" min={1} max={36}
+                        type="number" min={1} max={couponForm.discount_type === 'percent' ? 100 : 999}
                         value={couponForm.discount_value}
                         onChange={e => setCouponForm(f => ({ ...f, discount_value: parseInt(e.target.value) || 1 }))}
-                        className="w-full text-sm focus:outline-none"
+                        className="w-full text-sm py-2 focus:outline-none"
                       />
-                      <span className="text-xs text-gray-400 whitespace-nowrap">חודשים</span>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {couponForm.discount_type === 'months_free' ? 'חודשים' :
+                         couponForm.discount_type === 'days_free' ? 'ימים' :
+                         couponForm.discount_type === 'percent' ? '%' : '₪'}
+                      </span>
                     </div>
                     <input
                       type="number" min={1}
@@ -644,6 +666,15 @@ export default function AdminPage() {
                       className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
                     />
                   </div>
+                  {(couponForm.discount_type === 'percent' || couponForm.discount_type === 'fixed') && (
+                    <input
+                      value={couponForm.stripe_coupon_code}
+                      onChange={e => setCouponForm(f => ({ ...f, stripe_coupon_code: e.target.value.toUpperCase() }))}
+                      placeholder="קוד קופון Stripe (אופציונלי)"
+                      className="w-full px-3 py-2 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      dir="ltr"
+                    />
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="date"
@@ -696,10 +727,16 @@ export default function AdminPage() {
                             <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded-md">חדשים</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
-                          <span>🎁 {c.discount_value} חודשי Pro</span>
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400 flex-wrap">
+                          <span>
+                            {c.discount_type === 'months_free' ? `🎁 ${c.discount_value} חודשי Pro` :
+                             c.discount_type === 'days_free' ? `📅 ${c.discount_value} ימי Pro` :
+                             c.discount_type === 'percent' ? `% ${c.discount_value}% הנחה` :
+                             `₪ ${c.discount_value}₪ הנחה`}
+                          </span>
                           <span>📊 {c.uses_count}{c.max_uses ? `/${c.max_uses}` : ''} שימושים</span>
                           {c.valid_until && <span>⏰ עד {formatDate(c.valid_until)}</span>}
+                          {c.stripe_coupon_code && <span className="font-mono text-purple-400">{c.stripe_coupon_code}</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">

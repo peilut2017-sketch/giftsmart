@@ -24,11 +24,17 @@ const COUPON_ERRORS: Record<string, string> = {
   NOT_FIRST_TIME: 'קופון זה מיועד למשתמשים חדשים בלבד',
 }
 
+const BASE_PRICE = 9
+
+type TimeSuccess = { kind: 'time'; label: string; until: string }
+type DiscountApplied = { kind: 'discount'; discount_type: 'percent' | 'fixed'; value: number; discountedPrice: number; stripeCode: string | null }
+
 export default function UpgradeSheet() {
   const { upgradeSheetOpen, closeUpgradeSheet, upgradeReason, refreshPlan } = useSubscription()
   const [couponCode, setCouponCode] = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
-  const [couponSuccess, setCouponSuccess] = useState<{ months: number; until: string } | null>(null)
+  const [timeSuccess, setTimeSuccess] = useState<TimeSuccess | null>(null)
+  const [discountApplied, setDiscountApplied] = useState<DiscountApplied | null>(null)
 
   if (!upgradeSheetOpen) return null
 
@@ -41,13 +47,27 @@ export default function UpgradeSheet() {
     if (!data?.success) {
       return toast.error(COUPON_ERRORS[data?.error] || 'קוד לא תקף')
     }
-    // Success
-    const until = data.valid_until ? new Date(data.valid_until).toLocaleDateString('he-IL') : ''
-    setCouponSuccess({ months: data.months_added, until })
-    await refreshPlan()
+
+    if (data.grant_type === 'discount') {
+      const value = data.discount_value as number
+      const discountedPrice = data.discount_type === 'percent'
+        ? Math.max(0, parseFloat((BASE_PRICE * (1 - value / 100)).toFixed(2)))
+        : Math.max(0, BASE_PRICE - value)
+      setDiscountApplied({ kind: 'discount', discount_type: data.discount_type, value, discountedPrice, stripeCode: data.stripe_coupon_code || null })
+      toast.success('קוד הנחה הוחל!')
+    } else {
+      // grant_type === 'time' (months_free or days_free)
+      const until = data.valid_until ? new Date(data.valid_until).toLocaleDateString('he-IL') : ''
+      const label = data.days_added
+        ? `${data.days_added} יום${data.days_added > 1 ? 'ים' : ''} Pro הופעלו בהצלחה`
+        : `${data.months_added} חודש${data.months_added > 1 ? 'ים' : ''} Pro הופעלו בהצלחה`
+      setTimeSuccess({ kind: 'time', label, until })
+      await refreshPlan()
+    }
   }
 
-  if (couponSuccess) {
+  // Full-screen success for time-based coupons
+  if (timeSuccess) {
     return (
       <>
         <div className="fixed inset-0 bg-black/50 z-40" onClick={closeUpgradeSheet} />
@@ -58,15 +78,13 @@ export default function UpgradeSheet() {
             </div>
             <div>
               <p className="text-xl font-extrabold text-gray-900">ברוך הבא ל-Pro! 🎉</p>
-              <p className="text-sm text-gray-500 mt-1">
-                {couponSuccess.months} חודש{couponSuccess.months > 1 ? 'ים' : ''} Pro הופעלו בהצלחה
-              </p>
-              {couponSuccess.until && (
-                <p className="text-xs text-gray-400 mt-0.5">תוקף עד {couponSuccess.until}</p>
+              <p className="text-sm text-gray-500 mt-1">{timeSuccess.label}</p>
+              {timeSuccess.until && (
+                <p className="text-xs text-gray-400 mt-0.5">תוקף עד {timeSuccess.until}</p>
               )}
             </div>
             <button
-              onClick={() => { setCouponSuccess(null); closeUpgradeSheet() }}
+              onClick={() => { setTimeSuccess(null); closeUpgradeSheet() }}
               className="w-full bg-green-500 text-white py-3 rounded-2xl font-bold text-base"
             >
               מצוין!
@@ -76,6 +94,14 @@ export default function UpgradeSheet() {
       </>
     )
   }
+
+  const stripeLink = discountApplied?.stripeCode
+    ? `${STRIPE_PAYMENT_LINK}?prefilled_promo_code=${discountApplied.stripeCode}`
+    : STRIPE_PAYMENT_LINK
+
+  const ctaLabel = discountApplied
+    ? `שדרג עכשיו — ₪${discountApplied.discountedPrice}/חודש`
+    : 'שדרג עכשיו — ₪9/חודש'
 
   return (
     <>
@@ -100,10 +126,25 @@ export default function UpgradeSheet() {
           {upgradeReason && (
             <p className="text-sm text-white/80 mt-1">{upgradeReason}</p>
           )}
-          <div className="mt-3">
-            <span className="text-4xl font-black">₪9</span>
-            <span className="text-white/80 text-sm"> / חודש</span>
-          </div>
+          {discountApplied ? (
+            <div className="mt-3">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-2xl font-black line-through opacity-60">₪{BASE_PRICE}</span>
+                <span className="text-4xl font-black">₪{discountApplied.discountedPrice}</span>
+              </div>
+              <span className="text-white/80 text-sm"> / חודש</span>
+              <div className="mt-1 inline-block bg-white/25 rounded-full px-3 py-0.5 text-xs font-bold">
+                {discountApplied.discount_type === 'percent'
+                  ? `✓ קוד הנחה — ${discountApplied.value}% הנחה`
+                  : `✓ קוד הנחה — ₪${discountApplied.value} הנחה`}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3">
+              <span className="text-4xl font-black">₪9</span>
+              <span className="text-white/80 text-sm"> / חודש</span>
+            </div>
+          )}
           <p className="text-xs text-white/70 mt-1">ביטול בכל עת • ללא התחייבות</p>
         </div>
 
@@ -125,38 +166,49 @@ export default function UpgradeSheet() {
         {/* CTA */}
         <div className="px-6 pb-4 pt-2 space-y-3">
           <a
-            href={STRIPE_PAYMENT_LINK}
+            href={stripeLink}
             target="_blank"
             rel="noopener noreferrer"
             className="block w-full bg-gradient-to-r from-amber-400 to-orange-500 text-white text-center font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform"
             onClick={closeUpgradeSheet}
           >
-            שדרג עכשיו — ₪9/חודש
+            {ctaLabel}
           </a>
 
           {/* Coupon code */}
-          <div className="border border-gray-200 rounded-2xl p-3 space-y-2">
-            <p className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5" /> יש לך קוד קופון?
-            </p>
-            <div className="flex gap-2">
-              <input
-                value={couponCode}
-                onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="הזן קוד..."
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-300 text-left"
-                dir="ltr"
-                onKeyDown={e => e.key === 'Enter' && handleRedeemCoupon()}
-              />
-              <button
-                onClick={handleRedeemCoupon}
-                disabled={couponLoading || !couponCode.trim()}
-                className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 active:scale-95 transition-transform"
-              >
-                {couponLoading ? '...' : 'מימוש'}
-              </button>
+          {!discountApplied && (
+            <div className="border border-gray-200 rounded-2xl p-3 space-y-2">
+              <p className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5" /> יש לך קוד קופון?
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={couponCode}
+                  onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="הזן קוד..."
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-300 text-left"
+                  dir="ltr"
+                  onKeyDown={e => e.key === 'Enter' && handleRedeemCoupon()}
+                />
+                <button
+                  onClick={handleRedeemCoupon}
+                  disabled={couponLoading || !couponCode.trim()}
+                  className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 active:scale-95 transition-transform"
+                >
+                  {couponLoading ? '...' : 'מימוש'}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {discountApplied && (
+            <button
+              onClick={() => setDiscountApplied(null)}
+              className="block w-full text-center text-xs text-gray-400 py-1"
+            >
+              הסר קוד הנחה
+            </button>
+          )}
 
           <button
             onClick={closeUpgradeSheet}
