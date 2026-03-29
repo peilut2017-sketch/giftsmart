@@ -181,10 +181,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       toast.dismiss(toastId)
       if (found > 0) toast.success(`זוהו ${found} פרטים${usingGemini ? ' (AI)' : ''}`)
       else toast('לא זוהו פרטי שובר — נסה תמונה ברורה יותר', { icon: '🔍' })
-    } catch {
+    } catch (err) {
       // Gemini failed — try Tesseract as last resort
       if (isGeminiAvailable()) {
         try {
+          toast.dismiss(toastId)
+          const toastId2 = toast.loading('מנסה OCR...')
           const { createWorker } = await import('tesseract.js')
           const worker = await createWorker(['heb', 'eng'])
           const url = URL.createObjectURL(file)
@@ -194,14 +196,21 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           const extracted = extractFromSMS(text)
           localStorage.setItem(scanKey, (scansThisMonth + 1).toString())
           const found = applyExtracted(extracted)
-          toast.dismiss(toastId)
+          toast.dismiss(toastId2)
           if (found > 0) toast.success(`זוהו ${found} פרטים (OCR)`)
-          else toast.error('לא זוהו פרטי שובר')
+          else toast('לא זוהו פרטי שובר — נסה תמונה ברורה יותר', { icon: '🔍' })
           return
         } catch {}
       }
       toast.dismiss(toastId)
-      toast.error('שגיאה בניתוח התמונה')
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[OCR]', msg)
+      // Show a hint if it's an HEIC file
+      if (msg.includes('decode') || msg.includes('heic') || msg.includes('heif')) {
+        toast.error('פורמט HEIC לא נתמך — שמור כ-JPEG/PNG ונסה שוב')
+      } else {
+        toast.error('שגיאה בניתוח התמונה — בדוק את מפתח ה-API או נסה תמונה אחרת')
+      }
     } finally {
       setOcrLoading(false)
     }

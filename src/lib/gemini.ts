@@ -1,86 +1,106 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { ExtractedVoucher } from '../utils/smsExtractor'
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim() || undefined
 
-// ── Prompt ──────────────────────────────────────────────────────────────────
+// ── Prompt ────────────────────────────────────────────────────────────────────
 
 const EXTRACTION_SCHEMA = `
-Return ONLY a JSON object (no markdown, no explanation) with these fields:
+Return ONLY a JSON object (no markdown, no explanation) with these exact fields:
 {
-  "store_name": string | null,       // Retailer / brand name (e.g. "זארה", "BuyMe", "Amazon")
-  "code": string | null,             // Voucher/gift-card code — alphanumeric, keep hyphens, remove spaces
-  "cvv": string | null,              // CVV / PIN / security code (3-4 digits)
-  "amount": number | null,           // Original face value in ILS (₪)
-  "balance": number | null,          // Remaining balance if explicitly shown, else same as amount
-  "expiry_date": string | null,      // ISO 8601 date YYYY-MM-DD; last day of month if only month/year given
-  "categories": string[]             // 0-3 tags from: ["מסעדות","אופנה","מזון","בידור","אלקטרוניקה","יופי","ספורט","נסיעות","כללי"]
+  "store_name": string | null,
+  "code": string | null,
+  "cvv": string | null,
+  "amount": number | null,
+  "balance": number | null,
+  "expiry_date": string | null
 }
 
 Rules:
-- store_name: prefer the merchant's official brand name in Hebrew if it's an Israeli brand
-- code: the primary voucher/gift-card code. If multiple codes exist, pick the longest/most prominent
-- If a field is absent or unclear, return null (not empty string)
-- For Israeli super-vouchers (BuyMe, תו הזהב, תו פלוס, נופשונית, Fun Online, גיפט קארד ישראל) use that exact name as store_name
-- expiry_date: if "12/26" → "2026-12-31"; if "31/12/2026" → "2026-12-31"
+- store_name: official brand name, prefer Hebrew for Israeli brands
+- code: the main voucher/gift-card code — keep hyphens, strip spaces
+- cvv: security code / PIN (3–4 digits only), or null
+- amount: face value in ILS (numbers only, no currency symbol)
+- balance: remaining balance if shown separately, otherwise same as amount or null
+- expiry_date: always YYYY-MM-DD. "12/26" → "2026-12-31". "31/12/2026" → "2026-12-31"
+- For Israeli super-vouchers use the exact name: BuyMe | תו הזהב | תו פלוס | נופשונית | Fun Online | גיפט קארד ישראל
+- If a field is absent, return null — never an empty string
 `
 
-const IMAGE_PROMPT = `You are an expert at reading Israeli gift cards, vouchers, and store credit.
-Analyze this image and extract all voucher details.
-${EXTRACTION_SCHEMA}`
+const IMAGE_PROMPT = `You are an expert at reading Israeli gift cards, vouchers, and store credit. Analyze this image carefully and extract all voucher details.\n${EXTRACTION_SCHEMA}`
 
-const TEXT_PROMPT = `You are an expert at parsing Israeli SMS messages, emails, and receipts about gift cards and vouchers.
-Analyze this text and extract all voucher details.
-${EXTRACTION_SCHEMA}
+const TEXT_PROMPT = `You are an expert at parsing Israeli SMS messages, emails, and receipts about gift cards and vouchers. Extract voucher details from the following text.\n${EXTRACTION_SCHEMA}\n\nText:\n`
 
-Text to analyze:
-`
+// ── Image preparation ─────────────────────────────────────────────────────────
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function fileToBase64(file: File): Promise<string> {
+/**
+ * Convert any image file to a JPEG via canvas.
+ * - Handles HEIC (Safari), WebP, PNG, etc.
+ * - Resizes to at most 1600px on the longest side (Gemini works best ≤ 2MB).
+ * - Always returns mimeType = 'image/jpeg'.
+ */
+function prepareImage(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' }> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1]) // strip "data:image/...;base64,"
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      const MAX = 1600
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        if (width >= height) { height = Math.round(height * MAX / width); width = MAX }
+        else                 { width = Math.round(width  * MAX / height); height = MAX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('Canvas not available')); return }
+      ctx.drawImage(img, 0, 0, width, height)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.88)
+      const base64 = dataUrl.split(',')[1]
+      if (!base64) { reject(new Error('Canvas toDataURL failed')); return }
+      resolve({ base64, mimeType: 'image/jpeg' })
     }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error(`Cannot decode image (type: ${file.type || 'unknown'})`))
+    }
+
+    img.src = objectUrl
   })
 }
 
-function parseJsonResponse(raw: string): Partial<ExtractedVoucher & { categories?: string[] }> {
-  // Strip any markdown fences Gemini might add despite instructions
-  const cleaned = raw.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+// ── JSON parsing ──────────────────────────────────────────────────────────────
+
+function parseJsonResponse(raw: string): Partial<ExtractedVoucher> {
+  const cleaned = raw.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim()
   try {
     return JSON.parse(cleaned)
   } catch {
-    // Try to find a JSON object inside the response
-    const match = cleaned.match(/\{[\s\S]*\}/)
-    if (match) return JSON.parse(match[0])
-    throw new Error('Could not parse Gemini response as JSON')
-  }
-}
-
-function normaliseResult(raw: Partial<ExtractedVoucher & { categories?: string[] }>): ExtractedVoucher {
-  return {
-    store_name: raw.store_name || undefined,
-    code: raw.code || undefined,
-    cvv: raw.cvv || undefined,
-    amount: typeof raw.amount === 'number' && raw.amount > 0 ? raw.amount : undefined,
-    balance: typeof raw.balance === 'number' && raw.balance > 0 ? raw.balance : undefined,
-    expiry_date: raw.expiry_date ? normaliseDate(raw.expiry_date) : undefined,
+    const m = cleaned.match(/\{[\s\S]*\}/)
+    if (m) return JSON.parse(m[0])
+    throw new Error(`Gemini returned non-JSON: ${cleaned.slice(0, 120)}`)
   }
 }
 
 function normaliseDate(d: string): string | undefined {
-  // Accept YYYY-MM-DD or coerce partial dates
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-  // Try native parsing as last resort
   const ts = Date.parse(d)
-  if (!isNaN(ts)) return new Date(ts).toISOString().split('T')[0]
-  return undefined
+  return isNaN(ts) ? undefined : new Date(ts).toISOString().split('T')[0]
+}
+
+function normalise(raw: Partial<ExtractedVoucher>): ExtractedVoucher {
+  return {
+    store_name:  raw.store_name  || undefined,
+    code:        raw.code        || undefined,
+    cvv:         raw.cvv         || undefined,
+    amount:      typeof raw.amount  === 'number' && raw.amount  > 0 ? raw.amount  : undefined,
+    balance:     typeof raw.balance === 'number' && raw.balance > 0 ? raw.balance : undefined,
+    expiry_date: raw.expiry_date ? normaliseDate(raw.expiry_date) : undefined,
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -89,37 +109,25 @@ export function isGeminiAvailable(): boolean {
   return !!GEMINI_API_KEY
 }
 
-/**
- * Analyse a voucher image with Gemini Vision.
- * Returns extracted fields; throws if API call fails.
- */
-export async function analyzeVoucherImage(file: File): Promise<ExtractedVoucher> {
-  if (!GEMINI_API_KEY) throw new Error('No Gemini API key configured')
-
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-  const base64 = await fileToBase64(file)
-  const imagePart = { inlineData: { data: base64, mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' } }
-
-  const result = await model.generateContent([IMAGE_PROMPT, imagePart])
-  const text = result.response.text()
-  const parsed = parseJsonResponse(text)
-  return normaliseResult(parsed)
+function getModel() {
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!)
+  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 }
 
-/**
- * Extract voucher details from SMS / email / free text using Gemini.
- * Returns extracted fields; throws if API call fails.
- */
+export async function analyzeVoucherImage(file: File): Promise<ExtractedVoucher> {
+  if (!GEMINI_API_KEY) throw new Error('Gemini API key not configured')
+  const { base64, mimeType } = await prepareImage(file)
+  const model = getModel()
+  const result = await model.generateContent([
+    IMAGE_PROMPT,
+    { inlineData: { data: base64, mimeType } },
+  ])
+  return normalise(parseJsonResponse(result.response.text()))
+}
+
 export async function analyzeVoucherText(text: string): Promise<ExtractedVoucher> {
-  if (!GEMINI_API_KEY) throw new Error('No Gemini API key configured')
-
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
+  if (!GEMINI_API_KEY) throw new Error('Gemini API key not configured')
+  const model = getModel()
   const result = await model.generateContent(TEXT_PROMPT + text)
-  const raw = result.response.text()
-  const parsed = parseJsonResponse(raw)
-  return normaliseResult(parsed)
+  return normalise(parseJsonResponse(result.response.text()))
 }
