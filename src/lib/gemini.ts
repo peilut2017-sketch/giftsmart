@@ -44,6 +44,28 @@ export function prepareImage(file: File): Promise<{ base64: string; mimeType: 'i
   })
 }
 
+// ── Auth-aware invoke ─────────────────────────────────────────────────────────
+
+/**
+ * Call the Edge Function with the current user's JWT explicitly in the header.
+ * supabase.functions.invoke() sometimes omits the token if the session isn't
+ * fully hydrated yet, causing a 401. We fetch it first to be certain.
+ */
+async function invoke(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('יש להתחבר לפני ביצוע סריקה')
+
+  const { data, error } = await supabase.functions.invoke('analyze-voucher', {
+    body,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+
+  if (error) throw new Error(error.message)
+  const result = data as Record<string, unknown>
+  if (result?.error) throw new Error(result.error as string)
+  return result
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function normalise(raw: Record<string, unknown>): ExtractedVoucher {
@@ -72,22 +94,12 @@ export function isGeminiAvailable(): boolean {
  */
 export async function analyzeVoucherImage(file: File): Promise<ExtractedVoucher> {
   const { base64, mimeType } = await prepareImage(file)
-  const { data, error } = await supabase.functions.invoke('analyze-voucher', {
-    body: { image_base64: base64, mime_type: mimeType },
-  })
-  if (error) throw new Error(error.message)
-  if (data?.error) throw new Error(data.error)
-  return normalise(data as Record<string, unknown>)
+  return normalise(await invoke({ image_base64: base64, mime_type: mimeType }))
 }
 
 /**
  * Send SMS / free text to the analyze-voucher Edge Function.
  */
 export async function analyzeVoucherText(text: string): Promise<ExtractedVoucher> {
-  const { data, error } = await supabase.functions.invoke('analyze-voucher', {
-    body: { text },
-  })
-  if (error) throw new Error(error.message)
-  if (data?.error) throw new Error(data.error)
-  return normalise(data as Record<string, unknown>)
+  return normalise(await invoke({ text }))
 }
