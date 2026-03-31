@@ -439,9 +439,15 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
           from: existing.balance, to: vData.balance,
         })
       } else {
-        const changed: Record<string, any> = {}
-        keys.forEach(k => { changed[k] = { from: (existing as any)[k], to: (vData as any)[k] } })
-        logAction('edit', existing.store_name, id, changed)
+        const SENSITIVE = new Set(['code', 'cvv'])
+        const changed: Record<string, unknown> = {}
+        keys
+          .filter(k => !SENSITIVE.has(k))
+          .forEach(k => { changed[k] = { from: (existing as any)[k], to: (vData as any)[k] } })
+        if (Object.keys(changed).length > 0 || keys.some(k => SENSITIVE.has(k))) {
+          if (keys.some(k => SENSITIVE.has(k))) changed['_sensitive_updated'] = true
+          logAction('edit', existing.store_name, id, changed)
+        }
       }
     }
   }
@@ -613,10 +619,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   async function createShareToken(voucherId: string, expiresInDays?: number): Promise<string> {
     if (!user) throw new Error('לא מחובר')
-    const token = Array.from(crypto.getRandomValues(new Uint8Array(18)))
-      .map(b => b.toString(36).padStart(2, '0'))
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map(b => b.toString(16).padStart(2, '0'))
       .join('')
-      .slice(0, 24)
     const expires_at = expiresInDays
       ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
       : null

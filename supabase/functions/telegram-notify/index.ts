@@ -26,9 +26,9 @@ function send(chatId: number, text: string) {
 }
 
 serve(async (req) => {
-  // Allow only service-role calls
+  // Allow only service-role calls (exact match)
   const auth = req.headers.get('Authorization') || ''
-  if (!auth.includes(SUPABASE_SERVICE_KEY) && !auth.includes('Bearer')) {
+  if (auth !== `Bearer ${SUPABASE_SERVICE_KEY}`) {
     return new Response('Forbidden', { status: 403 })
   }
 

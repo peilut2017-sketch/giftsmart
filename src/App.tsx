@@ -21,7 +21,39 @@ import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import { isBiometricEnabled } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
-import { useState, useEffect } from 'react'
+import { Component, useState, useEffect } from 'react'
+import type { ReactNode } from 'react'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, message: '' }
+  }
+  static getDerivedStateFromError(err: unknown) {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) }
+  }
+  componentDidCatch(err: unknown, info: unknown) {
+    console.error('[ErrorBoundary]', err, info)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center" dir="rtl">
+          <p className="text-4xl">⚠️</p>
+          <h1 className="text-xl font-bold">משהו השתבש</h1>
+          <p className="text-sm text-gray-500">{this.state.message}</p>
+          <button
+            className="mt-2 px-6 py-2 bg-green-600 text-white rounded-full text-sm font-medium"
+            onClick={() => window.location.reload()}
+          >
+            רענן את הדף
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const A11Y_WIDGET_KEY = 'a11y_widget_enabled'
 
@@ -36,7 +68,12 @@ function NotificationBridge() {
   // On mount: show any unseen push broadcasts + subscribe to future ones
   useEffect(() => {
     if (!user) return
-    const seenIds: Set<string> = new Set(JSON.parse(localStorage.getItem(SEEN_PUSH_KEY) || '[]'))
+    let seenIds: Set<string>
+    try {
+      seenIds = new Set(JSON.parse(localStorage.getItem(SEEN_PUSH_KEY) || '[]'))
+    } catch {
+      seenIds = new Set()
+    }
 
     function showPush(id: string, title: string, body: string) {
       if (seenIds.has(id)) return
@@ -152,6 +189,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -173,5 +211,6 @@ export default function App() {
         />
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   )
 }

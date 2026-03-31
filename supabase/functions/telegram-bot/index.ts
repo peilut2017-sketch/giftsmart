@@ -90,10 +90,9 @@ function backToVoucherKeyboard(voucherId: string) {
 // ── Share-token for barcode link ──────────────────────────────────────────────
 
 async function makeShareToken(sb: ReturnType<typeof createClient>, voucherId: string, userId: string) {
-  const token = Array.from(crypto.getRandomValues(new Uint8Array(18)))
-    .map((b: number) => b.toString(36).padStart(2, '0'))
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+    .map((b: number) => b.toString(16).padStart(2, '0'))
     .join('')
-    .slice(0, 24)
   const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   const { error } = await sb.from('shared_voucher_tokens').insert({
     token, voucher_id: voucherId, created_by: userId, expires_at,
