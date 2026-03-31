@@ -6,7 +6,7 @@ import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
 import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { formatCurrency, getExpiryStatus } from '../utils/helpers'
+import { formatCurrency, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import { useNavigate } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -57,11 +57,14 @@ export default function HomePage() {
     return [...cats]
   }, [vouchers])
 
+  const EXPIRY_FILTER_DAYS = 30
+
   const expiredCount  = vouchers.filter(v => getExpiryStatus(v.expiry_date) === 'expired').length
-  const expiringCount = vouchers.filter(v => {
-    const s = getExpiryStatus(v.expiry_date)
-    return s === 'critical' || s === 'warning'
-  }).length
+  const expiringCount = useMemo(() => vouchers.filter(v => {
+    if (!v.expiry_date) return false
+    const days = getDaysUntilExpiry(v.expiry_date)
+    return days !== null && days >= 0 && days <= EXPIRY_FILTER_DAYS
+  }).length, [vouchers])
 
   const filtered = useMemo(() => {
     if (filterTab === 'shared_with_me') return [...sharedWithMe]
@@ -70,8 +73,9 @@ export default function HomePage() {
 
     if (filterTab === 'expiring') {
       result = result.filter(v => {
-        const s = getExpiryStatus(v.expiry_date)
-        return s === 'warning' || s === 'critical'
+        if (!v.expiry_date) return false
+        const days = getDaysUntilExpiry(v.expiry_date)
+        return days !== null && days >= 0 && days <= EXPIRY_FILTER_DAYS
       })
     } else if (filterTab === 'shared') {
       result = result.filter(v => v.is_shared)

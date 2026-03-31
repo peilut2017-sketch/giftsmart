@@ -20,6 +20,10 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
     if (!('Notification' in window)) return
 
     async function checkAndNotify() {
+      // Don't run while vouchers are still loading (empty array = loading state)
+      // This prevents the false "no expiring vouchers" notification on first render.
+      if (vouchers.length === 0) return
+
       // Throttle: don't re-notify within 24h
       const last = localStorage.getItem(NOTIF_KEY)
       if (last && Date.now() - parseInt(last) < CHECK_INTERVAL_MS) return
@@ -30,8 +34,6 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
       }
       if (permission !== 'granted') return
 
-      localStorage.setItem(NOTIF_KEY, Date.now().toString())
-
       const nowTime = Date.now()
       const expiring: Voucher[] = []
       for (const v of vouchers) {
@@ -40,19 +42,17 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
         if (daysLeft >= 0 && daysLeft <= EXPIRY_WINDOW_DAYS) expiring.push(v)
       }
 
+      // Only throttle and notify if there are actually expiring vouchers.
+      // Silently skip (no notification) when nothing is expiring — avoid noise.
+      if (expiring.length === 0) return
+
+      localStorage.setItem(NOTIF_KEY, Date.now().toString())
+
       const baseOptions: NotificationOptions = {
         icon: '/pwa-192x192.png',
         badge: '/pwa-192x192.png',
         tag: 'expiry-warning',
         data: { url: '/' },
-      }
-
-      if (expiring.length === 0) {
-        await showNotification('✅ אין שוברים שעומדים לפוג', {
-          ...baseOptions,
-          body: 'לא נמצאו שוברים שיפגו בחודש הקרוב',
-        })
-        return
       }
 
       const urgent = expiring.filter(v =>

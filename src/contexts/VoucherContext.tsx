@@ -198,9 +198,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       }
 
       // ── Fetch vouchers, super-vouchers, stores, categories in parallel ──
+      // NOTE: No wallet_id filter on vouchers — RLS (get_my_wallet_ids) returns
+      // vouchers from ALL wallets the user is a member of (own + shared wallets).
       type QueryResult = { data: any[] | null; error?: any }
       const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
-        withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').eq('wallet_id', wId).order('expiry_date', { ascending: true }).limit(500) as any),
+        withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').order('expiry_date', { ascending: true }).limit(500) as any),
         withTimeout<QueryResult>(
           supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).limit(100).then(res => {
             if (res.error?.code === '42703') {
@@ -585,7 +587,13 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       p_email: email,
     })
     if (error) throw error
-    return data as 'shared' | 'already_shared' | 'not_found'
+    const result = data as 'shared' | 'already_shared' | 'not_found'
+    if (result === 'shared') {
+      // Mark the voucher as shared so it appears in the "shared" tab
+      setVouchers(prev => prev.map(v => v.id === voucherId ? { ...v, is_shared: true } : v))
+      supabase.from('vouchers').update({ is_shared: true }).eq('id', voucherId).then(() => {})
+    }
+    return result
   }
 
   async function getVoucherShares(voucherId: string): Promise<VoucherShare[]> {
@@ -596,6 +604,12 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   async function unshareVoucher(voucherId: string, email: string) {
     await supabase.rpc('unshare_voucher', { p_voucher_id: voucherId, p_email: email })
     setSharedWithMe(prev => prev.filter(v => v.id !== voucherId))
+    // If no more shares remain, clear the is_shared flag
+    const remaining = await getVoucherShares(voucherId)
+    if (remaining.length === 0) {
+      setVouchers(prev => prev.map(v => v.id === voucherId ? { ...v, is_shared: false } : v))
+      supabase.from('vouchers').update({ is_shared: false }).eq('id', voucherId).then(() => {})
+    }
   }
 
   async function updateSharedVoucherBalance(voucherId: string, newBalance: number) {
