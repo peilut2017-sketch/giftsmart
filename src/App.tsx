@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
+import toast, { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
@@ -105,6 +105,34 @@ function NotificationBridge() {
       })
       .subscribe()
 
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
+
+  // Notify owner when someone updates balance via a shared link
+  useEffect(() => {
+    if (!user) return
+    const channel = supabase
+      .channel(`shared-balance-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'shared_balance_updates',
+        filter: `owner_user_id=eq.${user.id}`,
+      }, (payload) => {
+        const { store_name, old_balance, new_balance } = payload.new as {
+          store_name: string
+          old_balance: number
+          new_balance: number
+        }
+        toast(`🔔 יתרת "${store_name}" עודכנה: ₪${old_balance} ← ₪${new_balance}`, { duration: 6000 })
+        if (Notification.permission === 'granted') {
+          new Notification('יתרת שובר עודכנה', {
+            body: `${store_name}: ₪${old_balance} → ₪${new_balance}`,
+            icon: '/pwa-192x192.png',
+          })
+        }
+      })
+      .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [user])
 

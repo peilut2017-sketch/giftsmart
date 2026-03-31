@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
-import { Copy, AlertTriangle, Wallet } from 'lucide-react'
+import { Copy, AlertTriangle, Wallet, ChevronDown, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Toaster } from 'react-hot-toast'
 import JsBarcode from 'jsbarcode'
@@ -25,8 +25,14 @@ export default function SharedVoucherPage() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // Balance update state
+  const [showUpdateForm, setShowUpdateForm] = useState(false)
+  const [usedAmount, setUsedAmount] = useState('')
+  const [updating, setUpdating] = useState(false)
+
   const barcodeRef = useRef<SVGSVGElement>(null)
   const qrRef = useRef<HTMLCanvasElement>(null)
+  const usedInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!token) { setError('לינק לא תקין'); setLoading(false); return }
@@ -59,6 +65,11 @@ export default function SharedVoucherPage() {
     }
   }, [voucher?.code])
 
+  // Focus the input when the update form opens
+  useEffect(() => {
+    if (showUpdateForm) setTimeout(() => usedInputRef.current?.focus(), 80)
+  }, [showUpdateForm])
+
   async function loadSharedVoucher() {
     try {
       const { data, error: rpcError } = await supabase
@@ -86,7 +97,7 @@ export default function SharedVoucherPage() {
 
       setVoucher(row)
 
-      // Increment view count atomically via RPC (direct UPDATE is blocked by RLS for unauthenticated users)
+      // Increment view count atomically via RPC
       supabase.rpc('increment_share_view_count', { p_token: token }).then(() => {})
     } catch {
       setError('שגיאה בטעינת השובר')
@@ -104,6 +115,61 @@ export default function SharedVoucherPage() {
     })
   }
 
+  async function handleUpdateBalance() {
+    if (!voucher || !token) return
+    const used = parseFloat(usedAmount)
+    if (isNaN(used) || used < 0) return toast.error('סכום לא תקין')
+    if (used > voucher.balance) return toast.error(`לא ניתן לנצל יותר מהיתרה (₪${voucher.balance})`)
+
+    const newBalance = Math.max(0, voucher.balance - used)
+    const oldBalance = voucher.balance
+    setUpdating(true)
+
+    const { data, error } = await supabase.rpc('update_voucher_balance_by_token', {
+      p_token: token,
+      p_new_balance: newBalance,
+    })
+    setUpdating(false)
+
+    if (error || !data?.success) {
+      const msg = (data?.error as string) || error?.message || 'שגיאה'
+      if (msg === 'token_expired') toast.error('הלינק פג תוקף')
+      else toast.error('שגיאה בעדכון יתרה')
+      return
+    }
+
+    // Optimistic update
+    setVoucher(v => v ? { ...v, balance: newBalance } : v)
+    setUsedAmount('')
+    setShowUpdateForm(false)
+
+    // Undo toast — restores old balance
+    toast(
+      (t) => (
+        <span className="flex items-center gap-2">
+          <span>יתרה עודכנה: {formatCurrency(oldBalance)} ← {formatCurrency(newBalance)}</span>
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id)
+              const { data: undoData } = await supabase.rpc('update_voucher_balance_by_token', {
+                p_token: token,
+                p_new_balance: oldBalance,
+              })
+              if (undoData?.success) {
+                setVoucher(v => v ? { ...v, balance: oldBalance } : v)
+                toast.success('הפעולה בוטלה')
+              }
+            }}
+            className="text-blue-600 font-semibold underline text-sm"
+          >
+            ביטול
+          </button>
+        </span>
+      ),
+      { duration: 5000, icon: '✅' }
+    )
+  }
+
   const expiryStatus = voucher ? getExpiryStatus(voucher.expiry_date ?? undefined) : 'none'
   const expiryLabel = voucher ? getExpiryLabel(voucher.expiry_date ?? undefined) : ''
   const pct = voucher && voucher.amount > 0 ? (voucher.balance / voucher.amount) * 100 : 0
@@ -112,7 +178,10 @@ export default function SharedVoucherPage() {
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
-      <Toaster position="top-center" toastOptions={{ duration: 2000, style: { borderRadius: '16px', fontSize: '14px' } }} />
+      <Toaster
+        position="top-center"
+        toastOptions={{ duration: 2000, style: { borderRadius: '16px', fontSize: '14px' } }}
+      />
 
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl shadow-lg mb-3">
@@ -140,17 +209,18 @@ export default function SharedVoucherPage() {
         {voucher && !loading && (
           <div className={`bg-white rounded-3xl shadow-xl overflow-hidden border-2 ${
             expiryStatus === 'critical' ? 'border-red-200' :
-            expiryStatus === 'warning' ? 'border-yellow-200' : 'border-gray-100'
+            expiryStatus === 'warning'  ? 'border-orange-200' : 'border-gray-100'
           }`}>
             <div className="p-6 pb-4">
+              {/* Header: store + balance */}
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h2 className="text-xl font-bold text-gray-800">{voucher.store_name}</h2>
                   {expiryLabel && (
                     <div className={`flex items-center gap-1 mt-1 ${
-                      expiryStatus === 'expired' ? 'text-gray-400' :
+                      expiryStatus === 'expired'  ? 'text-gray-400' :
                       expiryStatus === 'critical' ? 'text-red-600' :
-                      expiryStatus === 'warning' ? 'text-yellow-600' : 'text-gray-400'
+                      expiryStatus === 'warning'  ? 'text-orange-600' : 'text-gray-400'
                     }`}>
                       {(expiryStatus === 'critical' || expiryStatus === 'warning') && (
                         <AlertTriangle className="w-3.5 h-3.5" />
@@ -167,9 +237,10 @@ export default function SharedVoucherPage() {
                 </div>
               </div>
 
+              {/* Balance bar */}
               {voucher.amount > 0 && (
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-4">
-                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                  <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
                 </div>
               )}
 
@@ -205,8 +276,62 @@ export default function SharedVoucherPage() {
               )}
             </div>
 
-            <div className="bg-gray-50 px-6 py-3 text-center">
-              <p className="text-xs text-gray-400">שותף דרך ארנק שוברים</p>
+            {/* Balance update section */}
+            <div className="border-t border-gray-100">
+              {!showUpdateForm ? (
+                <button
+                  onClick={() => setShowUpdateForm(true)}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 text-sm font-semibold text-green-700 hover:bg-green-50 transition-colors"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  עדכן יתרה לאחר שימוש
+                </button>
+              ) : (
+                <div className="p-4 space-y-3 bg-green-50">
+                  <p className="text-sm font-semibold text-gray-700 text-center">כמה הוצאת? (₪)</p>
+                  <div className="flex gap-2">
+                    <input
+                      ref={usedInputRef}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      max={voucher.balance}
+                      step="0.01"
+                      value={usedAmount}
+                      onChange={e => setUsedAmount(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
+                      placeholder={`עד ${voucher.balance}`}
+                      className="flex-1 text-center text-lg font-bold border border-gray-200 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white"
+                      dir="ltr"
+                    />
+                    <button
+                      onClick={handleUpdateBalance}
+                      disabled={updating || !usedAmount}
+                      className="px-5 py-2.5 bg-green-600 text-white rounded-2xl font-semibold text-sm disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {updating
+                        ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        : <Check className="w-4 h-4" />}
+                      אשר
+                    </button>
+                  </div>
+                  {usedAmount && !isNaN(parseFloat(usedAmount)) && parseFloat(usedAmount) > 0 && parseFloat(usedAmount) <= voucher.balance && (
+                    <p className="text-xs text-center text-gray-500">
+                      יתרה חדשה: <strong className="text-green-700">{formatCurrency(Math.max(0, voucher.balance - parseFloat(usedAmount)))}</strong>
+                    </p>
+                  )}
+                  <button
+                    onClick={() => { setShowUpdateForm(false); setUsedAmount('') }}
+                    className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-50 px-6 py-3 text-center border-t border-gray-100">
+              <p className="text-xs text-gray-400">שותף דרך GiftSmart</p>
             </div>
           </div>
         )}
