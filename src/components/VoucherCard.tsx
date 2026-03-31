@@ -50,12 +50,12 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
 
   const cardBgClass =
     expiryStatus === 'critical' ? 'bg-gradient-to-br from-red-50 to-orange-50' :
-    expiryStatus === 'warning'  ? 'bg-gradient-to-br from-yellow-50 to-amber-50' :
+    expiryStatus === 'warning'  ? 'bg-gradient-to-br from-orange-50 to-amber-50' :
     'bg-white'
 
   const cardBorderClass =
-    expiryStatus === 'critical' ? 'border-red-200' :
-    expiryStatus === 'warning'  ? 'border-yellow-200' :
+    expiryStatus === 'critical' ? 'border-red-300' :
+    expiryStatus === 'warning'  ? 'border-orange-300' :
     'border-gray-100'
 
   const barColor =

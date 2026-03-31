@@ -17,42 +17,48 @@ function json(body: unknown, status = 200) {
 // ── HTML Templates ──────────────────────────────────────────────────────────
 
 function inviteHtml(p: { to_name: string; from_name: string; wallet_name: string; app_url: string }) {
-  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-    <h2 style="color:#16a34a;margin-top:0">🎁 הוזמנת לארנק שוברים</h2>
-    <p>שלום ${p.to_name},</p>
-    <p><strong>${p.from_name}</strong> הזמין/ה אותך להצטרף לארנק <strong>"${p.wallet_name}"</strong>.</p>
-    <p>כעת תוכל/י לראות ולנהל שוברים משותפים.</p>
-    <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#16a34a;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
-      פתח ארנק שוברים
-    </a>
+  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;direction:rtl;text-align:right">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08);direction:rtl;text-align:right">
+    <h2 style="color:#16a34a;margin-top:0;text-align:right">🎁 הוזמנת לארנק שוברים</h2>
+    <p style="text-align:right">שלום ${p.to_name},</p>
+    <p style="text-align:right"><strong>${p.from_name}</strong> הזמין/ה אותך להצטרף לארנק <strong>"${p.wallet_name}"</strong>.</p>
+    <p style="text-align:right">כעת תוכל/י לראות ולנהל שוברים משותפים.</p>
+    <div style="text-align:right">
+      <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#16a34a;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
+        פתח ארנק שוברים
+      </a>
+    </div>
   </div>
 </body></html>`
 }
 
 function shareHtml(p: { to_name: string; from_name: string; store_name: string; app_url: string }) {
-  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-    <h2 style="color:#7c3aed;margin-top:0">🎁 שובר שותף איתך</h2>
-    <p>שלום ${p.to_name},</p>
-    <p><strong>${p.from_name}</strong> שיתף/ה איתך שובר של <strong>${p.store_name}</strong>.</p>
-    <p>כנס/י לאפליקציה ותמצא/י את השובר בלשונית <strong>"שותף איתי"</strong>.</p>
-    <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#7c3aed;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
-      פתח ארנק שוברים
-    </a>
+  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;direction:rtl;text-align:right">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08);direction:rtl;text-align:right">
+    <h2 style="color:#7c3aed;margin-top:0;text-align:right">🎁 שובר שותף איתך</h2>
+    <p style="text-align:right">שלום ${p.to_name},</p>
+    <p style="text-align:right"><strong>${p.from_name}</strong> שיתף/ה איתך שובר של <strong>${p.store_name}</strong>.</p>
+    <p style="text-align:right">כנס/י לאפליקציה ותמצא/י את השובר בלשונית <strong>"שותף איתי"</strong>.</p>
+    <div style="text-align:right">
+      <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#7c3aed;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
+        פתח ארנק שוברים
+      </a>
+    </div>
   </div>
 </body></html>`
 }
 
 function shareInviteHtml(p: { from_name: string; store_name: string; app_url: string }) {
-  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-    <h2 style="color:#7c3aed;margin-top:0">🎁 הזמנה לשיתוף שובר</h2>
-    <p><strong>${p.from_name}</strong> רצה/ה לשתף איתך שובר של <strong>${p.store_name}</strong>.</p>
-    <p>הצטרף/י לאפליקציה — השובר יופיע אוטומטית בלשונית "שותף איתי" לאחר הרישום.</p>
-    <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#7c3aed;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
-      הצטרף/י לארנק שוברים
-    </a>
+  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;direction:rtl;text-align:right">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08);direction:rtl;text-align:right">
+    <h2 style="color:#7c3aed;margin-top:0;text-align:right">🎁 הזמנה לשיתוף שובר</h2>
+    <p style="text-align:right"><strong>${p.from_name}</strong> רצה/ה לשתף איתך שובר של <strong>${p.store_name}</strong>.</p>
+    <p style="text-align:right">הצטרף/י לאפליקציה — השובר יופיע אוטומטית בלשונית "שותף איתי" לאחר הרישום.</p>
+    <div style="text-align:right">
+      <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#7c3aed;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
+        הצטרף/י לארנק שוברים
+      </a>
+    </div>
   </div>
 </body></html>`
 }
@@ -61,19 +67,21 @@ function expiryHtml(p: { to_name: string; count: number; vouchers_list: string; 
   const rows = p.vouchers_list
     .split('\n')
     .filter(Boolean)
-    .map(line => `<li style="margin:6px 0">${line.replace(/^•\s*/, '')}</li>`)
+    .map(line => `<li style="margin:6px 0;text-align:right">${line.replace(/^•\s*/, '')}</li>`)
     .join('')
 
-  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-    <h2 style="color:#d97706;margin-top:0">⏰ תזכורת: שוברים פגי תוקף</h2>
-    <p>שלום ${p.to_name},</p>
-    <p>יש לך <strong>${p.count} שוברים</strong> שעומדים לפוג בקרוב:</p>
-    <ul style="background:#fefce8;border-radius:12px;padding:16px 24px;color:#374151">${rows}</ul>
-    <p style="color:#6b7280;font-size:14px">מהר לפני שיפוג התוקף!</p>
-    <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#d97706;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
-      פתח ארנק שוברים
-    </a>
+  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;direction:rtl;text-align:right">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08);direction:rtl;text-align:right">
+    <h2 style="color:#ea580c;margin-top:0;text-align:right">⏰ תזכורת: שוברים עומדים לפוג</h2>
+    <p style="text-align:right">שלום ${p.to_name},</p>
+    <p style="text-align:right">יש לך <strong>${p.count} שוברים</strong> שעומדים לפוג בקרוב:</p>
+    <ul style="background:#fff7ed;border-radius:12px;padding:16px 24px;color:#374151;direction:rtl;text-align:right">${rows}</ul>
+    <p style="color:#6b7280;font-size:14px;text-align:right">מהר לפני שיפוג התוקף!</p>
+    <div style="text-align:right">
+      <a href="${p.app_url}" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#ea580c;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold">
+        פתח ארנק שוברים
+      </a>
+    </div>
   </div>
 </body></html>`
 }
@@ -97,7 +105,8 @@ serve(async (req) => {
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
     const { type, params } = await req.json()
-    const appUrl = Deno.env.get('APP_URL') || 'https://gifttest.vercel.app'
+    // Prefer app_url from request params (set by frontend), fall back to env / giftsmart.site
+    const appUrl: string = params?.app_url || Deno.env.get('APP_URL') || 'https://giftsmart.site'
 
     const transporter = nodemailer.createTransport({
       service: 'gmail',

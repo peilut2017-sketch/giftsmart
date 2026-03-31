@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://giftsmart.site')
 
 async function invoke(type: string, params: Record<string, unknown>) {
   const { error } = await supabase.functions.invoke('send-email', {

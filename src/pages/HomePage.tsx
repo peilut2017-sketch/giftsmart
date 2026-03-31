@@ -57,7 +57,11 @@ export default function HomePage() {
     return [...cats]
   }, [vouchers])
 
-  const expiredCount = vouchers.filter(v => getExpiryStatus(v.expiry_date) === 'expired').length
+  const expiredCount  = vouchers.filter(v => getExpiryStatus(v.expiry_date) === 'expired').length
+  const expiringCount = vouchers.filter(v => {
+    const s = getExpiryStatus(v.expiry_date)
+    return s === 'critical' || s === 'warning'
+  }).length
 
   const filtered = useMemo(() => {
     if (filterTab === 'shared_with_me') return [...sharedWithMe]
@@ -485,6 +489,20 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* Expiring vouchers banner */}
+      {expiringCount > 0 && filterTab !== 'expiring' && (
+        <button
+          onClick={() => setFilterTab('expiring')}
+          className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 text-right"
+        >
+          <span className="text-lg">⚠️</span>
+          <span className="flex-1 text-sm font-medium text-orange-800">
+            יש לך {expiringCount} {expiringCount === 1 ? 'שובר שעומד לפוג' : 'שוברים שעומדים לפוג'}
+          </span>
+          <span className="text-xs text-orange-500 font-medium">הצג ←</span>
+        </button>
+      )}
 
       {/* Voucher Grid */}
       <div className="p-4 pb-36" onTouchStart={() => { (document.activeElement as HTMLElement)?.blur() }}>
