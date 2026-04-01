@@ -43,3 +43,14 @@ export async function sendVoucherShareInviteEmail(params: {
 }) {
   await invoke('share_invite', params)
 }
+
+export async function sendGiftEmail(params: {
+  to_email: string
+  sender_name: string
+  message?: string
+  store_name: string
+  balance: number
+  gift_link: string
+}) {
+  await invoke('gift', params)
+}

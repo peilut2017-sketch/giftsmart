@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useVouchers, type ActivityLogEntry, type VoucherShare } from '../contexts/VoucherContext'
+import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
-import { sendVoucherSharedEmail, sendVoucherShareInviteEmail } from '../lib/emailService'
+import { sendVoucherSharedEmail, sendVoucherShareInviteEmail, sendGiftEmail } from '../lib/emailService'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2 } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -20,7 +20,7 @@ export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, profile } = useAuth()
-  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
 
   const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
@@ -39,12 +39,21 @@ export default function CheckoutPage() {
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
   const [shareLoading, setShareLoading] = useState(false)
-  const [shareTab, setShareTab] = useState<'link' | 'user'>('link')
+  const [shareTab, setShareTab] = useState<'link' | 'user' | 'gift'>('link')
   const [shareEmail, setShareEmail] = useState('')
   const [shareEmailLoading, setShareEmailLoading] = useState(false)
   const [voucherShares, setVoucherShares] = useState<VoucherShare[]>([])
   const [sharesLoaded, setSharesLoaded] = useState(false)
   const [pendingShareEmail, setPendingShareEmail] = useState<string | null>(null)
+
+  // Gift state
+  const [giftEmail, setGiftEmail] = useState('')
+  const [giftMessage, setGiftMessage] = useState('')
+  const [giftScheduled, setGiftScheduled] = useState(false)
+  const [giftDate, setGiftDate] = useState('')
+  const [giftSending, setGiftSending] = useState(false)
+  const [pendingGifts, setPendingGifts] = useState<PendingGift[]>([])
+  const [giftsLoaded, setGiftsLoaded] = useState(false)
   const [voucherLog, setVoucherLog] = useState<ActivityLogEntry[]>([])
   const [logLoading, setLogLoading] = useState(true)
   const [showStores, setShowStores] = useState(false)
@@ -142,6 +151,7 @@ export default function CheckoutPage() {
     setShareTab('link')
     setShareEmail('')
     setPendingShareEmail(null)
+    setGiftsLoaded(false)
     const tokens = await getShareTokens(voucher.id)
     setShareTokens(tokens)
     setShareLoading(false)
@@ -201,6 +211,59 @@ export default function CheckoutPage() {
       setPendingShareEmail(null)
       setShareEmail('')
     }
+  }
+
+  async function loadPendingGifts() {
+    if (!voucher || giftsLoaded) return
+    const gifts = await getPendingGifts(voucher.id)
+    setPendingGifts(gifts)
+    setGiftsLoaded(true)
+  }
+
+  async function handleSendGift() {
+    if (!voucher || !giftEmail.trim()) return
+    const sendAt = giftScheduled && giftDate ? new Date(giftDate) : new Date()
+    setGiftSending(true)
+    try {
+      const token = await createGift(voucher.id, giftEmail.trim(), giftMessage.trim(), sendAt)
+      if (!token) { toast.error('שגיאה ביצירת המתנה'); return }
+
+      const giftLink = `${window.location.origin}/gift/${token}`
+      const sendNow = !giftScheduled || !giftDate || sendAt <= new Date()
+
+      if (sendNow) {
+        await sendGiftEmail({
+          to_email: giftEmail.trim(),
+          sender_name: profile?.name || user?.email || '',
+          message: giftMessage.trim() || undefined,
+          store_name: voucher.store_name,
+          balance: voucher.balance,
+          gift_link: giftLink,
+        })
+        toast.success(`🎁 מתנה נשלחה ל-${giftEmail.trim()}!`)
+      } else {
+        toast.success(`🎁 מתנה מתוזמנת ל-${new Date(giftDate).toLocaleDateString('he-IL')}`)
+      }
+
+      setGiftEmail('')
+      setGiftMessage('')
+      setGiftScheduled(false)
+      setGiftDate('')
+      setGiftsLoaded(false)
+      const gifts = await getPendingGifts(voucher.id)
+      setPendingGifts(gifts)
+      setGiftsLoaded(true)
+    } catch {
+      toast.error('שגיאה בשליחת המתנה')
+    } finally {
+      setGiftSending(false)
+    }
+  }
+
+  async function handleCancelGift(giftId: string) {
+    await cancelGift(giftId)
+    setPendingGifts(prev => prev.filter(g => g.id !== giftId))
+    toast.success('מתנה בוטלה')
   }
 
   async function handleUnshare(email: string) {
@@ -768,13 +831,19 @@ export default function CheckoutPage() {
                   onClick={() => setShareTab('link')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'link' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}
                 >
-                  <Link2 className="w-3.5 h-3.5" /> שיתוף בלינק
+                  <Link2 className="w-3.5 h-3.5" /> בלינק
                 </button>
                 <button
                   onClick={() => setShareTab('user')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'user' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}
                 >
-                  <Users className="w-3.5 h-3.5" /> שתף עם משתמש
+                  <Users className="w-3.5 h-3.5" /> משתמש
+                </button>
+                <button
+                  onClick={() => { setShareTab('gift'); loadPendingGifts() }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'gift' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500'}`}
+                >
+                  <Gift className="w-3.5 h-3.5" /> שלח מתנה
                 </button>
               </div>
             )}
@@ -912,6 +981,100 @@ export default function CheckoutPage() {
                         <button
                           onClick={() => handleUnshare(s.shared_with_email)}
                           className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Gift tab ── */}
+            {shareTab === 'gift' && !isSharedVoucher && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">
+                  שלח שובר זה כמתנה — הנמען יקבל מייל עם לינק, יוכל לראות את השובר ולהוסיפו לחשבון שלו.
+                  השובר יועבר לארכיון כשייתבע.
+                </p>
+
+                {/* Recipient email */}
+                <div className="relative">
+                  <Gift className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="email"
+                    value={giftEmail}
+                    onChange={e => setGiftEmail(e.target.value)}
+                    placeholder="מייל הנמען"
+                    className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                </div>
+
+                {/* Personal message */}
+                <textarea
+                  value={giftMessage}
+                  onChange={e => setGiftMessage(e.target.value)}
+                  placeholder="הודעה אישית (אופציונלי)"
+                  rows={2}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
+                  dir="rtl"
+                />
+
+                {/* Schedule toggle */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setGiftScheduled(s => !s)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
+                      giftScheduled ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-500'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    תזמן לתאריך ספציפי
+                  </button>
+                </div>
+
+                {giftScheduled && (
+                  <input
+                    type="datetime-local"
+                    value={giftDate}
+                    onChange={e => setGiftDate(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                )}
+
+                {/* Send button */}
+                <button
+                  onClick={handleSendGift}
+                  disabled={giftSending || !giftEmail.trim() || (giftScheduled && !giftDate)}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl font-bold text-sm disabled:opacity-50 shadow hover:shadow-md active:scale-95 transition-all"
+                >
+                  {giftSending
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Gift className="w-4 h-4" />
+                  }
+                  {giftScheduled && giftDate ? 'תזמן שליחה' : 'שלח מתנה עכשיו'}
+                </button>
+
+                {/* Pending gifts list */}
+                {giftsLoaded && pendingGifts.length > 0 && (
+                  <div className="space-y-1 border-t pt-3">
+                    <p className="text-xs font-medium text-gray-500">מתנות שטרם נתבעו:</p>
+                    {pendingGifts.map(g => (
+                      <div key={g.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                        <div>
+                          <p className="text-sm text-gray-700">{g.recipient_email}</p>
+                          <p className="text-xs text-gray-400">
+                            {g.email_sent_at ? 'נשלח' : `מתוזמן: ${new Date(g.send_at).toLocaleDateString('he-IL')}`}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleCancelGift(g.id)}
+                          className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
+                          title="בטל מתנה"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

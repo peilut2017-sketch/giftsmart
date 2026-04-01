@@ -86,23 +86,55 @@ function expiryHtml(p: { to_name: string; count: number; vouchers_list: string; 
 </body></html>`
 }
 
+function giftHtml(p: { sender_name: string; message?: string; store_name: string; balance: number; gift_link: string; app_url: string }) {
+  const msgBlock = p.message
+    ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:14px 18px;margin:16px 0;direction:rtl;text-align:right">
+         <p style="color:#166534;font-style:italic;margin:0;text-align:right">"${p.message}"</p>
+       </div>`
+    : ''
+  return `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;direction:rtl;text-align:right">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08);direction:rtl;text-align:right">
+    <h2 style="color:#16a34a;margin-top:0;text-align:right">🎁 קיבלת מתנה!</h2>
+    <p style="text-align:right"><strong>${p.sender_name}</strong> שלח/ה לך שובר מתנה של <strong>${p.store_name}</strong>.</p>
+    <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:14px;padding:20px;margin:16px 0;text-align:center">
+      <p style="font-size:32px;font-weight:bold;color:#15803d;margin:0">₪${p.balance}</p>
+      <p style="color:#166534;margin:6px 0 0;font-size:14px">${p.store_name}</p>
+    </div>
+    ${msgBlock}
+    <div style="text-align:center;margin-top:24px">
+      <a href="${p.gift_link}" style="display:inline-block;padding:14px 36px;background:#16a34a;color:#fff;border-radius:12px;text-decoration:none;font-weight:bold;font-size:16px">
+        קבל/י את המתנה
+      </a>
+    </div>
+    <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:20px">
+      נשלח דרך <a href="${p.app_url}" style="color:#16a34a;text-decoration:none">GiftSmart</a>
+    </p>
+  </div>
+</body></html>`
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    // Verify JWT — only logged-in users can send emails
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) return json({ error: 'Unauthorized' }, 401)
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    )
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return json({ error: 'Unauthorized' }, 401)
+    // Accept either a valid JWT or the service-role key (used by cron)
+    const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_KEY') || ''
+    const isServiceRole = SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`
+
+    if (!isServiceRole) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
+      )
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return json({ error: 'Unauthorized' }, 401)
+    }
 
     const { type, params } = await req.json()
     // Prefer app_url from request params (set by frontend), fall back to env / giftsmart.site
@@ -149,6 +181,14 @@ serve(async (req) => {
         to: to_email,
         subject: `${from_name} הזמין/ה אותך לשתף שובר: ${store_name}`,
         html: shareInviteHtml({ from_name, store_name, app_url: appUrl }),
+      })
+    } else if (type === 'gift') {
+      const { to_email, sender_name, message, store_name, balance, gift_link } = params
+      await transporter.sendMail({
+        from,
+        to: to_email,
+        subject: `🎁 ${sender_name} שלח/ה לך מתנה: ${store_name}`,
+        html: giftHtml({ sender_name, message, store_name, balance, gift_link, app_url: appUrl }),
       })
     } else {
       return json({ error: 'Unknown type' }, 400)

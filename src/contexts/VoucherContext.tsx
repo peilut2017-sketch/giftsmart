@@ -49,6 +49,18 @@ interface VoucherContextType {
   updateSharedVoucherBalance: (voucherId: string, newBalance: number) => Promise<void>
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
   getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
+  createGift: (voucherId: string, recipientEmail: string, message: string, sendAt: Date) => Promise<string | null>
+  cancelGift: (giftId: string) => Promise<void>
+  getPendingGifts: (voucherId: string) => Promise<PendingGift[]>
+}
+
+export interface PendingGift {
+  id: string
+  recipient_email: string
+  message: string | null
+  send_at: string
+  email_sent_at: string | null
+  created_at: string
 }
 
 export interface ActivityLogEntry {
@@ -703,6 +715,38 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     return (data || []) as ActivityLogEntry[]
   }
 
+  // ── Gift sending ────────────────────────────────────────────────────────────
+
+  async function createGift(voucherId: string, recipientEmail: string, message: string, sendAt: Date): Promise<string | null> {
+    if (!user) return null
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map(b => b.toString(16).padStart(2, '0')).join('')
+    const { error } = await supabase.from('voucher_gifts').insert({
+      voucher_id: voucherId,
+      sender_user_id: user.id,
+      sender_name: user.user_metadata?.name || user.email || '',
+      recipient_email: recipientEmail,
+      message: message || null,
+      token,
+      send_at: sendAt.toISOString(),
+    })
+    return error ? null : token
+  }
+
+  async function cancelGift(giftId: string): Promise<void> {
+    await supabase.from('voucher_gifts').delete().eq('id', giftId)
+  }
+
+  async function getPendingGifts(voucherId: string): Promise<PendingGift[]> {
+    const { data } = await supabase
+      .from('voucher_gifts')
+      .select('id, recipient_email, message, send_at, email_sent_at, created_at')
+      .eq('voucher_id', voucherId)
+      .is('claimed_at', null)
+      .order('created_at', { ascending: false })
+    return data ?? []
+  }
+
   return (
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores, sharedWithMe,
@@ -713,6 +757,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
       shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance,
       getActivityLog, getVoucherActivityLog,
+      createGift, cancelGift, getPendingGifts,
     }}>
       {children}
     </VoucherContext.Provider>

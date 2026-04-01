@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
@@ -14,6 +14,7 @@ import StatsPage from './pages/StatsPage'
 import SettingsPage from './pages/SettingsPage'
 import AdminPage from './pages/AdminPage'
 import SharedVoucherPage from './pages/SharedVoucherPage'
+import GiftPage from './pages/GiftPage'
 import AccessibilityPage from './pages/AccessibilityPage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
@@ -141,7 +142,18 @@ function NotificationBridge() {
 
 function AppRoutes() {
   const { user, loading, passwordRecovery, signOut } = useAuth()
+  const navigate = useNavigate()
   const [biometricLocked, setBiometricLocked] = useState(false)
+
+  // After login: redirect back to gift page if user came from one
+  useEffect(() => {
+    if (!user) return
+    const returnTo = sessionStorage.getItem('gift_return')
+    if (returnTo) {
+      sessionStorage.removeItem('gift_return')
+      navigate(returnTo, { replace: true })
+    }
+  }, [user])
   const [widgetEnabled, setWidgetEnabled] = useState(
     () => localStorage.getItem(A11Y_WIDGET_KEY) !== 'false'
   )
@@ -222,6 +234,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/s/:token" element={<SharedVoucherPage />} />
+          <Route path="/gift/:token" element={<GiftPage />} />
           <Route path="/*" element={<AppRoutes />} />
         </Routes>
         <Toaster
