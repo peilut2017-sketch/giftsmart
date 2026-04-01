@@ -9,7 +9,6 @@ import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { SUPER_VOUCHER_STORES } from '../types'
 
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@example.com'
 
 interface UserRow {
   id: string
@@ -67,7 +66,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 type Confirm = { title: string; message?: string; onConfirm: () => void }
 
 export default function AdminPage() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, updateWalletName } = useVouchers()
 
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
@@ -111,7 +110,6 @@ export default function AdminPage() {
   const [sendingBroadcast, setSendingBroadcast] = useState(false)
   const [sendingPush, setSendingPush] = useState(false)
 
-  const isAdmin = user?.email === ADMIN_EMAIL
 
   useEffect(() => {
     if (!isAdmin) return
@@ -486,7 +484,7 @@ export default function AdminPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <p className="text-xs text-gray-400">{formatDate(u.created_at)}</p>
-                    {u.email !== ADMIN_EMAIL && (
+                    {u.id !== user?.id && (
                       <button
                         onClick={() => setDeleteTarget(u)}
                         className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"

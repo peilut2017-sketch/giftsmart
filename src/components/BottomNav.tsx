@@ -2,13 +2,10 @@ import { useNavigate } from 'react-router-dom'
 import { Home, Archive, BarChart2, Settings, Shield } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@example.com'
-
 export default function BottomNav() {
   const nav = useNavigate()
   const path = window.location.pathname
-  const { user } = useAuth()
-  const isAdmin = user?.email === ADMIN_EMAIL
+  const { isAdmin } = useAuth()
 
   const items = [
     { icon: Home, label: 'ארנק', path: '/' },

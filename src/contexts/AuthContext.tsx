@@ -7,6 +7,7 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   profile: Profile | null
+  isAdmin: boolean
   loading: boolean
   passwordRecovery: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -126,8 +127,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(prev => prev ? { ...prev, ...data } : null)
   }
 
+  const isAdmin = profile?.is_admin === true
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, passwordRecovery, signIn, signUp, signInWithGoogle, signOut, updateProfile, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, passwordRecovery, signIn, signUp, signInWithGoogle, signOut, updateProfile, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )

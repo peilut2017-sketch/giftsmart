@@ -67,6 +67,7 @@ export interface Profile {
   phone?: string
   avatar_url?: string
   show_voucher_value?: boolean
+  is_admin?: boolean
 }
 
 export interface Category {
