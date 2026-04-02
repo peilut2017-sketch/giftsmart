@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean
   passwordRecovery: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
+  signInWithBiometric: () => Promise<{ error: Error | null }>
   signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>
   signInWithGoogle: () => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
@@ -83,6 +84,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error }
   }
 
+  async function signInWithBiometric() {
+    // Try to restore existing session via refresh token (no password needed)
+    const { data, error } = await supabase.auth.refreshSession()
+    if (!error && data.session) {
+      setSession(data.session)
+      setUser(data.session.user)
+      await fetchProfile(data.session.user.id)
+      return { error: null }
+    }
+    return { error: error ?? new Error('session_expired') }
+  }
+
   async function signInWithGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -130,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = profile?.is_admin === true
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, passwordRecovery, signIn, signUp, signInWithGoogle, signOut, updateProfile, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, passwordRecovery, signIn, signInWithBiometric, signUp, signInWithGoogle, signOut, updateProfile, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )

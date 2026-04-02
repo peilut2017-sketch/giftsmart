@@ -4,6 +4,7 @@
 
 const CREDENTIAL_KEY = 'biometric_credential_id'
 const BIOMETRIC_ENABLED_KEY = 'biometric_enabled'
+const BIOMETRIC_EMAIL_KEY = 'biometric_email'
 
 export function isBiometricSupported(): boolean {
   return (
@@ -17,9 +18,14 @@ export function isBiometricEnabled(): boolean {
   return localStorage.getItem(BIOMETRIC_ENABLED_KEY) === 'true'
 }
 
+export function getBiometricEmail(): string | null {
+  return localStorage.getItem(BIOMETRIC_EMAIL_KEY)
+}
+
 export function disableBiometric() {
   localStorage.removeItem(BIOMETRIC_ENABLED_KEY)
   localStorage.removeItem(CREDENTIAL_KEY)
+  localStorage.removeItem(BIOMETRIC_EMAIL_KEY)
 }
 
 function base64url(buffer: ArrayBuffer): string {
@@ -38,7 +44,7 @@ function base64urlToUint8Array(base64url: string): Uint8Array {
   return buffer
 }
 
-export async function registerBiometric(userId: string, userName: string): Promise<boolean> {
+export async function registerBiometric(userId: string, userName: string, email?: string): Promise<boolean> {
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32))
     const credential = await navigator.credentials.create({
@@ -68,6 +74,7 @@ export async function registerBiometric(userId: string, userName: string): Promi
     const credId = base64url(credential.rawId)
     localStorage.setItem(CREDENTIAL_KEY, credId)
     localStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true')
+    if (email) localStorage.setItem(BIOMETRIC_EMAIL_KEY, email)
     return true
   } catch (err: any) {
     console.error('Biometric register error:', err)

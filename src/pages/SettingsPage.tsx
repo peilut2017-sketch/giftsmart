@@ -155,7 +155,7 @@ export default function SettingsPage() {
 
   async function handleEnableBiometric() {
     setBiometricLoading(true)
-    const ok = await registerBiometric(user?.id || '', profile?.name || user?.email || '')
+    const ok = await registerBiometric(user?.id || '', profile?.name || user?.email || '', user?.email)
     setBiometricLoading(false)
     if (ok) { setBiometricEnabled(true); toast.success('נעילה ביומטרית הופעלה!') }
     else toast.error('לא ניתן לרשום אימות ביומטרי')

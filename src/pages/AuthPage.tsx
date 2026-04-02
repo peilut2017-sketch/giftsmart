@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { isBiometricEnabled, getBiometricEmail, verifyBiometric } from '../lib/passkey'
 
 const APP_VERSION = '1.0.0'
 
@@ -29,7 +30,7 @@ function getPasswordStrength(password: string): PasswordStrength {
 }
 
 export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode }) {
-  const { signIn, signUp, signInWithGoogle, resetPassword, updatePassword } = useAuth()
+  const { signIn, signInWithBiometric, signUp, signInWithGoogle, resetPassword, updatePassword } = useAuth()
   const [googleLoading, setGoogleLoading] = useState(false)
   const [mode, setMode] = useState<Mode>(initialMode)
   const [email, setEmail] = useState('')
@@ -39,9 +40,39 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showStrength, setShowStrength] = useState(false)
+  const [biometricLoading, setBiometricLoading] = useState(false)
+  const [forcePassword, setForcePassword] = useState(false)
+
+  const biometricEmail = getBiometricEmail()
+  const showBiometricLogin =
+    mode === 'login' &&
+    !forcePassword &&
+    isBiometricEnabled() &&
+    !!biometricEmail &&
+    (email === '' || email.toLowerCase() === biometricEmail.toLowerCase())
 
   const strength = useMemo(() => getPasswordStrength(password), [password])
   const isRegisterOrNew = mode === 'register' || mode === 'newPassword'
+
+  async function handleBiometricLogin() {
+    setBiometricLoading(true)
+    try {
+      const ok = await verifyBiometric()
+      if (!ok) {
+        toast.error('אימות ביומטרי נכשל')
+        return
+      }
+      const { error } = await signInWithBiometric()
+      if (error) {
+        // Session expired — fall back to password
+        toast('הסשן פג תוקף — יש להזין סיסמה פעם אחת', { icon: '🔒' })
+        setEmail(biometricEmail || email)
+        setForcePassword(true)
+      }
+    } finally {
+      setBiometricLoading(false)
+    }
+  }
 
   function validatePasswordStrong(): boolean {
     if (strength.score < 3) {
@@ -182,7 +213,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               </div>
             )}
 
-            {mode !== 'forgot' && (
+            {mode !== 'forgot' && !showBiometricLogin && (
               <div>
                 <div className="relative">
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
@@ -254,22 +285,46 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
-            >
-              {loading ? '...' : mode === 'login' ? 'כניסה' : mode === 'register' ? 'הרשמה' : mode === 'forgot' ? 'שלח קישור' : 'עדכן סיסמה'}
-            </button>
-
-            {mode === 'login' && (
-              <button
-                type="button"
-                onClick={() => setMode('forgot')}
-                className="w-full text-center text-sm text-gray-400 hover:text-green-600 transition-colors pt-1"
-              >
-                שכחתי סיסמה
-              </button>
+            {showBiometricLogin ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBiometricLogin}
+                  disabled={biometricLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70"
+                >
+                  {biometricLoading
+                    ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    : <Fingerprint className="w-5 h-5" />}
+                  {biometricLoading ? 'מאמת...' : 'כניסה ביומטרית'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForcePassword(true)}
+                  className="w-full text-center text-sm text-gray-400 hover:text-green-600 transition-colors pt-1"
+                >
+                  כניסה עם סיסמה
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
+                >
+                  {loading ? '...' : mode === 'login' ? 'כניסה' : mode === 'register' ? 'הרשמה' : mode === 'forgot' ? 'שלח קישור' : 'עדכן סיסמה'}
+                </button>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('forgot')}
+                    className="w-full text-center text-sm text-gray-400 hover:text-green-600 transition-colors pt-1"
+                  >
+                    שכחתי סיסמה
+                  </button>
+                )}
+              </>
             )}
           </form>
 

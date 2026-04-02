@@ -6,17 +6,18 @@ import toast from 'react-hot-toast'
 interface Props {
   userId: string
   userName: string
+  userEmail?: string
   onDone: () => void
 }
 
-export default function BiometricSetupPrompt({ userId, userName, onDone }: Props) {
+export default function BiometricSetupPrompt({ userId, userName, userEmail, onDone }: Props) {
   const [loading, setLoading] = useState(false)
 
   if (!isBiometricSupported()) return null
 
   async function handleEnable() {
     setLoading(true)
-    const ok = await registerBiometric(userId, userName)
+    const ok = await registerBiometric(userId, userName, userEmail)
     setLoading(false)
     if (ok) {
       toast.success('נעילה ביומטרית הופעלה!')
