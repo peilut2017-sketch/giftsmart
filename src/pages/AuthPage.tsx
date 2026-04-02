@@ -7,6 +7,7 @@ import { isBiometricEnabled, getBiometricEmail, verifyBiometric } from '../lib/p
 const APP_VERSION = '1.0.0'
 
 type Mode = 'login' | 'register' | 'forgot' | 'newPassword'
+type LoginStep = 'email' | 'biometric' | 'password'
 
 interface PasswordStrength {
   score: number // 0-4
@@ -33,6 +34,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const { signIn, signInWithBiometric, signUp, signInWithGoogle, resetPassword, updatePassword } = useAuth()
   const [googleLoading, setGoogleLoading] = useState(false)
   const [mode, setMode] = useState<Mode>(initialMode)
+  const [loginStep, setLoginStep] = useState<LoginStep>('email')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
@@ -41,18 +43,25 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const [loading, setLoading] = useState(false)
   const [showStrength, setShowStrength] = useState(false)
   const [biometricLoading, setBiometricLoading] = useState(false)
-  const [forcePassword, setForcePassword] = useState(false)
-
-  const biometricEmail = getBiometricEmail()
-  const showBiometricLogin =
-    mode === 'login' &&
-    !forcePassword &&
-    isBiometricEnabled() &&
-    !!biometricEmail &&
-    (email === '' || email.toLowerCase() === biometricEmail.toLowerCase())
 
   const strength = useMemo(() => getPasswordStrength(password), [password])
   const isRegisterOrNew = mode === 'register' || mode === 'newPassword'
+
+  // When "Continue" is clicked on the email step
+  function handleEmailContinue(e: React.FormEvent) {
+    e.preventDefault()
+    if (!email) return toast.error('יש להזין כתובת אימייל')
+    const biometricEmail = getBiometricEmail()
+    if (
+      isBiometricEnabled() &&
+      biometricEmail &&
+      email.toLowerCase() === biometricEmail.toLowerCase()
+    ) {
+      setLoginStep('biometric')
+    } else {
+      setLoginStep('password')
+    }
+  }
 
   async function handleBiometricLogin() {
     setBiometricLoading(true)
@@ -66,8 +75,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       if (error) {
         // Session expired — fall back to password
         toast('הסשן פג תוקף — יש להזין סיסמה פעם אחת', { icon: '🔒' })
-        setEmail(biometricEmail || email)
-        setForcePassword(true)
+        setLoginStep('password')
       }
     } finally {
       setBiometricLoading(false)
@@ -94,6 +102,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
         else {
           toast.success('נשלח מייל לאיפוס סיסמה — בדוק את תיבת הדואר')
           setMode('login')
+          setLoginStep('email')
+          setEmail('')
         }
         return
       }
@@ -108,21 +118,75 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
         return
       }
 
-      if (!email || !password) return toast.error('יש למלא אימייל וסיסמה')
-
+      // login – password step
       if (mode === 'login') {
+        if (!password) return toast.error('יש להזין סיסמה')
         const { error } = await signIn(email, password)
         if (error) toast.error('אימייל או סיסמה שגויים')
-      } else {
-        if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
-        if (!validatePasswordStrong()) return
-        const { error } = await signUp(email, password, name)
-        if (error) toast.error('שגיאה בהרשמה: ' + error.message)
-        else toast.success('נרשמת בהצלחה!')
+        return
       }
+
+      // register
+      if (!email || !password) return toast.error('יש למלא אימייל וסיסמה')
+      if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
+      if (!validatePasswordStrong()) return
+      const { error } = await signUp(email, password, name)
+      if (error) toast.error('שגיאה בהרשמה: ' + error.message)
+      else toast.success('נרשמת בהצלחה!')
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Biometric step (full-screen style within the card) ──────────────────────
+  if (mode === 'login' && loginStep === 'biometric') {
+    return (
+      <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+          </div>
+          <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
+            <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5 shadow-lg bg-gradient-to-br from-green-400 to-emerald-600`}>
+              {biometricLoading
+                ? <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                : <Fingerprint className="w-10 h-10 text-white" />}
+            </div>
+
+            <p className="text-xs text-gray-400 mb-1 font-mono" dir="ltr">{email}</p>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">כניסה ביומטרית</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              {biometricLoading ? 'ממתין לאימות...' : 'השתמש בזיהוי פנים או טביעת אצבע'}
+            </p>
+
+            <button
+              onClick={handleBiometricLogin}
+              disabled={biometricLoading}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md disabled:opacity-50 mb-3"
+            >
+              {biometricLoading
+                ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                : <Fingerprint className="w-5 h-5" />}
+              {biometricLoading ? 'מאמת...' : 'אמת זהות'}
+            </button>
+
+            <button
+              onClick={() => setLoginStep('password')}
+              className="w-full text-sm text-gray-400 hover:text-green-600 transition-colors py-2"
+            >
+              כניסה עם סיסמה
+            </button>
+            <button
+              onClick={() => { setLoginStep('email'); setEmail('') }}
+              className="flex items-center justify-center gap-1 text-sm text-gray-300 hover:text-gray-500 transition-colors py-1 mx-auto"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+              שנה חשבון
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -142,7 +206,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             <div className="mb-6">
               {mode !== 'newPassword' && (
                 <button
-                  onClick={() => setMode('login')}
+                  onClick={() => { setMode('login'); setLoginStep('email'); setEmail('') }}
                   className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-3"
                 >
                   <ArrowRight className="w-4 h-4" />
@@ -162,7 +226,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             /* Login / Register Tabs */
             <div className="flex bg-gray-100 rounded-2xl p-1 mb-6">
               <button
-                onClick={() => setMode('login')}
+                onClick={() => { setMode('login'); setLoginStep('email'); setEmail(''); setPassword('') }}
                 className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all ${
                   mode === 'login' ? 'bg-white shadow text-green-600' : 'text-gray-500'
                 }`}
@@ -180,23 +244,9 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {mode === 'register' && (
-              <div className="relative">
-                <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
-                <input
-                  id="auth-name"
-                  type="text"
-                  placeholder="שם מלא"
-                  aria-label="שם מלא"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                />
-              </div>
-            )}
-
-            {mode !== 'newPassword' && (
+          {/* ── LOGIN 2-STEP FLOW ─────────────────────────────────────── */}
+          {mode === 'login' && loginStep === 'email' && (
+            <form onSubmit={handleEmailContinue} className="space-y-4" noValidate>
               <div className="relative">
                 <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                 <input
@@ -208,12 +258,111 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   onChange={e => setEmail(e.target.value)}
                   className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   autoComplete="email"
+                  autoFocus
                   dir="ltr"
                 />
               </div>
-            )}
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all"
+              >
+                המשך
+              </button>
+            </form>
+          )}
 
-            {mode !== 'forgot' && !showBiometricLogin && (
+          {/* ── LOGIN PASSWORD STEP ───────────────────────────────────── */}
+          {mode === 'login' && loginStep === 'password' && (
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              {/* Email display with back arrow */}
+              <button
+                type="button"
+                onClick={() => { setLoginStep('email'); setPassword('') }}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors w-full"
+              >
+                <ArrowRight className="w-4 h-4 flex-shrink-0" />
+                <span className="font-mono text-xs truncate" dir="ltr">{email}</span>
+              </button>
+
+              <div>
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
+                  <input
+                    id="auth-password"
+                    type={showPass ? 'text' : 'password'}
+                    placeholder="סיסמה"
+                    aria-label="סיסמה"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    autoComplete="current-password"
+                    autoFocus
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    aria-label={showPass ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  >
+                    {showPass ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
+              >
+                {loading ? '...' : 'כניסה'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setMode('forgot') }}
+                className="w-full text-center text-sm text-gray-400 hover:text-green-600 transition-colors pt-1"
+              >
+                שכחתי סיסמה
+              </button>
+            </form>
+          )}
+
+          {/* ── REGISTER & OTHER MODES ────────────────────────────────── */}
+          {mode !== 'login' && (
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              {mode === 'register' && (
+                <div className="relative">
+                  <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
+                  <input
+                    id="auth-name"
+                    type="text"
+                    placeholder="שם מלא"
+                    aria-label="שם מלא"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  />
+                </div>
+              )}
+
+              {mode !== 'newPassword' && (
+                <div className="relative">
+                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
+                  <input
+                    id="auth-email"
+                    type="email"
+                    placeholder="כתובת אימייל"
+                    aria-label="כתובת אימייל"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    autoComplete="email"
+                    dir="ltr"
+                  />
+                </div>
+              )}
+
               <div>
                 <div className="relative">
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
@@ -225,7 +374,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                     value={password}
                     onChange={e => { setPassword(e.target.value); if (isRegisterOrNew) setShowStrength(true) }}
                     className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    autoComplete={mode === 'newPassword' ? 'new-password' : 'new-password'}
                     dir="ltr"
                   />
                   <button
@@ -241,7 +390,6 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 {/* Password strength meter */}
                 {isRegisterOrNew && showStrength && password.length > 0 && (
                   <div className="mt-2 space-y-2">
-                    {/* Bar */}
                     <div className="flex gap-1">
                       {[0,1,2,3,4].map(i => (
                         <div
@@ -256,7 +404,6 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                       </span>
                       {strength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
                     </div>
-                    {/* Requirements */}
                     <div className="grid grid-cols-1 gap-0.5">
                       {strength.checks.map(c => (
                         <div key={c.label} className={`flex items-center gap-1.5 text-xs ${c.ok ? 'text-green-600' : 'text-gray-400'}`}>
@@ -268,68 +415,34 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   </div>
                 )}
               </div>
-            )}
 
-            {isRegisterOrNew && (
-              <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type={showPass ? 'text' : 'password'}
-                  placeholder="אימות סיסמה"
-                  value={password2}
-                  onChange={e => setPassword2(e.target.value)}
-                  className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                  autoComplete="new-password"
-                  dir="ltr"
-                />
-              </div>
-            )}
+              {isRegisterOrNew && (
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    placeholder="אימות סיסמה"
+                    value={password2}
+                    onChange={e => setPassword2(e.target.value)}
+                    className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    autoComplete="new-password"
+                    dir="ltr"
+                  />
+                </div>
+              )}
 
-            {showBiometricLogin ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleBiometricLogin}
-                  disabled={biometricLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70"
-                >
-                  {biometricLoading
-                    ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    : <Fingerprint className="w-5 h-5" />}
-                  {biometricLoading ? 'מאמת...' : 'כניסה ביומטרית'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForcePassword(true)}
-                  className="w-full text-center text-sm text-gray-400 hover:text-green-600 transition-colors pt-1"
-                >
-                  כניסה עם סיסמה
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
-                >
-                  {loading ? '...' : mode === 'login' ? 'כניסה' : mode === 'register' ? 'הרשמה' : mode === 'forgot' ? 'שלח קישור' : 'עדכן סיסמה'}
-                </button>
-                {mode === 'login' && (
-                  <button
-                    type="button"
-                    onClick={() => setMode('forgot')}
-                    className="w-full text-center text-sm text-gray-400 hover:text-green-600 transition-colors pt-1"
-                  >
-                    שכחתי סיסמה
-                  </button>
-                )}
-              </>
-            )}
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
+              >
+                {loading ? '...' : mode === 'register' ? 'הרשמה' : mode === 'forgot' ? 'שלח קישור' : 'עדכן סיסמה'}
+              </button>
+            </form>
+          )}
 
-          {/* Google OAuth — shown on login/register only */}
-          {(mode === 'login' || mode === 'register') && (
+          {/* Google OAuth — shown on login (email step) / register only */}
+          {(mode === 'register' || (mode === 'login' && loginStep === 'email')) && (
             <>
               <div className="flex items-center gap-3 my-4">
                 <div className="flex-1 h-px bg-gray-200" />
