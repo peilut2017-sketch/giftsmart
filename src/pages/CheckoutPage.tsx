@@ -8,11 +8,10 @@ import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpirySt
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Wallet, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { supabase } from '../lib/supabase'
 
 const QUICK_AMOUNTS = [50, 100]
 
@@ -305,72 +304,6 @@ export default function CheckoutPage() {
     toast.success('לינק נמחק')
   }
 
-  async function saveToGoogleWallet() {
-    if (!voucher) return
-    const toastId = toast.loading('מכין כרטיס Google Wallet...')
-    try {
-      const { data, error } = await supabase.functions.invoke('google-wallet', {
-        body: {
-          storeName: voucher.store_name,
-          balance: voucher.balance,
-          code: voucher.code,
-          expiryDate: voucher.expiry_date || null,
-          notes: voucher.notes || null,
-        },
-      })
-      toast.dismiss(toastId)
-      if (error || data?.error) {
-        const msg: string = data?.message || error?.message || ''
-        if (msg.includes('WALLET_NOT_CONFIGURED') || msg.includes('not set')) {
-          toast.error('Google Wallet לא מוגדר — ראה הוראות ב-supabase/functions/google-wallet/index.ts', { duration: 7000 })
-        } else {
-          toast.error('שגיאה: ' + (msg || 'לא ניתן ליצור כרטיס'))
-        }
-        return
-      }
-      window.open(data.url, '_blank')
-    } catch (err: any) {
-      toast.dismiss(toastId)
-      toast.error('שגיאה בחיבור ל-Edge Function')
-    }
-  }
-
-  async function saveToAppleWallet() {
-    if (!voucher) return
-    const toastId = toast.loading('מכין כרטיס Apple Wallet...')
-    try {
-      const { data: blob, error } = await supabase.functions.invoke('apple-wallet', {
-        body: {
-          storeName: voucher.store_name,
-          balance: voucher.balance,
-          code: voucher.code,
-          expiryDate: voucher.expiry_date || null,
-          notes: voucher.notes || null,
-        },
-      })
-      toast.dismiss(toastId)
-      if (error) {
-        const msg: string = error?.message || ''
-        if (msg.includes('WALLET_NOT_CONFIGURED') || msg.includes('not set')) {
-          toast.error('Apple Wallet לא מוגדר — ראה הוראות ב-supabase/functions/apple-wallet/index.ts', { duration: 7000 })
-        } else {
-          toast.error('שגיאה: ' + (msg || 'לא ניתן ליצור כרטיס'))
-        }
-        return
-      }
-      // Download .pkpass file
-      const url = URL.createObjectURL(new Blob([blob], { type: 'application/vnd.apple.pkpass' }))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${voucher.store_name}.pkpass`
-      a.click()
-      URL.revokeObjectURL(url)
-      toast.success('קובץ Apple Wallet הורד!')
-    } catch (err: any) {
-      toast.dismiss(toastId)
-      toast.error('שגיאה בחיבור ל-Edge Function')
-    }
-  }
 
   if (!voucher) {
     return (
@@ -531,21 +464,6 @@ export default function CheckoutPage() {
               </button>
             )}
 
-            <button
-              onClick={saveToGoogleWallet}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
-            >
-              <Wallet className="w-4 h-4" />
-              Google Wallet
-            </button>
-
-            <button
-              onClick={saveToAppleWallet}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800"
-            >
-              <Wallet className="w-4 h-4" />
-              Apple Wallet
-            </button>
           </div>
         </div>
 
