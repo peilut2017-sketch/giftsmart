@@ -157,8 +157,8 @@ BEGIN
     is_archived = true,
     notes = CASE
       WHEN notes IS NOT NULL AND notes <> ''
-        THEN notes || E'\n' || 'מתנה ל: ' || v_gift.recipient_email
-      ELSE 'מתנה ל: ' || v_gift.recipient_email
+        THEN notes || E'\n' || 'מתנה ל: ' || COALESCE(NULLIF(v_gift.recipient_email, ''), 'קישור')
+      ELSE 'מתנה ל: ' || COALESCE(NULLIF(v_gift.recipient_email, ''), 'קישור')
     END
   WHERE id = v_gift.voucher_id;
 

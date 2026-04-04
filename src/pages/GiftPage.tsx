@@ -74,13 +74,22 @@ export default function GiftPage() {
       const { data, error: rpcError } = await supabase
         .rpc('get_gift_by_token', { p_token: token })
 
-      if (rpcError || !data || data.length === 0) {
+      if (rpcError) {
+        console.error('get_gift_by_token RPC error:', rpcError)
+        // Distinguish between "function missing" and "not found"
+        const isMissing = rpcError.code === '42883' || rpcError.message?.includes('does not exist')
+        setError(isMissing ? 'שגיאת הגדרה — צור קשר עם התמיכה' : 'לינק מתנה לא נמצא')
+        setLoading(false)
+        return
+      }
+      if (!data || data.length === 0) {
         setError('לינק מתנה לא נמצא')
         setLoading(false)
         return
       }
       setGift(data[0] as GiftData)
-    } catch {
+    } catch (err) {
+      console.error('loadGift exception:', err)
       setError('שגיאה בטעינת המתנה')
     } finally {
       setLoading(false)

@@ -725,11 +725,13 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       voucher_id: voucherId,
       sender_user_id: user.id,
       sender_name: user.user_metadata?.name || user.email || '',
-      recipient_email: recipientEmail || null,
+      // Use empty string fallback so NOT NULL constraint doesn't block link-only gifts
+      recipient_email: recipientEmail || '',
       message: message || null,
       token,
       send_at: sendAt.toISOString(),
     })
+    if (error) console.error('createGift error:', error)
     return error ? null : token
   }
 
