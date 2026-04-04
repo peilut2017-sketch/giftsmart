@@ -53,7 +53,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   // Fetch the admin-controlled premium flag once on mount
   useEffect(() => {
-    supabase.rpc('get_premium_enabled').then(({ data }) => {
+    Promise.resolve(supabase.rpc('get_premium_enabled')).then(({ data }) => {
       if (data === false) setPremiumEnabled(false)
     }).catch(() => {})
   }, [])
@@ -92,7 +92,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshPlan() {
-    supabase.rpc('get_premium_enabled').then(({ data }) => {
+    Promise.resolve(supabase.rpc('get_premium_enabled')).then(({ data }) => {
       setPremiumEnabled(data !== false)
     }).catch(() => {})
     if (!user) { setPlan('free'); return }
