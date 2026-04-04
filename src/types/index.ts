@@ -17,6 +17,7 @@ export interface Voucher {
   link?: string
   is_archived: boolean
   is_shared: boolean
+  is_gift?: boolean
   created_at: string
   updated_at: string
   // derived

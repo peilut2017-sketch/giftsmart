@@ -224,6 +224,11 @@ export default function CheckoutPage() {
   async function handleSendGift() {
     if (!voucher) return
     if (giftMode === 'email' && !giftEmail.trim()) return
+    // Block sending gift to yourself
+    if (giftMode === 'email' && giftEmail.trim().toLowerCase() === user?.email?.toLowerCase()) {
+      toast.error('לא ניתן לשלוח מתנה לעצמך')
+      return
+    }
     const sendAt = giftScheduled && giftDate ? new Date(giftDate) : new Date()
     setGiftSending(true)
     setGiftLink(null)

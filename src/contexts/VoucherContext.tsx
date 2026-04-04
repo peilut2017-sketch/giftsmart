@@ -65,7 +65,7 @@ export interface PendingGift {
 
 export interface ActivityLogEntry {
   id: string
-  action: 'add' | 'edit' | 'balance_update' | 'archive' | 'unarchive' | 'delete'
+  action: 'add' | 'edit' | 'balance_update' | 'archive' | 'unarchive' | 'delete' | 'gift_sent' | 'gift_link' | 'gift_received' | 'gift_balance_update'
   voucher_id: string | null
   voucher_name: string
   details: Record<string, any>
@@ -731,8 +731,16 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       token,
       send_at: sendAt.toISOString(),
     })
-    if (error) console.error('createGift error:', error)
-    return error ? null : token
+    if (error) { console.error('createGift error:', error); return null }
+
+    // Log the gift action
+    const voucherName = [...vouchers, ...archivedVouchers].find(v => v.id === voucherId)?.store_name || ''
+    if (recipientEmail) {
+      logAction('gift_sent', voucherName, voucherId, { recipient: recipientEmail, message: message || undefined })
+    } else {
+      logAction('gift_link', voucherName, voucherId, { message: message || undefined })
+    }
+    return token
   }
 
   async function cancelGift(giftId: string): Promise<void> {

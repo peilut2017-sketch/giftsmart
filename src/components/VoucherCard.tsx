@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
-import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink } from 'lucide-react'
+import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink, Gift } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
@@ -192,6 +192,11 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
           )}
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {voucher.is_gift && (
+              <span title="שובר שהתקבל כמתנה" className="text-pink-500">
+                <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+            )}
             {safeLink && (
               <a href={safeLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1 rounded-full text-blue-500 hover:bg-blue-50" title="פתח קישור">
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -344,6 +349,11 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
               ))}
             </div>
             <div className="flex items-center gap-1.5">
+              {voucher.is_gift && (
+                <span title="שובר שהתקבל כמתנה" className="text-pink-500">
+                  <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+                </span>
+              )}
               {voucher.link && (
                 <a href={voucher.link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1 rounded-full text-blue-500 hover:bg-blue-50 transition-colors" title="פתח קישור">
                   <ExternalLink className="w-3.5 h-3.5" />

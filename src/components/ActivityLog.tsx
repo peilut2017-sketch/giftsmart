@@ -2,17 +2,21 @@ import { useEffect, useState } from 'react'
 import { useVouchers, type ActivityLogEntry } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
-import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Undo2, Zap } from 'lucide-react'
+import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Undo2, Zap, Gift, Link2, Mail } from 'lucide-react'
 import { formatCurrency } from '../utils/helpers'
 import toast from 'react-hot-toast'
 
 const ACTION_META: Record<ActivityLogEntry['action'], { label: string; Icon: any; color: string; bg: string }> = {
-  add:            { label: 'הוספת שובר',     Icon: Plus,           color: 'text-green-600',  bg: 'bg-green-50'  },
-  edit:           { label: 'עריכת שובר',      Icon: Edit2,          color: 'text-blue-600',   bg: 'bg-blue-50'   },
-  balance_update: { label: 'עדכון יתרה',      Icon: CreditCard,     color: 'text-purple-600', bg: 'bg-purple-50' },
-  archive:        { label: 'העברה לארכיון',   Icon: Archive,        color: 'text-orange-600', bg: 'bg-orange-50' },
-  unarchive:      { label: 'החזרה מהארכיון',  Icon: ArchiveRestore, color: 'text-teal-600',   bg: 'bg-teal-50'   },
-  delete:         { label: 'מחיקה',           Icon: Trash2,         color: 'text-red-600',    bg: 'bg-red-50'    },
+  add:                 { label: 'הוספת שובר',       Icon: Plus,           color: 'text-green-600',  bg: 'bg-green-50'   },
+  edit:                { label: 'עריכת שובר',        Icon: Edit2,          color: 'text-blue-600',   bg: 'bg-blue-50'    },
+  balance_update:      { label: 'עדכון יתרה',        Icon: CreditCard,     color: 'text-purple-600', bg: 'bg-purple-50'  },
+  archive:             { label: 'העברה לארכיון',     Icon: Archive,        color: 'text-orange-600', bg: 'bg-orange-50'  },
+  unarchive:           { label: 'החזרה מהארכיון',    Icon: ArchiveRestore, color: 'text-teal-600',   bg: 'bg-teal-50'    },
+  delete:              { label: 'מחיקה',             Icon: Trash2,         color: 'text-red-600',    bg: 'bg-red-50'     },
+  gift_sent:           { label: 'מתנה נשלחה',        Icon: Mail,           color: 'text-pink-600',   bg: 'bg-pink-50'    },
+  gift_link:           { label: 'קישור מתנה נוצר',   Icon: Link2,          color: 'text-pink-600',   bg: 'bg-pink-50'    },
+  gift_received:       { label: 'מתנה התקבלה',       Icon: Gift,           color: 'text-rose-600',   bg: 'bg-rose-50'    },
+  gift_balance_update: { label: 'עדכון יתרה (מתנה)', Icon: CreditCard,     color: 'text-pink-600',   bg: 'bg-pink-50'    },
 }
 
 const UNDOABLE: ActivityLogEntry['action'][] = ['edit', 'balance_update', 'archive', 'unarchive']
@@ -48,6 +52,15 @@ function buildSubtitle(entry: ActivityLogEntry): string {
     case 'archive':
     case 'delete':
       return d.balance !== undefined ? `יתרה: ${formatCurrency(d.balance)}` : ''
+    case 'gift_sent':
+      return d.recipient ? `ל: ${d.recipient}` : ''
+    case 'gift_link':
+      return 'קישור מתנה'
+    case 'gift_received':
+      return d.sender ? `מ: ${d.sender}` : ''
+    case 'gift_balance_update':
+      return d.from !== undefined && d.to !== undefined
+        ? `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}` : ''
     default:
       return ''
   }
