@@ -49,7 +49,7 @@ interface VoucherContextType {
   updateSharedVoucherBalance: (voucherId: string, newBalance: number) => Promise<void>
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
   getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
-  createGift: (voucherId: string, recipientEmail: string, message: string, sendAt: Date) => Promise<string | null>
+  createGift: (voucherId: string, recipientEmail: string | null, message: string, sendAt: Date) => Promise<string | null>
   cancelGift: (giftId: string) => Promise<void>
   getPendingGifts: (voucherId: string) => Promise<PendingGift[]>
 }
@@ -717,7 +717,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   // ── Gift sending ────────────────────────────────────────────────────────────
 
-  async function createGift(voucherId: string, recipientEmail: string, message: string, sendAt: Date): Promise<string | null> {
+  async function createGift(voucherId: string, recipientEmail: string | null, message: string, sendAt: Date): Promise<string | null> {
     if (!user) return null
     const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
       .map(b => b.toString(16).padStart(2, '0')).join('')
@@ -725,7 +725,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       voucher_id: voucherId,
       sender_user_id: user.id,
       sender_name: user.user_metadata?.name || user.email || '',
-      recipient_email: recipientEmail,
+      recipient_email: recipientEmail || null,
       message: message || null,
       token,
       send_at: sendAt.toISOString(),

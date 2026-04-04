@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -109,14 +109,28 @@ export default function AdminPage() {
   const [pushForm, setPushForm] = useState({ title: '', body: '' })
   const [sendingBroadcast, setSendingBroadcast] = useState(false)
   const [sendingPush, setSendingPush] = useState(false)
-
+  // Premium flag
+  const [premiumEnabled, setPremiumEnabled] = useState<boolean | null>(null)
+  const [premiumToggling, setPremiumToggling] = useState(false)
 
   useEffect(() => {
     if (!isAdmin) return
     supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
     supabase.rpc('get_all_users').then(({ data }) => { if (data) setAllUsers(data) })
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
+    supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(data !== false) })
   }, [isAdmin])
+
+  async function handleTogglePremium() {
+    if (premiumEnabled === null) return
+    const next = !premiumEnabled
+    setPremiumToggling(true)
+    const { error } = await supabase.rpc('admin_set_premium_enabled', { p_enabled: next })
+    setPremiumToggling(false)
+    if (error) { toast.error('שגיאה: ' + error.message); return }
+    setPremiumEnabled(next)
+    toast.success(next ? '💎 מערך מנויים הופעל' : '🔓 מערך מנויים הושבת — כולם Pro')
+  }
 
   // Realtime: notify admin when a new support message arrives
   useEffect(() => {
@@ -396,6 +410,41 @@ export default function AdminPage() {
       </div>
 
       <div className="p-4 pb-24 space-y-4">
+
+        {/* ── Premium feature flag ── */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${premiumEnabled ? 'bg-amber-50' : 'bg-green-50'}`}>
+                <Crown className={`w-5 h-5 ${premiumEnabled ? 'text-amber-500' : 'text-green-600'}`} />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">מערך מנויים פרמיום</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {premiumEnabled === null
+                    ? 'טוען...'
+                    : premiumEnabled
+                      ? 'פעיל — חלוקה בין Free ו-Pro'
+                      : 'מושבת — כל המשתמשים עם כל הפיצ\'רים'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleTogglePremium}
+              disabled={premiumToggling || premiumEnabled === null}
+              className="flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {premiumEnabled
+                ? <ToggleRight className="w-9 h-9 text-amber-500" />
+                : <ToggleLeft className="w-9 h-9 text-gray-300" />}
+            </button>
+          </div>
+          {!premiumEnabled && (
+            <p className="mt-2 text-xs text-green-700 bg-green-50 rounded-xl px-3 py-2">
+              המנויים עדיין קיימים ב-DB — הפעלה מחדש תשחזר את ההגבלות
+            </p>
+          )}
+        </div>
 
         {/* System Stats */}
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-3xl p-5 text-white">

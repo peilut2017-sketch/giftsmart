@@ -8,7 +8,7 @@ import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpirySt
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -46,11 +46,13 @@ export default function CheckoutPage() {
   const [pendingShareEmail, setPendingShareEmail] = useState<string | null>(null)
 
   // Gift state
+  const [giftMode, setGiftMode] = useState<'email' | 'link'>('link')
   const [giftEmail, setGiftEmail] = useState('')
   const [giftMessage, setGiftMessage] = useState('')
   const [giftScheduled, setGiftScheduled] = useState(false)
   const [giftDate, setGiftDate] = useState('')
   const [giftSending, setGiftSending] = useState(false)
+  const [giftLink, setGiftLink] = useState<string | null>(null)
   const [pendingGifts, setPendingGifts] = useState<PendingGift[]>([])
   const [giftsLoaded, setGiftsLoaded] = useState(false)
   const [voucherLog, setVoucherLog] = useState<ActivityLogEntry[]>([])
@@ -220,31 +222,47 @@ export default function CheckoutPage() {
   }
 
   async function handleSendGift() {
-    if (!voucher || !giftEmail.trim()) return
+    if (!voucher) return
+    if (giftMode === 'email' && !giftEmail.trim()) return
     const sendAt = giftScheduled && giftDate ? new Date(giftDate) : new Date()
     setGiftSending(true)
+    setGiftLink(null)
     try {
-      const token = await createGift(voucher.id, giftEmail.trim(), giftMessage.trim(), sendAt)
+      const email = giftMode === 'email' ? giftEmail.trim() : null
+      const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt)
       if (!token) { toast.error('שגיאה ביצירת המתנה'); return }
 
-      const giftLink = `${window.location.origin}/gift/${token}`
-      const sendNow = !giftScheduled || !giftDate || sendAt <= new Date()
+      const link = `${window.location.origin}/gift/${token}`
 
-      if (sendNow) {
-        await sendGiftEmail({
-          to_email: giftEmail.trim(),
-          sender_name: profile?.name || user?.email || '',
-          message: giftMessage.trim() || undefined,
-          store_name: voucher.store_name,
-          balance: voucher.balance,
-          gift_link: giftLink,
-        })
-        toast.success(`🎁 מתנה נשלחה ל-${giftEmail.trim()}!`)
+      if (giftMode === 'link') {
+        setGiftLink(link)
+        await navigator.clipboard.writeText(link).catch(() => {})
+        toast.success('🎁 קישור מתנה נוצר והועתק!')
       } else {
-        toast.success(`🎁 מתנה מתוזמנת ל-${new Date(giftDate).toLocaleDateString('he-IL')}`)
+        const sendNow = !giftScheduled || !giftDate || sendAt <= new Date()
+        if (sendNow) {
+          try {
+            await sendGiftEmail({
+              to_email: giftEmail.trim(),
+              sender_name: profile?.name || user?.email || '',
+              message: giftMessage.trim() || undefined,
+              store_name: voucher.store_name,
+              balance: voucher.balance,
+              gift_link: link,
+            })
+            toast.success(`🎁 מתנה נשלחה ל-${giftEmail.trim()}!`)
+          } catch (emailErr: any) {
+            // Gift was created but email failed — show link as fallback
+            setGiftLink(link)
+            toast.error('המתנה נוצרה אך שליחת המייל נכשלה — שלח את הקישור ידנית')
+            console.error('Gift email error:', emailErr)
+          }
+        } else {
+          toast.success(`🎁 מתנה מתוזמנת ל-${new Date(giftDate).toLocaleDateString('he-IL')}`)
+        }
+        setGiftEmail('')
       }
 
-      setGiftEmail('')
       setGiftMessage('')
       setGiftScheduled(false)
       setGiftDate('')
@@ -252,8 +270,8 @@ export default function CheckoutPage() {
       const gifts = await getPendingGifts(voucher.id)
       setPendingGifts(gifts)
       setGiftsLoaded(true)
-    } catch {
-      toast.error('שגיאה בשליחת המתנה')
+    } catch (err: any) {
+      toast.error('שגיאה ביצירת המתנה: ' + (err?.message || ''))
     } finally {
       setGiftSending(false)
     }
@@ -913,22 +931,45 @@ export default function CheckoutPage() {
             {shareTab === 'gift' && !isSharedVoucher && (
               <div className="space-y-4">
                 <p className="text-sm text-gray-500">
-                  שלח שובר זה כמתנה — הנמען יקבל מייל עם לינק, יוכל לראות את השובר ולהוסיפו לחשבון שלו.
-                  השובר יועבר לארכיון כשייתבע.
+                  שלח שובר זה כמתנה — הנמען יוכל לצפות ולהוסיפו לארנק שלו. השובר יועבר לארכיון כשייתבע.
                 </p>
 
-                {/* Recipient email */}
-                <div className="relative">
-                  <Gift className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="email"
-                    value={giftEmail}
-                    onChange={e => setGiftEmail(e.target.value)}
-                    placeholder="מייל הנמען"
-                    className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                    dir="ltr"
-                  />
+                {/* Mode toggle */}
+                <div className="flex bg-gray-100 rounded-2xl p-1">
+                  <button
+                    onClick={() => { setGiftMode('link'); setGiftLink(null) }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl transition-all ${
+                      giftMode === 'link' ? 'bg-white shadow text-green-600' : 'text-gray-500'
+                    }`}
+                  >
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    צור קישור
+                  </button>
+                  <button
+                    onClick={() => { setGiftMode('email'); setGiftLink(null) }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl transition-all ${
+                      giftMode === 'email' ? 'bg-white shadow text-green-600' : 'text-gray-500'
+                    }`}
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    שלח למייל
+                  </button>
                 </div>
+
+                {/* Recipient email (email mode only) */}
+                {giftMode === 'email' && (
+                  <div className="relative">
+                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="email"
+                      value={giftEmail}
+                      onChange={e => setGiftEmail(e.target.value)}
+                      placeholder="מייל הנמען"
+                      className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
 
                 {/* Personal message */}
                 <textarea
@@ -940,20 +981,22 @@ export default function CheckoutPage() {
                   dir="rtl"
                 />
 
-                {/* Schedule toggle */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setGiftScheduled(s => !s)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                      giftScheduled ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-500'
-                    }`}
-                  >
-                    <Calendar className="w-3.5 h-3.5" />
-                    תזמן לתאריך ספציפי
-                  </button>
-                </div>
+                {/* Schedule toggle (email mode only) */}
+                {giftMode === 'email' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setGiftScheduled(s => !s)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
+                        giftScheduled ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-500'
+                      }`}
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      תזמן לתאריך ספציפי
+                    </button>
+                  </div>
+                )}
 
-                {giftScheduled && (
+                {giftMode === 'email' && giftScheduled && (
                   <input
                     type="datetime-local"
                     value={giftDate}
@@ -964,18 +1007,37 @@ export default function CheckoutPage() {
                   />
                 )}
 
-                {/* Send button */}
+                {/* Action button */}
                 <button
                   onClick={handleSendGift}
-                  disabled={giftSending || !giftEmail.trim() || (giftScheduled && !giftDate)}
+                  disabled={giftSending || (giftMode === 'email' && (!giftEmail.trim() || (giftScheduled && !giftDate)))}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl font-bold text-sm disabled:opacity-50 shadow hover:shadow-md active:scale-95 transition-all"
                 >
                   {giftSending
                     ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <Gift className="w-4 h-4" />
+                    : giftMode === 'link' ? <LinkIcon className="w-4 h-4" /> : <Gift className="w-4 h-4" />
                   }
-                  {giftScheduled && giftDate ? 'תזמן שליחה' : 'שלח מתנה עכשיו'}
+                  {giftSending ? 'יוצר...' : giftMode === 'link' ? 'צור קישור מתנה' : giftScheduled && giftDate ? 'תזמן שליחה' : 'שלח מתנה עכשיו'}
                 </button>
+
+                {/* Created link display */}
+                {giftLink && (
+                  <div className="bg-green-50 border border-green-200 rounded-2xl p-3 space-y-2">
+                    <p className="text-xs font-medium text-green-700">🎁 קישור המתנה (שתף עם הנמען):</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-green-800 font-mono break-all flex-1">{giftLink}</p>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(giftLink).catch(() => {})
+                          toast.success('הועתק!')
+                        }}
+                        className="flex-shrink-0 p-2 bg-green-100 hover:bg-green-200 rounded-xl transition-colors"
+                      >
+                        <Copy className="w-4 h-4 text-green-700" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Pending gifts list */}
                 {giftsLoaded && pendingGifts.length > 0 && (
@@ -984,7 +1046,9 @@ export default function CheckoutPage() {
                     {pendingGifts.map(g => (
                       <div key={g.id} className="flex items-center justify-between py-2 border-b last:border-0">
                         <div>
-                          <p className="text-sm text-gray-700">{g.recipient_email}</p>
+                          <p className="text-sm text-gray-700">
+                            {g.recipient_email || <span className="text-gray-400 italic">קישור בלבד</span>}
+                          </p>
                           <p className="text-xs text-gray-400">
                             {g.email_sent_at ? 'נשלח' : `מתוזמן: ${new Date(g.send_at).toLocaleDateString('he-IL')}`}
                           </p>

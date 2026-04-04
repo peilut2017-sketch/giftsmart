@@ -47,8 +47,16 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [plan, setPlan] = useState<Plan>('free')
+  const [premiumEnabled, setPremiumEnabled] = useState(true)
   const [upgradeSheetOpen, setUpgradeSheetOpen] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState('')
+
+  // Fetch the admin-controlled premium flag once on mount
+  useEffect(() => {
+    supabase.rpc('get_premium_enabled').then(({ data }) => {
+      if (data === false) setPremiumEnabled(false)
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!user) { setPlan('free'); return }
@@ -74,7 +82,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     })()
   }, [user])
 
-  const isPro = plan === 'pro'
+  // If admin disabled premium system → everyone is effectively Pro
+  const isPro = !premiumEnabled || plan === 'pro'
   const limits = isPro ? PRO_LIMITS : FREE_LIMITS
 
   function openUpgradeSheet(reason = '') {
@@ -83,6 +92,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshPlan() {
+    supabase.rpc('get_premium_enabled').then(({ data }) => {
+      setPremiumEnabled(data !== false)
+    }).catch(() => {})
     if (!user) { setPlan('free'); return }
     try {
       const { data } = await supabase
