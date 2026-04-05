@@ -38,6 +38,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [tags, setTags] = useState(voucher?.tags?.join(', ') || '')
   const [notes, setNotes] = useState(voucher?.notes || '')
   const [link, setLink] = useState(voucher?.link || '')
+  const [source, setSource] = useState(voucher?.source || '')
   const [newCatName, setNewCatName] = useState('')
   const [showCatInput, setShowCatInput] = useState(false)
   const [showSMSInput, setShowSMSInput] = useState(false)
@@ -307,6 +308,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         notes: notes.trim() || undefined,
         link: link.trim() || undefined,
+        source: source.trim() || undefined,
         is_archived: false,
         is_shared: false,
       }
@@ -631,6 +633,34 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
           </div>
 
+          {/* Source */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">מקור שובר</label>
+            <input
+              type="text"
+              value={source}
+              onChange={e => setSource(e.target.value)}
+              placeholder="לדוגמה: קיבלתי כמתנה, נקנה בחנות, תוכנית נאמנות..."
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+            />
+          </div>
+
+          {/* Link */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5 block">
+              <Link className="w-3.5 h-3.5" />
+              קישור לשובר/לבדיקת יתרה
+            </label>
+            <input
+              type="url"
+              value={link}
+              onChange={e => setLink(e.target.value)}
+              placeholder="https://..."
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+              dir="ltr"
+            />
+          </div>
+
           {/* Categories */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-2 block">קטגוריות</label>
@@ -739,21 +769,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             />
           </div>
 
-          {/* Link */}
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5 block">
-              <Link className="w-3.5 h-3.5" />
-              קישור לשובר
-            </label>
-            <input
-              type="url"
-              value={link}
-              onChange={e => setLink(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-              dir="ltr"
-            />
-          </div>
         </form>
 
         {/* Footer */}

@@ -15,6 +15,7 @@ export interface Voucher {
   tags: string[]
   notes?: string
   link?: string
+  source?: string
   is_archived: boolean
   is_shared: boolean
   is_gift?: boolean
