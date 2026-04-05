@@ -183,6 +183,9 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
             {voucher.categories.length > 0 && (
               <span className="text-xs text-gray-400">{voucher.categories[0]}</span>
             )}
+            {voucher.source && (
+              <span className="text-xs text-gray-400 truncate">{voucher.source}</span>
+            )}
           </div>
 
           {voucher.amount > 0 && (
@@ -321,6 +324,9 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
               </div>
               {superVoucherName && (
                 <p className="text-xs text-gray-500 truncate">{voucher.store_name}</p>
+              )}
+              {voucher.source && (
+                <p className="text-xs text-gray-400 truncate">{voucher.source}</p>
               )}
             </div>
             <div className="flex-shrink-0 me-2">
