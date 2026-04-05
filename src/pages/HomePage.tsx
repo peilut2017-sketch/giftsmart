@@ -315,6 +315,8 @@ export default function HomePage() {
   }
 
   const totalBalance = vouchers.reduce((s, v) => s + v.balance, 0)
+  const filteredBalance = displayVouchers.reduce((s, v) => s + v.balance, 0)
+  const isFiltered = search !== '' || filterTab !== 'all' || filterCats.length > 0
 
   return (
     <div className="flex-1 bg-gray-50">
@@ -333,7 +335,13 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h1 className="text-xl font-bold text-gray-900">השוברים שלי</h1>
-              <p className="text-xs text-gray-500">{formatCurrency(totalBalance)} יתרה כוללת</p>
+              <div className="flex items-center gap-2">
+                {isFiltered && (
+                  <p className="text-xs font-semibold text-green-700">{formatCurrency(filteredBalance)} מוצג</p>
+                )}
+                {isFiltered && <span className="text-xs text-gray-300">|</span>}
+                <p className="text-xs text-gray-500">{formatCurrency(totalBalance)} יתרה כוללת</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {!isOnline && <WifiOff className="w-4 h-4 text-orange-500" />}
