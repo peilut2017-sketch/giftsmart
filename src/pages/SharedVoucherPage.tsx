@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
+import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric, parseBalanceInput } from '../utils/helpers'
 import { Copy, AlertTriangle, Wallet, ChevronDown, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Toaster } from 'react-hot-toast'
@@ -117,8 +117,8 @@ export default function SharedVoucherPage() {
 
   async function handleUpdateBalance() {
     if (!voucher || !token) return
-    const used = parseFloat(usedAmount)
-    if (isNaN(used) || used < 0) return toast.error('סכום לא תקין')
+    const { amount: used, storeName } = parseBalanceInput(usedAmount)
+    if (used === null || used < 0) return toast.error('סכום לא תקין')
     if (used > voucher.balance) return toast.error(`לא ניתן לנצל יותר מהיתרה (₪${voucher.balance})`)
 
     const newBalance = Math.max(0, voucher.balance - used)
@@ -128,6 +128,7 @@ export default function SharedVoucherPage() {
     const { data, error } = await supabase.rpc('update_voucher_balance_by_token', {
       p_token: token,
       p_new_balance: newBalance,
+      ...(storeName ? { p_store_used: storeName } : {}),
     })
     setUpdating(false)
 
@@ -138,12 +139,10 @@ export default function SharedVoucherPage() {
       return
     }
 
-    // Optimistic update
     setVoucher(v => v ? { ...v, balance: newBalance } : v)
     setUsedAmount('')
     setShowUpdateForm(false)
 
-    // Undo toast — restores old balance
     toast(
       (t) => (
         <span className="flex items-center gap-2">
@@ -288,21 +287,18 @@ export default function SharedVoucherPage() {
                 </button>
               ) : (
                 <div className="p-4 space-y-3 bg-green-50">
-                  <p className="text-sm font-semibold text-gray-700 text-center">כמה הוצאת? (₪)</p>
+                  <p className="text-sm font-semibold text-gray-700 text-center">סכום ושם החנות</p>
                   <div className="flex gap-2">
                     <input
                       ref={usedInputRef}
-                      type="number"
+                      type="text"
                       inputMode="decimal"
-                      min="0"
-                      max={voucher.balance}
-                      step="0.01"
                       value={usedAmount}
                       onChange={e => setUsedAmount(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
-                      placeholder={`עד ${voucher.balance}`}
+                      placeholder="לדוגמה: 150 קופיקס"
                       className="flex-1 text-center text-lg font-bold border border-gray-200 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white"
-                      dir="ltr"
+                      dir="rtl"
                     />
                     <button
                       onClick={handleUpdateBalance}
@@ -315,11 +311,15 @@ export default function SharedVoucherPage() {
                       אשר
                     </button>
                   </div>
-                  {usedAmount && !isNaN(parseFloat(usedAmount)) && parseFloat(usedAmount) > 0 && parseFloat(usedAmount) <= voucher.balance && (
-                    <p className="text-xs text-center text-gray-500">
-                      יתרה חדשה: <strong className="text-green-700">{formatCurrency(Math.max(0, voucher.balance - parseFloat(usedAmount)))}</strong>
-                    </p>
-                  )}
+                  {(() => {
+                    const { amount } = parseBalanceInput(usedAmount)
+                    if (!amount || amount <= 0 || amount > voucher.balance) return null
+                    return (
+                      <p className="text-xs text-center text-gray-500">
+                        יתרה חדשה: <strong className="text-green-700">{formatCurrency(Math.max(0, voucher.balance - amount))}</strong>
+                      </p>
+                    )
+                  })()}
                   <button
                     onClick={() => { setShowUpdateForm(false); setUsedAmount('') }}
                     className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"

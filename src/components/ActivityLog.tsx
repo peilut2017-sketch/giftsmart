@@ -38,9 +38,11 @@ function buildSubtitle(entry: ActivityLogEntry): string {
   switch (entry.action) {
     case 'add':
       return d.amount ? `סכום: ${formatCurrency(d.amount)}` : ''
-    case 'balance_update':
-      return d.from !== undefined && d.to !== undefined
-        ? `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}` : ''
+    case 'balance_update': {
+      if (d.from === undefined || d.to === undefined) return ''
+      const base = `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}`
+      return d.store_used ? `${base} · ${d.store_used}` : base
+    }
     case 'edit': {
       const parts: string[] = []
       if (d.store_name)  parts.push(`שם: ${d.store_name.to}`)
@@ -58,9 +60,11 @@ function buildSubtitle(entry: ActivityLogEntry): string {
       return 'קישור מתנה'
     case 'gift_received':
       return d.sender ? `מ: ${d.sender}` : ''
-    case 'gift_balance_update':
-      return d.from !== undefined && d.to !== undefined
-        ? `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}` : ''
+    case 'gift_balance_update': {
+      if (d.from === undefined || d.to === undefined) return ''
+      const base = `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}`
+      return d.store_used ? `${base} · ${d.store_used}` : base
+    }
     default:
       return ''
   }

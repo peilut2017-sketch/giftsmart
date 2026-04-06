@@ -25,7 +25,7 @@ interface VoucherContextType {
   loading: boolean
   isOnline: boolean
   addVoucher: (v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>) => Promise<Voucher | null>
-  updateVoucher: (id: string, data: Partial<Voucher>) => Promise<void>
+  updateVoucher: (id: string, data: Partial<Voucher>, storeUsed?: string | null) => Promise<void>
   deleteVoucher: (id: string) => Promise<void>
   archiveVoucher: (id: string) => Promise<void>
   unarchiveVoucher: (id: string) => Promise<void>
@@ -46,7 +46,7 @@ interface VoucherContextType {
   shareVoucherWithUser: (voucherId: string, email: string) => Promise<'shared' | 'already_shared' | 'not_found'>
   getVoucherShares: (voucherId: string) => Promise<VoucherShare[]>
   unshareVoucher: (voucherId: string, email: string) => Promise<void>
-  updateSharedVoucherBalance: (voucherId: string, newBalance: number) => Promise<void>
+  updateSharedVoucherBalance: (voucherId: string, newBalance: number, storeUsed?: string | null) => Promise<void>
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
   getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
   createGift: (voucherId: string, recipientEmail: string | null, message: string, sendAt: Date) => Promise<string | null>
@@ -431,7 +431,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  async function updateVoucher(id: string, vData: Partial<Voucher>) {
+  async function updateVoucher(id: string, vData: Partial<Voucher>, storeUsed?: string | null) {
     if (!isOnline && vouchers.find(v => v.id.startsWith('local-'))) {
       throw new Error('אין חיבור לאינטרנט')
     }
@@ -451,6 +451,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       if (keys.length === 1 && keys[0] === 'balance') {
         logAction('balance_update', existing.store_name, id, {
           from: existing.balance, to: vData.balance,
+          ...(storeUsed ? { store_used: storeUsed } : {}),
         })
       } else {
         const SENSITIVE = new Set(['code', 'cvv'])
@@ -624,10 +625,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function updateSharedVoucherBalance(voucherId: string, newBalance: number) {
+  async function updateSharedVoucherBalance(voucherId: string, newBalance: number, storeUsed?: string | null) {
     const { error } = await supabase.rpc('update_shared_voucher_balance', {
       p_voucher_id: voucherId,
       p_new_balance: newBalance,
+      ...(storeUsed ? { p_store_used: storeUsed } : {}),
     })
     if (error) throw error
     setSharedWithMe(prev => prev.map(v => v.id === voucherId ? { ...v, balance: newBalance } : v))

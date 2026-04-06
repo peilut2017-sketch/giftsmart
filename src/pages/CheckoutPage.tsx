@@ -4,7 +4,7 @@ import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { sendVoucherSharedEmail, sendVoucherShareInviteEmail, sendGiftEmail } from '../lib/emailService'
-import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
+import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus, parseBalanceInput } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
@@ -20,7 +20,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts } = useVouchers()
-  const { limits, openUpgradeSheet } = useSubscription()
+  const { limits, openUpgradeSheet, isPro } = useSubscription()
 
   const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
   const isSharedVoucher = sharedWithMe.some(v => v.id === id)
@@ -122,7 +122,7 @@ export default function CheckoutPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function updateBalance(newBalance: number, usedAmount?: number) {
+  async function updateBalance(newBalance: number, usedAmount?: number, storeUsed?: string | null) {
     if (!voucher) return
     if (!isOnline) {
       toast.error('אין חיבור לאינטרנט')
@@ -130,9 +130,9 @@ export default function CheckoutPage() {
     }
     const clamped = Math.max(0, newBalance)
     if (isSharedVoucher) {
-      await updateSharedVoucherBalance(voucher.id, clamped)
+      await updateSharedVoucherBalance(voucher.id, clamped, storeUsed)
     } else {
-      await updateVoucher(voucher.id, { balance: clamped })
+      await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
     }
     if (clamped <= 0) {
       toast.success('יתרה אופסה!')
@@ -578,35 +578,38 @@ export default function CheckoutPage() {
               </div>
 
               <div>
+                <p className="text-xs font-medium text-gray-500 mb-1.5">
+                  סכום{isPro ? ' ושם החנות' : ''}
+                </p>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     inputMode="decimal"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
-                    placeholder="סכום שימוש..."
+                    placeholder={isPro ? 'לדוגמה: 150 קופיקס' : 'סכום שימוש...'}
                     className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300"
                     style={{ fontSize: '16px' }}
-                    dir="ltr"
+                    dir="rtl"
                   />
                   <button
                     onClick={() => {
-                      const used = parseFloat(customAmount)
-                      if (!isNaN(used) && used > 0) {
-                        updateBalance(voucher.balance - used, used)
+                      const { amount, storeName } = parseBalanceInput(customAmount)
+                      if (amount !== null && amount > 0) {
+                        updateBalance(voucher.balance - amount, amount, isPro ? storeName : null)
                         setCustomAmount('')
                       }
                     }}
-                    disabled={!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0}
+                    disabled={!customAmount || parseBalanceInput(customAmount).amount === null || (parseBalanceInput(customAmount).amount ?? 0) <= 0}
                     className="shrink-0 px-3 py-2 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
                   >
                     עדכן
                   </button>
                 </div>
                 {(() => {
-                  const used = parseFloat(customAmount) || 0
-                  if (used <= 0) return null
-                  const newBal = Math.max(0, voucher.balance - used)
+                  const { amount } = parseBalanceInput(customAmount)
+                  if (!amount || amount <= 0) return null
+                  const newBal = Math.max(0, voucher.balance - amount)
                   return (
                     <p className={`text-xs mt-1.5 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
                       יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}

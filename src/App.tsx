@@ -120,15 +120,17 @@ function NotificationBridge() {
         table: 'shared_balance_updates',
         filter: `owner_user_id=eq.${user.id}`,
       }, (payload) => {
-        const { store_name, old_balance, new_balance } = payload.new as {
+        const { store_name, old_balance, new_balance, store_used } = payload.new as {
           store_name: string
           old_balance: number
           new_balance: number
+          store_used?: string | null
         }
-        toast(`🔔 יתרת "${store_name}" עודכנה: ₪${old_balance} ← ₪${new_balance}`, { duration: 6000 })
+        const locationSuffix = store_used ? ` · ${store_used}` : ''
+        toast(`🔔 יתרת "${store_name}" עודכנה: ₪${old_balance} ← ₪${new_balance}${locationSuffix}`, { duration: 6000 })
         if (Notification.permission === 'granted') {
           new Notification('יתרת שובר עודכנה', {
-            body: `${store_name}: ₪${old_balance} → ₪${new_balance}`,
+            body: `${store_name}: ₪${old_balance} → ₪${new_balance}${locationSuffix}`,
             icon: '/pwa-192x192.png',
           })
         }
