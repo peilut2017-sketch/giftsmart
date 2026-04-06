@@ -18,6 +18,7 @@ import GiftPage from './pages/GiftPage'
 import AccessibilityPage from './pages/AccessibilityPage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
+import OfflineBanner from './components/OfflineBanner'
 import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import { isBiometricEnabled } from './lib/passkey'
@@ -209,6 +210,7 @@ function AppRoutes() {
       {/* Skip to main content — visible on keyboard focus */}
       <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
       <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto overflow-x-hidden">
+        <OfflineBanner />
         <main id="main-content" className="flex-1 flex flex-col">
           <Routes>
             <Route path="/" element={<HomePage />} />

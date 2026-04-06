@@ -24,6 +24,7 @@ interface VoucherContextType {
   walletError: string | null
   loading: boolean
   isOnline: boolean
+  pendingOpsCount: number
   addVoucher: (v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>) => Promise<Voucher | null>
   updateVoucher: (id: string, data: Partial<Voucher>, storeUsed?: string | null) => Promise<void>
   deleteVoucher: (id: string) => Promise<void>
@@ -75,8 +76,15 @@ export interface ActivityLogEntry {
 const VoucherContext = createContext<VoucherContextType | undefined>(undefined)
 
 const CACHE_KEY_PREFIX = 'vouchers_cache_'
+const PENDING_OPS_KEY_PREFIX = 'pending_ops_'
 const VOUCHERS_VIEW = 'vouchers'
 const QUERY_TIMEOUT_MS = 8000
+
+type PendingOp =
+  | { type: 'update'; id: string; data: Partial<Voucher>; storeUsed?: string | null }
+  | { type: 'delete'; id: string }
+  | { type: 'archive'; id: string }
+  | { type: 'unarchive'; id: string }
 
 // Wraps a thenable (Supabase query) with a timeout so a hung query never freezes the app
 function withTimeout<T>(thenable: PromiseLike<T>, ms = QUERY_TIMEOUT_MS): Promise<T> {
@@ -100,6 +108,10 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const [walletError, setWalletError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [pendingOps, setPendingOps] = useState<PendingOp[]>([])
+  const pendingOpsRef = useRef<PendingOp[]>([])
+
+  const prevIsOnlineRef = useRef(navigator.onLine)
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -128,6 +140,54 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(CACHE_KEY_PREFIX + userId, JSON.stringify({ active, archived }))
     } catch {}
   }, [])
+
+  const loadPendingOps = useCallback((userId: string) => {
+    try {
+      const saved = localStorage.getItem(PENDING_OPS_KEY_PREFIX + userId)
+      if (saved) {
+        const ops: PendingOp[] = JSON.parse(saved)
+        pendingOpsRef.current = ops
+        setPendingOps(ops)
+      }
+    } catch {}
+  }, [])
+
+  const savePendingOps = useCallback((userId: string, ops: PendingOp[]) => {
+    try {
+      localStorage.setItem(PENDING_OPS_KEY_PREFIX + userId, JSON.stringify(ops))
+    } catch {}
+  }, [])
+
+  const enqueuePendingOp = useCallback((op: PendingOp, userId: string) => {
+    const newOps = [...pendingOpsRef.current, op]
+    pendingOpsRef.current = newOps
+    setPendingOps(newOps)
+    savePendingOps(userId, newOps)
+  }, [savePendingOps])
+
+  const flushPendingOps = useCallback(async (userId: string) => {
+    const ops = [...pendingOpsRef.current]
+    if (ops.length === 0) return
+    const failed: PendingOp[] = []
+    for (const op of ops) {
+      try {
+        if (op.type === 'update') {
+          await supabase.from(VOUCHERS_VIEW).update(op.data).eq('id', op.id)
+        } else if (op.type === 'delete') {
+          await supabase.from('vouchers').delete().eq('id', op.id)
+        } else if (op.type === 'archive') {
+          await supabase.from('vouchers').update({ is_archived: true }).eq('id', op.id)
+        } else if (op.type === 'unarchive') {
+          await supabase.from('vouchers').update({ is_archived: false }).eq('id', op.id)
+        }
+      } catch {
+        failed.push(op)
+      }
+    }
+    pendingOpsRef.current = failed
+    setPendingOps(failed)
+    savePendingOps(userId, failed)
+  }, [savePendingOps])
 
   const fetchData = useCallback(async () => {
     if (!user) {
@@ -303,6 +363,19 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [user])
 
+  // Auto-sync when coming back online
+  useEffect(() => {
+    if (!user) return
+    const justCameOnline = isOnline && !prevIsOnlineRef.current
+    prevIsOnlineRef.current = isOnline
+    if (!justCameOnline) return
+    ;(async () => {
+      await syncToCloud()
+      await flushPendingOps(user.id)
+      fetchData()
+    })().catch(console.error)
+  }, [isOnline, user]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (user) {
       // Reset all state before fetching for the new user to avoid showing stale data
@@ -314,6 +387,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       setSharedWithMe([])
       setWalletId(null)
       walletIdRef.current = null
+      loadPendingOps(user.id)
       fetchData()
     } else {
       // Clear all cached voucher data from localStorage on logout to prevent data leakage
@@ -374,6 +448,23 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   async function addVoucher(v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>): Promise<Voucher | null> {
     if (!user) throw new Error('לא מחובר')
 
+    // Offline: create a local voucher that will sync when back online
+    if (!navigator.onLine) {
+      const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const localVoucher: Voucher = {
+        ...(v as any),
+        id: localId,
+        user_id: user.id,
+        wallet_id: walletIdRef.current || 'local',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      const newActive = [...vouchers, localVoucher]
+      setVouchers(newActive)
+      saveToCache(user.id, newActive, archivedVouchers)
+      return localVoucher
+    }
+
     // If walletId not loaded yet, try to get it now
     let wId = walletId ?? walletIdRef.current
     if (!wId) {
@@ -432,16 +523,18 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateVoucher(id: string, vData: Partial<Voucher>, storeUsed?: string | null) {
-    if (!isOnline && vouchers.find(v => v.id.startsWith('local-'))) {
-      throw new Error('אין חיבור לאינטרנט')
-    }
     const existing = [...vouchers, ...archivedVouchers].find(v => v.id === id)
     const updated = { ...vData, updated_at: new Date().toISOString() }
     setVouchers(prev => prev.map(v => v.id === id ? { ...v, ...updated } : v))
 
     if (!id.startsWith('local-')) {
-      // Update through the view so pgsodium re-encrypts code/cvv if they changed
-      await supabase.from(VOUCHERS_VIEW).update(updated).eq('id', id)
+      if (!navigator.onLine) {
+        // Queue for later sync — optimistic update already applied above
+        enqueuePendingOp({ type: 'update', id, data: updated, storeUsed }, user!.id)
+      } else {
+        // Update through the view so pgsodium re-encrypts code/cvv if they changed
+        await supabase.from(VOUCHERS_VIEW).update(updated).eq('id', id)
+      }
     }
     const newActive = vouchers.map(v => v.id === id ? { ...v, ...updated } : v)
     if (user) saveToCache(user.id, newActive, archivedVouchers)
@@ -472,7 +565,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setVouchers(prev => prev.filter(v => v.id !== id))
     setArchivedVouchers(prev => prev.filter(v => v.id !== id))
     if (!id.startsWith('local-')) {
-      await supabase.from('vouchers').delete().eq('id', id)
+      if (!navigator.onLine) {
+        enqueuePendingOp({ type: 'delete', id }, user!.id)
+      } else {
+        await supabase.from('vouchers').delete().eq('id', id)
+      }
     }
     const newActive = vouchers.filter(v => v.id !== id)
     if (user) saveToCache(user.id, newActive, archivedVouchers.filter(v => v.id !== id))
@@ -488,7 +585,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setVouchers(newActive)
     setArchivedVouchers(newArchived)
     if (!id.startsWith('local-')) {
-      await supabase.from('vouchers').update({ is_archived: true }).eq('id', id)
+      if (!navigator.onLine) {
+        enqueuePendingOp({ type: 'archive', id }, user!.id)
+      } else {
+        await supabase.from('vouchers').update({ is_archived: true }).eq('id', id)
+      }
     }
     if (user) saveToCache(user.id, newActive, newArchived)
     logAction('archive', voucher.store_name, id, { balance: voucher.balance })
@@ -503,7 +604,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setVouchers(newActive)
     setArchivedVouchers(newArchived)
     if (!id.startsWith('local-')) {
-      await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
+      if (!navigator.onLine) {
+        enqueuePendingOp({ type: 'unarchive', id }, user!.id)
+      } else {
+        await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
+      }
     }
     if (user) saveToCache(user.id, newActive, newArchived)
     logAction('unarchive', voucher.store_name, id)
@@ -763,6 +868,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores, sharedWithMe,
       walletId, walletName, walletError, loading, isOnline,
+      pendingOpsCount: pendingOps.length,
       addVoucher, updateVoucher, deleteVoucher, archiveVoucher, unarchiveVoucher,
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
