@@ -12,19 +12,26 @@
 
 DO $$
 DECLARE
-  r RECORD;
+  r      RECORD;
+  v_drop TEXT;
 BEGIN
   FOR r IN
-    SELECT oid::regprocedure AS sig
-    FROM   pg_proc
-    WHERE  proname IN (
-      'update_voucher_balance_by_token',
-      'update_shared_voucher_balance',
-      'update_gift_voucher_balance'
-    )
-    AND    pronamespace = 'public'::regnamespace
+    SELECT p.proname,
+           pg_catalog.pg_get_function_identity_arguments(p.oid) AS args
+    FROM   pg_catalog.pg_proc p
+    JOIN   pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+    WHERE  p.proname IN (
+             'update_voucher_balance_by_token',
+             'update_shared_voucher_balance',
+             'update_gift_voucher_balance'
+           )
+    AND    n.nspname = 'public'
   LOOP
-    EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+    v_drop := format(
+      'DROP FUNCTION IF EXISTS public.%I(%s) CASCADE',
+      r.proname, r.args
+    );
+    EXECUTE v_drop;
   END LOOP;
 END;
 $$;
