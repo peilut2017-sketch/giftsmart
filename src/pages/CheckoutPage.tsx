@@ -584,7 +584,7 @@ export default function CheckoutPage() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    inputMode="decimal"
+                    inputMode="text"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
                     placeholder={isPro ? 'לדוגמה: 150 קופיקס' : 'סכום שימוש...'}

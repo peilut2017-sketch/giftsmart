@@ -319,7 +319,7 @@ export default function GiftPage() {
                       <input
                         ref={usedInputRef}
                         type="text"
-                        inputMode="decimal"
+                        inputMode="text"
                         value={usedAmount}
                         onChange={e => setUsedAmount(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
