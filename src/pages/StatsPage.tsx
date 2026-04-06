@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
-import { BarChart2, TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap } from 'lucide-react'
+import { BarChart2, TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap, PlusCircle, ShoppingBag, Clock, Gift, Info } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
@@ -26,36 +26,85 @@ export default function StatsPage() {
     const expired = active.filter(v => getExpiryStatus(v.expiry_date) === 'expired').length
     const shared = active.filter(v => v.is_shared).length
 
-    // Category breakdown
-    const catMap: Record<string, number> = {}
+    // Near-zero vouchers (less than 10% of original value remaining)
+    const nearZero = active.filter(v => {
+      const orig = v.amount || v.balance
+      return orig > 0 && v.balance > 0 && v.balance / orig < 0.1
+    }).length
+
+    // Gift vouchers
+    const giftVouchers = active.filter(v => v.is_gift).length
+
+    // Category breakdown — each category gets the FULL balance of vouchers assigned to it.
+    // Vouchers with multiple categories appear in each category at their full value.
+    // This means the sum may exceed totalBalance when vouchers span multiple categories.
+    const catMap: Record<string, { balance: number; count: number }> = {}
+    let multiCategoryCount = 0
     active.forEach(v => {
       if (v.categories.length === 0) {
-        catMap['אחר'] = (catMap['אחר'] || 0) + v.balance
+        if (!catMap['אחר']) catMap['אחר'] = { balance: 0, count: 0 }
+        catMap['אחר'].balance += v.balance
+        catMap['אחר'].count += 1
       } else {
+        if (v.categories.length > 1) multiCategoryCount++
         v.categories.forEach(cat => {
-          catMap[cat] = (catMap[cat] || 0) + v.balance / v.categories.length
+          if (!catMap[cat]) catMap[cat] = { balance: 0, count: 0 }
+          catMap[cat].balance += v.balance
+          catMap[cat].count += 1
         })
       }
     })
     const categoryData = Object.entries(catMap)
-      .filter(([, v]) => v > 0)
-      .map(([name, value]) => ({ name, value: Math.round(value) }))
+      .filter(([, v]) => v.balance > 0)
+      .map(([name, { balance, count }]) => ({ name, value: Math.round(balance), count }))
       .sort((a, b) => b.value - a.value)
 
     // Top stores by balance
-    const storeMap: Record<string, number> = {}
+    const storeMap: Record<string, { balance: number; count: number }> = {}
     active.forEach(v => {
-      storeMap[v.store_name] = (storeMap[v.store_name] || 0) + v.balance
+      if (!storeMap[v.store_name]) storeMap[v.store_name] = { balance: 0, count: 0 }
+      storeMap[v.store_name].balance += v.balance
+      storeMap[v.store_name].count += 1
     })
     const topStores = Object.entries(storeMap)
-      .map(([name, balance]) => ({ name, balance }))
+      .map(([name, { balance, count }]) => ({ name, balance, count }))
       .sort((a, b) => b.balance - a.balance)
       .slice(0, 5)
+
+    // Time-based activity stats
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    // Week starts on Sunday
+    const weekStart = new Date(todayStart)
+    weekStart.setDate(todayStart.getDate() - todayStart.getDay())
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    const allVouchers = [...vouchers, ...archivedVouchers]
+
+    const addedToday = allVouchers.filter(v => new Date(v.created_at) >= todayStart).length
+    const addedThisWeek = allVouchers.filter(v => new Date(v.created_at) >= weekStart).length
+    const addedThisMonth = allVouchers.filter(v => new Date(v.created_at) >= monthStart).length
+
+    // "Used" = vouchers whose balance was last updated within the period AND balance < original amount
+    // Also includes archived vouchers (fully depleted) updated within the period
+    const usedActive = active.filter(v => {
+      const orig = v.amount || 0
+      return orig > 0 && v.balance < orig
+    })
+    const usedArchived = archivedVouchers.filter(v => v.balance === 0 || (v.amount && v.balance < v.amount))
+    const usedCandidates = [...usedActive, ...usedArchived]
+
+    const usedToday = usedCandidates.filter(v => new Date(v.updated_at) >= todayStart).length
+    const usedThisWeek = usedCandidates.filter(v => new Date(v.updated_at) >= weekStart).length
+    const usedThisMonth = usedCandidates.filter(v => new Date(v.updated_at) >= monthStart).length
 
     return {
       totalBalance, totalOriginal, utilized, avgBalance,
       activeCount: active.length, expiringSoon, expired, shared,
+      nearZero, giftVouchers, multiCategoryCount,
       categoryData, topStores, archivedCount: archivedVouchers.length,
+      addedToday, addedThisWeek, addedThisMonth,
+      usedToday, usedThisWeek, usedThisMonth,
     }
   }, [vouchers, archivedVouchers])
 
@@ -65,7 +114,6 @@ export default function StatsPage() {
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
-      // Title
       doc.setFontSize(18)
       doc.setFont('helvetica', 'bold')
       doc.text('Voucher Wallet - Report', 105, 20, { align: 'center' })
@@ -74,7 +122,6 @@ export default function StatsPage() {
       doc.setFont('helvetica', 'normal')
       doc.text(new Date().toLocaleDateString('he-IL'), 105, 28, { align: 'center' })
 
-      // Summary section
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.text('Summary', 20, 40)
@@ -87,6 +134,8 @@ export default function StatsPage() {
         ['Avg Voucher Value', formatCurrency(stats.avgBalance)],
         ['Expiring Soon (14d)', stats.expiringSoon.toString()],
         ['Archived', stats.archivedCount.toString()],
+        ['Added This Month', stats.addedThisMonth.toString()],
+        ['Used This Month', stats.usedThisMonth.toString()],
       ]
 
       autoTable(doc, {
@@ -100,16 +149,18 @@ export default function StatsPage() {
 
       const afterSummary = (doc as any).lastAutoTable.finalY + 10
 
-      // Category breakdown
       if (stats.categoryData.length > 0) {
         doc.setFontSize(13)
         doc.setFont('helvetica', 'bold')
         doc.text('Balance by Category', 20, afterSummary)
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'italic')
+        doc.text('* Multi-category vouchers appear in each assigned category at full value', 20, afterSummary + 5)
 
         autoTable(doc, {
-          startY: afterSummary + 5,
-          head: [['Category', 'Balance']],
-          body: stats.categoryData.map(c => [c.name, formatCurrency(c.value)]),
+          startY: afterSummary + 10,
+          head: [['Category', 'Balance', 'Vouchers']],
+          body: stats.categoryData.map(c => [c.name, formatCurrency(c.value), c.count.toString()]),
           theme: 'striped',
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 20, right: 20 },
@@ -118,7 +169,6 @@ export default function StatsPage() {
 
       const afterCats = (doc as any).lastAutoTable.finalY + 10
 
-      // Top stores
       if (stats.topStores.length > 0) {
         doc.setFontSize(13)
         doc.setFont('helvetica', 'bold')
@@ -126,15 +176,14 @@ export default function StatsPage() {
 
         autoTable(doc, {
           startY: afterCats + 5,
-          head: [['Store', 'Balance']],
-          body: stats.topStores.map(s => [s.name, formatCurrency(s.balance)]),
+          head: [['Store', 'Balance', 'Vouchers']],
+          body: stats.topStores.map(s => [s.name, formatCurrency(s.balance), s.count.toString()]),
           theme: 'striped',
           headStyles: { fillColor: [245, 158, 11] },
           margin: { left: 20, right: 20 },
         })
       }
 
-      // Active vouchers list
       const activeVouchers = vouchers.filter(v => !v.is_archived)
       if (activeVouchers.length > 0) {
         doc.addPage()
@@ -175,6 +224,26 @@ export default function StatsPage() {
           <p className="text-sm text-gray-500">{label}</p>
           <p className={`text-xl font-bold ${color}`}>{value}</p>
           {sub && <p className="text-xs text-gray-400">{sub}</p>}
+        </div>
+      </div>
+    </div>
+  )
+
+  const TimeStatRow = ({ label, today, week, month }: { label: string; today: number; week: number; month: number }) => (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-gray-600 w-20 shrink-0">{label}</span>
+      <div className="flex-1 grid grid-cols-3 gap-2">
+        <div className="bg-gray-50 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-gray-400 mb-0.5">היום</p>
+          <p className="text-base font-bold text-gray-800">{today}</p>
+        </div>
+        <div className="bg-gray-50 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-gray-400 mb-0.5">השבוע</p>
+          <p className="text-base font-bold text-gray-800">{week}</p>
+        </div>
+        <div className="bg-gray-50 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-gray-400 mb-0.5">החודש</p>
+          <p className="text-base font-bold text-gray-800">{month}</p>
         </div>
       </div>
     </div>
@@ -241,6 +310,32 @@ export default function StatsPage() {
           </div>
         )}
 
+        {/* Activity over time */}
+        <div className="bg-white rounded-3xl shadow-sm p-5">
+          <h3 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-500" />
+            פעילות לאורך זמן
+          </h3>
+          <div className="space-y-3">
+            <TimeStatRow
+              label="נוספו"
+              today={stats.addedToday}
+              week={stats.addedThisWeek}
+              month={stats.addedThisMonth}
+            />
+            <TimeStatRow
+              label="שומשו"
+              today={stats.usedToday}
+              week={stats.usedThisWeek}
+              month={stats.usedThisMonth}
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-3 flex items-start gap-1">
+            <Info className="w-3 h-3 mt-0.5 shrink-0" />
+            "שומשו" מבוסס על שוברים שעודכנו ויש להם יתרה חלקית או שהוארכבו
+          </p>
+        </div>
+
         {/* Stat grid */}
         <div className="grid grid-cols-2 gap-3">
           <StatCard
@@ -273,6 +368,27 @@ export default function StatsPage() {
             value={stats.shared}
             color="text-blue-500"
           />
+          <StatCard
+            icon={ShoppingBag}
+            label="כמעט ריקים (<10%)"
+            value={stats.nearZero}
+            color={stats.nearZero > 0 ? 'text-amber-500' : 'text-gray-400'}
+            sub={stats.nearZero > 0 ? 'כדאי לנצל אותם' : undefined}
+          />
+          {stats.giftVouchers > 0 && (
+            <StatCard
+              icon={Gift}
+              label="שוברי מתנה"
+              value={stats.giftVouchers}
+              color="text-pink-500"
+            />
+          )}
+          <StatCard
+            icon={PlusCircle}
+            label="נוספו החודש"
+            value={stats.addedThisMonth}
+            color="text-indigo-500"
+          />
         </div>
 
         {/* Top stores */}
@@ -288,7 +404,8 @@ export default function StatsPage() {
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-gray-400 w-4">{i + 1}</span>
-                        <span className="text-sm text-gray-700 truncate max-w-[160px]">{store.name}</span>
+                        <span className="text-sm text-gray-700 truncate max-w-[140px]">{store.name}</span>
+                        <span className="text-xs text-gray-400">({store.count})</span>
                       </div>
                       <span className="text-sm font-semibold text-gray-800">{formatCurrency(store.balance)}</span>
                     </div>
@@ -308,7 +425,15 @@ export default function StatsPage() {
         {/* Category chart */}
         {stats.categoryData.length > 0 && (
           <div className="bg-white rounded-3xl shadow-sm p-5">
-            <h3 className="font-semibold text-gray-700 mb-4">התפלגות לפי קטגוריה</h3>
+            <div className="flex items-start justify-between mb-1">
+              <h3 className="font-semibold text-gray-700">התפלגות לפי קטגוריה</h3>
+            </div>
+            {stats.multiCategoryCount > 0 && (
+              <p className="text-xs text-gray-400 mb-3 flex items-start gap-1">
+                <Info className="w-3 h-3 mt-0.5 shrink-0" />
+                {stats.multiCategoryCount} שובר/ים משויכים למספר קטגוריות — כל אחד מוצג בכל קטגוריה שלו ביתרה המלאה שלו
+              </p>
+            )}
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie
@@ -335,8 +460,9 @@ export default function StatsPage() {
               {stats.categoryData.map((cat, i) => (
                 <div key={cat.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                     <span className="text-sm text-gray-700">{cat.name}</span>
+                    <span className="text-xs text-gray-400">({cat.count})</span>
                   </div>
                   <span className="text-sm font-semibold text-gray-800">{formatCurrency(cat.value)}</span>
                 </div>
