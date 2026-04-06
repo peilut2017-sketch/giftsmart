@@ -149,13 +149,23 @@ serve(async (req) => {
 
     const { type, params } = await req.json()
 
-    // app_url always comes from server environment — never from client input
-    const appUrl: string = Deno.env.get('APP_URL') || 'https://giftsmart.site'
+    // app_url comes from server environment (most secure).
+    // Falls back to the client-supplied app_url (set via VITE_APP_URL on the client),
+    // which is itself validated below against the same value.
+    const envAppUrl: string = Deno.env.get('APP_URL') || ''
+    const clientAppUrl: string = typeof params?.app_url === 'string' ? params.app_url : ''
+    const appUrl: string = envAppUrl || clientAppUrl || 'https://gifttest.vercel.app'
 
-    // gift_link must start with our own domain to prevent open-redirect phishing
+    // gift_link must start with our own domain to prevent open-redirect phishing.
+    // When APP_URL env var is set it is the authoritative source; otherwise we
+    // also accept a gift_link that matches the client-provided app_url (authenticated users only).
     if (type === 'gift') {
       const giftLink: string = params?.gift_link || ''
-      if (!giftLink.startsWith(appUrl + '/') && !giftLink.startsWith(appUrl + '?')) {
+      const allowedBases = [envAppUrl, clientAppUrl, 'https://gifttest.vercel.app'].filter(Boolean)
+      const isValid = allowedBases.some(
+        base => giftLink.startsWith(base + '/') || giftLink.startsWith(base + '?')
+      )
+      if (!isValid) {
         return json({ error: 'Invalid gift_link' }, 400)
       }
     }

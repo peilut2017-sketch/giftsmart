@@ -50,7 +50,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ sent: 0 }), { status: 200, headers: CORS })
   }
 
-  const appUrl = Deno.env.get('APP_URL') || 'https://giftsmart.site'
+  const appUrl = Deno.env.get('APP_URL') || 'https://gifttest.vercel.app'
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
