@@ -4,7 +4,7 @@ import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { sendVoucherSharedEmail, sendVoucherShareInviteEmail, sendGiftEmail } from '../lib/emailService'
-import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus, parseBalanceInput } from '../utils/helpers'
+import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
@@ -30,6 +30,7 @@ export default function CheckoutPage() {
   const qrRef = useRef<HTMLCanvasElement>(null)
   const [showCvv, setShowCvv] = useState(false)
   const [customAmount, setCustomAmount] = useState('')
+  const [customStore, setCustomStore] = useState('')
   const [copied, setCopied] = useState(false)
   const [wakeLock, setWakeLock] = useState<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
@@ -136,6 +137,7 @@ export default function CheckoutPage() {
     }
     if (clamped <= 0) {
       toast.success('יתרה אופסה!')
+      setConfirmArchive(true)
     } else {
       toast.success('יתרה עודכנה')
     }
@@ -570,7 +572,7 @@ export default function CheckoutPage() {
                   מחצית
                 </button>
                 <button
-                  onClick={async () => { await updateBalance(0); setConfirmArchive(true) }}
+                  onClick={() => updateBalance(0)}
                   className="py-2 bg-red-50 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-all"
                 >
                   מלא
@@ -578,37 +580,46 @@ export default function CheckoutPage() {
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1.5">
-                  סכום{isPro ? ' ושם החנות' : ''}
-                </p>
-                <div className="flex gap-2">
+                <p className="text-xs font-medium text-gray-500 mb-1.5">סכום שימוש</p>
+                <div className="flex gap-2 mb-2">
                   <input
-                    type="text"
-                    inputMode="text"
+                    type="number"
+                    inputMode="decimal"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
-                    placeholder={isPro ? 'לדוגמה: 150 קופיקס' : 'סכום שימוש...'}
+                    placeholder="סכום שימוש..."
                     className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300"
                     style={{ fontSize: '16px' }}
-                    dir="rtl"
+                    dir="ltr"
                   />
                   <button
                     onClick={() => {
-                      const { amount, storeName } = parseBalanceInput(customAmount)
-                      if (amount !== null && amount > 0) {
-                        updateBalance(voucher.balance - amount, amount, isPro ? storeName : null)
+                      const amount = parseFloat(customAmount)
+                      if (!isNaN(amount) && amount > 0) {
+                        updateBalance(voucher.balance - amount, amount, isPro ? (customStore.trim() || null) : null)
                         setCustomAmount('')
+                        setCustomStore('')
                       }
                     }}
-                    disabled={!customAmount || parseBalanceInput(customAmount).amount === null || (parseBalanceInput(customAmount).amount ?? 0) <= 0}
+                    disabled={!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0}
                     className="shrink-0 px-3 py-2 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
                   >
                     עדכן
                   </button>
                 </div>
+                {isPro && parseFloat(customAmount) > 0 && (
+                  <input
+                    type="text"
+                    value={customStore}
+                    onChange={e => setCustomStore(e.target.value)}
+                    placeholder="באיזה חנות? (אופציונלי)"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300 text-sm"
+                    dir="rtl"
+                  />
+                )}
                 {(() => {
-                  const { amount } = parseBalanceInput(customAmount)
-                  if (!amount || amount <= 0) return null
+                  const amount = parseFloat(customAmount)
+                  if (isNaN(amount) || amount <= 0) return null
                   const newBal = Math.max(0, voucher.balance - amount)
                   return (
                     <p className={`text-xs mt-1.5 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -706,8 +717,10 @@ export default function CheckoutPage() {
                       icon = <MinusCircle className="w-3.5 h-3.5" />
                       dotColor = 'bg-blue-500 text-white'
                       label = 'עדכון יתרה'
-                      if (entry.details?.from != null && entry.details?.to != null)
+                      if (entry.details?.from != null && entry.details?.to != null) {
                         detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
+                        if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
+                      }
                       break
                     case 'edit':
                       icon = <Pencil className="w-3.5 h-3.5" />

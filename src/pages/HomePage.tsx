@@ -140,7 +140,8 @@ export default function HomePage() {
   async function handleSave(vData: any) {
     if (editingVoucher) {
       const usedAmount = editingVoucher.balance - vData.balance
-      await updateVoucher(editingVoucher.id, vData)
+      const { _storeUsed, ...voucherData } = vData
+      await updateVoucher(editingVoucher.id, voucherData, _storeUsed ?? null)
       toast.success('שובר עודכן')
 
       if (usedAmount > 0) {

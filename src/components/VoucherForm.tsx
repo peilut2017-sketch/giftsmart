@@ -30,6 +30,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
   const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
   const [usageAmount, setUsageAmount] = useState('')
+  const [storeUsedInput, setStoreUsedInput] = useState('')
   const [valuePercent, setValuePercent] = useState(voucher?.value_percent?.toString() || '')
   const [code, setCode] = useState(voucher?.code || '')
   const [cvv, setCvv] = useState(voucher?.cvv || '')
@@ -311,6 +312,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         source: source.trim() || undefined,
         is_archived: false,
         is_shared: false,
+        _storeUsed: (voucher && used > 0) ? (storeUsedInput.trim() || null) : undefined,
       }
       await onSave(v)
       onClose()
@@ -516,6 +518,16 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     <p className="text-xs mt-1 text-gray-400">יתרה: ₪{(voucher.balance ?? 0).toLocaleString('he-IL')}</p>
                   )
                 })()}
+                {(parseFloat(usageAmount) || 0) > 0 && (
+                  <input
+                    type="text"
+                    value={storeUsedInput}
+                    onChange={e => setStoreUsedInput(e.target.value)}
+                    placeholder="באיזה חנות? (אופציונלי)"
+                    className="w-full mt-2 px-4 py-2.5 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="rtl"
+                  />
+                )}
               </div>
             ) : (
               <div>
