@@ -6,11 +6,30 @@
 -- included in the real-time notification sent to the voucher owner.
 
 
--- ── 1. update_voucher_balance_by_token (public shared link) ──────────────────
+-- ── 0. Drop all overloaded versions of the three functions ───────────────────
+-- Uses pg_proc to find every signature and drops them all, bypassing the
+-- ambiguity error that occurs when multiple overloads share the same name.
 
--- Drop all overloaded versions before recreating with new signature
-DROP FUNCTION IF EXISTS update_voucher_balance_by_token(TEXT, NUMERIC);
-DROP FUNCTION IF EXISTS update_voucher_balance_by_token(TEXT, NUMERIC, TEXT);
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT oid::regprocedure AS sig
+    FROM   pg_proc
+    WHERE  proname IN (
+      'update_voucher_balance_by_token',
+      'update_shared_voucher_balance',
+      'update_gift_voucher_balance'
+    )
+    AND    pronamespace = 'public'::regnamespace
+  LOOP
+    EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END;
+$$;
+
+-- ── 1. update_voucher_balance_by_token (public shared link) ──────────────────
 
 CREATE OR REPLACE FUNCTION update_voucher_balance_by_token(
   p_token       TEXT,
@@ -96,9 +115,6 @@ GRANT EXECUTE ON FUNCTION update_voucher_balance_by_token TO anon, authenticated
 
 -- ── 2. update_shared_voucher_balance (authenticated share recipient) ──────────
 
-DROP FUNCTION IF EXISTS update_shared_voucher_balance(UUID, NUMERIC);
-DROP FUNCTION IF EXISTS update_shared_voucher_balance(UUID, NUMERIC, TEXT);
-
 CREATE OR REPLACE FUNCTION update_shared_voucher_balance(
   p_voucher_id  UUID,
   p_new_balance NUMERIC,
@@ -160,9 +176,6 @@ GRANT EXECUTE ON FUNCTION update_shared_voucher_balance TO authenticated;
 
 
 -- ── 3. update_gift_voucher_balance (gift recipient) ───────────────────────────
-
-DROP FUNCTION IF EXISTS update_gift_voucher_balance(TEXT, NUMERIC);
-DROP FUNCTION IF EXISTS update_gift_voucher_balance(TEXT, NUMERIC, TEXT);
 
 CREATE OR REPLACE FUNCTION update_gift_voucher_balance(
   p_token       TEXT,
