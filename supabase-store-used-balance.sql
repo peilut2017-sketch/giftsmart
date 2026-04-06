@@ -8,6 +8,10 @@
 
 -- ── 1. update_voucher_balance_by_token (public shared link) ──────────────────
 
+-- Drop all overloaded versions before recreating with new signature
+DROP FUNCTION IF EXISTS update_voucher_balance_by_token(TEXT, NUMERIC);
+DROP FUNCTION IF EXISTS update_voucher_balance_by_token(TEXT, NUMERIC, TEXT);
+
 CREATE OR REPLACE FUNCTION update_voucher_balance_by_token(
   p_token       TEXT,
   p_new_balance NUMERIC,
@@ -92,6 +96,9 @@ GRANT EXECUTE ON FUNCTION update_voucher_balance_by_token TO anon, authenticated
 
 -- ── 2. update_shared_voucher_balance (authenticated share recipient) ──────────
 
+DROP FUNCTION IF EXISTS update_shared_voucher_balance(UUID, NUMERIC);
+DROP FUNCTION IF EXISTS update_shared_voucher_balance(UUID, NUMERIC, TEXT);
+
 CREATE OR REPLACE FUNCTION update_shared_voucher_balance(
   p_voucher_id  UUID,
   p_new_balance NUMERIC,
@@ -153,6 +160,9 @@ GRANT EXECUTE ON FUNCTION update_shared_voucher_balance TO authenticated;
 
 
 -- ── 3. update_gift_voucher_balance (gift recipient) ───────────────────────────
+
+DROP FUNCTION IF EXISTS update_gift_voucher_balance(TEXT, NUMERIC);
+DROP FUNCTION IF EXISTS update_gift_voucher_balance(TEXT, NUMERIC, TEXT);
 
 CREATE OR REPLACE FUNCTION update_gift_voucher_balance(
   p_token       TEXT,
