@@ -125,7 +125,7 @@ export default function CheckoutPage() {
 
   async function updateBalance(newBalance: number, usedAmount?: number, storeUsed?: string | null) {
     if (!voucher) return
-    if (!isOnline) {
+    if (!isOnline && isSharedVoucher) {
       toast.error('אין חיבור לאינטרנט')
       return
     }
@@ -134,6 +134,13 @@ export default function CheckoutPage() {
       await updateSharedVoucherBalance(voucher.id, clamped, storeUsed)
     } else {
       await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
+      if (!isOnline) {
+        toast.success('יתרה עודכנה (תסונכרן בחיבור)')
+        if (clamped <= 0) setConfirmArchive(true)
+        const used = usedAmount ?? (voucher.balance - clamped)
+        if (used > 0) sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null)
+        return
+      }
     }
     if (clamped <= 0) {
       toast.success('יתרה אופסה!')

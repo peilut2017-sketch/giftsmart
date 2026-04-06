@@ -293,7 +293,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         if (vData) {
           const active = vData.filter((v: any) => !v.is_archived)
           const archived = vData.filter((v: any) => v.is_archived)
-          setVouchers(active)
+          // Preserve any local (offline-created) vouchers that haven't been synced yet
+          setVouchers(prev => {
+            const localUnsynced = prev.filter(v => v.id.startsWith('local-'))
+            return [...active, ...localUnsynced]
+          })
           setArchivedVouchers(archived)
           saveToCache(user.id, active, archived)
 
@@ -309,7 +313,10 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
             if (byUserId && byUserId.length > 0) {
               const active2 = byUserId.filter((v: any) => !v.is_archived)
               const archived2 = byUserId.filter((v: any) => v.is_archived)
-              setVouchers(active2)
+              setVouchers(prev => {
+                const localUnsynced = prev.filter(v => v.id.startsWith('local-'))
+                return [...active2, ...localUnsynced]
+              })
               setArchivedVouchers(archived2)
               saveToCache(user.id, active2, archived2)
             }
@@ -370,6 +377,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     prevIsOnlineRef.current = isOnline
     if (!justCameOnline) return
     ;(async () => {
+      // fetchData first: sets walletIdRef.current (needed by syncToCloud) and preserves local vouchers in state
+      await fetchData()
       await syncToCloud()
       await flushPendingOps(user.id)
       fetchData()
@@ -628,11 +637,12 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function syncToCloud() {
-    if (!user || !walletId) return
+    if (!user || !walletIdRef.current) return
+    // Take a snapshot of local vouchers from current state
     const localVouchers = vouchers.filter(v => v.id.startsWith('local-'))
     for (const v of localVouchers) {
       const { id, ...rest } = v
-      const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletId }).select().single()
+      const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletIdRef.current }).select().single()
       if (data) {
         setVouchers(prev => prev.map(pv => pv.id === id ? data : pv))
       }
