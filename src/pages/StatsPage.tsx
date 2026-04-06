@@ -81,9 +81,12 @@ export default function StatsPage() {
 
     const allVouchers = [...vouchers, ...archivedVouchers]
 
-    const addedToday = allVouchers.filter(v => new Date(v.created_at) >= todayStart).length
-    const addedThisWeek = allVouchers.filter(v => new Date(v.created_at) >= weekStart).length
-    const addedThisMonth = allVouchers.filter(v => new Date(v.created_at) >= monthStart).length
+    const addedTodayList = allVouchers.filter(v => new Date(v.created_at) >= todayStart)
+    const addedWeekList = allVouchers.filter(v => new Date(v.created_at) >= weekStart)
+    const addedMonthList = allVouchers.filter(v => new Date(v.created_at) >= monthStart)
+
+    const sumAmount = (list: typeof allVouchers) =>
+      list.reduce((s, v) => s + (v.amount || v.balance), 0)
 
     // "Used" = vouchers whose balance was last updated within the period AND balance < original amount
     // Also includes archived vouchers (fully depleted) updated within the period
@@ -94,17 +97,22 @@ export default function StatsPage() {
     const usedArchived = archivedVouchers.filter(v => v.balance === 0 || (v.amount && v.balance < v.amount))
     const usedCandidates = [...usedActive, ...usedArchived]
 
-    const usedToday = usedCandidates.filter(v => new Date(v.updated_at) >= todayStart).length
-    const usedThisWeek = usedCandidates.filter(v => new Date(v.updated_at) >= weekStart).length
-    const usedThisMonth = usedCandidates.filter(v => new Date(v.updated_at) >= monthStart).length
+    const usedTodayList = usedCandidates.filter(v => new Date(v.updated_at) >= todayStart)
+    const usedWeekList = usedCandidates.filter(v => new Date(v.updated_at) >= weekStart)
+    const usedMonthList = usedCandidates.filter(v => new Date(v.updated_at) >= monthStart)
+
+    const sumUsed = (list: typeof usedCandidates) =>
+      list.reduce((s, v) => s + ((v.amount || 0) - v.balance), 0)
 
     return {
       totalBalance, totalOriginal, utilized, avgBalance,
       activeCount: active.length, expiringSoon, expired, shared,
       nearZero, giftVouchers, multiCategoryCount,
       categoryData, topStores, archivedCount: archivedVouchers.length,
-      addedToday, addedThisWeek, addedThisMonth,
-      usedToday, usedThisWeek, usedThisMonth,
+      addedToday: addedTodayList.length, addedThisWeek: addedWeekList.length, addedThisMonth: addedMonthList.length,
+      addedTodayAmount: sumAmount(addedTodayList), addedThisWeekAmount: sumAmount(addedWeekList), addedThisMonthAmount: sumAmount(addedMonthList),
+      usedToday: usedTodayList.length, usedThisWeek: usedWeekList.length, usedThisMonth: usedMonthList.length,
+      usedTodayAmount: sumUsed(usedTodayList), usedThisWeekAmount: sumUsed(usedWeekList), usedThisMonthAmount: sumUsed(usedMonthList),
     }
   }, [vouchers, archivedVouchers])
 
@@ -229,22 +237,31 @@ export default function StatsPage() {
     </div>
   )
 
-  const TimeStatRow = ({ label, today, week, month }: { label: string; today: number; week: number; month: number }) => (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-gray-600 w-20 shrink-0">{label}</span>
-      <div className="flex-1 grid grid-cols-3 gap-2">
-        <div className="bg-gray-50 rounded-xl px-3 py-2 text-center">
-          <p className="text-xs text-gray-400 mb-0.5">היום</p>
-          <p className="text-base font-bold text-gray-800">{today}</p>
-        </div>
-        <div className="bg-gray-50 rounded-xl px-3 py-2 text-center">
-          <p className="text-xs text-gray-400 mb-0.5">השבוע</p>
-          <p className="text-base font-bold text-gray-800">{week}</p>
-        </div>
-        <div className="bg-gray-50 rounded-xl px-3 py-2 text-center">
-          <p className="text-xs text-gray-400 mb-0.5">החודש</p>
-          <p className="text-base font-bold text-gray-800">{month}</p>
-        </div>
+  const TimeStatRow = ({
+    label,
+    today, todayAmount,
+    week, weekAmount,
+    month, monthAmount,
+  }: {
+    label: string
+    today: number; todayAmount: number
+    week: number; weekAmount: number
+    month: number; monthAmount: number
+  }) => (
+    <div>
+      <span className="text-sm font-medium text-gray-700 mb-2 block">{label}</span>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { period: 'היום', count: today, amount: todayAmount },
+          { period: 'השבוע', count: week, amount: weekAmount },
+          { period: 'החודש', count: month, amount: monthAmount },
+        ].map(({ period, count, amount }) => (
+          <div key={period} className="bg-gray-50 rounded-xl px-2 py-2.5 text-center">
+            <p className="text-xs text-gray-400 mb-1">{period}</p>
+            <p className="text-lg font-bold text-gray-800 leading-none">{count}</p>
+            <p className="text-xs text-gray-500 mt-1">{formatCurrency(amount)}</p>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -316,18 +333,18 @@ export default function StatsPage() {
             <Clock className="w-4 h-4 text-blue-500" />
             פעילות לאורך זמן
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <TimeStatRow
-              label="נוספו"
-              today={stats.addedToday}
-              week={stats.addedThisWeek}
-              month={stats.addedThisMonth}
+              label="שוברים שנוספו"
+              today={stats.addedToday} todayAmount={stats.addedTodayAmount}
+              week={stats.addedThisWeek} weekAmount={stats.addedThisWeekAmount}
+              month={stats.addedThisMonth} monthAmount={stats.addedThisMonthAmount}
             />
             <TimeStatRow
-              label="שומשו"
-              today={stats.usedToday}
-              week={stats.usedThisWeek}
-              month={stats.usedThisMonth}
+              label="שוברים שנוצלו"
+              today={stats.usedToday} todayAmount={stats.usedTodayAmount}
+              week={stats.usedThisWeek} weekAmount={stats.usedThisWeekAmount}
+              month={stats.usedThisMonth} monthAmount={stats.usedThisMonthAmount}
             />
           </div>
           <p className="text-xs text-gray-400 mt-3 flex items-start gap-1">
