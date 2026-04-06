@@ -6,7 +6,7 @@
 -- ── 1. פונקציית עזר: get_my_wallet_ids ──────────────────────────────────────
 -- נדרשת ע"י מדיניות ה-RLS של כל הטבלאות
 CREATE OR REPLACE FUNCTION get_my_wallet_ids()
-RETURNS SETOF UUID LANGUAGE SQL SECURITY DEFINER STABLE AS $$
+RETURNS SETOF UUID LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = public AS $$
   SELECT wallet_id FROM wallet_members WHERE user_id = auth.uid()
 $$;
 

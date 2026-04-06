@@ -85,7 +85,7 @@ create index if not exists support_messages_created_at_idx  on support_messages 
 -- ── RPC: redeem coupon ────────────────────────────────────────────────────────
 
 create or replace function redeem_coupon(p_code text, p_user_id uuid default auth.uid())
-returns jsonb language plpgsql security definer as $$
+returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_coupon     coupons%rowtype;
   v_user_email text;
@@ -165,16 +165,26 @@ $$;
 
 -- Pro subscriber count
 create or replace function admin_get_pro_count()
-returns int language sql security definer stable as $$
-  select count(*)::int from subscriptions
-   where plan = 'pro' and status = 'active'
-     and (current_period_end is null or current_period_end > now())
+returns int language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
+  return (select count(*)::int from subscriptions
+           where plan = 'pro' and status = 'active'
+             and (current_period_end is null or current_period_end > now()));
+end;
 $$;
 
 -- All coupons
 create or replace function admin_get_coupons()
-returns setof coupons language sql security definer stable as $$
-  select * from coupons order by created_at desc
+returns setof coupons language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
+  return query select * from coupons order by created_at desc;
+end;
 $$;
 
 -- Create coupon
@@ -187,9 +197,12 @@ create or replace function admin_create_coupon(
   p_valid_until      timestamptz default null,
   p_restricted_email text    default null,
   p_first_time_only  boolean default false
-) returns coupons language plpgsql security definer as $$
+) returns coupons language plpgsql security definer set search_path = public as $$
 declare v_row coupons;
 begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
   insert into coupons (code, name, type, discount_type, discount_value,
                        max_uses, valid_until, restricted_to_email, first_time_only, created_by)
   values (upper(trim(p_code)), p_name, p_type, 'months_free', p_discount_value,
@@ -201,36 +214,62 @@ $$;
 
 -- Toggle coupon active
 create or replace function admin_toggle_coupon(p_id uuid, p_active boolean)
-returns void language sql security definer as $$
-  update coupons set is_active = p_active where id = p_id
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
+  update coupons set is_active = p_active where id = p_id;
+end;
 $$;
 
 -- Delete coupon
 create or replace function admin_delete_coupon(p_id uuid)
-returns void language sql security definer as $$
-  delete from coupons where id = p_id
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
+  delete from coupons where id = p_id;
+end;
 $$;
 
 -- All support messages (newest first)
 create or replace function admin_get_messages()
-returns setof support_messages language sql security definer stable as $$
-  select * from support_messages order by
-    case status when 'unread' then 0 when 'read' then 1 else 2 end,
-    created_at desc
-  limit 500
+returns setof support_messages language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
+  return query
+    select * from support_messages order by
+      case status when 'unread' then 0 when 'read' then 1 else 2 end,
+      created_at desc
+    limit 500;
+end;
 $$;
 
 -- Mark message as read
 create or replace function admin_mark_message_read(p_id uuid)
-returns void language sql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
   update support_messages set status = 'read'
-   where id = p_id and status = 'unread'
+   where id = p_id and status = 'unread';
+end;
 $$;
 
 -- Reply to message
 create or replace function admin_reply_message(p_id uuid, p_reply text)
-returns void language sql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'permission_denied';
+  end if;
   update support_messages
      set admin_reply = p_reply, status = 'replied', replied_at = now()
-   where id = p_id
+   where id = p_id;
+end;
 $$;

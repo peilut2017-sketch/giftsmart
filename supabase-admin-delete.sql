@@ -28,6 +28,10 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true) THEN
+    RAISE EXCEPTION 'permission_denied';
+  END IF;
+
   -- Prevent admin from wiping their own data
   IF target_user_id = auth.uid() THEN
     RAISE EXCEPTION 'cannot_delete_self';
@@ -70,6 +74,10 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true) THEN
+    RAISE EXCEPTION 'permission_denied';
+  END IF;
+
   -- Prevent admin from deleting their own account
   IF target_user_id = auth.uid() THEN
     RAISE EXCEPTION 'cannot_delete_self';
