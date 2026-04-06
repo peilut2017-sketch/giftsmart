@@ -81,10 +81,10 @@ const VOUCHERS_VIEW = 'vouchers'
 const QUERY_TIMEOUT_MS = 8000
 
 type PendingOp =
-  | { type: 'update'; id: string; data: Partial<Voucher>; storeUsed?: string | null }
-  | { type: 'delete'; id: string }
-  | { type: 'archive'; id: string }
-  | { type: 'unarchive'; id: string }
+  | { type: 'update'; id: string; data: Partial<Voucher>; storeUsed?: string | null; voucherName?: string; previousBalance?: number }
+  | { type: 'delete'; id: string; voucherName?: string; balance?: number }
+  | { type: 'archive'; id: string; voucherName?: string; balance?: number }
+  | { type: 'unarchive'; id: string; voucherName?: string; balance?: number }
 
 // Wraps a thenable (Supabase query) with a timeout so a hung query never freezes the app
 function withTimeout<T>(thenable: PromiseLike<T>, ms = QUERY_TIMEOUT_MS): Promise<T> {
@@ -179,6 +179,36 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
           await supabase.from('vouchers').update({ is_archived: true }).eq('id', op.id)
         } else if (op.type === 'unarchive') {
           await supabase.from('vouchers').update({ is_archived: false }).eq('id', op.id)
+        }
+        // Log the action to activity_log now that we're online
+        if (op.voucherName) {
+          let action: ActivityLogEntry['action']
+          const details: Record<string, any> = {}
+          if (op.type === 'update') {
+            const keys = Object.keys(op.data).filter(k => k !== 'updated_at')
+            if (keys.length === 1 && keys[0] === 'balance') {
+              action = 'balance_update'
+              details.from = op.previousBalance
+              details.to = op.data.balance
+              if (op.storeUsed) details.store_used = op.storeUsed
+            } else {
+              action = 'edit'
+              const SENSITIVE = new Set(['code', 'cvv'])
+              keys.filter(k => !SENSITIVE.has(k)).forEach(k => { details[k] = { to: (op.data as any)[k] } })
+              if (keys.some(k => SENSITIVE.has(k))) details['_sensitive_updated'] = true
+            }
+          } else {
+            action = op.type
+            if ((op as any).balance !== undefined) details.balance = (op as any).balance
+          }
+          supabase.from('activity_log').insert({
+            user_id: userId,
+            wallet_id: walletIdRef.current,
+            action,
+            voucher_id: op.id,
+            voucher_name: op.voucherName,
+            details,
+          }).then(() => {}).catch(() => {})
         }
       } catch {
         failed.push(op)
@@ -539,7 +569,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
         // Queue for later sync — optimistic update already applied above
-        enqueuePendingOp({ type: 'update', id, data: updated, storeUsed }, user!.id)
+        enqueuePendingOp({ type: 'update', id, data: updated, storeUsed, voucherName: existing?.store_name, previousBalance: existing?.balance }, user!.id)
       } else {
         // Update through the view so pgsodium re-encrypts code/cvv if they changed
         await supabase.from(VOUCHERS_VIEW).update(updated).eq('id', id)
@@ -575,7 +605,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setArchivedVouchers(prev => prev.filter(v => v.id !== id))
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
-        enqueuePendingOp({ type: 'delete', id }, user!.id)
+        enqueuePendingOp({ type: 'delete', id, voucherName: target?.store_name, balance: target?.balance }, user!.id)
       } else {
         await supabase.from('vouchers').delete().eq('id', id)
       }
@@ -595,7 +625,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setArchivedVouchers(newArchived)
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
-        enqueuePendingOp({ type: 'archive', id }, user!.id)
+        enqueuePendingOp({ type: 'archive', id, voucherName: voucher.store_name, balance: voucher.balance }, user!.id)
       } else {
         await supabase.from('vouchers').update({ is_archived: true }).eq('id', id)
       }
@@ -614,7 +644,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setArchivedVouchers(newArchived)
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
-        enqueuePendingOp({ type: 'unarchive', id }, user!.id)
+        enqueuePendingOp({ type: 'unarchive', id, voucherName: voucher.store_name, balance: voucher.balance }, user!.id)
       } else {
         await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
       }
@@ -645,6 +675,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletIdRef.current }).select().single()
       if (data) {
         setVouchers(prev => prev.map(pv => pv.id === id ? data : pv))
+        logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
       }
     }
   }
@@ -878,7 +909,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     <VoucherContext.Provider value={{
       vouchers, archivedVouchers, superVouchers, categories, stores, sharedWithMe,
       walletId, walletName, walletError, loading, isOnline,
-      pendingOpsCount: pendingOps.length,
+      pendingOpsCount: pendingOps.length + vouchers.filter(v => v.id.startsWith('local-')).length,
       addVoucher, updateVoucher, deleteVoucher, archiveVoucher, unarchiveVoucher,
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
