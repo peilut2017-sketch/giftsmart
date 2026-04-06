@@ -94,16 +94,17 @@ export async function forceNotificationCheck(_vouchers?: Voucher[]) {
 }
 
 // Send an immediate push notification when a voucher is used
-export async function sendUsageNotification(storeName: string, usedAmount: number, newBalance: number) {
+export async function sendUsageNotification(storeName: string, usedAmount: number, newBalance: number, storeUsed?: string | null) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return
 
   const fullyRedeemed = newBalance <= 0
+  const storeLabel = storeUsed ? ` — ${storeUsed}` : ''
   const title = fullyRedeemed
-    ? `✅ שובר ${storeName} נוצל במלואו`
-    : `💳 שימוש בשובר ${storeName}`
+    ? `✅ שובר ${storeName} נוצל במלואו${storeLabel}`
+    : `💳 שימוש בשובר ${storeName}${storeLabel}`
   const body = fullyRedeemed
-    ? `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')} — השובר נוצל`
-    : `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')} | יתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`
+    ? `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} — השובר נוצל`
+    : `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} | יתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`
 
   const options: NotificationOptions = {
     body,

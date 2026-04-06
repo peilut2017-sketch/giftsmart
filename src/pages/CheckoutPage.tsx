@@ -143,7 +143,7 @@ export default function CheckoutPage() {
     }
     const used = usedAmount ?? (voucher.balance - clamped)
     if (used > 0) {
-      sendUsageNotification(voucher.store_name, used, clamped)
+      sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null)
     }
   }
 
@@ -554,11 +554,25 @@ export default function CheckoutPage() {
           {!isArchived && (
             <>
               <div className="text-xs font-medium text-gray-500 mb-2">עדכן יתרה — ניכוי מהירה</div>
+
+              {/* Shared store input for all balance updates */}
+              <input
+                type="text"
+                value={customStore}
+                onChange={e => setCustomStore(e.target.value)}
+                placeholder="באיזה חנות השתמשת? (אופציונלי)"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300 text-sm mb-3"
+                dir="rtl"
+              />
+
               <div className="grid grid-cols-4 gap-2 mb-3">
                 {QUICK_AMOUNTS.map(amt => (
                   <button
                     key={amt}
-                    onClick={() => updateBalance(voucher.balance - amt)}
+                    onClick={() => {
+                      updateBalance(voucher.balance - amt, amt, customStore.trim() || null)
+                      setCustomStore('')
+                    }}
                     disabled={voucher.balance < amt}
                     className="py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 disabled:opacity-40 transition-all"
                   >
@@ -566,13 +580,20 @@ export default function CheckoutPage() {
                   </button>
                 ))}
                 <button
-                  onClick={() => updateBalance(voucher.balance / 2)}
+                  onClick={() => {
+                    const half = voucher.balance / 2
+                    updateBalance(half, half, customStore.trim() || null)
+                    setCustomStore('')
+                  }}
                   className="py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all"
                 >
                   מחצית
                 </button>
                 <button
-                  onClick={() => updateBalance(0)}
+                  onClick={() => {
+                    updateBalance(0, voucher.balance, customStore.trim() || null)
+                    setCustomStore('')
+                  }}
                   className="py-2 bg-red-50 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-all"
                 >
                   מלא
@@ -596,7 +617,7 @@ export default function CheckoutPage() {
                     onClick={() => {
                       const amount = parseFloat(customAmount)
                       if (!isNaN(amount) && amount > 0) {
-                        updateBalance(voucher.balance - amount, amount, isPro ? (customStore.trim() || null) : null)
+                        updateBalance(voucher.balance - amount, amount, customStore.trim() || null)
                         setCustomAmount('')
                         setCustomStore('')
                       }
@@ -607,16 +628,6 @@ export default function CheckoutPage() {
                     עדכן
                   </button>
                 </div>
-                {isPro && parseFloat(customAmount) > 0 && (
-                  <input
-                    type="text"
-                    value={customStore}
-                    onChange={e => setCustomStore(e.target.value)}
-                    placeholder="באיזה חנות? (אופציונלי)"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300 text-sm"
-                    dir="rtl"
-                  />
-                )}
                 {(() => {
                   const amount = parseFloat(customAmount)
                   if (isNaN(amount) || amount <= 0) return null
