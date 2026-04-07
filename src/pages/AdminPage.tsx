@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -112,6 +112,11 @@ export default function AdminPage() {
   // Premium flag
   const [premiumEnabled, setPremiumEnabled] = useState<boolean | null>(null)
   const [premiumToggling, setPremiumToggling] = useState(false)
+  // Login banners
+  const [showBanners, setShowBanners] = useState(false)
+  const [banners, setBanners] = useState<{ id: string; image_url: string; is_active: boolean; created_at: string }[]>([])
+  const [bannersLoaded, setBannersLoaded] = useState(false)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
 
   useEffect(() => {
     if (!isAdmin) return
@@ -130,6 +135,55 @@ export default function AdminPage() {
     if (error) { toast.error('שגיאה: ' + error.message); return }
     setPremiumEnabled(next)
     toast.success(next ? '💎 מערך מנויים הופעל' : '🔓 מערך מנויים הושבת — כולם Pro')
+  }
+
+  async function loadBanners() {
+    if (bannersLoaded) return
+    const { data } = await supabase.rpc('admin_get_banners')
+    if (data) setBanners(data)
+    setBannersLoaded(true)
+  }
+
+  async function handleUploadBanner(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { toast.error('יש להעלות קובץ תמונה'); return }
+    setUploadingBanner(true)
+    try {
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const path = `banner-${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('banners').upload(path, file, { upsert: true })
+      if (uploadErr) { toast.error('שגיאה בהעלאה: ' + uploadErr.message); return }
+      const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(path)
+      const { data, error } = await supabase.rpc('admin_add_banner', { p_image_url: publicUrl })
+      if (error) { toast.error('שגיאה בשמירה: ' + error.message); return }
+      if (data) setBanners(prev => [data, ...prev])
+      toast.success('באנר הועלה בהצלחה!')
+    } finally {
+      setUploadingBanner(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleToggleBanner(id: string, active: boolean) {
+    await supabase.rpc('admin_toggle_banner', { p_id: id, p_active: active })
+    setBanners(prev => prev.map(b => b.id === id ? { ...b, is_active: active } : b))
+  }
+
+  async function handleDeleteBanner(id: string, imageUrl: string) {
+    setConfirm({
+      title: 'מחיקת באנר',
+      message: 'למחוק את הבאנר?',
+      onConfirm: async () => {
+        setConfirm(null)
+        // Delete from storage
+        const path = imageUrl.split('/banners/').pop()
+        if (path) await supabase.storage.from('banners').remove([path])
+        await supabase.rpc('admin_delete_banner', { p_id: id })
+        setBanners(prev => prev.filter(b => b.id !== id))
+        toast.success('באנר נמחק')
+      },
+    })
   }
 
   // Realtime: notify admin when a new support message arrives
@@ -1043,6 +1097,83 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Login Banner ── */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3.5 text-right"
+            onClick={() => { setShowBanners(v => !v); if (!showBanners) loadBanners() }}
+          >
+            <span className="flex items-center gap-2 font-semibold text-gray-800 text-sm">
+              <Image className="w-4 h-4 text-purple-500" />
+              באנר כניסה
+            </span>
+            {showBanners ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+
+          {showBanners && (
+            <div className="border-t divide-y divide-gray-50">
+              {/* Upload area */}
+              <div className="p-4">
+                <p className="text-xs text-gray-500 mb-3">
+                  הבאנר מוצג על מסך הכניסה למשך 5 שניות עם אפשרות דילוג.
+                </p>
+                <label className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed text-sm font-medium cursor-pointer transition-colors
+                  ${uploadingBanner ? 'border-gray-200 text-gray-400 cursor-not-allowed' : 'border-purple-300 text-purple-600 hover:bg-purple-50'}`}
+                >
+                  {uploadingBanner
+                    ? <><div className="w-4 h-4 border-2 border-gray-300 border-t-purple-500 rounded-full animate-spin" /> מעלה...</>
+                    : <><Image className="w-4 h-4" /> העלה באנר חדש</>}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingBanner}
+                    onChange={handleUploadBanner}
+                  />
+                </label>
+              </div>
+
+              {/* Banner list */}
+              {banners.length === 0 && bannersLoaded && (
+                <p className="px-4 py-3 text-xs text-gray-400">אין באנרים עדיין</p>
+              )}
+              {banners.map(b => (
+                <div key={b.id} className="p-3 flex items-center gap-3">
+                  <img
+                    src={b.image_url}
+                    alt="באנר"
+                    className="w-20 h-12 object-cover rounded-lg border border-gray-100 flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {b.is_active ? 'פעיל' : 'מושבת'}
+                    </span>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{new Date(b.created_at).toLocaleDateString('he-IL')}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleToggleBanner(b.id, !b.is_active)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                      title={b.is_active ? 'השבת' : 'הפעל'}
+                    >
+                      {b.is_active
+                        ? <ToggleRight className="w-5 h-5 text-green-500" />
+                        : <ToggleLeft className="w-5 h-5 text-gray-300" />}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteBanner(b.id, b.image_url)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      title="מחק"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
