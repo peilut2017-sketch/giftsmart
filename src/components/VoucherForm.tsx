@@ -619,29 +619,31 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
             <div className="col-span-2">
               <label htmlFor="vf-expiry" className="text-sm font-medium text-gray-700 mb-1 block">תאריך תפוגה</label>
-              <input
-                id="vf-expiry"
-                type="date"
-                value={expiryDate}
-                onChange={e => setExpiryDate(e.target.value)}
-                className="w-full px-2 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
-              />
-              <div className="flex gap-1.5 mt-1.5">
-                {[{ label: '+1y', years: 1 }, { label: '+2y', years: 2 }, { label: '+5y', years: 5 }].map(({ label, years }) => (
-                  <button
-                    key={years}
-                    type="button"
-                    onClick={() => {
-                      const d = new Date()
-                      d.setFullYear(d.getFullYear() + years)
-                      setExpiryDate(d.toISOString().split('T')[0])
-                    }}
-                    className="flex-1 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-xl hover:bg-green-100 hover:text-green-700 transition-colors"
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex gap-2 items-center">
+                <input
+                  id="vf-expiry"
+                  type="date"
+                  value={expiryDate}
+                  onChange={e => setExpiryDate(e.target.value)}
+                  className="flex-1 px-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+                <div className="flex gap-1">
+                  {[{ label: '+1y', years: 1 }, { label: '+2y', years: 2 }, { label: '+5y', years: 5 }].map(({ label, years }) => (
+                    <button
+                      key={years}
+                      type="button"
+                      onClick={() => {
+                        const d = new Date()
+                        d.setFullYear(d.getFullYear() + years)
+                        setExpiryDate(d.toISOString().split('T')[0])
+                      }}
+                      className="px-2 py-2 text-xs font-medium bg-gray-100 text-gray-600 rounded-xl hover:bg-green-100 hover:text-green-700 transition-colors"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
