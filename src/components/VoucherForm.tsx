@@ -291,13 +291,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         ? Math.max(0, (voucher.balance ?? 0) - used)
         : (parseFloat(balance) || parsedAmount || 0)
 
-      // Validate balance ≤ original amount
-      if (parsedAmount > 0 && newBalance > parsedAmount) {
-        toast.error(`היתרה (₪${newBalance.toLocaleString('he-IL')}) לא יכולה להיות גבוהה מהסכום המקורי (₪${parsedAmount.toLocaleString('he-IL')})`)
-        setLoading(false)
-        return
-      }
-
       const v = {
         store_name: storeName,
         amount: parsedAmount,
@@ -533,30 +526,30 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               </div>
             ) : (
               <div>
-                <label htmlFor="vf-balance" className="text-sm font-medium text-gray-700 mb-1 block">יתרה (₪)</label>
-                <input
-                  id="vf-balance"
-                  type="number"
-                  value={balance}
-                  onChange={e => setBalance(e.target.value)}
-                  placeholder="0"
-                  max={parseFloat(amount) > 0 ? amount : undefined}
-                  className={`w-full px-4 py-3 border rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 ${
-                    parseFloat(amount) > 0 && parseFloat(balance) > parseFloat(amount)
-                      ? 'border-red-400 bg-red-50'
-                      : 'border-gray-200'
-                  }`}
-                  dir="ltr"
-                />
-                {parseFloat(amount) > 0 && parseFloat(balance) > parseFloat(amount) && (
-                  <p className="text-xs mt-1 text-red-500">לא יכולה לעלות על הסכום המקורי</p>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 shrink-0">₪</span>
+                  <input
+                    type="number"
+                    value={actualCost}
+                    onChange={e => setActualCost(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                </div>
+                {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
+                  <p className="text-xs mt-1 text-gray-400">
+                    ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
+                  </p>
                 )}
               </div>
             )}
           </div>
 
-          {/* Actual cost — only if feature enabled */}
-          {showVoucherValue && (
+          {/* Actual cost — shown in edit mode only when there are transactions (otherwise shown in the grid above) */}
+          {voucher && hasTransactions && (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
               <div className="flex items-center gap-2">
@@ -565,7 +558,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   type="number"
                   value={actualCost}
                   onChange={e => setActualCost(e.target.value)}
-                  placeholder="הזן עלות שובר בפועל"
+                  placeholder="0"
                   min="0"
                   className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   dir="ltr"

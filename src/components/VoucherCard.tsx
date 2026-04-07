@@ -330,22 +330,25 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
                 <p className="text-xs text-gray-400 truncate">{voucher.source}</p>
               )}
             </div>
-            <div className="flex-shrink-0 me-2">
+            <div className="flex-shrink-0 me-2 text-right">
               <div className="text-lg font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
               {voucher.amount !== voucher.balance && (
                 <div className="text-xs text-gray-400">מתוך {formatCurrency(voucher.amount)}</div>
-              )}
-              {valuePercent && (
-                <div className="text-xs text-gray-400">ערך {valuePercent}%{actualCost != null ? ` | עלה ${actualCost.toLocaleString('he-IL')} ₪` : ''}</div>
               )}
             </div>
           </div>
 
           {voucher.amount > 0 && (
-            <div className="mb-3">
+            <div className="mb-2">
               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
               </div>
+            </div>
+          )}
+
+          {valuePercent && (
+            <div className="text-xs text-gray-400 mb-2">
+              ערך {valuePercent}%{actualCost != null ? ` | עלה ${actualCost.toLocaleString('he-IL')} ₪` : ''}
             </div>
           )}
 
