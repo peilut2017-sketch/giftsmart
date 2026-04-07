@@ -335,8 +335,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
               {voucher.amount !== voucher.balance && (
                 <div className="text-xs text-gray-400">מתוך {formatCurrency(voucher.amount)}</div>
               )}
-              {valueLessPercent && (
-                <div className="text-xs text-gray-400">(ערך {valueLessPercent}% פחות)</div>
+              {valuePercent && (
+                <div className="text-xs text-gray-400">ערך {valuePercent}%{actualCost != null ? ` | עלה ${actualCost.toLocaleString('he-IL')} ₪` : ''}</div>
               )}
             </div>
           </div>

@@ -201,14 +201,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
             action = op.type
             if ((op as any).balance !== undefined) details.balance = (op as any).balance
           }
-          supabase.from('activity_log').insert({
+          void Promise.resolve(supabase.from('activity_log').insert({
             user_id: userId,
             wallet_id: walletIdRef.current,
             action,
             voucher_id: op.id,
             voucher_name: op.voucherName,
             details,
-          }).then(() => {}).catch(() => {})
+          }))
         }
       } catch {
         failed.push(op)
