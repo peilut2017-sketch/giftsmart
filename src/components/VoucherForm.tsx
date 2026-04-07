@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
-import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
@@ -20,9 +19,7 @@ interface Props {
 
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
-  const { profile } = useAuth()
   const { limits, openUpgradeSheet } = useSubscription()
-  const showVoucherValue = profile?.show_voucher_value ?? false
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
@@ -548,8 +545,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             )}
           </div>
 
-          {/* Actual cost — shown in edit mode only when there are transactions (otherwise shown in the grid above) */}
-          {voucher && hasTransactions && (
+          {/* Actual cost — shown in edit mode (grid shows usage amount there instead) */}
+          {voucher && (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
               <div className="flex items-center gap-2">
