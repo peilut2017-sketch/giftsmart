@@ -31,7 +31,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
   const [usageAmount, setUsageAmount] = useState('')
   const [storeUsedInput, setStoreUsedInput] = useState('')
-  const [valuePercent, setValuePercent] = useState(voucher?.value_percent?.toString() || '')
+  const [actualCost, setActualCost] = useState(voucher?.actual_cost?.toString() || '')
   const [code, setCode] = useState(voucher?.code || '')
   const [cvv, setCvv] = useState(voucher?.cvv || '')
   const [expiryDate, setExpiryDate] = useState(voucher?.expiry_date || defaultExpiryDate())
@@ -301,7 +301,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         store_name: storeName,
         amount: parsedAmount,
         balance: newBalance,
-        value_percent: valuePercent ? parseFloat(valuePercent) : null,
+        actual_cost: actualCost ? parseFloat(actualCost) : null,
+        value_percent: actualCost && parsedAmount > 0 ? (parseFloat(actualCost) / parsedAmount) * 100 : null,
         code: code.trim(),
         cvv: cvv.trim() || undefined,
         expiry_date: expiryDate || undefined,
@@ -553,26 +554,25 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             )}
           </div>
 
-          {/* Value percent — only if feature enabled */}
+          {/* Actual cost — only if feature enabled */}
           {showVoucherValue && (
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">ערך שוק (%)</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">עלה לי (₪)</label>
               <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 shrink-0">₪</span>
                 <input
                   type="number"
-                  value={valuePercent}
-                  onChange={e => setValuePercent(e.target.value)}
-                  placeholder="למשל 90"
-                  min="1"
-                  max="100"
+                  value={actualCost}
+                  onChange={e => setActualCost(e.target.value)}
+                  placeholder="למשל 130"
+                  min="0"
                   className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   dir="ltr"
                 />
-                <span className="text-sm text-gray-500 shrink-0">%</span>
               </div>
-              {valuePercent && parseFloat(valuePercent) > 0 && parseFloat(valuePercent) < 100 && (
+              {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
                 <p className="text-xs mt-1 text-gray-400">
-                  (ערך {(100 - parseFloat(valuePercent)).toFixed(0)}% פחות מהנקוב)
+                  ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
                 </p>
               )}
             </div>

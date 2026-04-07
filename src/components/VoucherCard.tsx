@@ -46,7 +46,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
   const pct = voucher.amount > 0 ? (voucher.balance / voucher.amount) * 100 : 0
 
   const showVoucherValue = profile?.show_voucher_value && voucher.value_percent != null && voucher.value_percent > 0 && voucher.value_percent < 100
-  const valueLessPercent = showVoucherValue ? (100 - voucher.value_percent!).toFixed(0) : null
+  const valuePercent = showVoucherValue ? voucher.value_percent!.toFixed(0) : null
+  const actualCost = showVoucherValue && voucher.actual_cost != null ? voucher.actual_cost : null
 
   const cardBgClass =
     expiryStatus === 'critical' ? 'bg-gradient-to-br from-red-50 to-orange-50' :
@@ -217,8 +218,8 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
 
           <div className="text-left flex-shrink-0">
             <div className="text-base font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
-            {valueLessPercent && (
-              <div className="text-xs text-gray-400">(ערך {valueLessPercent}% פחות)</div>
+            {valuePercent && (
+              <div className="text-xs text-gray-400">ערך {valuePercent}%{actualCost != null ? ` | עלה ${actualCost.toLocaleString('he-IL')} ₪` : ''}</div>
             )}
           </div>
 

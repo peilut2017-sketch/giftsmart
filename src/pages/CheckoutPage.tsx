@@ -521,7 +521,7 @@ export default function CheckoutPage() {
             <div className="text-right">
               <div className="text-3xl font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
               {profile?.show_voucher_value && voucher.value_percent != null && voucher.value_percent > 0 && voucher.value_percent < 100 && (
-                <div className="text-xs text-gray-400 mt-0.5">(ערך {(100 - voucher.value_percent).toFixed(0)}% פחות מהנקוב)</div>
+                <div className="text-xs text-gray-400 mt-0.5">ערך {voucher.value_percent.toFixed(0)}%{voucher.actual_cost != null ? ` | עלה ${voucher.actual_cost.toLocaleString('he-IL')} ₪` : ''}</div>
               )}
             </div>
           </div>

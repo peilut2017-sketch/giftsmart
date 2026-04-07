@@ -8,6 +8,7 @@ export interface Voucher {
   amount: number
   balance: number
   value_percent?: number
+  actual_cost?: number
   code: string
   cvv?: string
   expiry_date?: string
