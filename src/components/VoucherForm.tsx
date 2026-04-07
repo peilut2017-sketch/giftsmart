@@ -43,7 +43,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [newCatName, setNewCatName] = useState('')
   const [showCatInput, setShowCatInput] = useState(false)
   const [showCatDropdown, setShowCatDropdown] = useState(false)
-  const catDropdownRef = useRef<HTMLDivElement>(null)
   const [showSMSInput, setShowSMSInput] = useState(false)
   const [smsText, setSmsText] = useState('')
   const [loading, setLoading] = useState(false)
@@ -72,21 +71,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       document.removeEventListener('touchstart', onOutside)
     }
   }, [showImageMenu])
-  useEffect(() => {
-    if (!showCatDropdown) return
-    function onOutside(e: MouseEvent | TouchEvent) {
-      if (catDropdownRef.current && !catDropdownRef.current.contains(e.target as Node)) {
-        setShowCatDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', onOutside)
-    document.addEventListener('touchstart', onOutside)
-    return () => {
-      document.removeEventListener('mousedown', onOutside)
-      document.removeEventListener('touchstart', onOutside)
-    }
-  }, [showCatDropdown])
-
   const scannerDivId = 'qr-scanner-div'
 
   // Existing tags from all vouchers for autocomplete
@@ -691,59 +675,56 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           </div>
 
           {/* Categories */}
-          <div ref={catDropdownRef} className="relative">
+          <div>
             <label className="text-sm font-medium text-gray-700 mb-2 block">קטגוריות</label>
-            <button
-              type="button"
-              onClick={() => setShowCatDropdown(prev => !prev)}
-              className="w-full flex items-center justify-between px-4 py-3 border border-gray-200 rounded-2xl bg-white text-sm hover:border-green-300 focus:outline-none focus:ring-2 focus:ring-green-300 transition-all"
-            >
-              <span className="flex flex-wrap gap-1.5 flex-1 text-right">
-                {selectedCats.length === 0 ? (
-                  <span className="text-gray-400">בחר קטגוריות...</span>
-                ) : (
-                  selectedCats.map(name => {
-                    const cat = categories.find(c => c.name === name)
-                    return (
-                      <span key={name} className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                        {cat?.emoji} {name}
-                      </span>
-                    )
-                  })
-                )}
-              </span>
-              <svg className={`w-4 h-4 text-gray-400 mr-2 flex-shrink-0 transition-transform ${showCatDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+            <div className="flex flex-wrap gap-2 items-center">
+              {selectedCats.map(name => {
+                const cat = categories.find(c => c.name === name)
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => toggleCat(name)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border-2 border-green-400 transition-all"
+                  >
+                    {cat?.emoji} {name}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => setShowCatDropdown(prev => !prev)}
+                className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-50 text-gray-500 border-2 border-dashed border-gray-300 hover:bg-gray-100 transition-all"
+              >
+                <Plus className="w-3.5 h-3.5 inline" /> {showCatDropdown ? 'סגור' : 'ערוך קטגוריות'}
+              </button>
+            </div>
 
             {showCatDropdown && (
-              <div className="absolute z-30 w-full mt-1 bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden">
-                <div className="p-3 flex flex-wrap gap-2 max-h-52 overflow-y-auto">
-                  {categories.map(cat => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => toggleCat(cat.name)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                        selectedCats.includes(cat.name)
-                          ? 'bg-green-100 text-green-700 border-2 border-green-400'
-                          : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
-                      }`}
-                    >
-                      {cat.emoji} {cat.name}
-                    </button>
-                  ))}
+              <div className="mt-2 p-3 border border-gray-100 rounded-2xl bg-gray-50 flex flex-wrap gap-2">
+                {categories.map(cat => (
                   <button
+                    key={cat.id}
                     type="button"
-                    onClick={() => setShowCatInput(!showCatInput)}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-50 text-gray-500 border-2 border-dashed border-gray-300 hover:bg-gray-100"
+                    onClick={() => toggleCat(cat.name)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      selectedCats.includes(cat.name)
+                        ? 'bg-green-100 text-green-700 border-2 border-green-400'
+                        : 'bg-white text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    }`}
                   >
-                    <Plus className="w-3.5 h-3.5 inline" /> הוסף קטגוריה
+                    {cat.emoji} {cat.name}
                   </button>
-                </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowCatInput(!showCatInput)}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium bg-white text-gray-500 border-2 border-dashed border-gray-300 hover:bg-gray-100"
+                >
+                  <Plus className="w-3.5 h-3.5 inline" /> הוסף קטגוריה
+                </button>
                 {showCatInput && (
-                  <div className="flex gap-2 px-3 pb-3">
+                  <div className="w-full flex gap-2 mt-1">
                     <input
                       type="text"
                       value={newCatName}
