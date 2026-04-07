@@ -557,14 +557,14 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           {/* Actual cost — only if feature enabled */}
           {showVoucherValue && (
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">עלה לי (₪)</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500 shrink-0">₪</span>
                 <input
                   type="number"
                   value={actualCost}
                   onChange={e => setActualCost(e.target.value)}
-                  placeholder="למשל 130"
+                  placeholder="הזן עלות שובר בפועל"
                   min="0"
                   className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                   dir="ltr"
