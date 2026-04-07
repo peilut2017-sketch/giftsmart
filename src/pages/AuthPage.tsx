@@ -1,10 +1,8 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { isBiometricEnabled, getBiometricEmail, verifyBiometric } from '../lib/passkey'
-import { supabase } from '../lib/supabase'
-import LoginBanner from '../components/LoginBanner'
 
 const APP_VERSION = '1.0.0'
 
@@ -36,14 +34,6 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const { signIn, signInWithBiometric, signUp, signInWithGoogle, resetPassword, updatePassword } = useAuth()
   const [googleLoading, setGoogleLoading] = useState(false)
   const [mode, setMode] = useState<Mode>(initialMode)
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
-  const [bannerDismissed, setBannerDismissed] = useState(false)
-
-  useEffect(() => {
-    supabase.rpc('get_active_banner').then(({ data }) => {
-      if (data?.image_url) setBannerUrl(data.image_url)
-    })
-  }, [])
   const [loginStep, setLoginStep] = useState<LoginStep>('email')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -146,11 +136,6 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
     } finally {
       setLoading(false)
     }
-  }
-
-  // ── Login banner ─────────────────────────────────────────────────────────────
-  if (bannerUrl && !bannerDismissed) {
-    return <LoginBanner imageUrl={bannerUrl} onDismiss={() => setBannerDismissed(true)} />
   }
 
   // ── Biometric step (full-screen style within the card) ──────────────────────

@@ -19,6 +19,7 @@ import AccessibilityPage from './pages/AccessibilityPage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
 import OfflineBanner from './components/OfflineBanner'
+import LoginBanner from './components/LoginBanner'
 import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import { isBiometricEnabled } from './lib/passkey'
@@ -147,6 +148,8 @@ function AppRoutes() {
   const { user, loading, passwordRecovery, signOut } = useAuth()
   const navigate = useNavigate()
   const [biometricLocked, setBiometricLocked] = useState(false)
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   // After login: redirect back to gift page if user came from one
   useEffect(() => {
@@ -157,6 +160,14 @@ function AppRoutes() {
       navigate(returnTo, { replace: true })
     }
   }, [user])
+
+  // After login: fetch banner to show on top of the app
+  useEffect(() => {
+    if (!user) { setBannerUrl(null); setBannerDismissed(false); return }
+    supabase.rpc('get_active_banner').then(({ data }) => {
+      if (data?.image_url) setBannerUrl(data.image_url)
+    })
+  }, [user?.id])
   const [widgetEnabled, setWidgetEnabled] = useState(
     () => localStorage.getItem(A11Y_WIDGET_KEY) !== 'false'
   )
@@ -200,6 +211,10 @@ function AppRoutes() {
         onSignOut={() => { signOut(); setBiometricLocked(false) }}
       />
     )
+  }
+
+  if (bannerUrl && !bannerDismissed) {
+    return <LoginBanner imageUrl={bannerUrl} onDismiss={() => setBannerDismissed(true)} />
   }
 
   return (
