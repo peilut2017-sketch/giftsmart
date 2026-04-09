@@ -664,6 +664,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setArchivedVouchers(newArchived)
     await supabase.from('vouchers').update({ is_archived: true }).in('id', ids.filter(id => !id.startsWith('local-')))
     if (user) saveToCache(user.id, newActive, newArchived)
+    for (const v of expired) {
+      logAction('archive', v.store_name, v.id, { balance: v.balance })
+    }
   }
 
   async function syncToCloud() {
@@ -772,6 +775,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateSharedVoucherBalance(voucherId: string, newBalance: number, storeUsed?: string | null) {
+    const target = sharedWithMe.find(v => v.id === voucherId)
     const { error } = await supabase.rpc('update_shared_voucher_balance', {
       p_voucher_id: voucherId,
       p_new_balance: newBalance,
@@ -779,6 +783,13 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     })
     if (error) throw error
     setSharedWithMe(prev => prev.map(v => v.id === voucherId ? { ...v, balance: newBalance } : v))
+    if (target) {
+      logAction('gift_balance_update', target.store_name, voucherId, {
+        from: target.balance,
+        to: newBalance,
+        ...(storeUsed ? { store_used: storeUsed } : {}),
+      })
+    }
   }
 
   async function updateWalletName(name: string) {

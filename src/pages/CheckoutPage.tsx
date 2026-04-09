@@ -807,6 +807,32 @@ export default function CheckoutPage() {
                       dotColor = 'bg-teal-500 text-white'
                       label = 'הוחזר לארנק'
                       break
+                    case 'gift_sent':
+                      icon = <Mail className="w-3.5 h-3.5" />
+                      dotColor = 'bg-pink-500 text-white'
+                      label = 'מתנה נשלחה'
+                      if (entry.details?.recipient) detail = `ל: ${entry.details.recipient}`
+                      break
+                    case 'gift_link':
+                      icon = <Link2 className="w-3.5 h-3.5" />
+                      dotColor = 'bg-pink-400 text-white'
+                      label = 'קישור מתנה נוצר'
+                      break
+                    case 'gift_received':
+                      icon = <Gift className="w-3.5 h-3.5" />
+                      dotColor = 'bg-rose-500 text-white'
+                      label = 'מתנה התקבלה'
+                      if (entry.details?.sender) detail = `מ: ${entry.details.sender}`
+                      break
+                    case 'gift_balance_update':
+                      icon = <MinusCircle className="w-3.5 h-3.5" />
+                      dotColor = 'bg-pink-600 text-white'
+                      label = 'עדכון יתרה (מתנה)'
+                      if (entry.details?.from != null && entry.details?.to != null) {
+                        detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
+                        if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
+                      }
+                      break
                     default:
                       icon = <Clock className="w-3.5 h-3.5" />
                       dotColor = 'bg-gray-400 text-white'
