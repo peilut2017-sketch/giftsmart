@@ -114,7 +114,7 @@ export default function CheckoutPage() {
         color: { dark: '#1e293b', light: '#ffffff' },
       }).catch(() => {})
     }
-  }, [voucher?.code])
+  }, [voucher?.code, lockConfirmed])
 
   async function copyCode() {
     if (!voucher?.code) return

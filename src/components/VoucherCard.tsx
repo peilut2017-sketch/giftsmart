@@ -174,11 +174,11 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               {superVoucherName && <Star className="w-3 h-3 text-amber-400 fill-amber-400 flex-shrink-0" />}
-              <span className="font-semibold text-gray-800 text-sm truncate">
+              <span className="font-semibold text-gray-800 text-sm break-words">
                 {superVoucherName || voucher.store_name}
               </span>
               {superVoucherName && (
-                <span className="text-xs text-gray-400 truncate">({voucher.store_name})</span>
+                <span className="text-xs text-gray-400 break-words">({voucher.store_name})</span>
               )}
             </div>
             {voucher.categories.length > 0 && (
@@ -324,15 +324,15 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
                 {superVoucherName && <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />}
-                <h3 className="font-semibold text-gray-800 text-sm truncate">
+                <h3 className="font-semibold text-gray-800 text-sm break-words">
                   {superVoucherName || voucher.store_name}
                 </h3>
               </div>
               {superVoucherName && (
-                <p className="text-xs text-gray-500 truncate">{voucher.store_name}</p>
+                <p className="text-xs text-gray-500 break-words">{voucher.store_name}</p>
               )}
               {voucher.source && (
-                <p className="text-xs text-gray-400 truncate">{voucher.source}</p>
+                <p className="text-xs text-gray-400 break-words">{voucher.source}</p>
               )}
             </div>
             <div className="flex-shrink-0 me-2 text-right">
