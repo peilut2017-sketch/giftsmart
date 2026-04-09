@@ -8,7 +8,7 @@ import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpirySt
 import { sendUsageNotification } from '../hooks/useNotifications'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -59,6 +59,7 @@ export default function CheckoutPage() {
   const [voucherLog, setVoucherLog] = useState<ActivityLogEntry[]>([])
   const [logLoading, setLogLoading] = useState(true)
   const [showStores, setShowStores] = useState(false)
+  const [lockConfirmed, setLockConfirmed] = useState(false)
 
   // Load voucher activity log
   useEffect(() => {
@@ -352,6 +353,55 @@ export default function CheckoutPage() {
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
   const isArchived = archivedVouchers.some(v => v.id === id)
+
+  // Lock gate — show blocking overlay if voucher is locked and not yet confirmed
+  if (voucher.is_locked && !lockConfirmed) {
+    return (
+      <div className="flex-1 bg-gray-50 flex flex-col">
+        {/* Minimal header */}
+        <div className="bg-white border-b sticky top-0 z-20">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100">
+              <ArrowRight className="w-5 h-5" />
+            </button>
+            <h1 className="font-bold text-gray-900">{voucher.store_name}</h1>
+          </div>
+        </div>
+
+        {/* Lock screen */}
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl shadow-lg border border-orange-200 p-8 max-w-sm w-full text-center">
+            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-orange-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">שובר נעול</h2>
+            {voucher.lock_reason ? (
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-6 text-right">
+                <p className="text-xs text-orange-600 font-medium mb-1">סיבת נעילה:</p>
+                <p className="text-sm text-orange-800 font-medium">{voucher.lock_reason}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mb-6">שובר זה נעול ומיועד לשימוש עתידי</p>
+            )}
+            <p className="text-xs text-gray-400 mb-6">לחץ על הכפתור כדי לפתוח את השובר ולהשתמש בו</p>
+            <button
+              onClick={() => setLockConfirmed(true)}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-400 to-amber-500 text-white py-3.5 rounded-2xl font-semibold shadow-md hover:shadow-lg transition-all"
+            >
+              <Unlock className="w-4 h-4" />
+              פתח שובר
+            </button>
+            <button
+              onClick={() => navigate(-1)}
+              className="w-full mt-3 py-3 text-gray-500 text-sm font-medium hover:text-gray-700"
+            >
+              חזור
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 bg-gray-50">

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
-import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink, Gift } from 'lucide-react'
+import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink, Gift, Lock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
@@ -196,6 +196,11 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
           )}
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {voucher.is_locked && (
+              <span title={voucher.lock_reason ? `נעול: ${voucher.lock_reason}` : 'שובר נעול'} className="text-orange-500">
+                <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+            )}
             {voucher.is_gift && (
               <span title="שובר שהתקבל כמתנה" className="text-pink-500">
                 <Gift className="w-3.5 h-3.5" aria-hidden="true" />
@@ -359,6 +364,11 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
               ))}
             </div>
             <div className="flex items-center gap-1.5">
+              {voucher.is_locked && (
+                <span title={voucher.lock_reason ? `נעול: ${voucher.lock_reason}` : 'שובר נעול'} className="text-orange-500">
+                  <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+                </span>
+              )}
               {voucher.is_gift && (
                 <span title="שובר שהתקבל כמתנה" className="text-pink-500">
                   <Gift className="w-3.5 h-3.5" aria-hidden="true" />

@@ -5,7 +5,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
 
@@ -44,6 +44,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [smsText, setSmsText] = useState('')
   const [loading, setLoading] = useState(false)
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+  const [isLocked, setIsLocked] = useState(voucher?.is_locked || false)
+  const [lockReason, setLockReason] = useState(voucher?.lock_reason || '')
   const [showScanner, setShowScanner] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [smsLoading, setSmsLoading] = useState(false)
@@ -304,6 +306,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         source: source.trim() || undefined,
         is_archived: false,
         is_shared: false,
+        is_locked: isLocked,
+        lock_reason: isLocked ? lockReason.trim() || undefined : undefined,
         _storeUsed: (voucher && used > 0) ? (storeUsedInput.trim() || null) : undefined,
       }
       await onSave(v)
@@ -797,6 +801,43 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               rows={3}
               className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
             />
+          </div>
+
+          {/* Lock voucher */}
+          <div className={`rounded-2xl border-2 p-4 transition-colors ${isLocked ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-gray-50'}`}>
+            <button
+              type="button"
+              onClick={() => setIsLocked(prev => !prev)}
+              className="w-full flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2.5">
+                <Lock className={`w-4 h-4 ${isLocked ? 'text-orange-500' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${isLocked ? 'text-orange-700' : 'text-gray-600'}`}>
+                  נעל שובר
+                </span>
+                {isLocked && (
+                  <span className="text-xs bg-orange-200 text-orange-700 px-2 py-0.5 rounded-full font-medium">פעיל</span>
+                )}
+              </div>
+              <div className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${isLocked ? 'bg-orange-400' : 'bg-gray-300'}`}>
+                <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${isLocked ? 'translate-x-[-16px]' : ''}`} />
+              </div>
+            </button>
+            <p className="text-xs text-gray-500 mt-1 mr-6">
+              שובר נעול יציג אזהרה לפני פתיחה בקופה
+            </p>
+            {isLocked && (
+              <div className="mt-3">
+                <label className="text-xs font-medium text-orange-700 mb-1 block">סיבת נעילה</label>
+                <textarea
+                  value={lockReason}
+                  onChange={e => setLockReason(e.target.value)}
+                  placeholder="לדוגמה: שמור ליום הולדת של דני, לא לשימוש עד דצמבר..."
+                  rows={2}
+                  className="w-full px-4 py-3 border border-orange-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none bg-white"
+                />
+              </div>
+            )}
           </div>
 
         </form>
