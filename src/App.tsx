@@ -148,8 +148,15 @@ function AppRoutes() {
   const { user, loading, passwordRecovery, signOut } = useAuth()
   const navigate = useNavigate()
   const [biometricLocked, setBiometricLocked] = useState(false)
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
-  const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  interface BannerData {
+    id: string
+    image_url: string
+    display_duration: number
+    skip_allowed: boolean
+  }
+  const [banners, setBanners] = useState<BannerData[]>([])
+  const [bannerIndex, setBannerIndex] = useState(0)
 
   // After login: redirect back to gift page if user came from one
   useEffect(() => {
@@ -161,11 +168,11 @@ function AppRoutes() {
     }
   }, [user])
 
-  // After login: fetch banner to show on top of the app
+  // After login: fetch all active banners to show in sequence
   useEffect(() => {
-    if (!user) { setBannerUrl(null); setBannerDismissed(false); return }
-    supabase.rpc('get_active_banner').then(({ data }) => {
-      if (data?.image_url) setBannerUrl(data.image_url)
+    if (!user) { setBanners([]); setBannerIndex(0); return }
+    supabase.rpc('get_active_banners').then(({ data }) => {
+      if (data && data.length > 0) setBanners(data)
     })
   }, [user?.id])
   const [widgetEnabled, setWidgetEnabled] = useState(
@@ -213,8 +220,16 @@ function AppRoutes() {
     )
   }
 
-  if (bannerUrl && !bannerDismissed) {
-    return <LoginBanner imageUrl={bannerUrl} onDismiss={() => setBannerDismissed(true)} />
+  if (banners.length > 0 && bannerIndex < banners.length) {
+    const b = banners[bannerIndex]
+    return (
+      <LoginBanner
+        imageUrl={b.image_url}
+        duration={b.display_duration ?? 5}
+        skipAllowed={b.skip_allowed ?? true}
+        onDismiss={() => setBannerIndex(i => i + 1)}
+      />
+    )
   }
 
   return (

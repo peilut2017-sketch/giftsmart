@@ -10,6 +10,14 @@ import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
 
+interface SupportMessageReply {
+  id: string
+  message_id: string
+  sender: 'user' | 'admin'
+  body: string
+  created_at: string
+}
+
 interface SupportMessage {
   id: string
   subject: string
@@ -19,6 +27,7 @@ interface SupportMessage {
   admin_reply: string | null
   replied_at: string | null
   created_at: string
+  replies?: SupportMessageReply[]
 }
 
 interface AdminBroadcast {
@@ -71,6 +80,9 @@ export default function SettingsPage() {
   const [myMessages, setMyMessages] = useState<SupportMessage[]>([])
   const [showMyMessages, setShowMyMessages] = useState(false)
   const [supportSent, setSupportSent] = useState(false)
+  const [expandedMessageId, setExpandedMessageId] = useState<string | null>(null)
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
+  const [sendingUserReply, setSendingUserReply] = useState<string | null>(null)
 
   // Admin broadcasts
   const [adminBroadcasts, setAdminBroadcasts] = useState<AdminBroadcast[]>([])
@@ -239,7 +251,34 @@ export default function SettingsPage() {
 
   async function loadMyMessages() {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
-    if (data) setMyMessages(data)
+    if (!data) return
+    // Load replies for each message
+    const withReplies = await Promise.all(data.map(async msg => {
+      const { data: replies } = await supabase.rpc('get_message_replies', { p_message_id: msg.id })
+      return { ...msg, replies: replies || [] }
+    }))
+    setMyMessages(withReplies)
+  }
+
+  async function sendUserReply(messageId: string) {
+    const body = replyTexts[messageId]?.trim()
+    if (!body) return
+    setSendingUserReply(messageId)
+    const { error } = await supabase.rpc('user_reply_message', { p_id: messageId, p_body: body })
+    setSendingUserReply(null)
+    if (error) return toast.error('שגיאה בשליחה: ' + error.message)
+    const newReply: SupportMessageReply = {
+      id: crypto.randomUUID(),
+      message_id: messageId,
+      sender: 'user',
+      body,
+      created_at: new Date().toISOString(),
+    }
+    setMyMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, replies: [...(m.replies || []), newReply] } : m
+    ))
+    setReplyTexts(prev => ({ ...prev, [messageId]: '' }))
+    toast.success('תשובה נשלחה')
   }
 
   async function handleRemoveMember(userId: string, email: string) {
@@ -871,32 +910,108 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* My messages history */}
+            {/* My messages history — thread view */}
             {showMyMessages && (
               <div className="border-t">
                 {myMessages.length === 0 ? (
                   <p className="text-center text-xs text-gray-400 py-4">אין הודעות קודמות</p>
                 ) : (
-                  <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
-                    {myMessages.map(m => (
-                      <div key={m.id} className="px-4 py-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-gray-800">{m.subject}</p>
-                          <span className="text-xs text-gray-400 flex-shrink-0 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />{formatDate(m.created_at)}
-                          </span>
+                  <div className="divide-y divide-gray-50 max-h-[28rem] overflow-y-auto">
+                    {myMessages.map(m => {
+                      const isExpanded = expandedMessageId === m.id
+                      const hasReplies = (m.replies?.length ?? 0) > 0
+                      const hasAdminReply = m.admin_reply || m.replies?.some(r => r.sender === 'admin')
+                      return (
+                        <div key={m.id} className="px-4 py-3">
+                          {/* Message header — click to expand/collapse thread */}
+                          <button
+                            className="w-full text-right"
+                            onClick={() => setExpandedMessageId(isExpanded ? null : m.id)}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-medium text-gray-800">{m.subject}</p>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {hasAdminReply && (
+                                  <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-medium">נענה</span>
+                                )}
+                                {!hasAdminReply && (
+                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">בטיפול</span>
+                                )}
+                                <span className="text-xs text-gray-400 flex items-center gap-0.5">
+                                  <Clock className="w-3 h-3" />{formatDate(m.created_at)}
+                                </span>
+                              </div>
+                            </div>
+                            {!isExpanded && (
+                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1 text-right">{m.body}</p>
+                            )}
+                          </button>
+
+                          {/* Expanded thread */}
+                          {isExpanded && (
+                            <div className="mt-2 space-y-2">
+                              {/* Original message bubble */}
+                              <div className="flex justify-end">
+                                <div className="bg-teal-500 text-white rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
+                                  <p className="text-xs">{m.body}</p>
+                                  <p className="text-[10px] text-teal-200 mt-0.5">{formatDate(m.created_at)}</p>
+                                </div>
+                              </div>
+
+                              {/* Thread replies */}
+                              {hasReplies ? (
+                                m.replies!.map(r => (
+                                  <div key={r.id} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${
+                                      r.sender === 'user'
+                                        ? 'bg-teal-500 text-white rounded-tl-sm'
+                                        : 'bg-gray-100 text-gray-800 rounded-tr-sm'
+                                    }`}>
+                                      {r.sender === 'admin' && (
+                                        <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>
+                                      )}
+                                      <p className="text-xs">{r.body}</p>
+                                      <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-teal-200' : 'text-gray-400'}`}>
+                                        {formatDate(r.created_at)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : m.admin_reply ? (
+                                /* Backward compat: show legacy admin_reply if no thread replies yet */
+                                <div className="flex justify-start">
+                                  <div className="bg-gray-100 text-gray-800 rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]">
+                                    <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>
+                                    <p className="text-xs">{m.admin_reply}</p>
+                                    {m.replied_at && <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(m.replied_at)}</p>}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {/* User reply input (shown when admin has replied) */}
+                              {(hasAdminReply) && (
+                                <div className="flex gap-1.5 mt-1">
+                                  <input
+                                    value={replyTexts[m.id] || ''}
+                                    onChange={e => setReplyTexts(prev => ({ ...prev, [m.id]: e.target.value }))}
+                                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserReply(m.id) } }}
+                                    placeholder="כתוב תשובה..."
+                                    className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-300"
+                                  />
+                                  <button
+                                    onClick={() => sendUserReply(m.id)}
+                                    disabled={sendingUserReply === m.id || !replyTexts[m.id]?.trim()}
+                                    className="px-3 py-2 bg-teal-500 text-white rounded-xl text-xs disabled:opacity-40 flex items-center gap-1"
+                                  >
+                                    <Send className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{m.body}</p>
-                        {m.admin_reply ? (
-                          <div className="mt-2 bg-teal-50 rounded-xl p-2.5">
-                            <p className="text-xs font-medium text-teal-600 mb-1">תשובת המנהל:</p>
-                            <p className="text-xs text-gray-700">{m.admin_reply}</p>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-400 mt-1">בטיפול</p>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

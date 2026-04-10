@@ -5,9 +5,10 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
+import { supabase } from '../lib/supabase'
 
 const OCR_STORAGE_KEY = () => `ocr_scans_${new Date().toISOString().slice(0, 7)}` // YYYY-MM
 
@@ -55,6 +56,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const imageCameraRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
   const imageMenuRef = useRef<HTMLDivElement>(null)
+  const operatorPickerRef = useRef<HTMLDivElement>(null)
+
+  // Operator quick-fill
+  const [operators, setOperators] = useState<{ id: string; name: string; url: string }[]>([])
+  const [showOperatorPicker, setShowOperatorPicker] = useState(false)
+  const [operatorsLoaded, setOperatorsLoaded] = useState(false)
 
   useEffect(() => {
     if (!showImageMenu) return
@@ -70,6 +77,32 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       document.removeEventListener('touchstart', onOutside)
     }
   }, [showImageMenu])
+
+  // Close operator picker on outside click
+  useEffect(() => {
+    if (!showOperatorPicker) return
+    function onOutside(e: MouseEvent | TouchEvent) {
+      if (operatorPickerRef.current && !operatorPickerRef.current.contains(e.target as Node)) {
+        setShowOperatorPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', onOutside)
+    document.addEventListener('touchstart', onOutside)
+    return () => {
+      document.removeEventListener('mousedown', onOutside)
+      document.removeEventListener('touchstart', onOutside)
+    }
+  }, [showOperatorPicker])
+
+  async function openOperatorPicker() {
+    if (!operatorsLoaded) {
+      const { data } = await supabase.rpc('get_balance_operators')
+      if (data) setOperators(data)
+      setOperatorsLoaded(true)
+    }
+    setShowOperatorPicker(v => !v)
+  }
+
   const scannerDivId = 'qr-scanner-div'
 
   // Existing tags from all vouchers for autocomplete
@@ -660,14 +693,46 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <Link className="w-3.5 h-3.5" />
               קישור לשובר/לבדיקת יתרה
             </label>
-            <input
-              type="url"
-              value={link}
-              onChange={e => setLink(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-              dir="ltr"
-            />
+            <div className="relative" ref={operatorPickerRef}>
+              <div className="flex gap-1.5">
+                <input
+                  type="url"
+                  value={link}
+                  onChange={e => setLink(e.target.value)}
+                  placeholder="https://..."
+                  className="flex-1 min-w-0 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  onClick={openOperatorPicker}
+                  className="flex-shrink-0 flex items-center gap-1 px-3 py-2 bg-teal-50 border border-teal-200 text-teal-700 rounded-2xl text-xs font-medium whitespace-nowrap"
+                >
+                  מפעיל <ChevronDown className="w-3 h-3" />
+                </button>
+              </div>
+              {showOperatorPicker && (
+                <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl z-30 overflow-hidden">
+                  {operators.length === 0 ? (
+                    <p className="px-4 py-3 text-xs text-gray-400 text-center">אין מפעילים מוגדרים</p>
+                  ) : (
+                    <div className="max-h-44 overflow-y-auto divide-y divide-gray-50">
+                      {operators.map(op => (
+                        <button
+                          key={op.id}
+                          type="button"
+                          onClick={() => { setLink(op.url); setShowOperatorPicker(false) }}
+                          className="w-full text-right px-4 py-2.5 hover:bg-teal-50 flex items-center justify-between gap-2"
+                        >
+                          <span className="font-medium text-sm text-gray-800">{op.name}</span>
+                          <span className="text-xs text-gray-400 truncate max-w-[140px]" dir="ltr">{op.url}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Categories */}

@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -102,6 +102,7 @@ export default function AdminPage() {
   const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null)
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
   const [sendingReply, setSendingReply] = useState<string | null>(null)
+  const [msgReplies, setMsgReplies] = useState<Record<string, { id: string; sender: string; body: string; created_at: string }[]>>({})
   // Broadcasts
   const [showBroadcasts, setShowBroadcasts] = useState(false)
   const [broadcasts, setBroadcasts] = useState<{ id: string; subject: string; body: string; created_at: string }[]>([])
@@ -114,9 +115,24 @@ export default function AdminPage() {
   const [premiumToggling, setPremiumToggling] = useState(false)
   // Login banners
   const [showBanners, setShowBanners] = useState(false)
-  const [banners, setBanners] = useState<{ id: string; image_url: string; is_active: boolean; created_at: string }[]>([])
+  const [banners, setBanners] = useState<{ id: string; image_url: string; is_active: boolean; display_duration: number; skip_allowed: boolean; display_order: number; created_at: string }[]>([])
   const [bannersLoaded, setBannersLoaded] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [dragBannerId, setDragBannerId] = useState<string | null>(null)
+  const [dragOverBannerId, setDragOverBannerId] = useState<string | null>(null)
+  const [editingBannerId, setEditingBannerId] = useState<string | null>(null)
+  const [bannerEditDuration, setBannerEditDuration] = useState(5)
+  const [bannerEditSkip, setBannerEditSkip] = useState(true)
+  // Operators (balance check)
+  const [showOperators, setShowOperators] = useState(false)
+  const [operators, setOperators] = useState<{ id: string; name: string; url: string }[]>([])
+  const [operatorsLoaded, setOperatorsLoaded] = useState(false)
+  const [showAddOperator, setShowAddOperator] = useState(false)
+  const [operatorForm, setOperatorForm] = useState({ name: '', url: '' })
+  const [editingOperator, setEditingOperator] = useState<{ id: string; name: string; url: string } | null>(null)
+  // Operator picker in SV forms
+  const [showSVOperatorPicker, setShowSVOperatorPicker] = useState(false)
+  const [showEditSVOperatorPicker, setShowEditSVOperatorPicker] = useState(false)
 
   useEffect(() => {
     if (!isAdmin) return
@@ -186,7 +202,79 @@ export default function AdminPage() {
     })
   }
 
-  // Realtime: notify admin when a new support message arrives
+  async function handleUpdateBannerSettings(id: string, duration: number, skip: boolean) {
+    await supabase.rpc('admin_update_banner_settings', { p_id: id, p_display_duration: duration, p_skip_allowed: skip })
+    setBanners(prev => prev.map(b => b.id === id ? { ...b, display_duration: duration, skip_allowed: skip } : b))
+    setEditingBannerId(null)
+    toast.success('הגדרות באנר עודכנו')
+  }
+
+  async function handleReorderBanners(newOrder: typeof banners) {
+    setBanners(newOrder)
+    await supabase.rpc('admin_reorder_banners', { p_ids: newOrder.map(b => b.id) })
+  }
+
+  function handleBannerDragStart(id: string) {
+    setDragBannerId(id)
+  }
+
+  function handleBannerDragOver(e: React.DragEvent, targetId: string) {
+    e.preventDefault()
+    setDragOverBannerId(targetId)
+  }
+
+  function handleBannerDrop(targetId: string) {
+    if (!dragBannerId || dragBannerId === targetId) { setDragBannerId(null); setDragOverBannerId(null); return }
+    const from = banners.findIndex(b => b.id === dragBannerId)
+    const to = banners.findIndex(b => b.id === targetId)
+    if (from === -1 || to === -1) return
+    const reordered = [...banners]
+    const [moved] = reordered.splice(from, 1)
+    reordered.splice(to, 0, moved)
+    setDragBannerId(null)
+    setDragOverBannerId(null)
+    handleReorderBanners(reordered)
+  }
+
+  async function loadOperators() {
+    if (operatorsLoaded) return
+    const { data } = await supabase.rpc('get_balance_operators')
+    if (data) setOperators(data)
+    setOperatorsLoaded(true)
+  }
+
+  async function handleCreateOperator() {
+    if (!operatorForm.name.trim() || !operatorForm.url.trim()) return toast.error('שם וקישור הם שדות חובה')
+    const { data, error } = await supabase.rpc('admin_create_operator', { p_name: operatorForm.name.trim(), p_url: operatorForm.url.trim() })
+    if (error) return toast.error('שגיאה: ' + error.message)
+    if (data) setOperators(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    setOperatorForm({ name: '', url: '' })
+    setShowAddOperator(false)
+    toast.success('מפעיל נוסף')
+  }
+
+  async function handleUpdateOperator() {
+    if (!editingOperator) return
+    await supabase.rpc('admin_update_operator', { p_id: editingOperator.id, p_name: editingOperator.name, p_url: editingOperator.url })
+    setOperators(prev => prev.map(o => o.id === editingOperator.id ? editingOperator : o).sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    setEditingOperator(null)
+    toast.success('מפעיל עודכן')
+  }
+
+  async function handleDeleteOperator(id: string, name: string) {
+    setConfirm({
+      title: 'מחיקת מפעיל',
+      message: `למחוק את "${name}"?`,
+      onConfirm: async () => {
+        setConfirm(null)
+        await supabase.rpc('admin_delete_operator', { p_id: id })
+        setOperators(prev => prev.filter(o => o.id !== id))
+        toast.success('מפעיל נמחק')
+      },
+    })
+  }
+
+  // Realtime: notify admin when a new support message or thread reply arrives
   useEffect(() => {
     if (!isAdmin) return
     const channel = supabase
@@ -201,6 +289,20 @@ export default function AdminPage() {
             body: `${msg.user_email || 'משתמש'}: ${msg.subject}`,
             icon: '/logo.png',
           })
+        }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'support_message_replies',
+      }, (payload) => {
+        const reply = payload.new as { id: string; message_id: string; sender: string; body: string; created_at: string }
+        if (reply.sender === 'user') {
+          // User replied — append to thread if expanded, mark message as unread
+          setMsgReplies(prev => {
+            const existing = prev[reply.message_id] || []
+            if (existing.some(r => r.id === reply.id)) return prev
+            return { ...prev, [reply.message_id]: [...existing, reply] }
+          })
+          setMessages(prev => prev.map(m => m.id === reply.message_id ? { ...m, status: 'unread' } : m))
         }
       })
       .subscribe()
@@ -259,9 +361,14 @@ export default function AdminPage() {
   async function handleExpandMessage(msg: SupportMessage) {
     const isNowOpen = expandedMsgId === msg.id
     setExpandedMsgId(isNowOpen ? null : msg.id)
-    if (!isNowOpen && msg.status === 'unread') {
-      await supabase.rpc('admin_mark_message_read', { p_id: msg.id })
-      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'read' } : m))
+    if (!isNowOpen) {
+      if (msg.status === 'unread') {
+        await supabase.rpc('admin_mark_message_read', { p_id: msg.id })
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'read' } : m))
+      }
+      // Load thread replies
+      const { data } = await supabase.rpc('admin_get_message_replies', { p_message_id: msg.id })
+      if (data) setMsgReplies(prev => ({ ...prev, [msg.id]: data }))
     }
   }
 
@@ -272,6 +379,8 @@ export default function AdminPage() {
     const { error } = await supabase.rpc('admin_reply_message', { p_id: msg.id, p_reply: reply })
     setSendingReply(null)
     if (error) return toast.error('שגיאה: ' + error.message)
+    const newReply = { id: crypto.randomUUID(), sender: 'admin', body: reply, created_at: new Date().toISOString() }
+    setMsgReplies(prev => ({ ...prev, [msg.id]: [...(prev[msg.id] || []), newReply] }))
     setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'replied', admin_reply: reply } : m))
     setReplyTexts(prev => ({ ...prev, [msg.id]: '' }))
     toast.success('תשובה נשלחה')
@@ -672,7 +781,38 @@ export default function AdminPage() {
               <input value={svName} onChange={e => setSvName(e.target.value)} placeholder="שם שובר-על" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" />
               <input value={svDesc} onChange={e => setSvDesc(e.target.value)} placeholder="תיאור (אופציונלי)" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" />
               <textarea value={svStores} onChange={e => setSvStores(e.target.value)} placeholder="חנויות מכבדות (כל חנות בשורה נפרדת או מופרדות בפסיק)" rows={3} className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-y" />
-              <input value={svBalanceUrl} onChange={e => setSvBalanceUrl(e.target.value)} placeholder="לינק לבדיקת יתרה (אופציונלי)" type="url" className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300" dir="ltr" />
+              <div className="relative">
+                <div className="flex gap-1.5">
+                  <input value={svBalanceUrl} onChange={e => setSvBalanceUrl(e.target.value)} placeholder="לינק לבדיקת יתרה (אופציונלי)" type="url" className="flex-1 px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 min-w-0" dir="ltr" />
+                  <button
+                    type="button"
+                    onClick={() => { setShowSVOperatorPicker(v => !v); if (!operatorsLoaded) loadOperators() }}
+                    className="flex-shrink-0 px-2 py-2 bg-teal-50 border border-teal-200 text-teal-600 rounded-xl text-xs font-medium flex items-center gap-1 whitespace-nowrap"
+                  >
+                    <Link className="w-3 h-3" /> מפעיל
+                  </button>
+                </div>
+                {showSVOperatorPicker && operators.length > 0 && (
+                  <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-40 overflow-y-auto">
+                    {operators.map(op => (
+                      <button
+                        key={op.id}
+                        type="button"
+                        onClick={() => { setSvBalanceUrl(op.url); setShowSVOperatorPicker(false) }}
+                        className="w-full text-right px-3 py-2 text-sm hover:bg-teal-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
+                      >
+                        <span className="font-medium text-gray-800">{op.name}</span>
+                        <span className="text-xs text-gray-400 truncate max-w-[120px]" dir="ltr">{op.url}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showSVOperatorPicker && operators.length === 0 && operatorsLoaded && (
+                  <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow p-3 z-20">
+                    <p className="text-xs text-gray-400 text-center">אין מפעילים — הוסף דרך "מפעילי שוברים"</p>
+                  </div>
+                )}
+              </div>
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={svGlobal} onChange={e => setSvGlobal(e.target.checked)} className="w-4 h-4 accent-green-500" />
                 <Globe className="w-4 h-4 text-blue-500" />
@@ -701,14 +841,45 @@ export default function AdminPage() {
                       rows={3}
                       className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                     />
-                    <input
-                      type="url"
-                      value={editingSV.balance_check_url || ''}
-                      onChange={e => setEditingSV({ ...editingSV, balance_check_url: e.target.value })}
-                      placeholder="לינק לבדיקת יתרה (אופציונלי)"
-                      className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                      dir="ltr"
-                    />
+                    <div className="relative">
+                      <div className="flex gap-1.5">
+                        <input
+                          type="url"
+                          value={editingSV.balance_check_url || ''}
+                          onChange={e => setEditingSV({ ...editingSV, balance_check_url: e.target.value })}
+                          placeholder="לינק לבדיקת יתרה (אופציונלי)"
+                          className="flex-1 px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 min-w-0"
+                          dir="ltr"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { setShowEditSVOperatorPicker(v => !v); if (!operatorsLoaded) loadOperators() }}
+                          className="flex-shrink-0 px-2 py-2 bg-teal-50 border border-teal-200 text-teal-600 rounded-xl text-xs font-medium flex items-center gap-1 whitespace-nowrap"
+                        >
+                          <Link className="w-3 h-3" /> מפעיל
+                        </button>
+                      </div>
+                      {showEditSVOperatorPicker && operators.length > 0 && (
+                        <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-40 overflow-y-auto">
+                          {operators.map(op => (
+                            <button
+                              key={op.id}
+                              type="button"
+                              onClick={() => { setEditingSV({ ...editingSV, balance_check_url: op.url }); setShowEditSVOperatorPicker(false) }}
+                              className="w-full text-right px-3 py-2 text-sm hover:bg-teal-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
+                            >
+                              <span className="font-medium text-gray-800">{op.name}</span>
+                              <span className="text-xs text-gray-400 truncate max-w-[120px]" dir="ltr">{op.url}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showEditSVOperatorPicker && operators.length === 0 && operatorsLoaded && (
+                        <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow p-3 z-20">
+                          <p className="text-xs text-gray-400 text-center">אין מפעילים — הוסף דרך "מפעילי שוברים"</p>
+                        </div>
+                      )}
+                    </div>
                     <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                       <input type="checkbox" checked={editingSV.is_global ?? false} onChange={e => setEditingSV({ ...editingSV, is_global: e.target.checked })} className="w-4 h-4 accent-green-500" />
                       <Globe className="w-4 h-4 text-blue-500" />
@@ -975,16 +1146,44 @@ export default function AdminPage() {
                         </button>
 
                         {isExpanded && (
-                          <div className="px-4 pb-4 space-y-3">
-                            <div className="bg-gray-50 rounded-2xl p-3">
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{msg.body}</p>
-                            </div>
-                            {msg.admin_reply && (
-                              <div className="bg-teal-50 rounded-2xl p-3">
-                                <p className="text-xs font-medium text-teal-600 mb-1">תשובתך:</p>
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{msg.admin_reply}</p>
+                          <div className="px-4 pb-4 space-y-2">
+                            {/* Thread view */}
+                            <div className="space-y-2 max-h-72 overflow-y-auto pb-1">
+                              {/* Original message */}
+                              <div className="flex justify-end">
+                                <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[80%]">
+                                  <p className="text-xs text-gray-500 font-medium mb-0.5">{msg.user_email || msg.user_name || 'משתמש'}</p>
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{msg.body}</p>
+                                  <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(msg.created_at)}</p>
+                                </div>
                               </div>
-                            )}
+                              {/* Thread replies */}
+                              {(msgReplies[msg.id] || []).length === 0 && msg.admin_reply && (
+                                /* Legacy: show admin_reply if no thread yet */
+                                <div className="flex justify-start">
+                                  <div className="bg-teal-50 rounded-2xl rounded-tr-sm px-3 py-2 max-w-[80%]">
+                                    <p className="text-xs text-teal-600 font-medium mb-0.5">מנהל</p>
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{msg.admin_reply}</p>
+                                  </div>
+                                </div>
+                              )}
+                              {(msgReplies[msg.id] || []).map(r => (
+                                <div key={r.id} className={`flex ${r.sender === 'admin' ? 'justify-start' : 'justify-end'}`}>
+                                  <div className={`rounded-2xl px-3 py-2 max-w-[80%] ${
+                                    r.sender === 'admin'
+                                      ? 'bg-teal-50 text-gray-700 rounded-tr-sm'
+                                      : 'bg-gray-100 text-gray-700 rounded-tl-sm'
+                                  }`}>
+                                    <p className={`text-xs font-medium mb-0.5 ${r.sender === 'admin' ? 'text-teal-600' : 'text-gray-500'}`}>
+                                      {r.sender === 'admin' ? 'מנהל' : (msg.user_email || 'משתמש')}
+                                    </p>
+                                    <p className="text-sm whitespace-pre-wrap">{r.body}</p>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(r.created_at)}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Reply input */}
                             <div className="flex gap-2">
                               <textarea
                                 value={replyTexts[msg.id] || ''}
@@ -1109,7 +1308,7 @@ export default function AdminPage() {
           >
             <span className="flex items-center gap-2 font-semibold text-gray-800 text-sm">
               <Image className="w-4 h-4 text-purple-500" />
-              באנר כניסה
+              באנרי כניסה ({banners.filter(b => b.is_active).length} פעילים)
             </span>
             {showBanners ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </button>
@@ -1119,7 +1318,7 @@ export default function AdminPage() {
               {/* Upload area */}
               <div className="p-4">
                 <p className="text-xs text-gray-500 mb-3">
-                  הבאנר מוצג על מסך הכניסה למשך 5 שניות עם אפשרות דילוג.
+                  ניתן להעלות מספר באנרים — יוצגו אחד אחרי השני לפי סדר הגרירה. גרור שורות לשינוי סדר.
                 </p>
                 <label className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed text-sm font-medium cursor-pointer transition-colors
                   ${uploadingBanner ? 'border-gray-200 text-gray-400 cursor-not-allowed' : 'border-purple-300 text-purple-600 hover:bg-purple-50'}`}
@@ -1137,43 +1336,200 @@ export default function AdminPage() {
                 </label>
               </div>
 
-              {/* Banner list */}
+              {/* Banner list with drag-and-drop */}
               {banners.length === 0 && bannersLoaded && (
                 <p className="px-4 py-3 text-xs text-gray-400">אין באנרים עדיין</p>
               )}
               {banners.map(b => (
-                <div key={b.id} className="p-3 flex items-center gap-3">
-                  <img
-                    src={b.image_url}
-                    alt="באנר"
-                    className="w-20 h-12 object-cover rounded-lg border border-gray-100 flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {b.is_active ? 'פעיל' : 'מושבת'}
-                    </span>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{new Date(b.created_at).toLocaleDateString('he-IL')}</p>
+                <div
+                  key={b.id}
+                  draggable
+                  onDragStart={() => handleBannerDragStart(b.id)}
+                  onDragOver={e => handleBannerDragOver(e, b.id)}
+                  onDrop={() => handleBannerDrop(b.id)}
+                  onDragEnd={() => { setDragBannerId(null); setDragOverBannerId(null) }}
+                  className={`transition-colors ${dragOverBannerId === b.id && dragBannerId !== b.id ? 'bg-purple-50 border-purple-200' : ''}`}
+                >
+                  <div className="p-3 flex items-center gap-2">
+                    {/* Drag handle */}
+                    <GripVertical className="w-4 h-4 text-gray-300 cursor-grab flex-shrink-0" />
+                    <img
+                      src={b.image_url}
+                      alt="באנר"
+                      className="w-16 h-10 object-cover rounded-lg border border-gray-100 flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {b.is_active ? 'פעיל' : 'מושבת'}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-[11px] text-gray-400">{b.display_duration ?? 5}ש׳</span>
+                        <span className="text-[11px] text-gray-400">{b.skip_allowed !== false ? '• ניתן לדילוג' : '• ללא דילוג'}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          if (editingBannerId === b.id) { setEditingBannerId(null); return }
+                          setEditingBannerId(b.id)
+                          setBannerEditDuration(b.display_duration ?? 5)
+                          setBannerEditSkip(b.skip_allowed !== false)
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                        title="הגדרות"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-gray-400" />
+                      </button>
+                      <button
+                        onClick={() => handleToggleBanner(b.id, !b.is_active)}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                        title={b.is_active ? 'השבת' : 'הפעל'}
+                      >
+                        {b.is_active
+                          ? <ToggleRight className="w-5 h-5 text-green-500" />
+                          : <ToggleLeft className="w-5 h-5 text-gray-300" />}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBanner(b.id, b.image_url)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                        title="מחק"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => handleToggleBanner(b.id, !b.is_active)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                      title={b.is_active ? 'השבת' : 'הפעל'}
-                    >
-                      {b.is_active
-                        ? <ToggleRight className="w-5 h-5 text-green-500" />
-                        : <ToggleLeft className="w-5 h-5 text-gray-300" />}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteBanner(b.id, b.image_url)}
-                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                      title="מחק"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  </div>
+                  {/* Inline settings editor */}
+                  {editingBannerId === b.id && (
+                    <div className="mx-3 mb-3 p-3 bg-purple-50 rounded-xl space-y-2">
+                      <div className="flex items-center gap-3">
+                        <label className="text-xs text-gray-600 flex-shrink-0">זמן תצוגה (שניות)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={bannerEditDuration}
+                          onChange={e => setBannerEditDuration(Math.max(1, parseInt(e.target.value) || 5))}
+                          className="w-20 px-2 py-1 border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-300"
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={bannerEditSkip}
+                          onChange={e => setBannerEditSkip(e.target.checked)}
+                          className="w-4 h-4 accent-purple-500"
+                        />
+                        <span className="text-xs text-gray-600">אפשר למשתמשים לדלג על הבאנר</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleUpdateBannerSettings(b.id, bannerEditDuration, bannerEditSkip)}
+                          className="flex-1 bg-purple-500 text-white py-1.5 rounded-lg text-xs font-medium"
+                        >שמור</button>
+                        <button
+                          onClick={() => setEditingBannerId(null)}
+                          className="flex-1 bg-gray-200 text-gray-600 py-1.5 rounded-lg text-xs font-medium"
+                        >ביטול</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Balance Check Operators ── */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3.5 text-right"
+            onClick={() => { setShowOperators(v => !v); if (!showOperators) loadOperators() }}
+          >
+            <span className="flex items-center gap-2 font-semibold text-gray-800 text-sm">
+              <Link className="w-4 h-4 text-teal-500" />
+              מפעילי שוברים ({operators.length})
+            </span>
+            {showOperators ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+
+          {showOperators && (
+            <div className="border-t">
+              <div className="p-4">
+                <p className="text-xs text-gray-500 mb-3">
+                  לינקים קבועים לבדיקת יתרה — יופיעו כקיצור דרך בטופס הוספת שובר.
+                </p>
+                {!showAddOperator ? (
+                  <button
+                    onClick={() => setShowAddOperator(true)}
+                    className="flex items-center gap-1.5 text-sm text-teal-600 bg-teal-50 px-3 py-1.5 rounded-xl"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> הוסף מפעיל
+                  </button>
+                ) : (
+                  <div className="space-y-2 bg-teal-50 rounded-xl p-3">
+                    <input
+                      value={operatorForm.name}
+                      onChange={e => setOperatorForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="שם המפעיל (למשל: מקס, כאל)"
+                      className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+                    />
+                    <input
+                      value={operatorForm.url}
+                      onChange={e => setOperatorForm(f => ({ ...f, url: e.target.value }))}
+                      placeholder="https://..."
+                      type="url"
+                      dir="ltr"
+                      className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={handleCreateOperator} className="flex-1 bg-teal-500 text-white py-2 rounded-xl text-sm">הוסף</button>
+                      <button onClick={() => { setShowAddOperator(false); setOperatorForm({ name: '', url: '' }) }} className="flex-1 bg-gray-200 py-2 rounded-xl text-sm">ביטול</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="divide-y divide-gray-50">
+                {operators.map(op => (
+                  <div key={op.id} className="px-4 py-3">
+                    {editingOperator?.id === op.id ? (
+                      <div className="space-y-2">
+                        <input
+                          value={editingOperator.name}
+                          onChange={e => setEditingOperator({ ...editingOperator, name: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+                        />
+                        <input
+                          value={editingOperator.url}
+                          onChange={e => setEditingOperator({ ...editingOperator, url: e.target.value })}
+                          type="url"
+                          dir="ltr"
+                          className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+                        />
+                        <div className="flex gap-2">
+                          <button onClick={handleUpdateOperator} className="flex-1 bg-teal-500 text-white py-1.5 rounded-xl text-sm">שמור</button>
+                          <button onClick={() => setEditingOperator(null)} className="flex-1 bg-gray-100 py-1.5 rounded-xl text-sm">ביטול</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800">{op.name}</p>
+                          <p className="text-xs text-gray-400 truncate" dir="ltr">{op.url}</p>
+                        </div>
+                        <button onClick={() => setEditingOperator(op)} className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50">
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDeleteOperator(op.id, op.name)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {operators.length === 0 && operatorsLoaded && (
+                  <p className="px-4 py-3 text-xs text-gray-400">אין מפעילים עדיין</p>
+                )}
+              </div>
             </div>
           )}
         </div>
