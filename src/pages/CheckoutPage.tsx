@@ -524,15 +524,15 @@ export default function CheckoutPage() {
               {copied ? 'הועתק!' : 'העתק קוד'}
             </button>
 
-            {voucher.code && (
+            {voucher.link && (
               <a
-                href={`https://otp.co.il/${encodeURIComponent(voucher.code)}`}
+                href={voucher.link}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
               >
                 <ExternalLink className="w-4 h-4" />
-                OTP
+                פתח קישור
               </a>
             )}
 
