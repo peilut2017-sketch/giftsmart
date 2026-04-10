@@ -926,7 +926,12 @@ export default function SettingsPage() {
                           {/* Message header — click to expand/collapse thread */}
                           <button
                             className="w-full text-right"
-                            onClick={() => setExpandedMessageId(isExpanded ? null : m.id)}
+                            onClick={() => {
+                              setExpandedMessageId(isExpanded ? null : m.id)
+                              if (!isExpanded) {
+                                void supabase.rpc('user_mark_message_read', { p_message_id: m.id })
+                              }
+                            }}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <p className="text-sm font-medium text-gray-800">{m.subject}</p>
@@ -1044,6 +1049,7 @@ export default function SettingsPage() {
                       if (isNew) {
                         seenBroadcastIds.add(b.id)
                         localStorage.setItem('seen_broadcast_ids', JSON.stringify([...seenBroadcastIds]))
+                        void supabase.rpc('record_broadcast_view', { p_broadcast_id: b.id })
                       }
                     }}
                   >

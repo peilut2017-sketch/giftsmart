@@ -54,6 +54,7 @@ interface SupportMessage {
   admin_reply: string | null
   replied_at: string | null
   created_at: string
+  user_read_at: string | null
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -110,6 +111,15 @@ export default function AdminPage() {
   const [pushForm, setPushForm] = useState({ title: '', body: '' })
   const [sendingBroadcast, setSendingBroadcast] = useState(false)
   const [sendingPush, setSendingPush] = useState(false)
+  // Reply editing
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null)
+  const [editingReplyText, setEditingReplyText] = useState('')
+  // Broadcast management
+  const [editingBroadcastId, setEditingBroadcastId] = useState<string | null>(null)
+  const [editingBroadcastForm, setEditingBroadcastForm] = useState({ subject: '', body: '' })
+  const [broadcastViewers, setBroadcastViewers] = useState<Record<string, { user_email: string; viewed_at: string }[]>>({})
+  const [loadingViewersFor, setLoadingViewersFor] = useState<string | null>(null)
+  const [showViewersFor, setShowViewersFor] = useState<string | null>(null)
   // Premium flag
   const [premiumEnabled, setPremiumEnabled] = useState<boolean | null>(null)
   const [premiumToggling, setPremiumToggling] = useState(false)
@@ -384,6 +394,69 @@ export default function AdminPage() {
     setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'replied', admin_reply: reply } : m))
     setReplyTexts(prev => ({ ...prev, [msg.id]: '' }))
     toast.success('תשובה נשלחה')
+  }
+
+  async function handleEditReply(replyId: string, msgId: string) {
+    const newBody = editingReplyText.trim()
+    if (!newBody) return
+    const { error } = await supabase.rpc('admin_edit_reply', { p_reply_id: replyId, p_body: newBody })
+    if (error) return toast.error('שגיאה בעריכה: ' + error.message)
+    setMsgReplies(prev => ({
+      ...prev,
+      [msgId]: (prev[msgId] || []).map(r => r.id === replyId ? { ...r, body: newBody } : r),
+    }))
+    setEditingReplyId(null)
+    toast.success('התשובה עודכנה')
+  }
+
+  async function handleDeleteReply(replyId: string, msgId: string) {
+    setConfirm({
+      title: 'מחיקת תשובה',
+      message: 'למחוק את התשובה?',
+      onConfirm: async () => {
+        setConfirm(null)
+        const { error } = await supabase.rpc('admin_delete_reply', { p_reply_id: replyId })
+        if (error) return toast.error('שגיאה במחיקה: ' + error.message)
+        setMsgReplies(prev => ({
+          ...prev,
+          [msgId]: (prev[msgId] || []).filter(r => r.id !== replyId),
+        }))
+        toast.success('התשובה נמחקה')
+      },
+    })
+  }
+
+  async function handleDeleteBroadcast(id: string) {
+    setConfirm({
+      title: 'מחיקת הודעה',
+      message: 'למחוק את ההודעה לכלל המשתמשים?',
+      onConfirm: async () => {
+        setConfirm(null)
+        await supabase.rpc('admin_delete_broadcast', { p_id: id })
+        setBroadcasts(prev => prev.filter(b => b.id !== id))
+        toast.success('הודעה נמחקה')
+      },
+    })
+  }
+
+  async function handleSaveEditBroadcast(id: string) {
+    const { subject, body } = editingBroadcastForm
+    if (!subject.trim() || !body.trim()) return toast.error('נושא וגוף חובה')
+    const { error } = await supabase.rpc('admin_edit_broadcast', { p_id: id, p_subject: subject.trim(), p_body: body.trim() })
+    if (error) return toast.error('שגיאה בעדכון: ' + error.message)
+    setBroadcasts(prev => prev.map(b => b.id === id ? { ...b, subject: subject.trim(), body: body.trim() } : b))
+    setEditingBroadcastId(null)
+    toast.success('הודעה עודכנה')
+  }
+
+  async function handleLoadBroadcastViewers(id: string) {
+    if (showViewersFor === id) { setShowViewersFor(null); return }
+    setLoadingViewersFor(id)
+    const { data, error } = await supabase.rpc('admin_get_broadcast_views', { p_broadcast_id: id })
+    setLoadingViewersFor(null)
+    if (error) return toast.error('שגיאה: ' + error.message)
+    setBroadcastViewers(prev => ({ ...prev, [id]: data || [] }))
+    setShowViewersFor(id)
   }
 
   async function handleCreateBroadcast() {
@@ -1140,6 +1213,14 @@ export default function AdminPage() {
                               <span className="text-xs text-gray-400">{msg.user_email || msg.user_name || 'משתמש'}</span>
                               <span className="text-xs text-gray-300">·</span>
                               <span className="text-xs text-gray-400">{CATEGORY_LABELS[msg.category] || msg.category}</span>
+                              {msg.user_read_at && (
+                                <>
+                                  <span className="text-xs text-gray-300">·</span>
+                                  <span className="text-[10px] text-blue-400 flex items-center gap-0.5">
+                                    <Eye className="w-3 h-3" />נקרא ע"י המשתמש
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
@@ -1174,11 +1255,52 @@ export default function AdminPage() {
                                       ? 'bg-teal-50 text-gray-700 rounded-tr-sm'
                                       : 'bg-gray-100 text-gray-700 rounded-tl-sm'
                                   }`}>
-                                    <p className={`text-xs font-medium mb-0.5 ${r.sender === 'admin' ? 'text-teal-600' : 'text-gray-500'}`}>
-                                      {r.sender === 'admin' ? 'מנהל' : (msg.user_email || 'משתמש')}
-                                    </p>
-                                    <p className="text-sm whitespace-pre-wrap">{r.body}</p>
-                                    <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(r.created_at)}</p>
+                                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                                      <p className={`text-xs font-medium ${r.sender === 'admin' ? 'text-teal-600' : 'text-gray-500'}`}>
+                                        {r.sender === 'admin' ? 'מנהל' : (msg.user_email || 'משתמש')}
+                                      </p>
+                                      {r.sender === 'admin' && editingReplyId !== r.id && (
+                                        <div className="flex items-center gap-0.5">
+                                          <button
+                                            onClick={() => { setEditingReplyId(r.id); setEditingReplyText(r.body) }}
+                                            className="p-0.5 rounded hover:bg-teal-100 text-teal-400"
+                                          >
+                                            <Edit2 className="w-2.5 h-2.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteReply(r.id, msg.id)}
+                                            className="p-0.5 rounded hover:bg-red-100 text-red-400"
+                                          >
+                                            <Trash2 className="w-2.5 h-2.5" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {editingReplyId === r.id ? (
+                                      <div className="space-y-1.5">
+                                        <textarea
+                                          value={editingReplyText}
+                                          onChange={e => setEditingReplyText(e.target.value)}
+                                          rows={3}
+                                          className="w-full px-2 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none bg-white"
+                                        />
+                                        <div className="flex gap-1.5">
+                                          <button
+                                            onClick={() => handleEditReply(r.id, msg.id)}
+                                            className="flex-1 bg-teal-500 text-white py-1 rounded-lg text-xs font-medium"
+                                          >שמור</button>
+                                          <button
+                                            onClick={() => setEditingReplyId(null)}
+                                            className="flex-1 bg-gray-200 text-gray-600 py-1 rounded-lg text-xs"
+                                          >ביטול</button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm whitespace-pre-wrap">{r.body}</p>
+                                        <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(r.created_at)}</p>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -1284,14 +1406,86 @@ export default function AdminPage() {
 
               {/* Broadcast history */}
               {broadcasts.length > 0 && (
-                <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
                   {broadcasts.map(b => (
                     <div key={b.id} className="px-4 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-gray-700 truncate">{b.subject}</p>
-                        <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(b.created_at)}</span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{b.body}</p>
+                      {editingBroadcastId === b.id ? (
+                        <div className="space-y-2">
+                          <input
+                            value={editingBroadcastForm.subject}
+                            onChange={e => setEditingBroadcastForm(f => ({ ...f, subject: e.target.value }))}
+                            placeholder="נושא ההודעה"
+                            className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          />
+                          <textarea
+                            value={editingBroadcastForm.body}
+                            onChange={e => setEditingBroadcastForm(f => ({ ...f, body: e.target.value }))}
+                            placeholder="גוף ההודעה"
+                            rows={2}
+                            className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveEditBroadcast(b.id)}
+                              className="flex-1 bg-blue-500 text-white py-1.5 rounded-xl text-xs font-medium"
+                            >שמור</button>
+                            <button
+                              onClick={() => setEditingBroadcastId(null)}
+                              className="flex-1 bg-gray-200 text-gray-600 py-1.5 rounded-xl text-xs"
+                            >ביטול</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-gray-700 truncate">{b.subject}</p>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <span className="text-xs text-gray-400">{formatDate(b.created_at)}</span>
+                              <button
+                                onClick={() => handleLoadBroadcastViewers(b.id)}
+                                title="מי צפה"
+                                className={`p-1 rounded-lg hover:bg-blue-50 ${loadingViewersFor === b.id ? 'opacity-50' : ''}`}
+                              >
+                                <Users className="w-3.5 h-3.5 text-blue-400" />
+                              </button>
+                              <button
+                                onClick={() => { setEditingBroadcastId(b.id); setEditingBroadcastForm({ subject: b.subject, body: b.body }) }}
+                                title="ערוך"
+                                className="p-1 rounded-lg hover:bg-gray-100"
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-gray-400" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBroadcast(b.id)}
+                                title="מחק"
+                                className="p-1 rounded-lg hover:bg-red-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{b.body}</p>
+                          {showViewersFor === b.id && (
+                            <div className="mt-2 bg-blue-50 rounded-xl p-2.5">
+                              <p className="text-[10px] font-semibold text-blue-600 mb-1.5">
+                                {broadcastViewers[b.id]?.length
+                                  ? `${broadcastViewers[b.id].length} משתמשים צפו`
+                                  : 'אף אחד לא צפה עדיין'}
+                              </p>
+                              {(broadcastViewers[b.id] || []).length > 0 && (
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {broadcastViewers[b.id].map(v => (
+                                    <div key={v.user_email} className="flex justify-between text-xs">
+                                      <span className="text-gray-600">{v.user_email}</span>
+                                      <span className="text-gray-400">{formatDate(v.viewed_at)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
