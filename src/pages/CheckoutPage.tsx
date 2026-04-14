@@ -502,8 +502,9 @@ export default function CheckoutPage() {
       {/* Sell modal */}
       {showSellModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowSellModal(false)}>
-          <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 space-y-4 overflow-y-auto max-h-[90dvh]" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]" onClick={e => e.stopPropagation()}>
+            {/* Header — קבוע */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
               <h2 className="font-bold text-lg flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-green-600" />
                 הצע שובר למכירה
@@ -512,41 +513,47 @@ export default function CheckoutPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
-              <p className="font-semibold">{voucher!.store_name}</p>
-              <p className="text-sm text-gray-500">יתרה: ₪{voucher!.balance}</p>
+            {/* Content — גלילה */}
+            <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-4">
+              <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
+                <p className="font-semibold">{voucher!.store_name}</p>
+                <p className="text-sm text-gray-500">יתרה: ₪{voucher!.balance}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">מחיר מבוקש (₪)</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={sellPrice}
+                  onChange={e => setSellPrice(e.target.value)}
+                  placeholder="לדוגמה: 80"
+                  className="w-full border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-400"
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">תיאור (אופציונלי)</label>
+                <textarea
+                  value={sellDescription}
+                  onChange={e => setSellDescription(e.target.value)}
+                  placeholder="מידע נוסף על השובר..."
+                  className="w-full border rounded-xl px-4 py-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-green-400"
+                />
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                השובר יינעל לשימוש אישי עד שיוסר מהמכירה. שיטות התשלום שהגדרת בפרופיל יוצגו לקונים.
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">מחיר מבוקש (₪)</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={sellPrice}
-                onChange={e => setSellPrice(e.target.value)}
-                placeholder="לדוגמה: 80"
-                className="w-full border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-400"
-                dir="ltr"
-              />
+            {/* Footer — כפתור קבוע */}
+            <div className="px-6 py-4 shrink-0 border-t border-gray-100">
+              <button
+                onClick={handleListForSale}
+                disabled={sellLoading || !sellPrice}
+                className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
+              >
+                {sellLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'פרסם למכירה'}
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">תיאור (אופציונלי)</label>
-              <textarea
-                value={sellDescription}
-                onChange={e => setSellDescription(e.target.value)}
-                placeholder="מידע נוסף על השובר..."
-                className="w-full border rounded-xl px-4 py-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-green-400"
-              />
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-              השובר יינעל לשימוש אישי עד שיוסר מהמכירה. שיטות התשלום שהגדרת בפרופיל יוצגו לקונים.
-            </div>
-            <button
-              onClick={handleListForSale}
-              disabled={sellLoading || !sellPrice}
-              className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-            >
-              {sellLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'פרסם למכירה'}
-            </button>
           </div>
         </div>
       )}
