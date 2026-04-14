@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
-import { formatCurrency, formatDate } from '../utils/helpers'
+import { formatDate } from '../utils/helpers'
 import { ShoppingBag, Search, Star, X, Clock, CheckCircle, Loader2, Tag, Flag, AlertCircle } from 'lucide-react'
 import type { MarketplaceListing, MarketplacePurchase } from '../types'
-import { PAYMENT_METHOD_LABELS } from '../types'
 import toast from 'react-hot-toast'
 
 // ─── Rating Stars ────────────────────────────────────────────────────────────
@@ -402,7 +401,7 @@ function MyPurchaseRow({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MarketplacePage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  useAuth()
   const {
     listings, myListings, myPurchases,
     loadingListings, loadingMyListings, loadingMyPurchases,

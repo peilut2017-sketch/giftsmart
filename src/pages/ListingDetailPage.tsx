@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
 import { formatDate } from '../utils/helpers'
-import { ArrowRight, Star, Clock, ShoppingBag, X, Loader2, Flag, ExternalLink, Phone, Mail, CheckCircle, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Star, Clock, ShoppingBag, X, Loader2, Flag, Phone, Mail, CheckCircle, AlertTriangle } from 'lucide-react'
 import type { MarketplaceListing, PaymentMethod } from '../types'
 import { PAYMENT_METHOD_LABELS } from '../types'
 import toast from 'react-hot-toast'
@@ -96,8 +95,7 @@ function BuyModal({
   onSuccess: () => void
 }) {
   const { confirmPaymentSent } = useMarketplace()
-  const { profile } = useAuth()
-  const [step, setStep] = useState<'info' | 'confirm'>('info')
+  useAuth()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [sending, setSending] = useState(false)
 
