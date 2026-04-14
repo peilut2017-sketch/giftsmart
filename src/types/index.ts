@@ -73,6 +73,70 @@ export interface Profile {
   avatar_url?: string
   show_voucher_value?: boolean
   is_admin?: boolean
+  marketplace_payment_methods?: PaymentMethod[]
+}
+
+// ============ Marketplace Types ============
+
+export interface PaymentMethod {
+  type: 'paypal' | 'bit' | 'paybox' | 'cashcash' | 'other'
+  value: string  // email for paypal, phone number for others
+  label?: string
+}
+
+export interface MarketplaceListing {
+  id: string
+  voucher_id: string
+  seller_id: string
+  asking_price: number
+  description?: string
+  status: 'active' | 'pending_payment' | 'sold' | 'cancelled'
+  created_at: string
+  updated_at?: string
+  // from get_marketplace_listings RPC
+  store_name?: string
+  balance?: number
+  expiry_date?: string
+  seller_name?: string
+  seller_email?: string
+  avg_rating?: number
+  rating_count?: number
+  seller_payment_methods?: PaymentMethod[]
+  // from get_my_listings RPC
+  purchase_id?: string
+  purchase_status?: string
+  buyer_name?: string
+  buyer_email?: string
+  payment_method_used?: string
+}
+
+export interface MarketplacePurchase {
+  purchase_id: string
+  listing_id: string
+  status: 'pending_buyer_payment' | 'buyer_confirmed' | 'completed' | 'cancelled'
+  payment_method_used?: string
+  buyer_confirmed_at?: string
+  seller_confirmed_at?: string
+  created_at: string
+  // voucher/listing info
+  store_name?: string
+  balance?: number
+  expiry_date?: string
+  asking_price?: number
+  // seller info
+  seller_id?: string
+  seller_name?: string
+  seller_email?: string
+  // rating
+  my_rating?: number | null
+}
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod['type'], string> = {
+  paypal: 'PayPal',
+  bit: 'Bit',
+  paybox: 'Paybox',
+  cashcash: 'Cashcash',
+  other: 'אחר',
 }
 
 export interface Category {

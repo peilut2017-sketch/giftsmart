@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Home, Archive, BarChart2, Settings, Shield } from 'lucide-react'
+import { Home, Archive, BarChart2, Settings, Shield, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function BottomNav() {
@@ -9,6 +9,7 @@ export default function BottomNav() {
 
   const items = [
     { icon: Home, label: 'ארנק', path: '/' },
+    { icon: ShoppingBag, label: 'שוק', path: '/market' },
     { icon: Archive, label: 'ארכיון', path: '/archive' },
     { icon: BarChart2, label: 'סטטיסטיקות', path: '/stats' },
     { icon: Settings, label: 'הגדרות', path: '/settings' },

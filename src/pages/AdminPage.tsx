@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -143,6 +143,45 @@ export default function AdminPage() {
   // Operator picker in SV forms
   const [showSVOperatorPicker, setShowSVOperatorPicker] = useState(false)
   const [showEditSVOperatorPicker, setShowEditSVOperatorPicker] = useState(false)
+  // Reports
+  const [showReports, setShowReports] = useState(false)
+  const [reports, setReports] = useState<{
+    id: string
+    reporter_email: string
+    reported_email: string
+    reason: string
+    details: string | null
+    status: string
+    created_at: string
+    purchase_id: string | null
+    listing_id: string | null
+  }[]>([])
+  const [reportsLoaded, setReportsLoaded] = useState(false)
+  const [updatingReport, setUpdatingReport] = useState<string | null>(null)
+
+  async function loadReports() {
+    if (reportsLoaded) return
+    const { data, error } = await supabase.rpc('admin_get_reports')
+    if (!error && data) setReports(data)
+    setReportsLoaded(true)
+  }
+
+  async function updateReportStatus(reportId: string, status: string) {
+    setUpdatingReport(reportId)
+    try {
+      const { error } = await supabase.rpc('admin_update_report_status', {
+        p_report_id: reportId,
+        p_status: status,
+      })
+      if (error) throw error
+      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status } : r))
+      toast.success('סטטוס עודכן')
+    } catch {
+      toast.error('שגיאה בעדכון')
+    } finally {
+      setUpdatingReport(null)
+    }
+  }
 
   useEffect(() => {
     if (!isAdmin) return
@@ -1724,6 +1763,73 @@ export default function AdminPage() {
                   <p className="px-4 py-3 text-xs text-gray-400">אין מפעילים עדיין</p>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Reports */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-4 py-4"
+            onClick={() => { setShowReports(!showReports); if (!showReports) loadReports() }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
+                <Flag className="w-5 h-5 text-red-500" />
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-800">דיווחי משתמשים</p>
+                <p className="text-xs text-gray-400">
+                  {reports.filter(r => r.status === 'pending').length} ממתינים לטיפול
+                </p>
+              </div>
+            </div>
+            {showReports ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+          {showReports && (
+            <div className="px-4 pb-4 space-y-3 border-t pt-3">
+              {!reportsLoaded && <p className="text-sm text-gray-400 text-center py-4">טוען...</p>}
+              {reportsLoaded && reports.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">אין דיווחים</p>
+              )}
+              {reports.map(r => (
+                <div key={r.id} className={`border rounded-2xl p-4 space-y-2 ${r.status === 'pending' ? 'border-red-200 bg-red-50' : r.status === 'reviewed' ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{r.reason}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        מדווח: <span className="font-medium">{r.reporter_email}</span>
+                        {' · '}על: <span className="font-medium text-red-700">{r.reported_email}</span>
+                      </p>
+                    </div>
+                    <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${r.status === 'pending' ? 'bg-red-100 text-red-700' : r.status === 'reviewed' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                      {r.status === 'pending' ? 'ממתין' : r.status === 'reviewed' ? 'נבדק' : 'נסגר'}
+                    </span>
+                  </div>
+                  {r.details && <p className="text-xs text-gray-600 bg-white rounded-xl p-2">{r.details}</p>}
+                  <p className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString('he-IL')}</p>
+                  <div className="flex gap-2">
+                    {r.status !== 'reviewed' && (
+                      <button
+                        disabled={updatingReport === r.id}
+                        onClick={() => updateReportStatus(r.id, 'reviewed')}
+                        className="px-3 py-1.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-xl hover:bg-yellow-200 disabled:opacity-50"
+                      >
+                        סמן כנבדק
+                      </button>
+                    )}
+                    {r.status !== 'resolved' && (
+                      <button
+                        disabled={updatingReport === r.id}
+                        onClick={() => updateReportStatus(r.id, 'resolved')}
+                        className="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-xl hover:bg-green-200 disabled:opacity-50"
+                      >
+                        סגור
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

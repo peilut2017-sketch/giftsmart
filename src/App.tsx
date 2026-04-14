@@ -3,6 +3,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
+import { MarketplaceProvider } from './contexts/MarketplaceContext'
 import { useExpiryNotifications } from './hooks/useNotifications'
 import { supabase } from './lib/supabase'
 import UpgradeSheet from './components/UpgradeSheet'
@@ -16,6 +17,8 @@ import AdminPage from './pages/AdminPage'
 import SharedVoucherPage from './pages/SharedVoucherPage'
 import GiftPage from './pages/GiftPage'
 import AccessibilityPage from './pages/AccessibilityPage'
+import MarketplacePage from './pages/MarketplacePage'
+import ListingDetailPage from './pages/ListingDetailPage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
 import OfflineBanner from './components/OfflineBanner'
@@ -235,6 +238,7 @@ function AppRoutes() {
   return (
     <SubscriptionProvider>
     <VoucherProvider>
+    <MarketplaceProvider>
       <NotificationBridge />
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}
@@ -250,12 +254,15 @@ function AppRoutes() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/accessibility" element={<AccessibilityPage />} />
+            <Route path="/market" element={<MarketplacePage />} />
+            <Route path="/market/listing/:id" element={<ListingDetailPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
         <BottomNav />
       </div>
       {widgetEnabled && <AccessibilityWidget />}
+    </MarketplaceProvider>
     </VoucherProvider>
     </SubscriptionProvider>
   )

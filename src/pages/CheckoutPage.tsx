@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
+import { useMarketplace } from '../contexts/MarketplaceContext'
 import { sendVoucherSharedEmail, sendVoucherShareInviteEmail, sendGiftEmail } from '../lib/emailService'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
+import { supabase } from '../lib/supabase'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock, ShoppingBag, Loader2 } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -21,6 +23,7 @@ export default function CheckoutPage() {
   const { user, profile } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
+  const { listForSale, removeFromSale } = useMarketplace()
 
   const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
   const isSharedVoucher = sharedWithMe.some(v => v.id === id)
@@ -60,6 +63,12 @@ export default function CheckoutPage() {
   const [logLoading, setLogLoading] = useState(true)
   const [showStores, setShowStores] = useState(false)
   const [lockConfirmed, setLockConfirmed] = useState(false)
+  // Sell modal
+  const [showSellModal, setShowSellModal] = useState(false)
+  const [sellPrice, setSellPrice] = useState('')
+  const [sellDescription, setSellDescription] = useState('')
+  const [sellLoading, setSellLoading] = useState(false)
+  const [removingFromSale, setRemovingFromSale] = useState(false)
 
   // Load voucher activity log
   useEffect(() => {
@@ -356,6 +365,8 @@ export default function CheckoutPage() {
 
   // Lock gate — show blocking overlay if voucher is locked and not yet confirmed
   if (voucher.is_locked && !lockConfirmed) {
+    const isForSale = voucher.lock_reason === 'for_sale'
+
     return (
       <div className="flex-1 bg-gray-50 flex flex-col">
         {/* Minimal header */}
@@ -370,41 +381,176 @@ export default function CheckoutPage() {
 
         {/* Lock screen */}
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl shadow-lg border border-orange-200 p-8 max-w-sm w-full text-center">
-            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-orange-500" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">שובר נעול</h2>
-            {voucher.lock_reason ? (
-              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-6 text-right">
-                <p className="text-xs text-orange-600 font-medium mb-1">סיבת נעילה:</p>
-                <p className="text-sm text-orange-800 font-medium">{voucher.lock_reason}</p>
+          {isForSale ? (
+            /* For-sale lock: can't use, but can remove from sale */
+            <div className="bg-white rounded-3xl shadow-lg border border-blue-200 p-8 max-w-sm w-full text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ShoppingBag className="w-8 h-8 text-blue-500" />
               </div>
-            ) : (
-              <p className="text-sm text-gray-500 mb-6">שובר זה נעול ומיועד לשימוש עתידי</p>
-            )}
-            <p className="text-xs text-gray-400 mb-6">לחץ על הכפתור כדי לפתוח את השובר ולהשתמש בו</p>
-            <button
-              onClick={() => setLockConfirmed(true)}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-400 to-amber-500 text-white py-3.5 rounded-2xl font-semibold shadow-md hover:shadow-lg transition-all"
-            >
-              <Unlock className="w-4 h-4" />
-              פתח שובר
-            </button>
-            <button
-              onClick={() => navigate(-1)}
-              className="w-full mt-3 py-3 text-gray-500 text-sm font-medium hover:text-gray-700"
-            >
-              חזור
-            </button>
-          </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">שובר מוצע למכירה</h2>
+              <p className="text-sm text-gray-500 mb-6">שובר זה נעול כי הוצע למכירה בשוק. לא ניתן להשתמש בו עד שיוסר מהמכירה.</p>
+              <button
+                disabled={removingFromSale}
+                onClick={async () => {
+                  setRemovingFromSale(true)
+                  try {
+                    // Find listing by voucher_id
+                    const { data } = await supabase
+                      .from('marketplace_listings')
+                      .select('id')
+                      .eq('voucher_id', voucher.id)
+                      .in('status', ['active', 'pending_payment'])
+                      .limit(1)
+                      .single()
+                    if (data?.id) {
+                      await removeFromSale(data.id)
+                      toast.success('הוסר מהמכירה — השובר זמין לשימוש')
+                      setLockConfirmed(false)
+                      // Refresh voucher state
+                      window.location.reload()
+                    }
+                  } catch {
+                    toast.error('שגיאה בהסרה מהמכירה')
+                  } finally {
+                    setRemovingFromSale(false)
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 bg-red-500 text-white py-3.5 rounded-2xl font-semibold shadow-md hover:bg-red-600 transition-all disabled:opacity-50"
+              >
+                {removingFromSale ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                הסר ממכירה
+              </button>
+              <button
+                onClick={() => navigate('/market')}
+                className="w-full mt-3 py-3 text-blue-500 text-sm font-medium hover:text-blue-700"
+              >
+                עבור לשוק
+              </button>
+              <button
+                onClick={() => navigate(-1)}
+                className="w-full mt-1 py-3 text-gray-500 text-sm font-medium hover:text-gray-700"
+              >
+                חזור
+              </button>
+            </div>
+          ) : (
+            /* Regular lock: allow unlock */
+            <div className="bg-white rounded-3xl shadow-lg border border-orange-200 p-8 max-w-sm w-full text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Lock className="w-8 h-8 text-orange-500" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">שובר נעול</h2>
+              {voucher.lock_reason ? (
+                <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-6 text-right">
+                  <p className="text-xs text-orange-600 font-medium mb-1">סיבת נעילה:</p>
+                  <p className="text-sm text-orange-800 font-medium">{voucher.lock_reason}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mb-6">שובר זה נעול ומיועד לשימוש עתידי</p>
+              )}
+              <p className="text-xs text-gray-400 mb-6">לחץ על הכפתור כדי לפתוח את השובר ולהשתמש בו</p>
+              <button
+                onClick={() => setLockConfirmed(true)}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-400 to-amber-500 text-white py-3.5 rounded-2xl font-semibold shadow-md hover:shadow-lg transition-all"
+              >
+                <Unlock className="w-4 h-4" />
+                פתח שובר
+              </button>
+              <button
+                onClick={() => navigate(-1)}
+                className="w-full mt-3 py-3 text-gray-500 text-sm font-medium hover:text-gray-700"
+              >
+                חזור
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
   }
 
+  async function handleListForSale() {
+    const price = parseFloat(sellPrice)
+    if (!price || price <= 0) { toast.error('הזן מחיר תקין'); return }
+    // Check payment methods
+    const methods = profile?.marketplace_payment_methods || []
+    if (methods.length === 0) {
+      toast.error('הגדר שיטת תשלום בהגדרות תחילה')
+      navigate('/settings')
+      return
+    }
+    setSellLoading(true)
+    try {
+      await listForSale(voucher!.id, price, sellDescription || undefined)
+      toast.success('השובר הוצע למכירה!')
+      setShowSellModal(false)
+      setSellPrice('')
+      setSellDescription('')
+      // Reload to reflect locked state
+      window.location.reload()
+    } catch (err: any) {
+      const msg = err?.message || ''
+      if (msg.includes('already_listed')) toast.error('שובר זה כבר מוצע למכירה')
+      else toast.error('שגיאה בהצעת השובר למכירה')
+    } finally {
+      setSellLoading(false)
+    }
+  }
+
   return (
     <div className="flex-1 bg-gray-50">
+      {/* Sell modal */}
+      {showSellModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowSellModal(false)}>
+          <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-lg flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-green-600" />
+                הצע שובר למכירה
+              </h2>
+              <button onClick={() => setShowSellModal(false)} className="p-2 rounded-full hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
+              <p className="font-semibold">{voucher!.store_name}</p>
+              <p className="text-sm text-gray-500">יתרה: ₪{voucher!.balance}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">מחיר מבוקש (₪)</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={sellPrice}
+                onChange={e => setSellPrice(e.target.value)}
+                placeholder="לדוגמה: 80"
+                className="w-full border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-400"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">תיאור (אופציונלי)</label>
+              <textarea
+                value={sellDescription}
+                onChange={e => setSellDescription(e.target.value)}
+                placeholder="מידע נוסף על השובר..."
+                className="w-full border rounded-xl px-4 py-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-green-400"
+              />
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+              השובר יינעל לשימוש אישי עד שיוסר מהמכירה. שיטות התשלום שהגדרת בפרופיל יוצגו לקונים.
+            </div>
+            <button
+              onClick={handleListForSale}
+              disabled={sellLoading || !sellPrice}
+              className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
+            >
+              {sellLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'פרסם למכירה'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {confirmArchive && (
         <ConfirmDialog
           title="העברה לארכיון"
@@ -460,6 +606,15 @@ export default function CheckoutPage() {
               aria-label="ערוך שובר"
             >
               <Edit2 className="w-5 h-5" />
+            </button>
+          )}
+          {!isSharedVoucher && !isArchived && !voucher.is_locked && (
+            <button
+              onClick={() => setShowSellModal(true)}
+              className="p-2 rounded-full hover:bg-gray-100 text-green-600"
+              aria-label="הצע למכירה"
+            >
+              <ShoppingBag className="w-5 h-5" />
             </button>
           )}
           {!isArchived && (

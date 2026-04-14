@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
-import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink, Gift, Lock } from 'lucide-react'
+import { Edit2, Trash2, Archive, AlertTriangle, Star, Check, ExternalLink, Gift, Lock, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
@@ -196,7 +196,12 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
           )}
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {voucher.is_locked && (
+            {voucher.is_locked && voucher.lock_reason === 'for_sale' && (
+              <span title="מוצע למכירה בשוק" className="text-blue-500">
+                <ShoppingBag className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+            )}
+            {voucher.is_locked && voucher.lock_reason !== 'for_sale' && (
               <span title={voucher.lock_reason ? `נעול: ${voucher.lock_reason}` : 'שובר נעול'} className="text-orange-500">
                 <Lock className="w-3.5 h-3.5" aria-hidden="true" />
               </span>
@@ -364,7 +369,12 @@ export default function VoucherCard({ voucher, onClick, onEdit, onDelete, onArch
               ))}
             </div>
             <div className="flex items-center gap-1.5">
-              {voucher.is_locked && (
+              {voucher.is_locked && voucher.lock_reason === 'for_sale' && (
+                <span title="מוצע למכירה בשוק" className="text-blue-500">
+                  <ShoppingBag className="w-3.5 h-3.5" aria-hidden="true" />
+                </span>
+              )}
+              {voucher.is_locked && voucher.lock_reason !== 'for_sale' && (
                 <span title={voucher.lock_reason ? `נעול: ${voucher.lock_reason}` : 'שובר נעול'} className="text-orange-500">
                   <Lock className="w-3.5 h-3.5" aria-hidden="true" />
                 </span>
