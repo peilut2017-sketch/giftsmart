@@ -502,7 +502,7 @@ export default function CheckoutPage() {
       {/* Sell modal */}
       {showSellModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowSellModal(false)}>
-          <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 space-y-4 overflow-y-auto max-h-[90dvh]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-lg flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-green-600" />
