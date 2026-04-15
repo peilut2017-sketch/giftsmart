@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatDate } from '../utils/helpers'
 import {
   ArrowRight, Star, Clock, ShoppingBag, X, Loader2, Flag,
-  Phone, Mail, CheckCircle, AlertTriangle, MessageCircle, ExternalLink,
+  Phone, Mail, CheckCircle, AlertTriangle, MessageCircle, ExternalLink, Copy, Tag,
 } from 'lucide-react'
 import type { MarketplaceListing, PaymentMethod } from '../types'
 import { PAYMENT_METHOD_LABELS } from '../types'
@@ -156,7 +156,11 @@ function BuyModal({
   const { confirmPaymentSent } = useMarketplace()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [sending, setSending] = useState(false)
+  const [copied, setCopied] = useState(false)
   useBodyScrollLock()
+
+  // Reset copied state when payment method changes
+  useEffect(() => { setCopied(false) }, [selectedMethod])
 
   const methods: PaymentMethod[] = listing.seller_payment_methods || []
   const paymentLink = selectedMethod
@@ -266,7 +270,20 @@ function BuyModal({
                 <p className="text-sm font-semibold text-blue-800">
                   שלח/י ₪{listing.asking_price} דרך {PAYMENT_METHOD_LABELS[selectedMethod.type]} ל:
                 </p>
-                <p className="font-mono text-base text-blue-900">{selectedMethod.value}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-base text-blue-900 flex-1 break-all">{selectedMethod.value}</p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedMethod.value)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="p-1.5 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors shrink-0"
+                    aria-label="העתק"
+                  >
+                    {copied ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {paymentLink && (
@@ -366,7 +383,10 @@ export default function ListingDetailPage() {
   const isOwnListing = listing.seller_id === user?.id
   const expiryDate = listing.expiry_date ? new Date(listing.expiry_date) : null
   const daysLeft = expiryDate ? Math.ceil((expiryDate.getTime() - Date.now()) / 86400000) : null
-  const displayPrice = currentPrice ?? listing.asking_price
+  const myReservedPrice =
+    listing.reserved_buyer_id === user?.id && listing.reserved_price != null
+      ? listing.reserved_price : null
+  const displayPrice = myReservedPrice ?? currentPrice ?? listing.asking_price
 
   return (
     <div className="flex-1 bg-gray-50" dir="rtl">
@@ -402,7 +422,17 @@ export default function ListingDetailPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-3xl font-bold text-green-600">₪{displayPrice}</p>
-              <p className="text-sm text-gray-500 mt-1">מחיר מבוקש</p>
+              {myReservedPrice != null ? (
+                <div className="flex items-center gap-1 mt-1">
+                  <Tag className="w-3.5 h-3.5 text-green-600" />
+                  <p className="text-sm text-green-700 font-medium">מחיר שוריין לך</p>
+                  {listing.asking_price !== myReservedPrice && (
+                    <p className="text-xs text-gray-400 line-through">₪{listing.asking_price}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mt-1">מחיר מבוקש</p>
+              )}
             </div>
             <div className="text-left">
               <p className="text-xl font-semibold text-gray-800">₪{listing.balance}</p>
