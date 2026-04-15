@@ -3,8 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDate } from '../utils/helpers'
-import { ShoppingBag, Search, Star, X, Clock, CheckCircle, Loader2, Tag, Flag, AlertCircle } from 'lucide-react'
-import type { MarketplaceListing, MarketplacePurchase } from '../types'
+import {
+  ShoppingBag, Search, Star, X, Clock, CheckCircle, Loader2,
+  Tag, Flag, AlertCircle, MessageCircle, ChevronRight,
+} from 'lucide-react'
+import type { MarketplaceListing, MarketplacePurchase, ListingConversation } from '../types'
+import ChatModal from '../components/ChatModal'
 import toast from 'react-hot-toast'
 
 // ─── Rating Stars ────────────────────────────────────────────────────────────
@@ -20,9 +24,7 @@ function StarRating({ value, max = 5, onChange }: { value: number; max?: number;
           className={`${onChange ? 'cursor-pointer' : 'cursor-default'} focus:outline-none`}
           aria-label={`${i + 1} כוכבים`}
         >
-          <Star
-            className={`w-5 h-5 ${i < value ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
-          />
+          <Star className={`w-5 h-5 ${i < value ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
         </button>
       ))}
     </div>
@@ -30,13 +32,7 @@ function StarRating({ value, max = 5, onChange }: { value: number; max?: number;
 }
 
 // ─── Rate Modal ───────────────────────────────────────────────────────────────
-function RateModal({
-  purchase,
-  onClose,
-}: {
-  purchase: MarketplacePurchase
-  onClose: () => void
-}) {
+function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClose: () => void }) {
   const { rateUser } = useMarketplace()
   const [rating, setRating] = useState(purchase.my_rating ?? 0)
   const [comment, setComment] = useState('')
@@ -58,26 +54,40 @@ function RateModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
+      <div
+        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
           <h2 className="font-bold text-lg">דרג את המוכר</h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
         </div>
-        <p className="text-sm text-gray-500">{purchase.seller_name || purchase.seller_email} · {purchase.store_name}</p>
-        <StarRating value={rating} onChange={setRating} />
-        <textarea
-          className="w-full border rounded-xl p-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-green-400"
-          placeholder="הוסף תגובה (אופציונלי)..."
-          value={comment}
-          onChange={e => setComment(e.target.value)}
-        />
-        <button
-          onClick={submit}
-          disabled={saving || rating === 0}
-          className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שמור דירוג'}
-        </button>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-6 pb-4 space-y-4">
+          <p className="text-sm text-gray-500">
+            {purchase.seller_name || purchase.seller_email} · {purchase.store_name}
+          </p>
+          <StarRating value={rating} onChange={setRating} />
+          <textarea
+            className="w-full border rounded-xl p-3 text-sm resize-none h-24 focus:outline-none focus:ring-2 focus:ring-green-400"
+            placeholder="הוסף תגובה (אופציונלי)..."
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+          />
+        </div>
+
+        {/* Sticky footer */}
+        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
+          <button
+            onClick={submit}
+            disabled={saving || rating === 0}
+            className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שמור דירוג'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -85,11 +95,7 @@ function RateModal({
 
 // ─── Report Modal ─────────────────────────────────────────────────────────────
 function ReportModal({
-  reportedUserId,
-  reportedName,
-  purchaseId,
-  listingId,
-  onClose,
+  reportedUserId, reportedName, purchaseId, listingId, onClose,
 }: {
   reportedUserId: string
   reportedName: string
@@ -127,36 +133,136 @@ function ReportModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold text-lg flex items-center gap-2"><Flag className="w-5 h-5 text-red-500" /> דווח על משתמש</h2>
+      <div
+        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+          <h2 className="font-bold text-lg flex items-center gap-2">
+            <Flag className="w-5 h-5 text-red-500" /> דווח על משתמש
+          </h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
         </div>
-        <p className="text-sm text-gray-500">דיווח על: {reportedName}</p>
-        <div className="space-y-2">
-          {reasons.map(r => (
-            <button
-              key={r}
-              onClick={() => setReason(r)}
-              className={`w-full text-right px-4 py-2.5 rounded-xl border text-sm transition-colors ${reason === r ? 'border-red-500 bg-red-50 text-red-700 font-medium' : 'border-gray-200 hover:bg-gray-50'}`}
-            >
-              {r}
-            </button>
-          ))}
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-6 pb-4 space-y-3">
+          <p className="text-sm text-gray-500">דיווח על: {reportedName}</p>
+          <div className="space-y-2">
+            {reasons.map(r => (
+              <button
+                key={r}
+                onClick={() => setReason(r)}
+                className={`w-full text-right px-4 py-2.5 rounded-xl border text-sm transition-colors ${
+                  reason === r ? 'border-red-500 bg-red-50 text-red-700 font-medium' : 'border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          <textarea
+            className="w-full border rounded-xl p-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-red-400"
+            placeholder="פרטים נוספים (אופציונלי)..."
+            value={details}
+            onChange={e => setDetails(e.target.value)}
+          />
         </div>
-        <textarea
-          className="w-full border rounded-xl p-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-red-400"
-          placeholder="פרטים נוספים (אופציונלי)..."
-          value={details}
-          onChange={e => setDetails(e.target.value)}
-        />
-        <button
-          onClick={submit}
-          disabled={saving || !reason}
-          className="w-full py-3 bg-red-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שלח דיווח'}
-        </button>
+
+        {/* Sticky footer */}
+        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
+          <button
+            onClick={submit}
+            disabled={saving || !reason}
+            className="w-full py-3 bg-red-600 text-white rounded-2xl font-semibold disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שלח דיווח'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Conversations list modal (seller picks which buyer to chat with) ─────────
+function ConversationsModal({
+  listing,
+  onSelectConversation,
+  onClose,
+}: {
+  listing: MarketplaceListing
+  onSelectConversation: (buyerId: string, buyerName: string) => void
+  onClose: () => void
+}) {
+  const { getListingConversations } = useMarketplace()
+  const [convs, setConvs] = useState<ListingConversation[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getListingConversations(listing.id)
+      .then(data => {
+        setConvs(data)
+        // If exactly one conversation, jump straight to it
+        if (data.length === 1) {
+          onSelectConversation(
+            data[0].other_user_id,
+            data[0].other_user_name || data[0].other_user_email || 'קונה',
+          )
+        }
+      })
+      .catch(() => toast.error('שגיאה בטעינת השיחות'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
+      <div
+        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+          <div>
+            <h2 className="font-bold text-lg">שיחות</h2>
+            <p className="text-xs text-gray-500">{listing.store_name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-4 pb-6 space-y-2">
+          {loading ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
+          ) : convs.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 space-y-2">
+              <MessageCircle className="w-10 h-10 mx-auto opacity-30" />
+              <p className="text-sm">אין שיחות עדיין</p>
+            </div>
+          ) : (
+            convs.map(c => (
+              <button
+                key={c.other_user_id}
+                onClick={() => onSelectConversation(
+                  c.other_user_id,
+                  c.other_user_name || c.other_user_email || 'קונה',
+                )}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 border border-gray-100 transition-colors text-right"
+              >
+                <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
+                  {(c.other_user_name || c.other_user_email || '?')[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 text-sm truncate">
+                    {c.other_user_name || c.other_user_email}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">{c.last_body}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-xs text-gray-400">{c.message_count} הודעות</span>
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </div>
+              </button>
+            ))
+          )}
+        </div>
       </div>
     </div>
   )
@@ -222,11 +328,13 @@ function MyListingRow({
   onRemove,
   onConfirm,
   onReport,
+  onChat,
 }: {
   listing: MarketplaceListing
   onRemove: () => void
   onConfirm: () => void
   onReport: () => void
+  onChat: () => void
 }) {
   const [removing, setRemoving] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -251,7 +359,7 @@ function MyListingRow({
           <p className="font-semibold text-gray-900 truncate">{listing.store_name}</p>
           <p className="text-xs text-gray-500 mt-0.5">יתרה: ₪{listing.balance} · מחיר: ₪{listing.asking_price}</p>
         </div>
-        <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusColor[listing.status]}`}>
+        <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${statusColor[listing.status]}`}>
           {statusLabel[listing.status]}
         </span>
       </div>
@@ -289,19 +397,33 @@ function MyListingRow({
         </div>
       )}
 
-      {/* Actions for active listing */}
-      {listing.status === 'active' && !listing.purchase_status && (
-        <button
-          disabled={removing}
-          onClick={async () => {
-            setRemoving(true)
-            try { await onRemove() } finally { setRemoving(false) }
-          }}
-          className="w-full py-2 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-50 disabled:opacity-50"
-        >
-          {removing ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'הסר ממכירה'}
-        </button>
-      )}
+      {/* Action buttons row */}
+      <div className="flex gap-2">
+        {/* Chat button — always visible for active/pending listings */}
+        {(listing.status === 'active' || listing.status === 'pending_payment') && (
+          <button
+            onClick={onChat}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4 text-green-600" />
+            שיחות
+          </button>
+        )}
+
+        {/* Remove from sale for active listing with no pending purchase */}
+        {listing.status === 'active' && !listing.purchase_status && (
+          <button
+            disabled={removing}
+            onClick={async () => {
+              setRemoving(true)
+              try { await onRemove() } finally { setRemoving(false) }
+            }}
+            className="flex-1 py-2 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-50 disabled:opacity-50"
+          >
+            {removing ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'הסר ממכירה'}
+          </button>
+        )}
+      </div>
 
       {listing.status === 'sold' && (
         <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -319,11 +441,13 @@ function MyPurchaseRow({
   onRate,
   onReport,
   onCancel,
+  onChat,
 }: {
   purchase: MarketplacePurchase
   onRate: () => void
   onReport: () => void
   onCancel: () => void
+  onChat: () => void
 }) {
   const statusLabel: Record<string, string> = {
     pending_buyer_payment: 'ממתין לתשלום',
@@ -367,6 +491,17 @@ function MyPurchaseRow({
       )}
 
       <div className="flex gap-2 flex-wrap">
+        {/* Chat with seller (before completion) */}
+        {purchase.status !== 'cancelled' && purchase.seller_id && (
+          <button
+            onClick={onChat}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4 text-green-600" />
+            שוחח עם המוכר
+          </button>
+        )}
+
         {purchase.status === 'completed' && (
           <button
             onClick={onRate}
@@ -413,20 +548,28 @@ export default function MarketplacePage() {
   const [search, setSearch] = useState('')
   const [ratingPurchase, setRatingPurchase] = useState<MarketplacePurchase | null>(null)
   const [reportTarget, setReportTarget] = useState<{
-    userId: string
-    name: string
-    purchaseId?: string
-    listingId?: string
+    userId: string; name: string; purchaseId?: string; listingId?: string
   } | null>(null)
 
-  // Load data when tab changes
+  // Chat state
+  const [chatTarget, setChatTarget] = useState<{
+    listingId: string
+    otherUserId: string
+    otherUserName: string
+    isSeller: boolean
+    askingPrice: number
+    storeName: string
+  } | null>(null)
+
+  // Conversations modal (seller picks buyer to chat with)
+  const [convsListing, setConvsListing] = useState<MarketplaceListing | null>(null)
+
   useEffect(() => {
     if (tab === 'all') fetchListings(search || undefined)
     else if (tab === 'mine') fetchMyListings()
     else fetchMyPurchases()
   }, [tab])
 
-  // Re-fetch when search changes (debounced)
   useEffect(() => {
     if (tab !== 'all') return
     const t = setTimeout(() => fetchListings(search || undefined), 400)
@@ -441,13 +584,14 @@ export default function MarketplacePage() {
           <ShoppingBag className="w-6 h-6 text-green-600" />
           <h1 className="font-bold text-xl text-gray-900 flex-1">שוק שוברים</h1>
         </div>
-        {/* Tabs */}
         <div className="flex border-t">
           {([['all', 'כל השוברים'], ['mine', 'הרשימות שלי'], ['purchases', 'רכישות שלי']] as const).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === t ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                tab === t ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'
+              }`}
             >
               {label}
             </button>
@@ -455,7 +599,7 @@ export default function MarketplacePage() {
         </div>
       </div>
 
-      {/* Search (all tab only) */}
+      {/* Search */}
       {tab === 'all' && (
         <div className="px-4 pt-4">
           <div className="relative">
@@ -517,27 +661,20 @@ export default function MarketplacePage() {
                   key={l.id}
                   listing={l}
                   onRemove={async () => {
-                    try {
-                      await removeFromSale(l.id)
-                      toast.success('הוסר מהמכירה')
-                    } catch {
-                      toast.error('שגיאה בהסרה')
-                    }
+                    try { await removeFromSale(l.id); toast.success('הוסר מהמכירה') }
+                    catch { toast.error('שגיאה בהסרה') }
                   }}
                   onConfirm={async () => {
-                    try {
-                      await confirmPaymentReceived(l.purchase_id!)
-                      toast.success('אושר! השובר הועבר לקונה')
-                    } catch {
-                      toast.error('שגיאה באישור')
-                    }
+                    try { await confirmPaymentReceived(l.purchase_id!); toast.success('אושר! השובר הועבר לקונה') }
+                    catch { toast.error('שגיאה באישור') }
                   }}
                   onReport={() => setReportTarget({
-                    userId: l.purchase_id ? (l.buyer_email || '') : '',
+                    userId: l.buyer_email || '',
                     name: l.buyer_name || l.buyer_email || 'קונה',
                     purchaseId: l.purchase_id,
                     listingId: l.id,
                   })}
+                  onChat={() => setConvsListing(l)}
                 />
               ))
             )}
@@ -566,12 +703,19 @@ export default function MarketplacePage() {
                     purchaseId: p.purchase_id,
                   })}
                   onCancel={async () => {
-                    try {
-                      await cancelPurchase(p.purchase_id)
-                      toast.success('הרכישה בוטלה')
-                    } catch {
-                      toast.error('שגיאה בביטול')
-                    }
+                    try { await cancelPurchase(p.purchase_id); toast.success('הרכישה בוטלה') }
+                    catch { toast.error('שגיאה בביטול') }
+                  }}
+                  onChat={() => {
+                    if (!p.seller_id) return
+                    setChatTarget({
+                      listingId: p.listing_id,
+                      otherUserId: p.seller_id,
+                      otherUserName: p.seller_name || p.seller_email?.split('@')[0] || 'מוכר',
+                      isSeller: false,
+                      askingPrice: p.asking_price ?? 0,
+                      storeName: p.store_name ?? '',
+                    })
                   }}
                 />
               ))
@@ -580,7 +724,7 @@ export default function MarketplacePage() {
         )}
       </div>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       {ratingPurchase && (
         <RateModal purchase={ratingPurchase} onClose={() => setRatingPurchase(null)} />
       )}
@@ -591,6 +735,44 @@ export default function MarketplacePage() {
           purchaseId={reportTarget.purchaseId}
           listingId={reportTarget.listingId}
           onClose={() => setReportTarget(null)}
+        />
+      )}
+
+      {/* Conversations picker for seller */}
+      {convsListing && !chatTarget && (
+        <ConversationsModal
+          listing={convsListing}
+          onSelectConversation={(buyerId, buyerName) => {
+            setConvsListing(null)
+            setChatTarget({
+              listingId: convsListing.id,
+              otherUserId: buyerId,
+              otherUserName: buyerName,
+              isSeller: true,
+              askingPrice: convsListing.asking_price ?? 0,
+              storeName: convsListing.store_name ?? '',
+            })
+          }}
+          onClose={() => setConvsListing(null)}
+        />
+      )}
+
+      {/* Chat */}
+      {chatTarget && (
+        <ChatModal
+          listingId={chatTarget.listingId}
+          otherUserId={chatTarget.otherUserId}
+          otherUserName={chatTarget.otherUserName}
+          isSeller={chatTarget.isSeller}
+          currentAskingPrice={chatTarget.askingPrice}
+          storeName={chatTarget.storeName}
+          onClose={() => setChatTarget(null)}
+          onPriceUpdated={(newPrice) => {
+            setChatTarget(prev => prev ? { ...prev, askingPrice: newPrice } : null)
+            // Refresh listings so the updated price is visible
+            if (tab === 'mine') fetchMyListings()
+            if (tab === 'purchases') fetchMyPurchases()
+          }}
         />
       )}
     </div>

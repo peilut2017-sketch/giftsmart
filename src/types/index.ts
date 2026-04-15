@@ -139,6 +139,32 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod['type'], string> = {
   other: 'אחר',
 }
 
+// ============ Marketplace Chat Types ============
+
+export interface MarketplaceMessage {
+  id: string
+  listing_id: string
+  sender_id: string
+  receiver_id: string
+  body: string
+  msg_type: 'text' | 'price_offer'
+  offer_amount?: number | null
+  offer_status?: 'pending' | 'accepted' | 'rejected' | null
+  created_at: string
+  sender_name?: string | null
+  sender_email?: string | null
+  is_mine: boolean
+}
+
+export interface ListingConversation {
+  other_user_id: string
+  other_user_name?: string | null
+  other_user_email?: string | null
+  last_body: string
+  last_at: string
+  message_count: number
+}
+
 export interface Category {
   id: string
   name: string
