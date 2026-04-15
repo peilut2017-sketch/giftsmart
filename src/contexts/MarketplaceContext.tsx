@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
@@ -32,6 +32,12 @@ interface MarketplaceContextValue {
   fetchChat: (listingId: string, otherUserId: string) => Promise<MarketplaceMessage[]>
   respondToPriceOffer: (messageId: string, response: 'accepted' | 'rejected') => Promise<void>
   getListingConversations: (listingId: string) => Promise<ListingConversation[]>
+
+  // Unread badge
+  unreadChatCount: number
+  markChatRead: () => void
+  registerActiveChat: (chatKey: string) => void
+  unregisterActiveChat: (chatKey: string) => void
 }
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null)
@@ -50,6 +56,19 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [loadingListings, setLoadingListings] = useState(false)
   const [loadingMyListings, setLoadingMyListings] = useState(false)
   const [loadingMyPurchases, setLoadingMyPurchases] = useState(false)
+
+  // Unread chat badge
+  const [unreadChatCount, setUnreadChatCount] = useState(0)
+  // Tracks which chat windows are currently open (key = `${listingId}:${otherUserId}`)
+  const activeChats = useRef<Set<string>>(new Set())
+  const markChatRead = useCallback(() => setUnreadChatCount(0), [])
+  const registerActiveChat = useCallback((chatKey: string) => {
+    activeChats.current.add(chatKey)
+    setUnreadChatCount(0)
+  }, [])
+  const unregisterActiveChat = useCallback((chatKey: string) => {
+    activeChats.current.delete(chatKey)
+  }, [])
 
   const fetchListings = useCallback(async (search?: string, minBalance?: number, maxPrice?: number) => {
     if (!user) return
@@ -212,6 +231,46 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return (data as ListingConversation[]) || []
   }, [])
 
+  // Realtime: global inbox — new chat messages addressed to current user
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel(`chat-inbox-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'marketplace_messages',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const msg = payload.new as {
+            body: string
+            msg_type: string
+            listing_id: string
+            sender_id: string
+          }
+          const chatKey = `${msg.listing_id}:${msg.sender_id}`
+
+          // Only count/notify if that ChatModal is NOT currently open
+          if (!activeChats.current.has(chatKey)) {
+            setUnreadChatCount(c => c + 1)
+
+            // Push notification
+            if (Notification.permission === 'granted') {
+              const body = msg.msg_type === 'price_offer' ? 'הצעת מחיר חדשה התקבלה' : msg.body
+              new Notification('הודעה חדשה בשוק', { body, icon: '/pwa-192x192.png' })
+            }
+          }
+        },
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
+
   // Realtime: notify seller when buyer confirms payment
   useEffect(() => {
     if (!user) return
@@ -296,6 +355,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         fetchChat,
         respondToPriceOffer,
         getListingConversations,
+        unreadChatCount,
+        markChatRead,
+        registerActiveChat,
+        unregisterActiveChat,
       }}
     >
       {children}
