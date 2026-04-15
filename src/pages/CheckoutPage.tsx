@@ -501,7 +501,7 @@ export default function CheckoutPage() {
     <div className="flex-1 bg-gray-50">
       {/* Sell modal */}
       {showSellModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowSellModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={() => setShowSellModal(false)}>
           <div className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[calc(85dvh-4rem)] mb-16" onClick={e => e.stopPropagation()}>
             {/* Header — קבוע */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
@@ -514,7 +514,7 @@ export default function CheckoutPage() {
               </button>
             </div>
             {/* Content — גלילה */}
-            <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-4">
+            <div className="modal-scroll flex-1 overflow-y-auto min-h-0 px-6 space-y-4 pb-4">
               <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
                 <p className="font-semibold">{voucher!.store_name}</p>
                 <p className="text-sm text-gray-500">יתרה: ₪{voucher!.balance}</p>

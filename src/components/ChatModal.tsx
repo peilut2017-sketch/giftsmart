@@ -167,7 +167,7 @@ export default function ChatModal({
   const otherDisplayName = otherUserName || 'משתמש'
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col"
         style={{ height: '85dvh' }}
@@ -189,7 +189,7 @@ export default function ChatModal({
         </div>
 
         {/* ── Messages ── */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <div className="modal-scroll flex-1 overflow-y-auto min-h-0 px-4 py-3 space-y-3">
           {loading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-6 h-6 animate-spin text-green-500" />

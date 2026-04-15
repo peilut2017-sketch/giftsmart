@@ -85,7 +85,7 @@ function ReportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
         onClick={e => e.stopPropagation()}
@@ -101,7 +101,7 @@ function ReportModal({
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-6 pb-4 space-y-3">
+        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-3">
           <p className="text-sm text-gray-500">דיווח על: {reportedName}</p>
           <div className="space-y-2">
             {reasons.map(r => (
@@ -182,7 +182,7 @@ function BuyModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[90dvh]"
         onClick={e => e.stopPropagation()}
@@ -196,7 +196,7 @@ function BuyModal({
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-6 pb-4 space-y-4">
+        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-4">
           {/* Voucher summary */}
           <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
             <p className="font-semibold">{listing.store_name}</p>

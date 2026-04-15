@@ -122,6 +122,17 @@ html, body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* ── Modal bottom sheets ──────────────────────────────────────────────────────
+   Ensure scroll works inside fixed modals on iOS / Android WebView.
+   - overscroll-behavior: contain  → prevents page scrolling through modal
+   - -webkit-overflow-scrolling: touch → momentum scroll on older iOS
+   Apply to any scrollable modal body (class="modal-scroll").
+────────────────────────────────────────────────────────────────────────────── */
+.modal-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 /* ─────────────────────────────────────────────
    ACCESSIBILITY — skip link
 ───────────────────────────────────────────── */
