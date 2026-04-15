@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
-import type { MarketplaceListing, MarketplacePurchase } from '../types'
+import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage, ListingConversation } from '../types'
 import toast from 'react-hot-toast'
 
 interface MarketplaceContextValue {
@@ -25,6 +25,13 @@ interface MarketplaceContextValue {
   cancelPurchase: (purchaseId: string) => Promise<void>
   rateUser: (purchaseId: string, ratedUserId: string, rating: number, comment?: string) => Promise<void>
   reportUser: (reportedUserId: string, reason: string, details?: string, purchaseId?: string, listingId?: string) => Promise<void>
+
+  // Chat
+  sendMessage: (listingId: string, receiverId: string, body: string) => Promise<void>
+  sendPriceOffer: (listingId: string, receiverId: string, offerAmount: number, body: string) => Promise<void>
+  fetchChat: (listingId: string, otherUserId: string) => Promise<MarketplaceMessage[]>
+  respondToPriceOffer: (messageId: string, response: 'accepted' | 'rejected') => Promise<void>
+  getListingConversations: (listingId: string) => Promise<ListingConversation[]>
 }
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null)
@@ -156,6 +163,55 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }, [])
 
+  // ── Chat ──────────────────────────────────────────────────────────────────
+
+  const sendMessage = useCallback(async (listingId: string, receiverId: string, body: string) => {
+    const { error } = await supabase.rpc('send_marketplace_message', {
+      p_listing_id: listingId,
+      p_receiver_id: receiverId,
+      p_body: body,
+      p_msg_type: 'text',
+      p_offer_amount: null,
+    })
+    if (error) throw error
+  }, [])
+
+  const sendPriceOffer = useCallback(async (listingId: string, receiverId: string, offerAmount: number, body: string) => {
+    const { error } = await supabase.rpc('send_marketplace_message', {
+      p_listing_id: listingId,
+      p_receiver_id: receiverId,
+      p_body: body,
+      p_msg_type: 'price_offer',
+      p_offer_amount: offerAmount,
+    })
+    if (error) throw error
+  }, [])
+
+  const fetchChat = useCallback(async (listingId: string, otherUserId: string): Promise<MarketplaceMessage[]> => {
+    const { data, error } = await supabase.rpc('get_listing_chat', {
+      p_listing_id: listingId,
+      p_other_user_id: otherUserId,
+    })
+    if (error) throw error
+    return (data as MarketplaceMessage[]) || []
+  }, [])
+
+  const respondToPriceOffer = useCallback(async (messageId: string, response: 'accepted' | 'rejected') => {
+    const { error } = await supabase.rpc('respond_to_price_offer', {
+      p_message_id: messageId,
+      p_response: response,
+    })
+    if (error) throw error
+  }, [])
+
+  const getListingConversations = useCallback(async (listingId: string): Promise<ListingConversation[]> => {
+    const { data, error } = await supabase.rpc('get_listing_conversations', {
+      p_listing_id: listingId,
+    })
+    if (error) throw error
+    return (data as ListingConversation[]) || []
+  }, [])
+
   // Realtime: notify seller when buyer confirms payment
   useEffect(() => {
     if (!user) return
@@ -235,6 +291,11 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         cancelPurchase,
         rateUser,
         reportUser,
+        sendMessage,
+        sendPriceOffer,
+        fetchChat,
+        respondToPriceOffer,
+        getListingConversations,
       }}
     >
       {children}
