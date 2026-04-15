@@ -154,6 +154,7 @@ export interface MarketplaceMessage {
   sender_name?: string | null
   sender_email?: string | null
   is_mine: boolean
+  is_read?: boolean
 }
 
 export interface ListingConversation {

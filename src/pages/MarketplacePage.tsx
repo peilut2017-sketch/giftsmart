@@ -568,17 +568,23 @@ export default function MarketplacePage() {
   // Conversations modal (seller picks buyer to chat with)
   const [convsListing, setConvsListing] = useState<MarketplaceListing | null>(null)
 
+  // Prefetch all three tabs in parallel on first mount — tab switches will be instant
+  useEffect(() => {
+    Promise.all([fetchListings(), fetchMyListings(), fetchMyPurchases()])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When the user explicitly switches to a tab, ensure its data is up-to-date
   useEffect(() => {
     if (tab === 'all') fetchListings(search || undefined)
     else if (tab === 'mine') fetchMyListings()
     else fetchMyPurchases()
-  }, [tab])
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (tab !== 'all') return
     const t = setTimeout(() => fetchListings(search || undefined), 400)
     return () => clearTimeout(t)
-  }, [search])
+  }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex-1 bg-gray-50" dir="rtl">
@@ -628,7 +634,7 @@ export default function MarketplacePage() {
         {/* ── All listings ── */}
         {tab === 'all' && (
           <>
-            {loadingListings ? (
+            {loadingListings && listings.length === 0 ? (
               <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
             ) : listings.length === 0 ? (
               <div className="text-center py-12 text-gray-400 space-y-2">
@@ -651,7 +657,7 @@ export default function MarketplacePage() {
         {/* ── My listings ── */}
         {tab === 'mine' && (
           <>
-            {loadingMyListings ? (
+            {loadingMyListings && myListings.length === 0 ? (
               <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
             ) : myListings.length === 0 ? (
               <div className="text-center py-12 text-gray-400 space-y-2">
@@ -688,7 +694,7 @@ export default function MarketplacePage() {
         {/* ── My purchases ── */}
         {tab === 'purchases' && (
           <>
-            {loadingMyPurchases ? (
+            {loadingMyPurchases && myPurchases.length === 0 ? (
               <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
             ) : myPurchases.length === 0 ? (
               <div className="text-center py-12 text-gray-400 space-y-2">
