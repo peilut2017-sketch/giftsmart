@@ -183,7 +183,7 @@ export default function ChatModal({
       setShowOfferInput(false)
     } catch (err: any) {
       const msg = err?.message || ''
-      if (msg.includes('only_seller_can_offer_price')) toast.error('רק המוכר יכול להציע מחיר')
+      if (msg.includes('offer_not_lower_than_asking_price')) toast.error('ההצעה חייבת להיות נמוכה מהמחיר הנוכחי')
       else toast.error('שגיאה בשליחת ההצעה')
     } finally {
       setSending(false)
@@ -196,8 +196,11 @@ export default function ChatModal({
       await respondToPriceOffer(messageId, response)
       if (response === 'accepted') {
         const msg = messages.find(m => m.id === messageId)
-        if (msg?.offer_amount) onPriceUpdated?.(msg.offer_amount)
-        toast.success(`קיבלת את ההצעה! המחיר עודכן ל-₪${msg?.offer_amount}`)
+        toast.success(
+          isSeller
+            ? `שמרת מחיר לקונה: ₪${msg?.offer_amount}`
+            : `המחיר שמור לך: ₪${msg?.offer_amount}`,
+        )
       } else {
         toast('דחית את ההצעה', { icon: '✋' })
       }
@@ -269,10 +272,12 @@ export default function ChatModal({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* ── Offer input (seller) ── */}
-        {showOfferInput && isSeller && (
+        {/* ── Offer input (seller & buyer) ── */}
+        {showOfferInput && (
           <div className="px-4 py-3 bg-green-50 border-t border-green-100 shrink-0">
-            <p className="text-xs font-medium text-green-700 mb-2">הצע מחיר חדש (נמוך מ-₪{currentAskingPrice})</p>
+            <p className="text-xs font-medium text-green-700 mb-2">
+              {isSeller ? `הצע מחיר חדש (נמוך מ-₪${currentAskingPrice})` : `הצע מחיר (נמוך מ-₪${currentAskingPrice})`}
+            </p>
             <div className="flex gap-2">
               <input
                 type="number"
@@ -302,14 +307,14 @@ export default function ChatModal({
 
         {/* ── Footer input ── */}
         <div className="px-4 py-3 border-t bg-white shrink-0 space-y-2">
-          {/* Price offer button (seller only) */}
-          {isSeller && !showOfferInput && (
+          {/* Price offer button (seller & buyer) */}
+          {!showOfferInput && (
             <button
               onClick={() => setShowOfferInput(true)}
               className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full hover:bg-green-100 transition-colors"
             >
               <Tag className="w-3.5 h-3.5" />
-              הורד מחיר
+              {isSeller ? 'הורד מחיר' : 'הצע מחיר'}
             </button>
           )}
           <div className="flex gap-2 items-end">
@@ -375,8 +380,8 @@ function MessageBubble({
             </div>
           )}
 
-          {/* Buyer can accept/reject pending offers */}
-          {msg.offer_status === 'pending' && !isMe && !isSeller && (
+          {/* Recipient can accept/reject pending offers (works for both buyer and seller) */}
+          {msg.offer_status === 'pending' && !isMe && (
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => onRespond(msg.id, 'accepted')}
@@ -393,9 +398,6 @@ function MessageBubble({
                 דחה
               </button>
             </div>
-          )}
-          {msg.offer_status === 'pending' && !isMe && isSeller && (
-            <p className="text-xs text-amber-600">ממתין לתגובת הקונה</p>
           )}
         </div>
       </div>

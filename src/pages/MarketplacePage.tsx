@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatDate } from '../utils/helpers'
 import {
   ShoppingBag, Search, Star, X, Clock, CheckCircle, Loader2,
-  Tag, Flag, AlertCircle, MessageCircle, ChevronRight,
+  Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
 } from 'lucide-react'
 import type { MarketplaceListing, MarketplacePurchase, ListingConversation } from '../types'
 import ChatModal from '../components/ChatModal'
@@ -241,30 +241,44 @@ function ConversationsModal({
               <p className="text-sm">אין שיחות עדיין</p>
             </div>
           ) : (
-            convs.map(c => (
-              <button
-                key={c.other_user_id}
-                onClick={() => onSelectConversation(
-                  c.other_user_id,
-                  c.other_user_name || c.other_user_email || 'קונה',
-                )}
-                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 border border-gray-100 transition-colors text-right"
-              >
-                <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
-                  {(c.other_user_name || c.other_user_email || '?')[0].toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 text-sm truncate">
-                    {c.other_user_name || c.other_user_email}
-                  </p>
-                  <p className="text-xs text-gray-400 truncate">{c.last_body}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-xs text-gray-400">{c.message_count} הודעות</span>
-                  <ChevronRight className="w-4 h-4 text-gray-300" />
-                </div>
-              </button>
-            ))
+            convs.map(c => {
+              const hasUnread = (c.unread_count ?? 0) > 0
+              return (
+                <button
+                  key={c.other_user_id}
+                  onClick={() => onSelectConversation(
+                    c.other_user_id,
+                    c.other_user_name || c.other_user_email || 'קונה',
+                  )}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 border transition-colors text-right ${
+                    hasUnread ? 'border-green-300 bg-green-50' : 'border-gray-100'
+                  }`}
+                >
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      {(c.other_user_name || c.other_user_email || '?')[0].toUpperCase()}
+                    </div>
+                    {hasUnread && (
+                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+                        {(c.unread_count ?? 0) > 9 ? '9+' : c.unread_count}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm truncate ${hasUnread ? 'font-bold text-gray-900' : 'font-medium text-gray-900'}`}>
+                      {c.other_user_name || c.other_user_email}
+                    </p>
+                    <p className={`text-xs truncate ${hasUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+                      {c.last_body}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="text-xs text-gray-400">{c.message_count} הודעות</span>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </div>
+                </button>
+              )
+            })
           )}
         </div>
       </div>
@@ -333,15 +347,22 @@ function MyListingRow({
   onConfirm,
   onReport,
   onChat,
+  unreadCount = 0,
+  onUpdatePrice,
 }: {
   listing: MarketplaceListing
   onRemove: () => void
   onConfirm: () => void
   onReport: () => void
   onChat: () => void
+  unreadCount?: number
+  onUpdatePrice: (newPrice: number) => Promise<void>
 }) {
   const [removing, setRemoving] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [showPriceInput, setShowPriceInput] = useState(false)
+  const [newPriceInput, setNewPriceInput] = useState('')
+  const [updatingPrice, setUpdatingPrice] = useState(false)
 
   const statusLabel: Record<string, string> = {
     active: 'פעיל',
@@ -401,16 +422,71 @@ function MyListingRow({
         </div>
       )}
 
+      {/* Update price inline */}
+      {listing.status === 'active' && showPriceInput && (
+        <div className="flex gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            value={newPriceInput}
+            onChange={e => setNewPriceInput(e.target.value)}
+            placeholder={`מחיר נוכחי: ₪${listing.asking_price}`}
+            className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+            autoFocus
+          />
+          <button
+            disabled={updatingPrice || !newPriceInput}
+            onClick={async () => {
+              const price = parseFloat(newPriceInput)
+              if (!price || price <= 0) { return }
+              setUpdatingPrice(true)
+              try {
+                await onUpdatePrice(price)
+                setShowPriceInput(false)
+                setNewPriceInput('')
+              } finally {
+                setUpdatingPrice(false)
+              }
+            }}
+            className="px-3 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+          >
+            {updatingPrice ? <Loader2 className="w-4 h-4 animate-spin" /> : 'עדכן'}
+          </button>
+          <button
+            onClick={() => { setShowPriceInput(false); setNewPriceInput('') }}
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-500"
+          >
+            ביטול
+          </button>
+        </div>
+      )}
+
       {/* Action buttons row */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {/* Chat button — always visible for active/pending listings */}
         {(listing.status === 'active' || listing.status === 'pending_payment') && (
           <button
             onClick={onChat}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+            className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
           >
             <MessageCircle className="w-4 h-4 text-green-600" />
             שיחות
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+        )}
+
+        {/* Update price button for active listings */}
+        {listing.status === 'active' && !showPriceInput && (
+          <button
+            onClick={() => setShowPriceInput(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            עדכן מחיר
           </button>
         )}
 
@@ -446,12 +522,14 @@ function MyPurchaseRow({
   onReport,
   onCancel,
   onChat,
+  unreadCount = 0,
 }: {
   purchase: MarketplacePurchase
   onRate: () => void
   onReport: () => void
   onCancel: () => void
   onChat: () => void
+  unreadCount?: number
 }) {
   const statusLabel: Record<string, string> = {
     pending_buyer_payment: 'ממתין לתשלום',
@@ -499,10 +577,15 @@ function MyPurchaseRow({
         {purchase.status !== 'cancelled' && purchase.seller_id && (
           <button
             onClick={onChat}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+            className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
           >
             <MessageCircle className="w-4 h-4 text-green-600" />
             שוחח עם המוכר
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
         )}
 
@@ -546,6 +629,7 @@ export default function MarketplacePage() {
     loadingListings, loadingMyListings, loadingMyPurchases,
     fetchListings, fetchMyListings, fetchMyPurchases,
     removeFromSale, confirmPaymentReceived, cancelPurchase,
+    unreadByListing, updateListingPrice,
   } = useMarketplace()
 
   const [tab, setTab] = useState<'all' | 'mine' | 'purchases'>('all')
@@ -670,6 +754,7 @@ export default function MarketplacePage() {
                 <MyListingRow
                   key={l.id}
                   listing={l}
+                  unreadCount={unreadByListing[l.id] ?? 0}
                   onRemove={async () => {
                     try { await removeFromSale(l.id); toast.success('הוסר מהמכירה') }
                     catch { toast.error('שגיאה בהסרה') }
@@ -679,12 +764,21 @@ export default function MarketplacePage() {
                     catch { toast.error('שגיאה באישור') }
                   }}
                   onReport={() => setReportTarget({
-                    userId: l.buyer_email || '',
+                    userId: l.buyer_id || '',
                     name: l.buyer_name || l.buyer_email || 'קונה',
                     purchaseId: l.purchase_id,
                     listingId: l.id,
                   })}
                   onChat={() => setConvsListing(l)}
+                  onUpdatePrice={async (price) => {
+                    try {
+                      await updateListingPrice(l.id, price)
+                      await fetchMyListings()
+                      toast.success('המחיר עודכן')
+                    } catch {
+                      toast.error('שגיאה בעדכון המחיר')
+                    }
+                  }}
                 />
               ))
             )}
@@ -706,6 +800,7 @@ export default function MarketplacePage() {
                 <MyPurchaseRow
                   key={p.purchase_id}
                   purchase={p}
+                  unreadCount={unreadByListing[p.listing_id] ?? 0}
                   onRate={() => setRatingPurchase(p)}
                   onReport={() => setReportTarget({
                     userId: p.seller_id!,

@@ -33,9 +33,11 @@ interface MarketplaceContextValue {
   respondToPriceOffer: (messageId: string, response: 'accepted' | 'rejected') => Promise<void>
   getListingConversations: (listingId: string) => Promise<ListingConversation[]>
   markMessagesRead: (listingId: string, senderUserId: string) => Promise<void>
+  updateListingPrice: (listingId: string, newPrice: number) => Promise<void>
 
-  // Unread badge
+  // Unread badge + per-listing counts
   unreadChatCount: number
+  unreadByListing: Record<string, number>
   markChatRead: () => void
   registerActiveChat: (chatKey: string) => void
   unregisterActiveChat: (chatKey: string) => void
@@ -64,14 +66,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     listings: 0, myListings: 0, myPurchases: 0,
   })
 
-  // Unread chat badge
+  // Unread chat badge + per-listing counts
   const [unreadChatCount, setUnreadChatCount] = useState(0)
+  const [unreadByListing, setUnreadByListing] = useState<Record<string, number>>({})
   // Tracks which chat windows are currently open (key = `${listingId}:${otherUserId}`)
   const activeChats = useRef<Set<string>>(new Set())
   const markChatRead = useCallback(() => setUnreadChatCount(0), [])
   const registerActiveChat = useCallback((chatKey: string) => {
+    const listingId = chatKey.split(':')[0]
     activeChats.current.add(chatKey)
     setUnreadChatCount(0)
+    setUnreadByListing(prev => ({ ...prev, [listingId]: 0 }))
   }, [])
   const unregisterActiveChat = useCallback((chatKey: string) => {
     activeChats.current.delete(chatKey)
@@ -260,13 +265,34 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_sender_id: senderUserId,
     })
     if (error) console.error('[marketplace] markMessagesRead error', error)
+    // Update local per-listing count
+    setUnreadByListing(prev => ({ ...prev, [listingId]: 0 }))
   }, [])
 
-  // Seed the unread count from DB on login (needed if badge should persist across sessions)
+  const updateListingPrice = useCallback(async (listingId: string, newPrice: number) => {
+    const { error } = await supabase.rpc('update_listing_price', {
+      p_listing_id: listingId,
+      p_new_price: newPrice,
+    })
+    if (error) throw error
+    fetchedAt.current.myListings = 0
+    await fetchMyListings()
+  }, [fetchMyListings])
+
+  // Seed unread counts from DB on login
   useEffect(() => {
-    if (!user) { setUnreadChatCount(0); return }
+    if (!user) { setUnreadChatCount(0); setUnreadByListing({}); return }
     supabase.rpc('get_unread_chat_count').then(({ data }) => {
       if (typeof data === 'number') setUnreadChatCount(data)
+    })
+    supabase.rpc('get_chat_unread_by_listing').then(({ data }) => {
+      if (data) {
+        const map: Record<string, number> = {}
+        ;(data as { listing_id: string; unread_count: number }[]).forEach(r => {
+          map[r.listing_id] = Number(r.unread_count)
+        })
+        setUnreadByListing(map)
+      }
     })
   }, [user])
 
@@ -284,7 +310,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           table: 'marketplace_messages',
           filter: `receiver_id=eq.${user.id}`,
         },
-        (payload) => {
+        async (payload) => {
           const msg = payload.new as {
             body: string
             msg_type: string
@@ -296,11 +322,34 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           // Only count/notify if that ChatModal is NOT currently open
           if (!activeChats.current.has(chatKey)) {
             setUnreadChatCount(c => c + 1)
+            setUnreadByListing(prev => ({
+              ...prev,
+              [msg.listing_id]: (prev[msg.listing_id] ?? 0) + 1,
+            }))
 
-            // Push notification
+            // Fetch sender name for a meaningful push title
+            const { data: sender } = await supabase
+              .from('profiles')
+              .select('name, email')
+              .eq('id', msg.sender_id)
+              .single()
+            const senderName = sender?.name
+              || sender?.email?.split('@')[0]
+              || 'משתמש'
+
             if (Notification.permission === 'granted') {
-              const body = msg.msg_type === 'price_offer' ? 'הצעת מחיר חדשה התקבלה' : msg.body
-              new Notification('הודעה חדשה בשוק', { body, icon: '/pwa-192x192.png' })
+              const body = msg.msg_type === 'price_offer'
+                ? `הצעת מחיר חדשה: ${senderName}`
+                : msg.body
+              const notification = new Notification(`${senderName} שלח הודעה`, {
+                body,
+                icon: '/pwa-192x192.png',
+                tag: `chat-${msg.listing_id}`,
+              })
+              notification.onclick = () => {
+                window.focus()
+                window.location.href = `/market/listing/${msg.listing_id}`
+              }
             }
           }
         },
@@ -395,7 +444,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         respondToPriceOffer,
         getListingConversations,
         markMessagesRead,
+        updateListingPrice,
         unreadChatCount,
+        unreadByListing,
         markChatRead,
         registerActiveChat,
         unregisterActiveChat,
