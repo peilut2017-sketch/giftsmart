@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Send, Tag, Check, XCircle, Loader2, MessageCircle } from 'lucide-react'
+import { X, Send, Tag, Check, CheckCheck, XCircle, Loader2, MessageCircle } from 'lucide-react'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -29,7 +29,8 @@ export default function ChatModal({
   onPriceUpdated,
 }: ChatModalProps) {
   const { user } = useAuth()
-  const { sendMessage, sendPriceOffer, fetchChat, respondToPriceOffer } = useMarketplace()
+  const { sendMessage, sendPriceOffer, fetchChat, respondToPriceOffer,
+          registerActiveChat, unregisterActiveChat, markMessagesRead } = useMarketplace()
   useBodyScrollLock()
 
   const [messages, setMessages] = useState<MarketplaceMessage[]>([])
@@ -43,16 +44,29 @@ export default function ChatModal({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // Register this chat as active so the global inbox listener skips counting/pushing.
+  // Also request notification permission — best moment since user is actively chatting.
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+    const key = `${listingId}:${otherUserId}`
+    registerActiveChat(key)
+    return () => unregisterActiveChat(key)
+  }, [listingId, otherUserId, registerActiveChat, unregisterActiveChat])
+
   const loadMessages = useCallback(async () => {
     try {
       const msgs = await fetchChat(listingId, otherUserId)
       setMessages(msgs)
+      // Mark the other user's messages as read now that we've loaded them
+      markMessagesRead(listingId, otherUserId)
     } catch {
       toast.error('שגיאה בטעינת ההודעות')
     } finally {
       setLoading(false)
     }
-  }, [listingId, otherUserId, fetchChat])
+  }, [listingId, otherUserId, fetchChat, markMessagesRead])
 
   useEffect(() => {
     loadMessages()
@@ -78,12 +92,28 @@ export default function ChatModal({
         },
         (payload) => {
           const msg = payload.new as MarketplaceMessage & { sender_id: string; receiver_id: string }
-          // Only add if relevant to this chat
+          // Only handle messages relevant to this conversation
           if (
             (msg.sender_id === user.id && msg.receiver_id === otherUserId) ||
             (msg.sender_id === otherUserId && msg.receiver_id === user.id)
           ) {
-            setMessages(prev => [...prev, { ...msg, is_mine: msg.sender_id === user.id }])
+            setMessages(prev => {
+              if (msg.sender_id === user.id) {
+                // Replace the optimistic temp message (same body, sent by me) with the real one
+                const tempIdx = prev.findIndex(
+                  m => m.id.startsWith('temp-') && m.body === msg.body && m.is_mine,
+                )
+                if (tempIdx >= 0) {
+                  const updated = [...prev]
+                  updated[tempIdx] = { ...msg, is_mine: true }
+                  return updated
+                }
+              } else {
+                // Incoming message from the other user — mark as read immediately
+                markMessagesRead(listingId, otherUserId)
+              }
+              return [...prev, { ...msg, is_mine: msg.sender_id === user.id }]
+            })
           }
         },
       )
@@ -108,12 +138,32 @@ export default function ChatModal({
   async function handleSend() {
     const trimmed = text.trim()
     if (!trimmed || sending) return
+
+    // Optimistic update — show message immediately before server confirms
+    const tempId = `temp-${Date.now()}`
+    const optimistic: MarketplaceMessage = {
+      id: tempId,
+      listing_id: listingId,
+      sender_id: user!.id,
+      receiver_id: otherUserId,
+      body: trimmed,
+      msg_type: 'text',
+      offer_amount: null,
+      offer_status: null,
+      created_at: new Date().toISOString(),
+      is_mine: true,
+    }
+    setMessages(prev => [...prev, optimistic])
+    setText('')
     setSending(true)
+
     try {
       await sendMessage(listingId, otherUserId, trimmed)
-      setText('')
       inputRef.current?.focus()
     } catch (err: any) {
+      // Roll back optimistic message and restore the typed text
+      setMessages(prev => prev.filter(m => m.id !== tempId))
+      setText(trimmed)
       const msg = err?.message || ''
       if (msg.includes('listing_not_available')) toast.error('המודעה כבר אינה זמינה')
       else toast.error('שגיאה בשליחת ההודעה')
@@ -355,14 +405,24 @@ function MessageBubble({
   return (
     <div className={`flex ${isMe ? 'justify-start' : 'justify-end'}`}>
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-2.5 space-y-0.5 ${
+        className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
           isMe
             ? 'bg-gray-100 text-gray-900 rounded-tr-sm'
             : 'bg-green-600 text-white rounded-tl-sm'
         }`}
       >
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.body}</p>
-        <p className={`text-xs ${isMe ? 'text-gray-400' : 'text-green-200'}`}>{formatTime(msg.created_at)}</p>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap mb-0.5">{msg.body}</p>
+        {/* Timestamp + read receipt */}
+        <div className="flex items-center gap-1" dir="ltr">
+          <span className={`text-xs ${isMe ? 'text-gray-400' : 'text-green-200'}`}>
+            {formatTime(msg.created_at)}
+          </span>
+          {isMe && (
+            msg.is_read
+              ? <CheckCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              : <Check className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+          )}
+        </div>
       </div>
     </div>
   )

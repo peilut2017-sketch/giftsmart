@@ -1,11 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { Home, Archive, BarChart2, Settings, Shield, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useMarketplace } from '../contexts/MarketplaceContext'
 
 export default function BottomNav() {
   const nav = useNavigate()
   const path = window.location.pathname
   const { isAdmin } = useAuth()
+  const { unreadChatCount } = useMarketplace()
 
   const items = [
     { icon: Home, label: 'ארנק', path: '/' },
@@ -32,7 +34,14 @@ export default function BottomNav() {
                 active ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
-              <item.icon className={`w-5 h-5 ${active ? 'stroke-[2.5]' : ''}`} aria-hidden="true" />
+              <div className="relative">
+                <item.icon className={`w-5 h-5 ${active ? 'stroke-[2.5]' : ''}`} aria-hidden="true" />
+                {item.path === '/market' && unreadChatCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none pointer-events-none">
+                    {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                  </span>
+                )}
+              </div>
               <span className="text-xs font-medium">{item.label}</span>
               {active && <div className="w-1 h-1 bg-green-500 rounded-full" aria-hidden="true" />}
             </button>
