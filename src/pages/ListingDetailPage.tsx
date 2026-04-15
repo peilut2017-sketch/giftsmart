@@ -396,7 +396,7 @@ export default function ListingDetailPage() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4 pb-32">
+      <div className="p-4 space-y-4 pb-40">
         {/* Main info card */}
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
           <div className="flex items-start justify-between">
@@ -497,9 +497,12 @@ export default function ListingDetailPage() {
         )}
       </div>
 
-      {/* Buy button (sticky bottom) */}
+      {/* Buy button (sticky bottom — positioned above BottomNav) */}
       {!isOwnListing && !purchased && listing.status === 'active' && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t">
+        <div
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+        >
           <button
             onClick={() => setShowBuy(true)}
             className="w-full py-3.5 bg-green-600 text-white rounded-2xl font-bold text-base shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
@@ -511,13 +514,19 @@ export default function ListingDetailPage() {
       )}
 
       {isOwnListing && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t">
+        <div
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+        >
           <p className="text-center text-sm text-gray-500">זו מודעה שלך</p>
         </div>
       )}
 
       {listing.status !== 'active' && !isOwnListing && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t">
+        <div
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+        >
           <p className="text-center text-sm text-gray-400">מודעה זו אינה זמינה לרכישה</p>
         </div>
       )}
