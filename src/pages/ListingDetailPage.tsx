@@ -10,6 +10,7 @@ import {
 import type { MarketplaceListing, PaymentMethod } from '../types'
 import { PAYMENT_METHOD_LABELS } from '../types'
 import ChatModal from '../components/ChatModal'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
 
 // ─── Payment link builder ─────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ function ReportModal({
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
+  useBodyScrollLock()
 
   const reasons = [
     'מידע כוזב במודעה',
@@ -85,7 +87,7 @@ function ReportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
         onClick={e => e.stopPropagation()}
@@ -101,7 +103,7 @@ function ReportModal({
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-6 pb-4 space-y-3">
+        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-3">
           <p className="text-sm text-gray-500">דיווח על: {reportedName}</p>
           <div className="space-y-2">
             {reasons.map(r => (
@@ -154,6 +156,7 @@ function BuyModal({
   const { confirmPaymentSent } = useMarketplace()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [sending, setSending] = useState(false)
+  useBodyScrollLock()
 
   const methods: PaymentMethod[] = listing.seller_payment_methods || []
   const paymentLink = selectedMethod
@@ -182,7 +185,7 @@ function BuyModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[90dvh]"
         onClick={e => e.stopPropagation()}
@@ -196,7 +199,7 @@ function BuyModal({
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-6 pb-4 space-y-4">
+        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-4">
           {/* Voucher summary */}
           <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
             <p className="font-semibold">{listing.store_name}</p>
@@ -393,7 +396,7 @@ export default function ListingDetailPage() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4 pb-32">
+      <div className="p-4 space-y-4 pb-40">
         {/* Main info card */}
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
           <div className="flex items-start justify-between">
@@ -494,9 +497,12 @@ export default function ListingDetailPage() {
         )}
       </div>
 
-      {/* Buy button (sticky bottom) */}
+      {/* Buy button (sticky bottom — positioned above BottomNav) */}
       {!isOwnListing && !purchased && listing.status === 'active' && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t">
+        <div
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+        >
           <button
             onClick={() => setShowBuy(true)}
             className="w-full py-3.5 bg-green-600 text-white rounded-2xl font-bold text-base shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
@@ -508,13 +514,19 @@ export default function ListingDetailPage() {
       )}
 
       {isOwnListing && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t">
+        <div
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+        >
           <p className="text-center text-sm text-gray-500">זו מודעה שלך</p>
         </div>
       )}
 
       {listing.status !== 'active' && !isOwnListing && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t">
+        <div
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+        >
           <p className="text-center text-sm text-gray-400">מודעה זו אינה זמינה לרכישה</p>
         </div>
       )}
