@@ -7,6 +7,7 @@ import { useMarketplace } from '../contexts/MarketplaceContext'
 import { sendVoucherSharedEmail, sendVoucherShareInviteEmail, sendGiftEmail } from '../lib/emailService'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import { supabase } from '../lib/supabase'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
@@ -69,6 +70,9 @@ export default function CheckoutPage() {
   const [sellDescription, setSellDescription] = useState('')
   const [sellLoading, setSellLoading] = useState(false)
   const [removingFromSale, setRemovingFromSale] = useState(false)
+
+  // Lock body scroll when sell modal is open
+  useBodyScrollLock(showSellModal)
 
   // Load voucher activity log
   useEffect(() => {
@@ -501,8 +505,8 @@ export default function CheckoutPage() {
     <div className="flex-1 bg-gray-50">
       {/* Sell modal */}
       {showSellModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={() => setShowSellModal(false)}>
-          <div className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[calc(85dvh-4rem)] mb-16" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={() => setShowSellModal(false)}>
+          <div className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]" onClick={e => e.stopPropagation()}>
             {/* Header — קבוע */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
               <h2 className="font-bold text-lg flex items-center gap-2">

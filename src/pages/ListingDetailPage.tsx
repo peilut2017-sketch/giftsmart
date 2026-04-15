@@ -10,6 +10,7 @@ import {
 import type { MarketplaceListing, PaymentMethod } from '../types'
 import { PAYMENT_METHOD_LABELS } from '../types'
 import ChatModal from '../components/ChatModal'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
 
 // ─── Payment link builder ─────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ function ReportModal({
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
+  useBodyScrollLock()
 
   const reasons = [
     'מידע כוזב במודעה',
@@ -85,7 +87,7 @@ function ReportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
         onClick={e => e.stopPropagation()}
@@ -154,6 +156,7 @@ function BuyModal({
   const { confirmPaymentSent } = useMarketplace()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [sending, setSending] = useState(false)
+  useBodyScrollLock()
 
   const methods: PaymentMethod[] = listing.seller_payment_methods || []
   const paymentLink = selectedMethod
@@ -182,7 +185,7 @@ function BuyModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[90dvh]"
         onClick={e => e.stopPropagation()}

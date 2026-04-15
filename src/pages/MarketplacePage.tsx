@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { MarketplaceListing, MarketplacePurchase, ListingConversation } from '../types'
 import ChatModal from '../components/ChatModal'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
 
 // ─── Rating Stars ────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClo
   const [rating, setRating] = useState(purchase.my_rating ?? 0)
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
+  useBodyScrollLock()
 
   async function submit() {
     if (rating === 0) { toast.error('בחר דירוג'); return }
@@ -53,7 +55,7 @@ function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClo
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
         onClick={e => e.stopPropagation()}
@@ -107,6 +109,7 @@ function ReportModal({
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
+  useBodyScrollLock()
 
   const reasons = [
     'תשלום לא התקבל',
@@ -132,7 +135,7 @@ function ReportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
         onClick={e => e.stopPropagation()}
@@ -197,6 +200,7 @@ function ConversationsModal({
   const { getListingConversations } = useMarketplace()
   const [convs, setConvs] = useState<ListingConversation[]>([])
   const [loading, setLoading] = useState(true)
+  useBodyScrollLock()
 
   useEffect(() => {
     getListingConversations(listing.id)
@@ -215,7 +219,7 @@ function ConversationsModal({
   }, [])
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
         onClick={e => e.stopPropagation()}

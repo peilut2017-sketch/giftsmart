@@ -4,6 +4,7 @@ import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { MarketplaceMessage } from '../types'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
 
 interface ChatModalProps {
@@ -29,6 +30,7 @@ export default function ChatModal({
 }: ChatModalProps) {
   const { user } = useAuth()
   const { sendMessage, sendPriceOffer, fetchChat, respondToPriceOffer } = useMarketplace()
+  useBodyScrollLock()
 
   const [messages, setMessages] = useState<MarketplaceMessage[]>([])
   const [loading, setLoading] = useState(true)
@@ -167,7 +169,7 @@ export default function ChatModal({
   const otherDisplayName = otherUserName || 'משתמש'
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center overflow-hidden" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
       <div
         className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col"
         style={{ height: '85dvh' }}
