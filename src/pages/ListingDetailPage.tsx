@@ -481,7 +481,7 @@ export default function ListingDetailPage() {
                   {listing.seller_name || listing.seller_email?.split('@')[0]}
                 </p>
                 {listing.is_verified_seller && (
-                  <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" title="מוכר מאומת" />
+                  <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" />
                 )}
               </div>
               {(listing.avg_rating ?? 0) > 0 ? (
