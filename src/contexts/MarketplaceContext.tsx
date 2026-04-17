@@ -1,20 +1,20 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
-import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage } from '../types'
+import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage, ListingConversation } from '../types'
 import toast from 'react-hot-toast'
 
 interface MarketplaceContextValue {
   // Data
-  listings: MarketplaceListing[]
-  myListings: MarketplaceListing[]
-  myPurchases: MarketplacePurchase[]
+  listings: MarketplaceListing[]          // all active marketplace listings (not mine)
+  myListings: MarketplaceListing[]        // my listings as seller
+  myPurchases: MarketplacePurchase[]      // my purchases as buyer
   loadingListings: boolean
   loadingMyListings: boolean
   loadingMyPurchases: boolean
 
-  // Marketplace actions
+  // Actions
   fetchListings: (search?: string, minBalance?: number, maxPrice?: number) => Promise<void>
   fetchMyListings: () => Promise<void>
   fetchMyPurchases: () => Promise<void>
@@ -27,10 +27,20 @@ interface MarketplaceContextValue {
   reportUser: (reportedUserId: string, reason: string, details?: string, purchaseId?: string, listingId?: string) => Promise<void>
 
   // Chat
-  chatMessages: Record<string, MarketplaceMessage[]>   // key = "listingId:buyerId"
-  fetchChatMessages: (listingId: string, buyerId?: string) => Promise<void>
-  sendChatMessage: (listingId: string, message: string, buyerId?: string) => Promise<void>
+  sendMessage: (listingId: string, receiverId: string, body: string) => Promise<void>
+  sendPriceOffer: (listingId: string, receiverId: string, offerAmount: number, body: string) => Promise<void>
+  fetchChat: (listingId: string, otherUserId: string) => Promise<MarketplaceMessage[]>
+  respondToPriceOffer: (messageId: string, response: 'accepted' | 'rejected') => Promise<void>
+  getListingConversations: (listingId: string) => Promise<ListingConversation[]>
+  markMessagesRead: (listingId: string, senderUserId: string) => Promise<void>
   updateListingPrice: (listingId: string, newPrice: number) => Promise<void>
+
+  // Unread badge + per-listing counts
+  unreadChatCount: number
+  unreadByListing: Record<string, number>
+  markChatRead: () => void
+  registerActiveChat: (chatKey: string) => void
+  unregisterActiveChat: (chatKey: string) => void
 }
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null)
@@ -49,12 +59,35 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [loadingListings, setLoadingListings] = useState(false)
   const [loadingMyListings, setLoadingMyListings] = useState(false)
   const [loadingMyPurchases, setLoadingMyPurchases] = useState(false)
-  const [chatMessages, setChatMessages] = useState<Record<string, MarketplaceMessage[]>>({})
 
-  // ── Fetch actions ──────────────────────────────────────────────────────────
+  // TTL cache — avoids refetching data that's still fresh (60 s)
+  const CACHE_TTL_MS = 60_000
+  const fetchedAt = useRef<{ listings: number; myListings: number; myPurchases: number }>({
+    listings: 0, myListings: 0, myPurchases: 0,
+  })
+
+  // Unread chat badge + per-listing counts
+  const [unreadChatCount, setUnreadChatCount] = useState(0)
+  const [unreadByListing, setUnreadByListing] = useState<Record<string, number>>({})
+  // Tracks which chat windows are currently open (key = `${listingId}:${otherUserId}`)
+  const activeChats = useRef<Set<string>>(new Set())
+  const markChatRead = useCallback(() => setUnreadChatCount(0), [])
+  const registerActiveChat = useCallback((chatKey: string) => {
+    const listingId = chatKey.split(':')[0]
+    activeChats.current.add(chatKey)
+    setUnreadChatCount(0)
+    setUnreadByListing(prev => ({ ...prev, [listingId]: 0 }))
+  }, [])
+  const unregisterActiveChat = useCallback((chatKey: string) => {
+    activeChats.current.delete(chatKey)
+  }, [])
 
   const fetchListings = useCallback(async (search?: string, minBalance?: number, maxPrice?: number) => {
     if (!user) return
+    const isDefaultQuery = !search && !minBalance && !maxPrice
+    const now = Date.now()
+    // Skip refetch if fresh data already loaded (default query only)
+    if (isDefaultQuery && fetchedAt.current.listings && now - fetchedAt.current.listings < CACHE_TTL_MS) return
     setLoadingListings(true)
     try {
       const { data, error } = await supabase.rpc('get_marketplace_listings', {
@@ -64,6 +97,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       })
       if (error) throw error
       setListings((data as MarketplaceListing[]) || [])
+      if (isDefaultQuery) fetchedAt.current.listings = Date.now()
     } catch (err) {
       console.error('[marketplace] fetchListings error', err)
     } finally {
@@ -73,11 +107,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const fetchMyListings = useCallback(async () => {
     if (!user) return
+    const now = Date.now()
+    if (fetchedAt.current.myListings && now - fetchedAt.current.myListings < CACHE_TTL_MS) return
     setLoadingMyListings(true)
     try {
       const { data, error } = await supabase.rpc('get_my_listings')
       if (error) throw error
       setMyListings((data as MarketplaceListing[]) || [])
+      fetchedAt.current.myListings = Date.now()
     } catch (err) {
       console.error('[marketplace] fetchMyListings error', err)
     } finally {
@@ -87,19 +124,20 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const fetchMyPurchases = useCallback(async () => {
     if (!user) return
+    const now = Date.now()
+    if (fetchedAt.current.myPurchases && now - fetchedAt.current.myPurchases < CACHE_TTL_MS) return
     setLoadingMyPurchases(true)
     try {
       const { data, error } = await supabase.rpc('get_my_purchases')
       if (error) throw error
       setMyPurchases((data as MarketplacePurchase[]) || [])
+      fetchedAt.current.myPurchases = Date.now()
     } catch (err) {
       console.error('[marketplace] fetchMyPurchases error', err)
     } finally {
       setLoadingMyPurchases(false)
     }
   }, [user])
-
-  // ── Marketplace actions ────────────────────────────────────────────────────
 
   const listForSale = useCallback(async (voucherId: string, askingPrice: number, description?: string) => {
     const { data, error } = await supabase.rpc('list_voucher_for_sale', {
@@ -108,6 +146,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_description: description || null,
     })
     if (error) throw error
+    fetchedAt.current.myListings = 0  // invalidate cache
     await fetchMyListings()
     return data as MarketplaceListing
   }, [fetchMyListings])
@@ -115,6 +154,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const removeFromSale = useCallback(async (listingId: string) => {
     const { error } = await supabase.rpc('remove_from_sale', { p_listing_id: listingId })
     if (error) throw error
+    fetchedAt.current.myListings = 0
     await fetchMyListings()
   }, [fetchMyListings])
 
@@ -124,18 +164,21 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_payment_method_used: paymentMethod,
     })
     if (error) throw error
+    fetchedAt.current.listings = 0; fetchedAt.current.myPurchases = 0
     await Promise.all([fetchListings(), fetchMyPurchases()])
   }, [fetchListings, fetchMyPurchases])
 
   const confirmPaymentReceived = useCallback(async (purchaseId: string) => {
     const { error } = await supabase.rpc('seller_confirm_payment', { p_purchase_id: purchaseId })
     if (error) throw error
+    fetchedAt.current.myListings = 0
     await fetchMyListings()
   }, [fetchMyListings])
 
   const cancelPurchase = useCallback(async (purchaseId: string) => {
     const { error } = await supabase.rpc('cancel_purchase', { p_purchase_id: purchaseId })
     if (error) throw error
+    fetchedAt.current.myPurchases = 0; fetchedAt.current.myListings = 0
     await Promise.all([fetchMyPurchases(), fetchMyListings()])
   }, [fetchMyPurchases, fetchMyListings])
 
@@ -167,41 +210,64 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }, [])
 
-  // ── Chat actions ───────────────────────────────────────────────────────────
+  // ── Chat ──────────────────────────────────────────────────────────────────
 
-  const fetchChatMessages = useCallback(async (listingId: string, buyerId?: string) => {
-    if (!user) return
-    const effectiveBuyerId = buyerId || user.id
-    const key = `${listingId}:${effectiveBuyerId}`
-    try {
-      const { data, error } = await supabase.rpc('get_chat_messages', {
-        p_listing_id: listingId,
-        p_buyer_id: effectiveBuyerId,
-      })
-      if (error) throw error
-      setChatMessages(prev => ({ ...prev, [key]: (data as MarketplaceMessage[]) || [] }))
-    } catch (err) {
-      console.error('[marketplace] fetchChatMessages error', err)
-    }
-  }, [user])
-
-  const sendChatMessage = useCallback(async (listingId: string, message: string, buyerId?: string) => {
-    if (!user) return
-    const { data, error } = await supabase.rpc('send_chat_message', {
+  const sendMessage = useCallback(async (listingId: string, receiverId: string, body: string) => {
+    const { error } = await supabase.rpc('send_marketplace_message', {
       p_listing_id: listingId,
-      p_message: message,
-      p_buyer_id: buyerId || null,
+      p_receiver_id: receiverId,
+      p_body: body,
+      p_msg_type: 'text',
+      p_offer_amount: null,
     })
     if (error) throw error
-    // Append optimistically
-    const effectiveBuyerId = buyerId || user.id
-    const key = `${listingId}:${effectiveBuyerId}`
-    const newMsg = data as MarketplaceMessage
-    setChatMessages(prev => ({
-      ...prev,
-      [key]: [...(prev[key] || []), { ...newMsg, is_me: true }],
-    }))
-  }, [user])
+  }, [])
+
+  const sendPriceOffer = useCallback(async (listingId: string, receiverId: string, offerAmount: number, body: string) => {
+    const { error } = await supabase.rpc('send_marketplace_message', {
+      p_listing_id: listingId,
+      p_receiver_id: receiverId,
+      p_body: body,
+      p_msg_type: 'price_offer',
+      p_offer_amount: offerAmount,
+    })
+    if (error) throw error
+  }, [])
+
+  const fetchChat = useCallback(async (listingId: string, otherUserId: string): Promise<MarketplaceMessage[]> => {
+    const { data, error } = await supabase.rpc('get_listing_chat', {
+      p_listing_id: listingId,
+      p_other_user_id: otherUserId,
+    })
+    if (error) throw error
+    return (data as MarketplaceMessage[]) || []
+  }, [])
+
+  const respondToPriceOffer = useCallback(async (messageId: string, response: 'accepted' | 'rejected') => {
+    const { error } = await supabase.rpc('respond_to_price_offer', {
+      p_message_id: messageId,
+      p_response: response,
+    })
+    if (error) throw error
+  }, [])
+
+  const getListingConversations = useCallback(async (listingId: string): Promise<ListingConversation[]> => {
+    const { data, error } = await supabase.rpc('get_listing_conversations', {
+      p_listing_id: listingId,
+    })
+    if (error) throw error
+    return (data as ListingConversation[]) || []
+  }, [])
+
+  const markMessagesRead = useCallback(async (listingId: string, senderUserId: string) => {
+    const { error } = await supabase.rpc('mark_chat_messages_read', {
+      p_listing_id: listingId,
+      p_sender_id: senderUserId,
+    })
+    if (error) console.error('[marketplace] markMessagesRead error', error)
+    // Update local per-listing count
+    setUnreadByListing(prev => ({ ...prev, [listingId]: 0 }))
+  }, [])
 
   const updateListingPrice = useCallback(async (listingId: string, newPrice: number) => {
     const { error } = await supabase.rpc('update_listing_price', {
@@ -209,10 +275,91 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_new_price: newPrice,
     })
     if (error) throw error
+    fetchedAt.current.myListings = 0
     await fetchMyListings()
   }, [fetchMyListings])
 
-  // ── Realtime: seller notified when buyer confirms payment ──────────────────
+  // Seed unread counts from DB on login
+  useEffect(() => {
+    if (!user) { setUnreadChatCount(0); setUnreadByListing({}); return }
+    supabase.rpc('get_unread_chat_count').then(({ data }) => {
+      if (typeof data === 'number') setUnreadChatCount(data)
+    })
+    supabase.rpc('get_chat_unread_by_listing').then(({ data }) => {
+      if (data) {
+        const map: Record<string, number> = {}
+        ;(data as { listing_id: string; unread_count: number }[]).forEach(r => {
+          map[r.listing_id] = Number(r.unread_count)
+        })
+        setUnreadByListing(map)
+      }
+    })
+  }, [user])
+
+  // Realtime: global inbox — new chat messages addressed to current user
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel(`chat-inbox-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'marketplace_messages',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const msg = payload.new as {
+            body: string
+            msg_type: string
+            listing_id: string
+            sender_id: string
+          }
+          const chatKey = `${msg.listing_id}:${msg.sender_id}`
+
+          // Only count/notify if that ChatModal is NOT currently open
+          if (!activeChats.current.has(chatKey)) {
+            setUnreadChatCount(c => c + 1)
+            setUnreadByListing(prev => ({
+              ...prev,
+              [msg.listing_id]: (prev[msg.listing_id] ?? 0) + 1,
+            }))
+
+            // Fetch sender name for a meaningful push title
+            const { data: sender } = await supabase
+              .from('profiles')
+              .select('name, email')
+              .eq('id', msg.sender_id)
+              .single()
+            const senderName = sender?.name
+              || sender?.email?.split('@')[0]
+              || 'משתמש'
+
+            if (Notification.permission === 'granted') {
+              const body = msg.msg_type === 'price_offer'
+                ? `הצעת מחיר חדשה: ${senderName}`
+                : msg.body
+              const notification = new Notification(`${senderName} שלח הודעה`, {
+                body,
+                icon: '/pwa-192x192.png',
+                tag: `chat-${msg.listing_id}`,
+              })
+              notification.onclick = () => {
+                window.focus()
+                window.location.href = `/market/listing/${msg.listing_id}`
+              }
+            }
+          }
+        },
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
+
+  // Realtime: notify seller when buyer confirms payment
   useEffect(() => {
     if (!user) return
 
@@ -227,9 +374,12 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           filter: `seller_id=eq.${user.id}`,
         },
         (payload) => {
-          const updated = payload.new as { status: string }
+          const updated = payload.new as { status: string; listing_id: string }
           if (updated.status === 'buyer_confirmed') {
-            toast('קונה אישר ששלח תשלום! בדוק את הרשימות שלך.', { icon: '💰', duration: 6000 })
+            toast('קונה אישר ששלח תשלום! בדוק את הרשימות שלך.', {
+              icon: '💰',
+              duration: 6000,
+            })
             fetchMyListings()
           }
         },
@@ -239,7 +389,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return () => { supabase.removeChannel(channel) }
   }, [user, fetchMyListings])
 
-  // ── Realtime: buyer notified when seller confirms (voucher transferred) ────
+  // Realtime: notify buyer when seller confirms (voucher transferred)
   useEffect(() => {
     if (!user) return
 
@@ -256,7 +406,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const updated = payload.new as { status: string }
           if (updated.status === 'completed') {
-            toast('המוכר אישר את התשלום! השובר הועבר לארנק שלך.', { icon: '🎉', duration: 6000 })
+            toast('המוכר אישר את התשלום! השובר הועבר לארנק שלך.', {
+              icon: '🎉',
+              duration: 6000,
+            })
             fetchMyPurchases()
           }
         },
@@ -265,40 +418,6 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
     return () => { supabase.removeChannel(channel) }
   }, [user, fetchMyPurchases])
-
-  // ── Realtime: new chat messages ────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return
-
-    const channel = supabase
-      .channel(`marketplace-chat-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'marketplace_messages',
-          filter: `buyer_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const msg = payload.new as MarketplaceMessage
-          // Only show toast/update if someone else sent it
-          if (msg.sender_id !== user.id) {
-            const key = `${msg.listing_id}:${msg.buyer_id}`
-            setChatMessages(prev => ({
-              ...prev,
-              [key]: [...(prev[key] || []), { ...msg, is_me: false }],
-            }))
-            if (!msg.is_system) {
-              toast('💬 הגיעה הודעה חדשה מהמוכר!', { duration: 4000 })
-            }
-          }
-        },
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [user])
 
   return (
     <MarketplaceContext.Provider
@@ -319,10 +438,18 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         cancelPurchase,
         rateUser,
         reportUser,
-        chatMessages,
-        fetchChatMessages,
-        sendChatMessage,
+        sendMessage,
+        sendPriceOffer,
+        fetchChat,
+        respondToPriceOffer,
+        getListingConversations,
+        markMessagesRead,
         updateListingPrice,
+        unreadChatCount,
+        unreadByListing,
+        markChatRead,
+        registerActiveChat,
+        unregisterActiveChat,
       }}
     >
       {children}

@@ -1,204 +1,233 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Marketplace Chat — messages between buyers and sellers
--- Run this AFTER supabase-marketplace.sql
+-- Marketplace Chat Messages
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Chat between buyers and sellers about a specific listing.
+-- Works BEFORE any purchase (negotiation) and AFTER (coordination).
+-- msg_type: 'text' | 'price_offer'
+-- offer_status: 'pending' | 'accepted' | 'rejected'  (only for price_offer)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- ─── Table ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS marketplace_messages (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  listing_id UUID        NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
-  buyer_id   UUID        NOT NULL REFERENCES auth.users(id),
-  sender_id  UUID        NOT NULL REFERENCES auth.users(id),
-  message    TEXT        NOT NULL
-               CHECK (char_length(trim(message)) > 0 AND char_length(message) <= 1000),
-  is_system  BOOLEAN     NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  listing_id    UUID        NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+  sender_id     UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  receiver_id   UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  body          TEXT        NOT NULL,
+  msg_type      TEXT        NOT NULL DEFAULT 'text'     CHECK (msg_type IN ('text','price_offer')),
+  offer_amount  NUMERIC(10,2),
+  offer_status  TEXT                                    CHECK (offer_status IN ('pending','accepted','rejected')),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_marketplace_messages_conv
-  ON marketplace_messages (listing_id, buyer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_mkt_messages_listing  ON marketplace_messages (listing_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_mkt_messages_receiver ON marketplace_messages (receiver_id, created_at);
 
--- Full identity needed for realtime filtering
-ALTER TABLE marketplace_messages REPLICA IDENTITY FULL;
-
--- Enable realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE marketplace_messages;
-
--- ─── Row Level Security ──────────────────────────────────────────────────────
 ALTER TABLE marketplace_messages ENABLE ROW LEVEL SECURITY;
 
--- Buyer reads their own conversation messages
-CREATE POLICY "msg_buyer_read" ON marketplace_messages
-  FOR SELECT USING (buyer_id = auth.uid());
+-- Participants can see their own messages
+CREATE POLICY "mm_select" ON marketplace_messages
+  FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 
--- Seller reads all messages for their listings
-CREATE POLICY "msg_seller_read" ON marketplace_messages
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM marketplace_listings l
-      WHERE l.id = listing_id AND l.seller_id = auth.uid()
-    )
-  );
+-- Anyone can send (as long as sender_id = themselves)
+CREATE POLICY "mm_insert" ON marketplace_messages
+  FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
--- Inserts are done via SECURITY DEFINER RPCs below
+-- Only receiver can update offer_status (accept / reject)
+CREATE POLICY "mm_update" ON marketplace_messages
+  FOR UPDATE USING (auth.uid() = receiver_id AND msg_type = 'price_offer')
+  WITH CHECK  (auth.uid() = receiver_id);
 
--- ─── get_chat_messages ───────────────────────────────────────────────────────
--- Returns all messages for a listing/buyer conversation.
--- Caller must be the buyer (p_buyer_id = auth.uid()) or the listing seller.
-CREATE OR REPLACE FUNCTION get_chat_messages(p_listing_id UUID, p_buyer_id UUID)
-RETURNS TABLE (
-  id           UUID,
-  listing_id   UUID,
-  buyer_id     UUID,
-  sender_id    UUID,
-  message      TEXT,
-  is_system    BOOLEAN,
-  created_at   TIMESTAMPTZ,
-  sender_name  TEXT,
-  is_me        BOOLEAN
-) LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  -- Authorization: caller must be the buyer or the listing seller
-  IF p_buyer_id != auth.uid() THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM marketplace_listings
-      WHERE id = p_listing_id AND seller_id = auth.uid()
-    ) THEN
-      RAISE EXCEPTION 'unauthorized';
-    END IF;
-  END IF;
-
-  RETURN QUERY
-  SELECT
-    m.id,
-    m.listing_id,
-    m.buyer_id,
-    m.sender_id,
-    m.message,
-    m.is_system,
-    m.created_at,
-    COALESCE(pr.name, pr.email)::TEXT AS sender_name,
-    (m.sender_id = auth.uid()) AS is_me
-  FROM marketplace_messages m
-  LEFT JOIN profiles pr ON pr.id = m.sender_id
-  WHERE m.listing_id = p_listing_id
-    AND m.buyer_id = p_buyer_id
-  ORDER BY m.created_at ASC;
-END;
-$$;
-
--- ─── send_chat_message ───────────────────────────────────────────────────────
--- Buyer sends: p_buyer_id = NULL (uses auth.uid())
--- Seller replies: p_buyer_id = the buyer they're replying to
-CREATE OR REPLACE FUNCTION send_chat_message(
-  p_listing_id UUID,
-  p_message    TEXT,
-  p_buyer_id   UUID DEFAULT NULL
-) RETURNS marketplace_messages LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- ─── RPC: send a message ──────────────────────────────────────────────────────
+-- Validates that:
+--   • The listing exists and is active (or pending_payment)
+--   • The sender is either the listing seller or a valid buyer
+--   • price_offer may only be sent by the seller
+CREATE OR REPLACE FUNCTION send_marketplace_message(
+  p_listing_id    UUID,
+  p_receiver_id   UUID,
+  p_body          TEXT,
+  p_msg_type      TEXT    DEFAULT 'text',
+  p_offer_amount  NUMERIC DEFAULT NULL
+)
+RETURNS marketplace_messages
+LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
-  v_listing  marketplace_listings%ROWTYPE;
-  v_buyer_id UUID;
-  v_msg      marketplace_messages%ROWTYPE;
+  v_listing  marketplace_listings;
+  v_msg      marketplace_messages;
 BEGIN
-  SELECT * INTO v_listing FROM marketplace_listings WHERE id = p_listing_id;
-  IF NOT FOUND THEN RAISE EXCEPTION 'listing_not_found'; END IF;
+  SELECT * INTO v_listing
+  FROM marketplace_listings
+  WHERE id = p_listing_id;
 
-  IF v_listing.seller_id = auth.uid() THEN
-    -- Seller is sending: require explicit buyer_id
-    IF p_buyer_id IS NULL THEN RAISE EXCEPTION 'buyer_id_required'; END IF;
-    IF p_buyer_id = auth.uid() THEN RAISE EXCEPTION 'cannot_message_yourself'; END IF;
-    v_buyer_id := p_buyer_id;
-  ELSE
-    -- Buyer is sending
-    IF v_listing.seller_id = auth.uid() THEN RAISE EXCEPTION 'cannot_buy_own_listing'; END IF;
-    v_buyer_id := auth.uid();
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'listing_not_found';
   END IF;
 
-  INSERT INTO marketplace_messages (listing_id, buyer_id, sender_id, message)
-  VALUES (p_listing_id, v_buyer_id, auth.uid(), trim(p_message))
+  IF v_listing.status NOT IN ('active','pending_payment') THEN
+    RAISE EXCEPTION 'listing_not_available';
+  END IF;
+
+  -- Must involve the seller
+  IF auth.uid() <> v_listing.seller_id AND p_receiver_id <> v_listing.seller_id THEN
+    RAISE EXCEPTION 'not_authorized';
+  END IF;
+
+  -- Cannot message yourself (cannot buy own listing)
+  IF auth.uid() = p_receiver_id THEN
+    RAISE EXCEPTION 'cannot_message_yourself';
+  END IF;
+
+  -- Only seller can send price offers
+  IF p_msg_type = 'price_offer' AND auth.uid() <> v_listing.seller_id THEN
+    RAISE EXCEPTION 'only_seller_can_offer_price';
+  END IF;
+
+  IF p_msg_type = 'price_offer' AND (p_offer_amount IS NULL OR p_offer_amount <= 0) THEN
+    RAISE EXCEPTION 'invalid_offer_amount';
+  END IF;
+
+  INSERT INTO marketplace_messages
+    (listing_id, sender_id, receiver_id, body, msg_type, offer_amount, offer_status)
+  VALUES (
+    p_listing_id,
+    auth.uid(),
+    p_receiver_id,
+    p_body,
+    p_msg_type,
+    CASE WHEN p_msg_type = 'price_offer' THEN p_offer_amount ELSE NULL END,
+    CASE WHEN p_msg_type = 'price_offer' THEN 'pending'       ELSE NULL END
+  )
   RETURNING * INTO v_msg;
 
   RETURN v_msg;
 END;
 $$;
 
--- ─── update_listing_price ────────────────────────────────────────────────────
--- Seller reduces asking price. Sends a system message to all existing conversations.
-CREATE OR REPLACE FUNCTION update_listing_price(p_listing_id UUID, p_new_price NUMERIC)
-RETURNS marketplace_listings LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE
-  v_listing marketplace_listings%ROWTYPE;
+-- ─── RPC: get chat between current user and another user for a listing ────────
+CREATE OR REPLACE FUNCTION get_listing_chat(
+  p_listing_id    UUID,
+  p_other_user_id UUID
+)
+RETURNS TABLE (
+  id            UUID,
+  listing_id    UUID,
+  sender_id     UUID,
+  receiver_id   UUID,
+  body          TEXT,
+  msg_type      TEXT,
+  offer_amount  NUMERIC,
+  offer_status  TEXT,
+  created_at    TIMESTAMPTZ,
+  sender_name   TEXT,
+  sender_email  TEXT,
+  is_mine       BOOLEAN
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  SELECT * INTO v_listing FROM marketplace_listings WHERE id = p_listing_id;
-  IF NOT FOUND THEN RAISE EXCEPTION 'listing_not_found'; END IF;
-  IF v_listing.seller_id != auth.uid() THEN RAISE EXCEPTION 'unauthorized'; END IF;
-  IF v_listing.status != 'active' THEN RAISE EXCEPTION 'listing_not_active'; END IF;
-  IF p_new_price <= 0 THEN RAISE EXCEPTION 'price_must_be_positive'; END IF;
-  IF p_new_price >= v_listing.asking_price THEN RAISE EXCEPTION 'new_price_must_be_lower'; END IF;
-
-  UPDATE marketplace_listings
-  SET asking_price = p_new_price, updated_at = NOW()
-  WHERE id = p_listing_id
-  RETURNING * INTO v_listing;
-
-  -- Notify each buyer who has chatted about this listing via system message
-  INSERT INTO marketplace_messages (listing_id, buyer_id, sender_id, message, is_system)
-  SELECT DISTINCT
-    p_listing_id,
-    m.buyer_id,
-    auth.uid(),
-    '💰 המוכר הוריד את המחיר ל-₪' || p_new_price::TEXT,
-    TRUE
-  FROM marketplace_messages m
-  WHERE m.listing_id = p_listing_id;
-
-  RETURN v_listing;
+  RETURN QUERY
+  SELECT
+    mm.id,
+    mm.listing_id,
+    mm.sender_id,
+    mm.receiver_id,
+    mm.body,
+    mm.msg_type,
+    mm.offer_amount,
+    mm.offer_status,
+    mm.created_at,
+    p.name   AS sender_name,
+    p.email  AS sender_email,
+    (mm.sender_id = auth.uid()) AS is_mine
+  FROM marketplace_messages mm
+  JOIN profiles p ON p.id = mm.sender_id
+  WHERE mm.listing_id = p_listing_id
+    AND (
+      (mm.sender_id = auth.uid() AND mm.receiver_id = p_other_user_id)
+      OR
+      (mm.sender_id = p_other_user_id AND mm.receiver_id = auth.uid())
+    )
+  ORDER BY mm.created_at ASC;
 END;
 $$;
 
--- ─── get_listing_conversations ───────────────────────────────────────────────
--- For sellers: list of buyers who have sent messages about a listing.
+-- ─── RPC: respond to a price offer (buyer accepts / rejects) ─────────────────
+CREATE OR REPLACE FUNCTION respond_to_price_offer(
+  p_message_id UUID,
+  p_response   TEXT   -- 'accepted' | 'rejected'
+)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_msg marketplace_messages;
+BEGIN
+  SELECT * INTO v_msg FROM marketplace_messages WHERE id = p_message_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'message_not_found'; END IF;
+  IF v_msg.receiver_id <> auth.uid() THEN RAISE EXCEPTION 'not_authorized'; END IF;
+  IF v_msg.msg_type <> 'price_offer' THEN RAISE EXCEPTION 'not_a_price_offer'; END IF;
+  IF v_msg.offer_status <> 'pending' THEN RAISE EXCEPTION 'already_responded'; END IF;
+  IF p_response NOT IN ('accepted','rejected') THEN RAISE EXCEPTION 'invalid_response'; END IF;
+
+  UPDATE marketplace_messages
+  SET offer_status = p_response
+  WHERE id = p_message_id;
+
+  -- If accepted → update listing asking_price
+  IF p_response = 'accepted' THEN
+    UPDATE marketplace_listings
+    SET asking_price = v_msg.offer_amount, updated_at = NOW()
+    WHERE id = v_msg.listing_id;
+  END IF;
+END;
+$$;
+
+-- ─── RPC: list all conversations for a listing (seller only) ─────────────────
+-- Returns one row per buyer who has chatted with the seller about this listing.
 CREATE OR REPLACE FUNCTION get_listing_conversations(p_listing_id UUID)
 RETURNS TABLE (
-  buyer_id        UUID,
-  buyer_name      TEXT,
-  last_message    TEXT,
-  last_message_at TIMESTAMPTZ,
-  msg_count       BIGINT
-) LANGUAGE plpgsql SECURITY DEFINER AS $$
+  other_user_id    UUID,
+  other_user_name  TEXT,
+  other_user_email TEXT,
+  last_body        TEXT,
+  last_at          TIMESTAMPTZ,
+  message_count    BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
+  -- Only the seller of this listing may call this
   IF NOT EXISTS (
     SELECT 1 FROM marketplace_listings
     WHERE id = p_listing_id AND seller_id = auth.uid()
   ) THEN
-    RAISE EXCEPTION 'unauthorized';
+    RAISE EXCEPTION 'not_authorized';
   END IF;
 
   RETURN QUERY
-  WITH last_per_buyer AS (
-    SELECT DISTINCT ON (m.buyer_id)
-      m.buyer_id,
-      m.message AS last_message,
-      m.created_at AS last_message_at
-    FROM marketplace_messages m
-    WHERE m.listing_id = p_listing_id
-    ORDER BY m.buyer_id, m.created_at DESC
-  ),
-  counts AS (
-    SELECT m.buyer_id, COUNT(*) AS msg_count
-    FROM marketplace_messages m
-    WHERE m.listing_id = p_listing_id
-    GROUP BY m.buyer_id
+  WITH ranked AS (
+    SELECT
+      CASE WHEN mm.sender_id = auth.uid() THEN mm.receiver_id ELSE mm.sender_id END AS other_id,
+      mm.body,
+      mm.created_at,
+      ROW_NUMBER() OVER (
+        PARTITION BY CASE WHEN mm.sender_id = auth.uid() THEN mm.receiver_id ELSE mm.sender_id END
+        ORDER BY mm.created_at DESC
+      ) AS rn,
+      COUNT(*) OVER (
+        PARTITION BY CASE WHEN mm.sender_id = auth.uid() THEN mm.receiver_id ELSE mm.sender_id END
+      ) AS cnt
+    FROM marketplace_messages mm
+    WHERE mm.listing_id = p_listing_id
+      AND (mm.sender_id = auth.uid() OR mm.receiver_id = auth.uid())
   )
   SELECT
-    lpb.buyer_id,
-    COALESCE(pr.name, pr.email)::TEXT AS buyer_name,
-    lpb.last_message,
-    lpb.last_message_at,
-    c.msg_count
-  FROM last_per_buyer lpb
-  JOIN profiles pr ON pr.id = lpb.buyer_id
-  JOIN counts    c  ON c.buyer_id = lpb.buyer_id
-  ORDER BY lpb.last_message_at DESC;
+    r.other_id,
+    p.name,
+    p.email,
+    r.body,
+    r.created_at,
+    r.cnt
+  FROM ranked r
+  JOIN profiles p ON p.id = r.other_id
+  WHERE r.rn = 1
+  ORDER BY r.created_at DESC;
 END;
 $$;

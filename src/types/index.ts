@@ -101,6 +101,8 @@ export interface MarketplaceListing {
   voucher_id: string
   seller_id: string
   asking_price: number
+  reserved_price?: number | null
+  reserved_buyer_id?: string | null
   description?: string
   status: 'active' | 'pending_payment' | 'sold' | 'cancelled'
   created_at: string
@@ -117,6 +119,7 @@ export interface MarketplaceListing {
   // from get_my_listings RPC
   purchase_id?: string
   purchase_status?: string
+  buyer_id?: string
   buyer_name?: string
   buyer_email?: string
   payment_method_used?: string
@@ -150,6 +153,34 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod['type'], string> = {
   cashcash: 'Cashcash',
   lavi: 'לביא',
   other: 'אחר',
+}
+
+// ============ Marketplace Chat Types ============
+
+export interface MarketplaceMessage {
+  id: string
+  listing_id: string
+  sender_id: string
+  receiver_id: string
+  body: string
+  msg_type: 'text' | 'price_offer'
+  offer_amount?: number | null
+  offer_status?: 'pending' | 'accepted' | 'rejected' | null
+  created_at: string
+  sender_name?: string | null
+  sender_email?: string | null
+  is_mine: boolean
+  is_read?: boolean
+}
+
+export interface ListingConversation {
+  other_user_id: string
+  other_user_name?: string | null
+  other_user_email?: string | null
+  last_body: string
+  last_at: string
+  message_count: number
+  unread_count?: number
 }
 
 export interface Category {
