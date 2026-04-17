@@ -43,6 +43,7 @@ const METHOD_COLORS: Record<PaymentMethod['type'], string> = {
   bit:      'bg-purple-600',
   paybox:   'bg-orange-500',
   cashcash: 'bg-teal-500',
+  lavi:     'bg-emerald-500',
   other:    'bg-gray-500',
 }
 

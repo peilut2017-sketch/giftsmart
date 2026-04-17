@@ -26,7 +26,6 @@ export default function ChatModal({
   currentAskingPrice,
   storeName,
   onClose,
-  onPriceUpdated,
 }: ChatModalProps) {
   const { user } = useAuth()
   const { sendMessage, sendPriceOffer, fetchChat, respondToPriceOffer,
@@ -263,7 +262,6 @@ export default function ChatModal({
               <MessageBubble
                 key={msg.id}
                 msg={msg}
-                isSeller={isSeller}
                 onRespond={handleRespond}
                 respondingTo={respondingTo}
               />
@@ -345,12 +343,10 @@ export default function ChatModal({
 // ─── Message bubble ───────────────────────────────────────────────────────────
 function MessageBubble({
   msg,
-  isSeller,
   onRespond,
   respondingTo,
 }: {
   msg: MarketplaceMessage
-  isSeller: boolean
   onRespond: (id: string, r: 'accepted' | 'rejected') => void
   respondingTo: string | null
 }) {

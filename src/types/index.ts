@@ -84,18 +84,6 @@ export interface PaymentMethod {
   label?: string
 }
 
-export interface MarketplaceMessage {
-  id: string
-  listing_id: string
-  buyer_id: string
-  sender_id: string
-  message: string
-  is_system: boolean
-  created_at: string
-  sender_name?: string
-  is_me?: boolean
-}
-
 export interface MarketplaceListing {
   id: string
   voucher_id: string
