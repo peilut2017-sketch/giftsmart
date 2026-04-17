@@ -176,8 +176,8 @@ RETURNS TABLE (
   FROM profiles p
   LEFT JOIN marketplace_purchases pur ON pur.seller_id = p.id AND pur.status = 'completed'
   LEFT JOIN user_ratings r ON r.rated_user_id = p.id
-  WHERE COUNT(DISTINCT pur.id) > 0
   GROUP BY p.id, p.name, p.email, p.is_verified_seller
+  HAVING COUNT(DISTINCT pur.id) > 0
   ORDER BY total_sales DESC;
 $$;
 
