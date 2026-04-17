@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatDate } from '../utils/helpers'
 import {
   ArrowRight, Star, Clock, ShoppingBag, X, Loader2, Flag,
-  Phone, Mail, CheckCircle, AlertTriangle, MessageCircle, ExternalLink, Copy, Tag,
+  Phone, Mail, CheckCircle, AlertTriangle, MessageCircle, ExternalLink, Copy, Tag, BadgeCheck,
 } from 'lucide-react'
 import type { MarketplaceListing, PaymentMethod } from '../types'
 import { PAYMENT_METHOD_LABELS } from '../types'
@@ -435,9 +435,21 @@ export default function ListingDetailPage() {
                 <p className="text-sm text-gray-500 mt-1">מחיר מבוקש</p>
               )}
             </div>
-            <div className="text-left">
+            <div className="text-left space-y-1">
               <p className="text-xl font-semibold text-gray-800">₪{listing.balance}</p>
               <p className="text-sm text-gray-500">יתרה בשובר</p>
+              {(() => {
+                const b = listing.balance ?? 0
+                const p = displayPrice ?? 0
+                const pct = b > 0 && p < b ? Math.round(((b - p) / b) * 100) : 0
+                return pct > 0 ? (
+                  <span className={`block text-center text-xs font-bold px-2 py-0.5 rounded-full ${
+                    pct >= 30 ? 'bg-green-500 text-white' : pct >= 15 ? 'bg-orange-400 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    חסוך {pct}%
+                  </span>
+                ) : null
+              })()}
             </div>
           </div>
 
@@ -464,9 +476,14 @@ export default function ListingDetailPage() {
               {(listing.seller_name || listing.seller_email || '?')[0].toUpperCase()}
             </div>
             <div className="flex-1">
-              <p className="font-medium text-gray-800">
-                {listing.seller_name || listing.seller_email?.split('@')[0]}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-medium text-gray-800">
+                  {listing.seller_name || listing.seller_email?.split('@')[0]}
+                </p>
+                {listing.is_verified_seller && (
+                  <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" title="מוכר מאומת" />
+                )}
+              </div>
               {(listing.avg_rating ?? 0) > 0 ? (
                 <div className="flex items-center gap-1 mt-0.5">
                   {[1,2,3,4,5].map(i => (

@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -158,6 +158,16 @@ export default function AdminPage() {
   }[]>([])
   const [reportsLoaded, setReportsLoaded] = useState(false)
   const [updatingReport, setUpdatingReport] = useState<string | null>(null)
+  // Marketplace settings
+  const [showMktSettings, setShowMktSettings] = useState(false)
+  const [mktSettings, setMktSettings] = useState({ free_listing_days: 30, pro_listing_days: 60, verified_min_rating: 4.0, verified_min_sales: 5, watchlist_pro_only: true })
+  const [mktSettingsLoaded, setMktSettingsLoaded] = useState(false)
+  const [savingMktSettings, setSavingMktSettings] = useState(false)
+  // Verified sellers
+  const [showVerifiedSellers, setShowVerifiedSellers] = useState(false)
+  const [verifiedSellers, setVerifiedSellers] = useState<{ user_id: string; name: string; email: string; is_verified: boolean; total_sales: number; avg_rating: number }[]>([])
+  const [verifiedSellersLoaded, setVerifiedSellersLoaded] = useState(false)
+  const [togglingVerified, setTogglingVerified] = useState<string | null>(null)
 
   async function loadReports() {
     if (reportsLoaded) return
@@ -180,6 +190,53 @@ export default function AdminPage() {
       toast.error('שגיאה בעדכון')
     } finally {
       setUpdatingReport(null)
+    }
+  }
+
+  async function loadMktSettings() {
+    if (mktSettingsLoaded) return
+    const { data } = await supabase.rpc('get_marketplace_settings')
+    if (data) setMktSettings({ free_listing_days: data.free_listing_days, pro_listing_days: data.pro_listing_days, verified_min_rating: Number(data.verified_min_rating), verified_min_sales: data.verified_min_sales, watchlist_pro_only: data.watchlist_pro_only })
+    setMktSettingsLoaded(true)
+  }
+
+  async function saveMktSettings() {
+    setSavingMktSettings(true)
+    try {
+      const { error } = await supabase.rpc('update_marketplace_settings', {
+        p_free_listing_days: mktSettings.free_listing_days,
+        p_pro_listing_days: mktSettings.pro_listing_days,
+        p_verified_min_rating: mktSettings.verified_min_rating,
+        p_verified_min_sales: mktSettings.verified_min_sales,
+        p_watchlist_pro_only: mktSettings.watchlist_pro_only,
+      })
+      if (error) throw error
+      toast.success('הגדרות שוק עודכנו')
+    } catch {
+      toast.error('שגיאה בשמירה')
+    } finally {
+      setSavingMktSettings(false)
+    }
+  }
+
+  async function loadVerifiedSellers() {
+    if (verifiedSellersLoaded) return
+    const { data } = await supabase.rpc('admin_get_verified_sellers')
+    if (data) setVerifiedSellers(data)
+    setVerifiedSellersLoaded(true)
+  }
+
+  async function handleSetVerified(userId: string, verified: boolean) {
+    setTogglingVerified(userId)
+    try {
+      const { error } = await supabase.rpc('admin_set_verified_seller', { p_user_id: userId, p_verified: verified })
+      if (error) throw error
+      setVerifiedSellers(prev => prev.map(s => s.user_id === userId ? { ...s, is_verified: verified } : s))
+      toast.success(verified ? 'מוכר אומת' : 'אימות הוסר')
+    } catch {
+      toast.error('שגיאה')
+    } finally {
+      setTogglingVerified(null)
     }
   }
 
@@ -1832,6 +1889,117 @@ export default function AdminPage() {
                       </button>
                     )}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Marketplace Settings */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-4 py-4"
+            onClick={() => { setShowMktSettings(!showMktSettings); if (!showMktSettings) loadMktSettings() }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                <ShoppingBag className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-800">הגדרות שוק</p>
+                <p className="text-xs text-gray-400">תפוגה, אימות מוכר, רשימות</p>
+              </div>
+            </div>
+            {showMktSettings ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+          {showMktSettings && (
+            <div className="px-4 pb-4 border-t pt-4 space-y-4">
+              {!mktSettingsLoaded ? (
+                <p className="text-sm text-gray-400 text-center py-4">טוען...</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">ימי הצגה (חינמי)</label>
+                      <input type="number" min={1} max={365} value={mktSettings.free_listing_days}
+                        onChange={e => setMktSettings(s => ({ ...s, free_listing_days: parseInt(e.target.value) || 30 }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">ימי הצגה (פרו)</label>
+                      <input type="number" min={1} max={365} value={mktSettings.pro_listing_days}
+                        onChange={e => setMktSettings(s => ({ ...s, pro_listing_days: parseInt(e.target.value) || 60 }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">מינ' דירוג מאומת</label>
+                      <input type="number" min={1} max={5} step={0.1} value={mktSettings.verified_min_rating}
+                        onChange={e => setMktSettings(s => ({ ...s, verified_min_rating: parseFloat(e.target.value) || 4 }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">מינ' מכירות לאימות</label>
+                      <input type="number" min={1} value={mktSettings.verified_min_sales}
+                        onChange={e => setMktSettings(s => ({ ...s, verified_min_sales: parseInt(e.target.value) || 5 }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <span className="text-sm text-gray-700">רשימות מעקב לפרו בלבד</span>
+                    <button onClick={() => setMktSettings(s => ({ ...s, watchlist_pro_only: !s.watchlist_pro_only }))}
+                      className={`w-12 h-6 rounded-full transition-colors ${mktSettings.watchlist_pro_only ? 'bg-indigo-500' : 'bg-gray-300'}`}>
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${mktSettings.watchlist_pro_only ? 'translate-x-1' : '-translate-x-5'} mx-auto`} />
+                    </button>
+                  </div>
+                  <button onClick={saveMktSettings} disabled={savingMktSettings}
+                    className="w-full py-3 bg-indigo-600 text-white rounded-2xl font-medium text-sm disabled:opacity-50">
+                    {savingMktSettings ? 'שומר...' : 'שמור הגדרות'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Verified Sellers */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-4 py-4"
+            onClick={() => { setShowVerifiedSellers(!showVerifiedSellers); if (!showVerifiedSellers) loadVerifiedSellers() }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <BadgeCheck className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-800">מוכרים מאומתים</p>
+                <p className="text-xs text-gray-400">{verifiedSellers.filter(s => s.is_verified).length} מאומתים</p>
+              </div>
+            </div>
+            {showVerifiedSellers ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+          {showVerifiedSellers && (
+            <div className="px-4 pb-4 border-t pt-3 space-y-2">
+              {!verifiedSellersLoaded && <p className="text-sm text-gray-400 text-center py-4">טוען...</p>}
+              {verifiedSellersLoaded && verifiedSellers.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">אין מוכרים עם מכירות עדיין</p>
+              )}
+              {verifiedSellers.map(s => (
+                <div key={s.user_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-gray-800 truncate">{s.name || s.email}</p>
+                      {s.is_verified && <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" />}
+                    </div>
+                    <p className="text-xs text-gray-400">⭐ {Number(s.avg_rating).toFixed(1)} · {s.total_sales} מכירות</p>
+                  </div>
+                  <button
+                    disabled={togglingVerified === s.user_id}
+                    onClick={() => handleSetVerified(s.user_id, !s.is_verified)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-xl disabled:opacity-50 shrink-0 ${s.is_verified ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                  >
+                    {s.is_verified ? 'הסר אימות' : 'אמת'}
+                  </button>
                 </div>
               ))}
             </div>

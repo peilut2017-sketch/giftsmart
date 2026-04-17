@@ -6,8 +6,10 @@ import { formatDate } from '../utils/helpers'
 import {
   ShoppingBag, Search, Star, X, Clock, CheckCircle, Loader2,
   Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
+  BadgeCheck, Bell, Plus, Trash2,
 } from 'lucide-react'
-import type { MarketplaceListing, MarketplacePurchase, ListingConversation } from '../types'
+import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem } from '../types'
+import { supabase } from '../lib/supabase'
 import ChatModal from '../components/ChatModal'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
@@ -286,10 +288,17 @@ function ConversationsModal({
   )
 }
 
+// ─── Discount badge helper ────────────────────────────────────────────────────
+function discountPct(balance: number | undefined, askingPrice: number): number {
+  if (!balance || balance <= 0 || askingPrice >= balance) return 0
+  return Math.round(((balance - askingPrice) / balance) * 100)
+}
+
 // ─── Listing Card (marketplace browse) ───────────────────────────────────────
 function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClick: () => void }) {
   const expiryDate = listing.expiry_date ? new Date(listing.expiry_date) : null
   const isExpiringSoon = expiryDate ? (expiryDate.getTime() - Date.now()) / 86400000 < 30 : false
+  const pct = discountPct(listing.balance, listing.asking_price)
 
   return (
     <button
@@ -303,9 +312,15 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
             <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{listing.description}</p>
           )}
         </div>
-        <div className="text-left shrink-0">
+        <div className="text-left shrink-0 space-y-1">
           <p className="text-lg font-bold text-green-600">₪{listing.asking_price}</p>
-          <p className="text-xs text-gray-400">מחיר</p>
+          {pct > 0 && (
+            <span className={`block text-center text-xs font-bold px-2 py-0.5 rounded-full ${
+              pct >= 30 ? 'bg-green-500 text-white' : pct >= 15 ? 'bg-orange-400 text-white' : 'bg-gray-200 text-gray-600'
+            }`}>
+              חסוך {pct}%
+            </span>
+          )}
         </div>
       </div>
 
@@ -320,13 +335,16 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
       </div>
 
       <div className="flex items-center justify-between border-t pt-2">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <div className="w-6 h-6 bg-gradient-to-br from-green-400 to-teal-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
             {(listing.seller_name || listing.seller_email || '?')[0].toUpperCase()}
           </div>
           <span className="text-xs text-gray-600 truncate max-w-[120px]">
             {listing.seller_name || listing.seller_email?.split('@')[0]}
           </span>
+          {listing.is_verified_seller && (
+            <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          )}
         </div>
         {(listing.avg_rating ?? 0) > 0 && (
           <div className="flex items-center gap-1">
@@ -632,12 +650,19 @@ export default function MarketplacePage() {
     unreadByListing, updateListingPrice,
   } = useMarketplace()
 
-  const [tab, setTab] = useState<'all' | 'mine' | 'purchases'>('all')
+  const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>('all')
   const [search, setSearch] = useState('')
   const [ratingPurchase, setRatingPurchase] = useState<MarketplacePurchase | null>(null)
   const [reportTarget, setReportTarget] = useState<{
     userId: string; name: string; purchaseId?: string; listingId?: string
   } | null>(null)
+  // Watchlist
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
+  const [watchlistLoaded, setWatchlistLoaded] = useState(false)
+  const [showAddWatch, setShowAddWatch] = useState(false)
+  const [watchForm, setWatchForm] = useState({ store_name: '', min_discount_pct: 0, notify_push: true, notify_email: false })
+  const [savingWatch, setSavingWatch] = useState(false)
+  const [deletingWatch, setDeletingWatch] = useState<string | null>(null)
 
   // Chat state
   const [chatTarget, setChatTarget] = useState<{
@@ -670,6 +695,49 @@ export default function MarketplacePage() {
     return () => clearTimeout(t)
   }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (tab !== 'watchlist' || watchlistLoaded) return
+    supabase.rpc('get_my_watchlist').then(({ data }) => {
+      if (data) setWatchlist(data)
+      setWatchlistLoaded(true)
+    })
+  }, [tab, watchlistLoaded])
+
+  async function addWatchItem() {
+    if (!watchForm.store_name.trim()) { toast.error('הכנס שם חנות'); return }
+    setSavingWatch(true)
+    try {
+      const { data, error } = await supabase.rpc('add_watchlist_item', {
+        p_store_name: watchForm.store_name.trim(),
+        p_min_discount_pct: watchForm.min_discount_pct,
+        p_notify_push: watchForm.notify_push,
+        p_notify_email: watchForm.notify_email,
+      })
+      if (error) throw error
+      if (data) setWatchlist(prev => [data, ...prev])
+      setShowAddWatch(false)
+      setWatchForm({ store_name: '', min_discount_pct: 0, notify_push: true, notify_email: false })
+      toast.success('התראה נוספה')
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message || ''
+      toast.error(msg.includes('pro_required') ? 'פונקציה זו זמינה למנויי פרו בלבד' : 'שגיאה בהוספה')
+    } finally {
+      setSavingWatch(false)
+    }
+  }
+
+  async function deleteWatchItem(id: string) {
+    setDeletingWatch(id)
+    try {
+      await supabase.rpc('delete_watchlist_item', { p_id: id })
+      setWatchlist(prev => prev.filter(w => w.id !== id))
+    } catch {
+      toast.error('שגיאה במחיקה')
+    } finally {
+      setDeletingWatch(null)
+    }
+  }
+
   return (
     <div className="flex-1 bg-gray-50" dir="rtl">
       {/* Header */}
@@ -678,12 +746,12 @@ export default function MarketplacePage() {
           <ShoppingBag className="w-6 h-6 text-green-600" />
           <h1 className="font-bold text-xl text-gray-900 flex-1">שוק שוברים</h1>
         </div>
-        <div className="flex border-t">
-          {([['all', 'כל השוברים'], ['mine', 'הרשימות שלי'], ['purchases', 'רכישות שלי']] as const).map(([t, label]) => (
+        <div className="flex border-t overflow-x-auto">
+          {([['all', 'שוק'], ['mine', 'שלי'], ['purchases', 'רכישות'], ['watchlist', 'התראות']] as const).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex-1 min-w-[4.5rem] py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
                 tab === t ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -741,6 +809,14 @@ export default function MarketplacePage() {
         {/* ── My listings ── */}
         {tab === 'mine' && (
           <>
+            <div className="flex justify-end">
+              <button
+                onClick={() => navigate('/market/bulk')}
+                className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-xl"
+              >
+                <ShoppingBag className="w-3.5 h-3.5" /> פרסם מרובה
+              </button>
+            </div>
             {loadingMyListings && myListings.length === 0 ? (
               <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
             ) : myListings.length === 0 ? (
@@ -782,6 +858,97 @@ export default function MarketplacePage() {
                 />
               ))
             )}
+          </>
+        )}
+
+        {/* ── Watchlist ── */}
+        {tab === 'watchlist' && (
+          <>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold text-gray-800 flex items-center gap-1.5">
+                <Bell className="w-4 h-4 text-indigo-500" /> התראות מעקב
+              </h2>
+              <button
+                onClick={() => setShowAddWatch(v => !v)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-xl"
+              >
+                <Plus className="w-3.5 h-3.5" /> הוסף
+              </button>
+            </div>
+
+            {showAddWatch && (
+              <div className="bg-white rounded-2xl border border-indigo-100 p-4 space-y-3">
+                <input
+                  type="text"
+                  placeholder="שם חנות (למשל: H&M)"
+                  value={watchForm.store_name}
+                  onChange={e => setWatchForm(f => ({ ...f, store_name: e.target.value }))}
+                  className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600 shrink-0">אחוז הנחה מינימלי:</label>
+                  <input
+                    type="number" min={0} max={99} value={watchForm.min_discount_pct}
+                    onChange={e => setWatchForm(f => ({ ...f, min_discount_pct: parseInt(e.target.value) || 0 }))}
+                    className="w-20 border rounded-xl px-3 py-1.5 text-sm text-center focus:outline-none"
+                  />
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={watchForm.notify_push}
+                      onChange={e => setWatchForm(f => ({ ...f, notify_push: e.target.checked }))}
+                      className="rounded" />
+                    התראה בדחיפה
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={watchForm.notify_email}
+                      onChange={e => setWatchForm(f => ({ ...f, notify_email: e.target.checked }))}
+                      className="rounded" />
+                    דוא"ל
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={addWatchItem} disabled={savingWatch}
+                    className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                    {savingWatch ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שמור'}
+                  </button>
+                  <button onClick={() => setShowAddWatch(false)}
+                    className="px-4 py-2 border rounded-xl text-sm text-gray-500">
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!watchlistLoaded && (
+              <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-indigo-500" /></div>
+            )}
+            {watchlistLoaded && watchlist.length === 0 && !showAddWatch && (
+              <div className="text-center py-12 text-gray-400 space-y-2">
+                <Bell className="w-10 h-10 mx-auto opacity-30" />
+                <p className="font-medium">אין התראות פעילות</p>
+                <p className="text-sm">לחץ "הוסף" כדי לעקוב אחרי חנות</p>
+              </div>
+            )}
+            {watchlist.map(w => (
+              <div key={w.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800 truncate">{w.store_name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    הנחה מינ': {w.min_discount_pct}% ·
+                    {w.notify_push ? ' 🔔 דחיפה' : ''}{w.notify_email ? ' 📧 דוא"ל' : ''}
+                  </p>
+                </div>
+                <button
+                  disabled={deletingWatch === w.id}
+                  onClick={() => deleteWatchItem(w.id)}
+                  className="p-2 rounded-xl border border-red-200 text-red-400 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deletingWatch === w.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              </div>
+            ))}
           </>
         )}
 

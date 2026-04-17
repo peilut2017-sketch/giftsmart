@@ -104,6 +104,7 @@ export interface MarketplaceListing {
   avg_rating?: number
   rating_count?: number
   seller_payment_methods?: PaymentMethod[]
+  is_verified_seller?: boolean
   // from get_my_listings RPC
   purchase_id?: string
   purchase_status?: string
@@ -159,6 +160,37 @@ export interface MarketplaceMessage {
   sender_email?: string | null
   is_mine: boolean
   is_read?: boolean
+}
+
+// ============ Marketplace Settings ============
+
+export interface MarketplaceSettings {
+  free_listing_days: number
+  pro_listing_days: number
+  verified_min_rating: number
+  verified_min_sales: number
+  watchlist_pro_only: boolean
+}
+
+export interface WatchlistItem {
+  id: string
+  user_id: string
+  store_name: string
+  min_discount_pct: number
+  notify_push: boolean
+  notify_email: boolean
+  created_at: string
+}
+
+export interface MarketplaceNotification {
+  id: string
+  user_id: string
+  type: string
+  title: string
+  body: string
+  listing_id?: string
+  is_read: boolean
+  created_at: string
 }
 
 export interface ListingConversation {
