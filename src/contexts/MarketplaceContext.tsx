@@ -2,19 +2,19 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
-import type { MarketplaceListing, MarketplacePurchase } from '../types'
+import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage } from '../types'
 import toast from 'react-hot-toast'
 
 interface MarketplaceContextValue {
   // Data
-  listings: MarketplaceListing[]          // all active marketplace listings (not mine)
-  myListings: MarketplaceListing[]        // my listings as seller
-  myPurchases: MarketplacePurchase[]      // my purchases as buyer
+  listings: MarketplaceListing[]
+  myListings: MarketplaceListing[]
+  myPurchases: MarketplacePurchase[]
   loadingListings: boolean
   loadingMyListings: boolean
   loadingMyPurchases: boolean
 
-  // Actions
+  // Marketplace actions
   fetchListings: (search?: string, minBalance?: number, maxPrice?: number) => Promise<void>
   fetchMyListings: () => Promise<void>
   fetchMyPurchases: () => Promise<void>
@@ -25,6 +25,12 @@ interface MarketplaceContextValue {
   cancelPurchase: (purchaseId: string) => Promise<void>
   rateUser: (purchaseId: string, ratedUserId: string, rating: number, comment?: string) => Promise<void>
   reportUser: (reportedUserId: string, reason: string, details?: string, purchaseId?: string, listingId?: string) => Promise<void>
+
+  // Chat
+  chatMessages: Record<string, MarketplaceMessage[]>   // key = "listingId:buyerId"
+  fetchChatMessages: (listingId: string, buyerId?: string) => Promise<void>
+  sendChatMessage: (listingId: string, message: string, buyerId?: string) => Promise<void>
+  updateListingPrice: (listingId: string, newPrice: number) => Promise<void>
 }
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null)
@@ -43,6 +49,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [loadingListings, setLoadingListings] = useState(false)
   const [loadingMyListings, setLoadingMyListings] = useState(false)
   const [loadingMyPurchases, setLoadingMyPurchases] = useState(false)
+  const [chatMessages, setChatMessages] = useState<Record<string, MarketplaceMessage[]>>({})
+
+  // ── Fetch actions ──────────────────────────────────────────────────────────
 
   const fetchListings = useCallback(async (search?: string, minBalance?: number, maxPrice?: number) => {
     if (!user) return
@@ -89,6 +98,8 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setLoadingMyPurchases(false)
     }
   }, [user])
+
+  // ── Marketplace actions ────────────────────────────────────────────────────
 
   const listForSale = useCallback(async (voucherId: string, askingPrice: number, description?: string) => {
     const { data, error } = await supabase.rpc('list_voucher_for_sale', {
@@ -156,7 +167,52 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }, [])
 
-  // Realtime: notify seller when buyer confirms payment
+  // ── Chat actions ───────────────────────────────────────────────────────────
+
+  const fetchChatMessages = useCallback(async (listingId: string, buyerId?: string) => {
+    if (!user) return
+    const effectiveBuyerId = buyerId || user.id
+    const key = `${listingId}:${effectiveBuyerId}`
+    try {
+      const { data, error } = await supabase.rpc('get_chat_messages', {
+        p_listing_id: listingId,
+        p_buyer_id: effectiveBuyerId,
+      })
+      if (error) throw error
+      setChatMessages(prev => ({ ...prev, [key]: (data as MarketplaceMessage[]) || [] }))
+    } catch (err) {
+      console.error('[marketplace] fetchChatMessages error', err)
+    }
+  }, [user])
+
+  const sendChatMessage = useCallback(async (listingId: string, message: string, buyerId?: string) => {
+    if (!user) return
+    const { data, error } = await supabase.rpc('send_chat_message', {
+      p_listing_id: listingId,
+      p_message: message,
+      p_buyer_id: buyerId || null,
+    })
+    if (error) throw error
+    // Append optimistically
+    const effectiveBuyerId = buyerId || user.id
+    const key = `${listingId}:${effectiveBuyerId}`
+    const newMsg = data as MarketplaceMessage
+    setChatMessages(prev => ({
+      ...prev,
+      [key]: [...(prev[key] || []), { ...newMsg, is_me: true }],
+    }))
+  }, [user])
+
+  const updateListingPrice = useCallback(async (listingId: string, newPrice: number) => {
+    const { error } = await supabase.rpc('update_listing_price', {
+      p_listing_id: listingId,
+      p_new_price: newPrice,
+    })
+    if (error) throw error
+    await fetchMyListings()
+  }, [fetchMyListings])
+
+  // ── Realtime: seller notified when buyer confirms payment ──────────────────
   useEffect(() => {
     if (!user) return
 
@@ -171,12 +227,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           filter: `seller_id=eq.${user.id}`,
         },
         (payload) => {
-          const updated = payload.new as { status: string; listing_id: string }
+          const updated = payload.new as { status: string }
           if (updated.status === 'buyer_confirmed') {
-            toast('קונה אישר ששלח תשלום! בדוק את הרשימות שלך.', {
-              icon: '💰',
-              duration: 6000,
-            })
+            toast('קונה אישר ששלח תשלום! בדוק את הרשימות שלך.', { icon: '💰', duration: 6000 })
             fetchMyListings()
           }
         },
@@ -186,7 +239,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return () => { supabase.removeChannel(channel) }
   }, [user, fetchMyListings])
 
-  // Realtime: notify buyer when seller confirms (voucher transferred)
+  // ── Realtime: buyer notified when seller confirms (voucher transferred) ────
   useEffect(() => {
     if (!user) return
 
@@ -203,10 +256,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const updated = payload.new as { status: string }
           if (updated.status === 'completed') {
-            toast('המוכר אישר את התשלום! השובר הועבר לארנק שלך.', {
-              icon: '🎉',
-              duration: 6000,
-            })
+            toast('המוכר אישר את התשלום! השובר הועבר לארנק שלך.', { icon: '🎉', duration: 6000 })
             fetchMyPurchases()
           }
         },
@@ -215,6 +265,40 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
     return () => { supabase.removeChannel(channel) }
   }, [user, fetchMyPurchases])
+
+  // ── Realtime: new chat messages ────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel(`marketplace-chat-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'marketplace_messages',
+          filter: `buyer_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const msg = payload.new as MarketplaceMessage
+          // Only show toast/update if someone else sent it
+          if (msg.sender_id !== user.id) {
+            const key = `${msg.listing_id}:${msg.buyer_id}`
+            setChatMessages(prev => ({
+              ...prev,
+              [key]: [...(prev[key] || []), { ...msg, is_me: false }],
+            }))
+            if (!msg.is_system) {
+              toast('💬 הגיעה הודעה חדשה מהמוכר!', { duration: 4000 })
+            }
+          }
+        },
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
 
   return (
     <MarketplaceContext.Provider
@@ -235,6 +319,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         cancelPurchase,
         rateUser,
         reportUser,
+        chatMessages,
+        fetchChatMessages,
+        sendChatMessage,
+        updateListingPrice,
       }}
     >
       {children}

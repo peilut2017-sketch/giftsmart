@@ -220,7 +220,11 @@ export default function AdminPage() {
       const { error: uploadErr } = await supabase.storage.from('banners').upload(path, file, { upsert: true })
       if (uploadErr) { toast.error('שגיאה בהעלאה: ' + uploadErr.message); return }
       const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(path)
-      const { data, error } = await supabase.rpc('admin_add_banner', { p_image_url: publicUrl })
+      const { data, error } = await supabase.rpc('admin_add_banner', {
+        p_image_url: publicUrl,
+        p_display_duration: 5,
+        p_skip_allowed: true,
+      })
       if (error) { toast.error('שגיאה בשמירה: ' + error.message); return }
       if (data) setBanners(prev => [data, ...prev])
       toast.success('באנר הועלה בהצלחה!')

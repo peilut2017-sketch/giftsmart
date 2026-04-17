@@ -79,9 +79,21 @@ export interface Profile {
 // ============ Marketplace Types ============
 
 export interface PaymentMethod {
-  type: 'paypal' | 'bit' | 'paybox' | 'cashcash' | 'other'
+  type: 'paypal' | 'bit' | 'paybox' | 'cashcash' | 'lavi' | 'other'
   value: string  // email for paypal, phone number for others
   label?: string
+}
+
+export interface MarketplaceMessage {
+  id: string
+  listing_id: string
+  buyer_id: string
+  sender_id: string
+  message: string
+  is_system: boolean
+  created_at: string
+  sender_name?: string
+  is_me?: boolean
 }
 
 export interface MarketplaceListing {
@@ -136,6 +148,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod['type'], string> = {
   bit: 'Bit',
   paybox: 'Paybox',
   cashcash: 'Cashcash',
+  lavi: 'לביא',
   other: 'אחר',
 }
 
