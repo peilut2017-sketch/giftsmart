@@ -4,7 +4,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
-import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
+import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Wallet, Tag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
@@ -18,7 +18,7 @@ type SortDir = 'asc' | 'desc'
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
+  const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
@@ -318,9 +318,11 @@ export default function HomePage() {
   const totalBalance = vouchers.reduce((s, v) => s + v.balance, 0)
   const filteredBalance = displayVouchers.reduce((s, v) => s + v.balance, 0)
   const isFiltered = search !== '' || filterTab !== 'all' || filterCats.length > 0
+  const forSaleCount = vouchers.filter(v => v.is_locked && v.lock_reason === 'for_sale').length
+  const [searchOpen, setSearchOpen] = useState(false)
 
   return (
-    <div className="flex-1 bg-gray-50">
+    <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
       {confirm && (
         <ConfirmDialog
           title={confirm.title}
@@ -330,76 +332,127 @@ export default function HomePage() {
           onCancel={() => setConfirm(null)}
         />
       )}
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-30">
-        <div className="px-4 pt-4 pb-3">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">השוברים שלי</h1>
-              <div className="flex items-center gap-2">
-                {isFiltered && (
-                  <p className="text-xs font-semibold text-green-700">{formatCurrency(filteredBalance)} מוצג</p>
-                )}
-                {isFiltered && <span className="text-xs text-gray-300">|</span>}
-                <p className="text-xs text-gray-500">{formatCurrency(totalBalance)} יתרה כוללת</p>
-              </div>
+
+      {/* ── Gradient Hero Header ── */}
+      <div style={{
+        background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 60%, #1a9e90 100%)',
+        padding: '20px 20px 24px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* Decorative circles */}
+        <div style={{ position: 'absolute', top: -40, left: -40, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -20, right: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', pointerEvents: 'none' }} />
+
+        {/* Top row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Wallet size={18} color="#fff" />
             </div>
-            <div className="flex items-center gap-2">
-              {!isOnline && <WifiOff className="w-4 h-4 text-orange-500" />}
-              {expiredCount > 0 && !isSelectMode && (
-                <button
-                  onClick={handleArchiveExpired}
-                  className="flex items-center gap-1 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full font-medium border border-orange-200"
-                >
-                  <Archive className="w-3.5 h-3.5" />
-                  ארכב פגויים ({expiredCount})
-                </button>
-              )}
-              {!isSelectMode ? (
-                <button
-                  onClick={() => setIsSelectMode(true)}
-                  className="flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full font-medium hover:bg-gray-200"
-                >
-                  <CheckSquare className="w-3.5 h-3.5" />
-                  בחר
-                </button>
-              ) : (
-                <button
-                  onClick={exitSelectMode}
-                  className="flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full font-medium"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  ביטול
-                </button>
-              )}
+            <div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>הארנק שלי</div>
+              <div style={{ fontSize: 14, color: '#fff', fontWeight: 700 }}>{walletName || 'ארנק ראשי'}</div>
             </div>
           </div>
-
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="search"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="חיפוש לפי חנות, קוד, קטגוריה..."
-              className="w-full pr-10 pl-9 py-2.5 bg-gray-100 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-            />
-            {search && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {!isOnline && <WifiOff size={18} color="rgba(255,255,255,0.7)" />}
+            {expiredCount > 0 && !isSelectMode && (
               <button
-                onClick={() => setSearch('')}
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gray-400 text-white flex items-center justify-center hover:bg-gray-500 transition-colors"
-                aria-label="נקה חיפוש"
+                onClick={handleArchiveExpired}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
               >
-                <X className="w-3 h-3" />
+                <Archive size={13} color="#fbbf24" />
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24' }}>פגויים ({expiredCount})</span>
+              </button>
+            )}
+            <button
+              onClick={() => setSearchOpen(s => !s)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+              aria-label="חיפוש"
+            >
+              <Search size={20} color={searchOpen ? '#fff' : 'rgba(255,255,255,0.75)'} />
+            </button>
+            {!isSelectMode ? (
+              <button
+                onClick={() => setIsSelectMode(true)}
+                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Heebo, sans-serif' }}
+              >
+                <CheckSquare size={14} color="#fff" />
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>בחר</span>
+              </button>
+            ) : (
+              <button
+                onClick={exitSelectMode}
+                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Heebo, sans-serif' }}
+              >
+                <X size={14} color="#fff" />
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>ביטול</span>
               </button>
             )}
           </div>
         </div>
 
+        {/* Balance display */}
+        <div style={{ marginBottom: 14, position: 'relative' }}>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginBottom: 4, fontWeight: 500 }}>
+            {isFiltered ? 'יתרה מוצגת' : 'יתרה כוללת'}
+          </div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: '#fff', letterSpacing: '-1px', lineHeight: 1 }}>
+            {formatCurrency(isFiltered ? filteredBalance : totalBalance)}
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 5 }}>
+            {isFiltered ? `${displayVouchers.length} מתוך ${vouchers.length} שוברים` : `${vouchers.length} שוברים פעילים`}
+          </div>
+        </div>
+
+        {/* Quick stats */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
+          {expiringCount > 0 && filterTab !== 'expiring' && (
+            <button
+              onClick={() => setFilterTab('expiring')}
+              style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
+            >
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fbbf24', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{expiringCount} פגים בקרוב</span>
+            </button>
+          )}
+          {forSaleCount > 0 && (
+            <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Tag size={12} color="rgba(255,255,255,0.8)" />
+              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{forSaleCount} למכירה</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Collapsible Search Bar ── */}
+      {searchOpen && (
+        <div style={{ background: 'var(--c-surface)', padding: '10px 16px', borderBottom: '1px solid var(--c-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--c-bg)', borderRadius: 12, padding: '0 12px' }}>
+            <Search size={16} color="var(--c-text3)" />
+            <input
+              autoFocus
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="חיפוש לפי חנות, קוד, קטגוריה..."
+              style={{ flex: 1, height: 42, border: 'none', background: 'transparent', fontSize: 15, color: 'var(--c-text)', fontFamily: 'Heebo, sans-serif', outline: 'none', direction: 'rtl' }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2 }}>
+                <X size={15} color="var(--c-text3)" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sticky filter bar ── */}
+      <div className="sticky top-0 z-30" style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
         {/* Tabs */}
         {!isSelectMode && (
-          <div className="flex items-center px-4 pb-2 gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center px-4 py-2 gap-2 overflow-x-auto no-scrollbar">
             {([
               { key: 'all', label: `הכל (${vouchers.length})` },
               { key: 'expiring', label: '⚠️ פג בקרוב' },
@@ -439,7 +492,7 @@ export default function HomePage() {
 
         {/* Select mode header */}
         {isSelectMode && (
-          <div className="flex items-center px-4 pb-2 gap-2">
+          <div className="flex items-center px-4 py-2 gap-2">
             <button
               onClick={toggleSelectAll}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium bg-gray-100 text-gray-600"
@@ -453,7 +506,7 @@ export default function HomePage() {
 
         {/* Filters panel */}
         {showFilters && !isSelectMode && (
-          <div className="px-4 pb-3 border-t pt-3 bg-gray-50">
+          <div className="px-4 pb-3 border-t pt-3" style={{ background: 'var(--c-bg)' }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-gray-600">קטגוריות</span>
               <div className="flex items-center gap-2">
@@ -503,20 +556,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Expiring vouchers banner */}
-      {expiringCount > 0 && filterTab !== 'expiring' && (
-        <button
-          onClick={() => setFilterTab('expiring')}
-          className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 text-right"
-        >
-          <span className="text-lg">⚠️</span>
-          <span className="flex-1 text-sm font-medium text-orange-800">
-            יש לך {expiringCount} {expiringCount === 1 ? 'שובר שעומד לפוג' : 'שוברים שעומדים לפוג'}
-          </span>
-          <span className="text-xs text-orange-500 font-medium">הצג ←</span>
-        </button>
-      )}
-
       {/* Voucher Grid */}
       <div className="p-4 pb-36" onTouchStart={() => { (document.activeElement as HTMLElement)?.blur() }}>
         {walletError && (
@@ -528,7 +567,7 @@ export default function HomePage() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[1,2,3,4].map(i => (
-              <div key={i} className="h-32 bg-white rounded-2xl animate-pulse" />
+              <div key={i} className="h-32 gs-skeleton" style={{ borderRadius: 18 }} />
             ))}
           </div>
         ) : displayVouchers.length === 0 ? (

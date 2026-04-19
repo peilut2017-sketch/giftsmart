@@ -1,8 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Design System Tokens ─────────────────────────────────────── */
+:root {
+  --c-primary:       #16a34a;
+  --c-primary-light: #dcfce7;
+  --c-primary-mid:   #22c55e;
+  --c-primary-dark:  #15803d;
+  --c-gold:          #c8880f;
+  --c-gold-light:    #fef3d0;
+  --c-gold-mid:      #e09a12;
+  --c-bg:            #f2f4f3;
+  --c-surface:       #ffffff;
+  --c-border:        #e0e8e6;
+  --c-text:          #0f1c1a;
+  --c-text2:         #4a6260;
+  --c-text3:         #8da5a2;
+  --c-error:         #dc2626;
+  --c-warning:       #d97706;
+  --c-success:       #16a34a;
+  --c-urgent:        #ef4444;
+  --c-urgent-bg:     #fef2f2;
+  --r-card:          18px;
+  --r-btn:           12px;
+  --shadow-card:     0 1px 3px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.07);
+  --shadow-fab:      0 4px 20px rgba(22,163,74,0.40);
+  --shadow-nav:      0 -1px 0 rgba(0,0,0,0.06);
+}
 
 * {
   box-sizing: border-box;
@@ -12,8 +39,8 @@ body {
   margin: 0;
   font-family: 'Heebo', system-ui, sans-serif;
   direction: rtl;
-  background-color: #f8fafc;
-  color: #1e293b;
+  background-color: var(--c-bg);
+  color: var(--c-text);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   overflow-x: hidden;
@@ -26,150 +53,133 @@ body {
 }
 
 /* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* PWA safe area */
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
-}
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
-/* Animations */
+/* ── Animations ───────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(100%); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(1);   opacity: 1; }
   100% { transform: scale(1.4); opacity: 0; }
 }
-
-.animate-fade-in {
-  animation: fadeIn 0.2s ease-out;
+@keyframes gs-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes gs-fadeup {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes gs-pop {
+  0%   { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1);    opacity: 1; }
 }
 
-.animate-slide-up {
-  animation: slideUp 0.3s ease-out;
+.animate-fade-in  { animation: fadeIn    0.2s ease-out; }
+.animate-slide-up { animation: slideUp   0.3s ease-out; }
+.gs-fadeup        { animation: gs-fadeup 0.3s ease both; }
+.gs-pop           { animation: gs-pop    0.2s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+/* Skeleton loader */
+.gs-skeleton {
+  background: linear-gradient(90deg, #e8edec 25%, #f4f7f6 50%, #e8edec 75%);
+  background-size: 200% 100%;
+  animation: gs-shimmer 1.4s infinite;
+  border-radius: 8px;
 }
 
-/* Card hover effects */
+/* Tap press effect */
+.gs-tap { transition: transform 0.12s ease, opacity 0.12s ease; cursor: pointer; }
+.gs-tap:active { transform: scale(0.97); opacity: 0.88; }
+
+/* ── Card hover ───────────────────────────────────────────────── */
 .voucher-card {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .voucher-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.10);
 }
 
-/* Glass effect */
+/* ── Glass effect ─────────────────────────────────────────────── */
 .glass {
   backdrop-filter: blur(12px);
   background: rgba(255,255,255,0.85);
 }
 
-/* Bottom nav */
+/* ── Bottom nav ───────────────────────────────────────────────── */
 .bottom-nav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 50;
-  background: white;
-  border-top: 1px solid #e2e8f0;
+  height: 72px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0,0,0,0.06);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Expiry warning */
-.expiry-warning {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-}
+/* Expiry colours */
+.expiry-warning { background: linear-gradient(135deg, #fef3c7, #fde68a); }
+.expiry-danger  { background: linear-gradient(135deg, #fee2e2, #fecaca); }
 
-.expiry-danger {
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
-}
-
-/* Toast position */
-.Toaster > div {
-  font-family: 'Heebo', sans-serif !important;
-}
+/* Toast */
+.Toaster > div { font-family: 'Heebo', sans-serif !important; }
 
 input, select, textarea {
   font-family: 'Heebo', sans-serif;
-  font-size: 16px !important; /* prevents iOS auto-zoom — must override Tailwind text-xs/text-sm */
+  font-size: 16px !important;
 }
 
 html, body {
   overflow-x: hidden;
-  /* prevent double-tap zoom without breaking single taps */
   touch-action: manipulation;
 }
 
-/* hide scrollbar in tabs row while preserving scroll */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-/* ── Modal bottom sheets ──────────────────────────────────────────────────────
-   Ensure scroll works inside fixed modals on iOS / Android WebView.
-   - overscroll-behavior: contain  → prevents page scrolling through modal
-   - -webkit-overflow-scrolling: touch → momentum scroll on older iOS
-   Apply to any scrollable modal body (class="modal-scroll").
-────────────────────────────────────────────────────────────────────────────── */
+/* Modal scroll */
 .modal-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
 
-/* ─────────────────────────────────────────────
-   ACCESSIBILITY — skip link
-───────────────────────────────────────────── */
+/* ── Accessibility ────────────────────────────────────────────── */
 .skip-link {
-  position: absolute;
-  top: -9999px;
-  right: 0;
-  background: #166534;
-  color: #fff;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 0 0 8px 8px;
-  z-index: 9999;
-  text-decoration: none;
+  position: absolute; top: -9999px; right: 0;
+  background: #166534; color: #fff;
+  padding: 8px 16px; font-size: 14px; font-weight: 600;
+  border-radius: 0 0 8px 8px; z-index: 9999; text-decoration: none;
 }
-.skip-link:focus {
-  top: 0;
-}
+.skip-link:focus { top: 0; }
 
-/* ─────────────────────────────────────────────
-   ACCESSIBILITY — enhanced focus ring
-   Applied via body class: .a11y-focus
-───────────────────────────────────────────── */
 .a11y-focus *:focus-visible {
   outline: 3px solid #2563eb !important;
   outline-offset: 3px !important;
   border-radius: 4px;
 }
 
-/* ─────────────────────────────────────────────
-   ACCESSIBILITY — text size
-   Applied via body class: .a11y-text-md / .a11y-text-lg / .a11y-text-xl
-───────────────────────────────────────────── */
 .a11y-text-md { font-size: 106% !important; }
 .a11y-text-lg { font-size: 115% !important; }
 .a11y-text-xl { font-size: 130% !important; }
+
+/* ── Extended accessibility ───────────────────────────────────── */
 
 .a11y-text-md *, .a11y-text-lg *, .a11y-text-xl * {
   font-size: inherit;

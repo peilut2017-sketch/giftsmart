@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
-import { formatDate } from '../utils/helpers'
 import {
-  ShoppingBag, Search, Star, X, Clock, CheckCircle, Loader2,
+  ShoppingBag, Search, Star, X, CheckCircle, Loader2,
   Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
-  BadgeCheck, Bell, Plus, Trash2,
+  Bell, Plus, Trash2,
 } from 'lucide-react'
 import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem } from '../types'
 import { supabase } from '../lib/supabase'
@@ -295,64 +294,127 @@ function discountPct(balance: number | undefined, askingPrice: number): number {
 }
 
 // ─── Listing Card (marketplace browse) ───────────────────────────────────────
+const CARD_PALETTE = ['#8b5cf6','#f59e0b','#3b82f6','#ec4899','#10b981','#0ea5e9','#6366f1','#f43f5e','#a855f7','#ef4444','#84cc16','#f97316']
+function listingColor(name: string) {
+  let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return CARD_PALETTE[h % CARD_PALETTE.length]
+}
+
 function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClick: () => void }) {
   const expiryDate = listing.expiry_date ? new Date(listing.expiry_date) : null
-  const isExpiringSoon = expiryDate ? (expiryDate.getTime() - Date.now()) / 86400000 < 30 : false
+  const daysLeft = expiryDate ? Math.ceil((expiryDate.getTime() - Date.now()) / 86400000) : null
+  const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 30
+  const isExpired = daysLeft !== null && daysLeft < 0
   const pct = discountPct(listing.balance, listing.asking_price)
+  const color = listingColor(listing.store_name ?? '')
+  const sellerInitial = (listing.seller_name || listing.seller_email || '?')[0].toUpperCase()
+  const sellerLabel = listing.seller_name || listing.seller_email?.split('@')[0] || '?'
+
+  const expiryColor = isExpired ? '#ef4444' : isExpiringSoon ? '#d97706' : '#8da5a2'
+  const expiryBg = isExpired ? '#fef2f2' : isExpiringSoon ? '#fffbeb' : '#f2f4f3'
+  const expiryLabel = expiryDate
+    ? (isExpired ? 'פג תוקף' : daysLeft === 0 ? 'היום' : `${daysLeft} ימים`)
+    : ''
 
   return (
     <button
       onClick={onClick}
-      className="w-full text-right bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3 hover:shadow-md transition-shadow"
+      className="w-full text-right gs-tap"
+      style={{
+        background: 'var(--c-surface)',
+        borderRadius: 'var(--r-card)',
+        boxShadow: 'var(--shadow-card)',
+        overflow: 'hidden',
+        position: 'relative',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'block',
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 truncate">{listing.store_name}</p>
-          {listing.description && (
-            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{listing.description}</p>
-          )}
+      {/* Top color bar */}
+      <div style={{ height: 4, background: `linear-gradient(90deg, ${color}, ${color}88)` }} />
+
+      {/* Discount sticker */}
+      {pct > 0 && (
+        <div style={{
+          position: 'absolute', top: 18, left: 14,
+          background: 'var(--c-primary)',
+          color: '#fff',
+          borderRadius: '50% 50% 50% 0',
+          width: 52, height: 52,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(22,163,74,0.35)',
+          transform: 'rotate(-8deg)',
+          zIndex: 2,
+        }}>
+          <span style={{ fontSize: 15, fontWeight: 900, lineHeight: 1 }}>-{pct}%</span>
         </div>
-        <div className="text-left shrink-0 space-y-1">
-          <p className="text-lg font-bold text-green-600">₪{listing.asking_price}</p>
-          {pct > 0 && (
-            <span className={`block text-center text-xs font-bold px-2 py-0.5 rounded-full ${
-              pct >= 30 ? 'bg-green-500 text-white' : pct >= 15 ? 'bg-orange-400 text-white' : 'bg-gray-200 text-gray-600'
-            }`}>
-              חסוך {pct}%
+      )}
+
+      <div style={{ padding: pct > 0 ? '14px 14px 14px 72px' : '14px 14px 14px 14px' }}>
+        {/* Store + price */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--c-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {listing.store_name}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>
+              שובר · ₪{listing.balance}
+            </div>
+          </div>
+          <div style={{ textAlign: 'left', flexShrink: 0, marginRight: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--c-primary)', lineHeight: 1 }}>
+              ₪{listing.asking_price}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--c-text3)', textAlign: 'left', marginTop: 2, textDecoration: 'line-through' }}>
+              ₪{listing.balance}
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: 'var(--c-border)', margin: '0 0 10px' }} />
+
+        {/* Seller row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%',
+              background: color + '20', border: `1.5px solid ${color}50`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 800, color: color, flexShrink: 0,
+            }}>
+              {sellerInitial}
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text)' }}>{sellerLabel}</span>
+                {listing.is_verified_seller && (
+                  <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                )}
+              </div>
+              {(listing.avg_rating ?? 0) > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
+                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text2)' }}>{Number(listing.avg_rating).toFixed(1)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--c-text3)' }}>({listing.rating_count})</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {expiryLabel && (
+            <span style={{
+              fontSize: 11, color: expiryColor, background: expiryBg,
+              padding: '3px 8px', borderRadius: 100, fontWeight: 500,
+              border: isExpiringSoon || isExpired ? `1px solid ${expiryColor}40` : 'none',
+            }}>
+              {isExpiringSoon ? '⚠ ' : ''}{expiryLabel}
             </span>
           )}
         </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>יתרה: <span className="font-semibold text-gray-800">₪{listing.balance}</span></span>
-        {expiryDate && (
-          <span className={`flex items-center gap-1 ${isExpiringSoon ? 'text-orange-500' : ''}`}>
-            <Clock className="w-3 h-3" />
-            {formatDate(listing.expiry_date!)}
-          </span>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between border-t pt-2">
-        <div className="flex items-center gap-1.5">
-          <div className="w-6 h-6 bg-gradient-to-br from-green-400 to-teal-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {(listing.seller_name || listing.seller_email || '?')[0].toUpperCase()}
-          </div>
-          <span className="text-xs text-gray-600 truncate max-w-[120px]">
-            {listing.seller_name || listing.seller_email?.split('@')[0]}
-          </span>
-          {listing.is_verified_seller && (
-            <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-          )}
-        </div>
-        {(listing.avg_rating ?? 0) > 0 && (
-          <div className="flex items-center gap-1">
-            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-            <span className="text-xs font-medium">{Number(listing.avg_rating).toFixed(1)}</span>
-            <span className="text-xs text-gray-400">({listing.rating_count})</span>
-          </div>
-        )}
       </div>
     </button>
   )
@@ -739,43 +801,58 @@ export default function MarketplacePage() {
   }
 
   return (
-    <div className="flex-1 bg-gray-50" dir="rtl">
+    <div className="flex-1" style={{ background: 'var(--c-bg)' }} dir="rtl">
       {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <ShoppingBag className="w-6 h-6 text-green-600" />
-          <h1 className="font-bold text-xl text-gray-900 flex-1">שוק שוברים</h1>
-        </div>
-        <div className="flex border-t overflow-x-auto">
-          {([['all', 'שוק'], ['mine', 'שלי'], ['purchases', 'רכישות'], ['watchlist', 'התראות']] as const).map(([t, label]) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 min-w-[4.5rem] py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
-                tab === t ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      <div className="sticky top-0 z-20" style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
+        <div style={{ padding: '16px 20px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>מרקטפלייס</div>
+              {listings.length > 0 && (
+                <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>{listings.length} מבצעים פעילים</div>
+              )}
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 0 }}>
+            {([['all', 'שוק'], ['mine', 'שלי'], ['purchases', 'רכישות'], ['watchlist', 'התראות']] as const).map(([t, label]) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                style={{
+                  flex: 1, padding: '10px 0', border: 'none', background: 'none',
+                  cursor: 'pointer', position: 'relative', fontFamily: 'Heebo, sans-serif',
+                  fontSize: 14, fontWeight: tab === t ? 700 : 400,
+                  color: tab === t ? 'var(--c-primary)' : 'var(--c-text3)',
+                  transition: 'color 0.2s',
+                }}
+              >
+                {label}
+                {tab === t && (
+                  <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 28, height: 3, borderRadius: '3px 3px 0 0', background: 'var(--c-primary)' }} />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Search */}
       {tab === 'all' && (
-        <div className="px-4 pt-4">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <div style={{ padding: '12px 16px', background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--c-bg)', borderRadius: 12, padding: '0 12px' }}>
+            <Search size={16} color="var(--c-text3)" />
             <input
               type="text"
-              className="w-full border rounded-2xl pr-10 pl-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400"
+              style={{ flex: 1, height: 40, border: 'none', background: 'transparent', fontSize: 15, color: 'var(--c-text)', fontFamily: 'Heebo, sans-serif', outline: 'none', direction: 'rtl' }}
               placeholder="חפש לפי שם חנות..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute left-3 top-1/2 -translate-y-1/2">
-                <X className="w-4 h-4 text-gray-400" />
+              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2 }}>
+                <X size={15} color="var(--c-text3)" />
               </button>
             )}
           </div>
