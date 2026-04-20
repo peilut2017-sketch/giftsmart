@@ -18,6 +18,14 @@ import ConfirmDialog from '../components/ConfirmDialog'
 
 const QUICK_AMOUNTS = [50, 100]
 
+const CAT_COLORS: Record<string, string> = {
+  'אופנה': '#8b5cf6', 'מזון': '#f59e0b', 'אלקטרוניקה': '#3b82f6',
+  'יופי': '#ec4899', 'בית': '#10b981', 'ספורט': '#0ea5e9',
+  'נסיעות': '#6366f1', 'בידור': '#f43f5e', 'ילדים': '#a855f7',
+  'בריאות': '#22c55e', 'ספרים': '#78716c', 'מסעדות': '#ef4444',
+  'סופר': '#84cc16', 'מתנה': '#f97316', 'אחר': '#6b7280',
+}
+
 export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -366,6 +374,7 @@ export default function CheckoutPage() {
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
   const isArchived = archivedVouchers.some(v => v.id === id)
+  const catColor = CAT_COLORS[voucher.categories?.[0] || ''] || 'var(--c-primary)'
 
   // Lock gate — show blocking overlay if voucher is locked and not yet confirmed
   if (voucher.is_locked && !lockConfirmed) {
@@ -502,7 +511,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="flex-1 bg-gray-50">
+    <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
       {/* Sell modal */}
       {showSellModal && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={() => setShowSellModal(false)}>
@@ -597,57 +606,75 @@ export default function CheckoutPage() {
           onClose={() => setShowEditForm(false)}
         />
       )}
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100">
-            <ArrowRight className="w-5 h-5" />
+      {/* ── Gradient Hero Header ── */}
+      <div style={{
+        background: `linear-gradient(160deg, ${catColor}dd 0%, ${catColor}99 100%)`,
+        padding: '0 20px 24px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* decorative circles */}
+        <div style={{ position: 'absolute', top: -30, left: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', pointerEvents: 'none' }} />
+
+        {/* top bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 0 20px' }}>
+          <button onClick={() => navigate(-1)} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ArrowRight className="w-5 h-5" style={{ color: '#fff' }} />
           </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              {sv && <Star className="w-4 h-4 text-amber-400 fill-amber-400" />}
-              <h1 className="font-bold text-gray-900">{sv?.name || voucher.store_name}</h1>
-            </div>
-            {sv && <p className="text-xs text-gray-500">{voucher.store_name}</p>}
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{sv?.name || voucher.store_name}</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {!isSharedVoucher && !isArchived && (
+              <button onClick={() => setShowEditForm(true)} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Edit2 className="w-4 h-4" style={{ color: '#fff' }} />
+              </button>
+            )}
+            {!isSharedVoucher && !isArchived && !voucher.is_locked && (
+              <button onClick={() => setShowSellModal(true)} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShoppingBag className="w-4 h-4" style={{ color: '#fff' }} />
+              </button>
+            )}
+            {!isArchived && (
+              <button onClick={() => setConfirmArchive(true)} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Archive className="w-4 h-4" style={{ color: '#fff' }} />
+              </button>
+            )}
+            {!isSharedVoucher && (
+              <button onClick={() => setConfirmDelete(true)} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 className="w-4 h-4" style={{ color: 'rgba(255,100,100,0.9)' }} />
+              </button>
+            )}
           </div>
-          {!isSharedVoucher && !isArchived && (
-            <button
-              onClick={() => setShowEditForm(true)}
-              className="p-2 rounded-full hover:bg-gray-100 text-blue-500"
-              aria-label="ערוך שובר"
-            >
-              <Edit2 className="w-5 h-5" />
-            </button>
-          )}
-          {!isSharedVoucher && !isArchived && !voucher.is_locked && (
-            <button
-              onClick={() => setShowSellModal(true)}
-              className="p-2 rounded-full hover:bg-gray-100 text-green-600"
-              aria-label="הצע למכירה"
-            >
-              <ShoppingBag className="w-5 h-5" />
-            </button>
-          )}
-          {!isArchived && (
-            <button
-              onClick={() => setConfirmArchive(true)}
-              className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
-              aria-label="העבר לארכיון"
-            >
-              <Archive className="w-5 h-5" />
-            </button>
-          )}
-          {!isSharedVoucher && (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="p-2 rounded-full hover:bg-gray-100 text-red-500"
-              aria-label="מחק שובר"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          )}
+        </div>
+
+        {/* Store avatar + balance */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 18, background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 900, color: '#fff', flexShrink: 0 }}>
+            {(sv?.name || voucher.store_name).charAt(0)}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 3, fontWeight: 500 }}>יתרה נוכחית</div>
+            <div style={{ fontSize: 36, fontWeight: 900, color: '#fff', letterSpacing: '-1px', lineHeight: 1 }}>
+              {formatCurrency(voucher.balance)}
+            </div>
+            {voucher.amount > 0 && voucher.amount !== voucher.balance && (
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>
+                מתוך {formatCurrency(voucher.amount)} מקורי
+              </div>
+            )}
+            {sv && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{voucher.store_name}</div>}
+          </div>
         </div>
       </div>
+
+      {/* Lock banner */}
+      {voucher.is_locked && (
+        <div style={{ background: 'var(--c-gold-light)', borderBottom: '1px solid #f6d680', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Lock className="w-4 h-4" style={{ color: 'var(--c-gold)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-gold)' }}>
+            {voucher.lock_reason === 'for_sale' ? 'נעול — השובר מפורסם למכירה' : `נעול: ${voucher.lock_reason}`}
+          </span>
+        </div>
+      )}
 
       <div className="p-4 space-y-4 pb-32">
         {/* Offline warning for shared */}
@@ -666,7 +693,7 @@ export default function CheckoutPage() {
         )}
 
         {/* Barcode / QR */}
-        <div className="bg-white rounded-3xl shadow-sm p-6 text-center overflow-hidden">
+        <div className="text-center overflow-hidden" style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
           <div className="w-full overflow-hidden flex items-center justify-center mb-4">
             {isAlpha ? (
               <canvas ref={qrRef} className="rounded-xl" />
@@ -731,7 +758,7 @@ export default function CheckoutPage() {
         )}
 
         {/* Balance Card */}
-        <div className="bg-white rounded-3xl shadow-sm p-5">
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-gray-500">יתרה נוכחית</span>
             <div className="text-right">

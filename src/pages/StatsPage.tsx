@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
-import { BarChart2, TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap, PlusCircle, ShoppingBag, Clock, Gift, Info } from 'lucide-react'
+import { TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap, PlusCircle, ShoppingBag, Clock, Gift, Info } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
@@ -223,7 +223,7 @@ export default function StatsPage() {
   }
 
   const StatCard = ({ icon: Icon, label, value, sub, color = 'text-gray-700' }: any) => (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+    <div style={{ background: 'var(--c-surface)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-card)', border: 'none' }}>
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-50">
           <Icon className={`w-5 h-5 ${color}`} />
@@ -267,13 +267,13 @@ export default function StatsPage() {
   )
 
   return (
-    <div className="flex-1 bg-gray-50">
-      <div className="bg-white border-b px-4 py-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5" />
-            סטטיסטיקות
-          </h1>
+    <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
+      <div style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)', padding: '20px 20px 16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>סטטיסטיקות</div>
+            <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>סיכום הארנק שלך</div>
+          </div>
           {limits.canExport ? (
             <button
               onClick={exportPDF}
@@ -296,7 +296,7 @@ export default function StatsPage() {
 
       <div className="p-4 pb-24 space-y-4">
         {/* Total balance */}
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl p-6 text-white shadow-lg">
+        <div style={{ background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 60%, #1a9e90 100%)', borderRadius: 20, padding: 24, color: '#fff' }}>
           <p className="text-green-100 text-sm mb-1">יתרה פנויה כוללת</p>
           <p className="text-4xl font-bold mb-1">{formatCurrency(stats.totalBalance)}</p>
           <div className="flex items-center gap-3 text-green-100 text-sm">
@@ -309,7 +309,7 @@ export default function StatsPage() {
 
         {/* Utilization bar */}
         {stats.totalOriginal > 0 && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 16 }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">ניצול שוברים</span>
               <span className="text-sm font-bold text-gray-800">{stats.utilized}%</span>
@@ -328,7 +328,7 @@ export default function StatsPage() {
         )}
 
         {/* Activity over time */}
-        <div className="bg-white rounded-3xl shadow-sm p-5">
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
           <h3 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-500" />
             פעילות לאורך זמן
@@ -410,7 +410,7 @@ export default function StatsPage() {
 
         {/* Top stores */}
         {stats.topStores.length > 0 && (
-          <div className="bg-white rounded-3xl shadow-sm p-5">
+          <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
             <h3 className="font-semibold text-gray-700 mb-4">חנויות מובילות לפי יתרה</h3>
             <div className="space-y-3">
               {stats.topStores.map((store, i) => {
@@ -441,7 +441,7 @@ export default function StatsPage() {
 
         {/* Category chart */}
         {stats.categoryData.length > 0 && (
-          <div className="bg-white rounded-3xl shadow-sm p-5">
+          <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
             <div className="flex items-start justify-between mb-1">
               <h3 className="font-semibold text-gray-700">התפלגות לפי קטגוריה</h3>
             </div>

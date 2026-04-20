@@ -5,7 +5,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Users, Trash2, UserPlus, Zap, Crown, MessageSquare, ChevronDown, ChevronUp, Clock, Plus } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Plus, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -433,106 +433,74 @@ export default function SettingsPage() {
   )
 
   return (
-    <div className="flex-1 bg-gray-50">
-      <div className="bg-white border-b px-4 py-4">
-        <h1 className="text-xl font-bold text-gray-900">הגדרות</h1>
-      </div>
+    <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
 
-      <div className="p-4 pb-24 space-y-4">
-        {/* Profile */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">פרופיל אישי</p>
-          </div>
-
-          {!editName ? (
-            <div className="p-4 flex items-center gap-3">
-              <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center text-white font-bold text-lg">
-                  {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
-                </div>
-                {isPro && (
-                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center shadow">
-                    <Crown className="w-3 h-3 text-white" />
+      <div className="pb-24 space-y-4">
+        {/* Profile hero card */}
+        <div style={{
+          background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 100%)',
+          padding: '24px 20px 20px',
+          marginBottom: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ width: 64, height: 64, borderRadius: 20, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+              {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
+            </div>
+            <div style={{ flex: 1 }}>
+              {!editName ? (
+                <>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{profile?.name || 'ללא שם'}</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{user?.email}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, background: isPro ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: 100 }}>
+                      {isPro ? '⭐ Pro' : 'משתמש רגיל'}
+                    </span>
                   </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-gray-800">{profile?.name || 'ללא שם'}</p>
-                  {isPro ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                      <Crown className="w-3 h-3" />
-                      Pro
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                      חינמי
-                    </span>
-                  )}
+                </>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="שם מלא" style={{ height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 15, padding: '0 12px', fontFamily: 'Heebo, sans-serif', outline: 'none' }} />
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="טלפון" dir="ltr" style={{ height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 15, padding: '0 12px', fontFamily: 'Heebo, sans-serif', outline: 'none' }} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={saveProfile} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>שמור</button>
+                    <button onClick={() => setEditName(false)} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(0,0,0,0.15)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>ביטול</button>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-500 truncate">{user?.email}</p>
-                {profile?.phone && <p className="text-xs text-gray-400">{profile.phone}</p>}
-              </div>
-              <button
-                onClick={() => setEditName(true)}
-                className="text-sm text-green-600 font-medium px-3 py-1.5 bg-green-50 rounded-xl flex-shrink-0"
-              >
-                עריכה
+              )}
+            </div>
+            {!editName && (
+              <button onClick={() => setEditName(true)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 10, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Pencil className="w-4 h-4" style={{ color: '#fff' }} />
               </button>
-            </div>
-          ) : null}
-
-          {editName && (
-            <div className="p-4 space-y-3">
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="שם מלא"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-              />
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="מספר טלפון"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
-              />
-              <div className="flex gap-2">
-                <button onClick={saveProfile} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                  <Check className="w-4 h-4" /> שמור
-                </button>
-                <button onClick={() => setEditName(false)} className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                  <X className="w-4 h-4" /> ביטול
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!editName && !isPro && (
-            <button
-              onClick={() => openUpgradeSheet('שדרג לחוויה מלאה ללא הגבלות')}
-              className="mx-4 mb-4 flex items-center justify-between gap-3 w-[calc(100%-2rem)] px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow active:scale-95 transition-transform"
-            >
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4" fill="white" />
-                <div className="text-right">
-                  <p className="text-sm font-bold">שדרג ל-Pro</p>
-                  <p className="text-xs text-white/80">שוברים ללא הגבלה · ₪9/חודש</p>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 opacity-80 rotate-180" />
-            </button>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Payment Methods for Marketplace */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">שיטות תשלום בשוק</p>
+        {/* Pro upgrade card */}
+        {!isPro && (
+          <div onClick={() => openUpgradeSheet('שדרג לחוויה מלאה')} className="gs-tap" style={{
+            margin: '0 16px 4px',
+            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+            borderRadius: 18, padding: '16px 18px',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.2)',
+            cursor: 'pointer', position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg, var(--c-gold) 0%, #e8b422 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Crown className="w-5 h-5" style={{ color: '#fff' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>שדרג ל-GiftSmart Pro</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>שוברים ללא הגבלה · ₪9 לחודש</div>
+              </div>
+              <ChevronRight className="w-4 h-4 rotate-180" style={{ color: 'rgba(255,255,255,0.5)' }} />
+            </div>
           </div>
+        )}
+
+        {/* Payment Methods for Marketplace */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>שיטות תשלום בשוק</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
           <div className="p-4 space-y-3">
             <p className="text-xs text-gray-500">שיטות אלה יוצגו לקונים בעת מכירת שוברים</p>
 
@@ -602,10 +570,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Password */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">אבטחה</p>
-          </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>אבטחה</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
 
           {!editPass ? (
             <MenuItem icon={Lock} label="שינוי סיסמה" desc="עדכן את סיסמת הכניסה" onClick={() => setEditPass(true)} />
@@ -673,10 +639,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Reminder days */}
-        <div className="bg-white rounded-3xl shadow-sm p-4">
-          <div className="px-0 pb-3 border-b mb-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">תזכורת תוקף</p>
-          </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>תזכורת תוקף</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '16px' }}>
           <p className="text-sm text-gray-700 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
           <div className="flex items-center gap-3">
             <input
@@ -706,10 +670,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Accessibility widget toggle */}
-        <div className="bg-white rounded-3xl shadow-sm p-4">
-          <div className="pb-3 border-b mb-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">נגישות</p>
-          </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>נגישות</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '16px' }}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-800">הצג כפתור נגישות</p>
@@ -740,10 +702,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Voucher value feature */}
-        <div className="bg-white rounded-3xl shadow-sm p-4">
-          <div className="pb-3 border-b mb-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">תצוגת ערך שובר</p>
-          </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>תצוגת ערך שובר</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '16px' }}>
           <div className="flex items-center justify-between">
             <div className="flex-1 ml-3">
               <p className="text-sm font-medium text-gray-800">הצג ערך שוק של שוברים</p>
@@ -763,10 +723,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Tools */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">כלים</p>
-          </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>כלים</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
           <div className="divide-y divide-gray-50">
             <MenuItem
               icon={CloudUpload}
@@ -793,11 +751,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Telegram */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50 flex items-center gap-2">
-            <Send className="w-3.5 h-3.5 text-sky-500" />
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">טלגרם</p>
-          </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>טלגרם</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
 
           {telegramLinked ? (
             <div className="p-4">
@@ -874,11 +829,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Wallet sharing */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50 flex items-center gap-2">
-            <Users className="w-3.5 h-3.5 text-green-600" />
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">שיתוף הארנק שלי</p>
-          </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>שיתוף הארנק שלי</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
 
           <div className="p-4 space-y-3">
             {/* Member list */}
@@ -962,11 +914,10 @@ export default function SettingsPage() {
 
         {/* Support messages — Pro only */}
         {isPro && (
-          <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5" /> תמיכה
-              </p>
+          <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>תמיכה</div>
+          <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--c-border, rgba(0,0,0,0.06))', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }}
                 className="text-xs text-teal-600 flex items-center gap-1"
@@ -1136,11 +1087,12 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+        </>
         )}
 
         {/* Admin broadcasts */}
         {adminBroadcasts.length > 0 && (
-          <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <Bell className="w-4 h-4 text-blue-500" />
@@ -1183,7 +1135,7 @@ export default function SettingsPage() {
         <ActivityLog />
 
         {/* Sign out */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
           <MenuItem
             icon={LogOut}
             label="התנתק"

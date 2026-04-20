@@ -90,7 +90,7 @@ export default function ArchivePage() {
   }
 
   return (
-    <div className="flex-1">
+    <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
       {confirm && (
         <ConfirmDialog
           title={confirm.title}
@@ -101,17 +101,21 @@ export default function ArchivePage() {
         />
       )}
       {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-20 px-4 py-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Archive className="w-5 h-5 text-gray-400" />
-          <h1 className="text-xl font-bold text-gray-900">ארכיון</h1>
-          <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">{archivedVouchers.length}</span>
-          <div className="flex-1" />
+      <div style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)', padding: '20px 20px 16px', position: 'sticky', top: 0, zIndex: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>ארכיון</div>
+            <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>שוברים שמומשו או פגו</div>
+          </div>
           <button
             onClick={() => setShowSort(!showSort)}
-            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-              showSort ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-            }`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 12,
+              padding: '6px 12px', borderRadius: 999, fontWeight: 500,
+              background: showSort ? 'var(--c-primary-light)' : 'var(--c-bg)',
+              color: showSort ? 'var(--c-primary)' : 'var(--c-text3)',
+              border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+            }}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             {sortLabels[sortKey]}
@@ -119,14 +123,18 @@ export default function ArchivePage() {
         </div>
 
         {showSort && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             {(Object.keys(sortLabels) as SortKey[]).map(key => (
               <button
                 key={key}
                 onClick={() => { setSortKey(key); setShowSort(false) }}
-                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-                  sortKey === key ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
+                style={{
+                  fontSize: 12, padding: '6px 12px', borderRadius: 999, fontWeight: 500,
+                  background: sortKey === key ? 'var(--c-primary-light)' : 'var(--c-bg)',
+                  color: sortKey === key ? 'var(--c-primary)' : 'var(--c-text3)',
+                  border: sortKey === key ? '1px solid var(--c-primary)' : '1px solid transparent',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
               >
                 {sortLabels[key]}
               </button>
@@ -134,13 +142,16 @@ export default function ArchivePage() {
           </div>
         )}
 
-        <input
-          type="search"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="חיפוש בארכיון..."
-          className="w-full px-4 py-2.5 bg-gray-100 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--c-bg)', borderRadius: 999, padding: '8px 14px', marginTop: 12 }}>
+          <Archive style={{ width: 16, height: 16, color: 'var(--c-text3)', flexShrink: 0 }} />
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="חיפוש בארכיון..."
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 15, color: 'var(--c-text)' }}
+          />
+        </div>
       </div>
 
       <div className="p-4 pb-24">
@@ -155,39 +166,36 @@ export default function ArchivePage() {
               <div
                 key={v.id}
                 onClick={() => navigate(`/checkout/${v.id}`)}
-                className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow"
+                style={{ display: 'flex', overflow: 'hidden', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', background: 'var(--c-surface)', opacity: 0.75, cursor: 'pointer' }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-700 truncate">{v.store_name}</p>
-                    <p className="text-xs text-gray-400 font-mono mt-0.5">{v.code}</p>
+                {/* Left color strip */}
+                <div style={{ width: 5, background: '#9ca3af', flexShrink: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, padding: '12px 12px 12px 10px', gap: 12 }}>
+                  {/* Store initial avatar */}
+                  <div style={{ width: 40, height: 40, background: '#f3f4f6', color: '#9ca3af', fontSize: 16, fontWeight: 800, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {v.store_name.charAt(0)}
+                  </div>
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.store_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--c-text3)', fontFamily: 'monospace', marginTop: 2 }}>{v.code}</div>
                     {v.expiry_date && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        תוקף: {formatDate(v.expiry_date)}
-                      </p>
-                    )}
-                    {v.categories?.length > 0 && (
-                      <div className="flex gap-1 mt-1 flex-wrap">
-                        {v.categories.slice(0, 2).map(cat => (
-                          <span key={cat} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{cat}</span>
-                        ))}
-                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--c-text3)', marginTop: 2 }}>תוקף: {formatDate(v.expiry_date)}</div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mr-2">
-                    <div className="text-left">
-                      <div className="text-base font-bold text-gray-500">{formatCurrency(v.balance)}</div>
-                    </div>
+                  {/* Balance + actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text3)' }}>{formatCurrency(v.balance)}</div>
                     <button
                       onClick={e => { e.stopPropagation(); unarchiveVoucher(v.id).then(() => toast.success('הוחזר לארנק')) }}
-                      className="p-2 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+                      style={{ padding: 8, borderRadius: 10, background: 'rgba(34,197,94,0.1)', color: '#16a34a', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       title="החזר לארנק"
                     >
                       <RotateCcw className="w-4 h-4" />
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); requestDelete(v.id) }}
-                      className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                      style={{ padding: 8, borderRadius: 10, background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       title="מחיקה"
                     >
                       <Trash2 className="w-4 h-4" />
