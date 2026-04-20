@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -704,6 +704,7 @@ function MyPurchaseRow({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MarketplacePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   useAuth()
   const {
     listings, myListings, myPurchases,
@@ -713,7 +714,9 @@ export default function MarketplacePage() {
     unreadByListing, updateListingPrice,
   } = useMarketplace()
 
-  const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>('all')
+  const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>(
+    (location.state as { initialTab?: string } | null)?.initialTab as 'purchases' | undefined ?? 'all'
+  )
   const [search, setSearch] = useState('')
   type MarketSortKey = 'discount' | 'balance' | 'expiry' | 'newest'
   const [sortKey, setSortKey] = useState<MarketSortKey>('newest')

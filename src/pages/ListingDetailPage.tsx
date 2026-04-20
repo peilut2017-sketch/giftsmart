@@ -536,7 +536,7 @@ export default function ListingDetailPage() {
             <p className="font-semibold text-green-800">אישרת ששלחת תשלום!</p>
             <p className="text-sm text-green-600">המוכר יאשר את הקבלה בקרוב. עקוב אחר הסטטוס ב"רכישות שלי".</p>
             <button
-              onClick={() => navigate('/market')}
+              onClick={() => navigate('/market', { state: { initialTab: 'purchases' } })}
               className="mt-1 text-sm text-green-700 underline"
             >
               עבור לרכישות שלי

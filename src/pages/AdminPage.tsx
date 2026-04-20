@@ -170,9 +170,14 @@ export default function AdminPage() {
   const [togglingVerified, setTogglingVerified] = useState<string | null>(null)
 
   async function loadReports() {
-    if (reportsLoaded) return
+    setReportsLoaded(false)
     const { data, error } = await supabase.rpc('admin_get_reports')
-    if (!error && data) setReports(data)
+    if (error) {
+      console.error('[admin] loadReports:', error)
+      toast.error('שגיאה בטעינת דיווחים')
+    } else {
+      setReports((data as typeof reports) || [])
+    }
     setReportsLoaded(true)
   }
 
@@ -1832,7 +1837,7 @@ export default function AdminPage() {
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between px-4 py-4"
-            onClick={() => { setShowReports(!showReports); if (!showReports) loadReports() }}
+            onClick={() => { const next = !showReports; setShowReports(next); if (next) loadReports() }}
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
