@@ -374,7 +374,7 @@ export default function CheckoutPage() {
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
   const isArchived = archivedVouchers.some(v => v.id === id)
-  const catColor = CAT_COLORS[voucher.categories?.[0] || ''] || 'var(--c-primary)'
+  const catColor = CAT_COLORS[voucher.categories?.[0] || ''] || '#16a34a'
 
   // Lock gate — show blocking overlay if voucher is locked and not yet confirmed
   if (voucher.is_locked && !lockConfirmed) {
