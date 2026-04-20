@@ -4,7 +4,8 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
-import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Wallet, Tag } from 'lucide-react'
+import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag } from 'lucide-react'
+import { GiftSmartIcon } from '../components/GiftSmartLogo'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
@@ -347,12 +348,12 @@ export default function HomePage() {
         {/* Top row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Wallet size={18} color="#fff" />
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <GiftSmartIcon size={22} variant="white" />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>הארנק שלי</div>
-              <div style={{ fontSize: 14, color: '#fff', fontWeight: 700 }}>{walletName || 'ארנק ראשי'}</div>
+              <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, letterSpacing: '-0.3px' }}>GiftSmart</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>{walletName || 'ארנק ראשי'}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -607,18 +608,25 @@ export default function HomePage() {
       {/* Bulk action bar */}
       {isSelectMode && selectedIds.size > 0 && (
         <div className="fixed bottom-20 left-0 right-0 z-40 px-4">
-          <div className="bg-gray-900 text-white rounded-2xl p-3 flex items-center gap-3 shadow-xl">
-            <span className="text-sm font-medium flex-1">{selectedIds.size} שוברים נבחרו</span>
+          <div className="bg-gray-900 text-white rounded-2xl p-3 flex items-center gap-2 shadow-xl">
+            <span className="text-sm font-medium flex-1">{selectedIds.size} נבחרו</span>
+            <button
+              onClick={() => navigate('/market/bulk', { state: { voucherIds: [...selectedIds] } })}
+              className="flex items-center gap-1.5 px-3 py-2 bg-green-600 rounded-xl text-sm font-medium hover:bg-green-500"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              מכירה
+            </button>
             <button
               onClick={bulkArchive}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gray-700 rounded-xl text-sm font-medium hover:bg-gray-600"
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 rounded-xl text-sm font-medium hover:bg-gray-600"
             >
               <Archive className="w-4 h-4" />
               ארכיון
             </button>
             <button
               onClick={bulkDelete}
-              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 rounded-xl text-sm font-medium hover:bg-red-500"
+              className="flex items-center gap-1.5 px-3 py-2 bg-red-600 rounded-xl text-sm font-medium hover:bg-red-500"
             >
               <Trash2 className="w-4 h-4" />
               מחיקה

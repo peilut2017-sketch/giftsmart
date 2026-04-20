@@ -5,6 +5,30 @@ import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helper
 import { Edit2, Trash2, Archive, Star, Check, ExternalLink, Gift, Lock, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
+function StoreLogo({ name, link, color, size }: { name: string; link?: string; color: string; size: number }) {
+  const [failed, setFailed] = useState(false)
+  let src: string | null = null
+  if (link && !failed) {
+    try {
+      const hostname = new URL(link).hostname.replace(/^www\./, '')
+      src = `https://logo.clearbit.com/${hostname}`
+    } catch { /* invalid URL */ }
+  }
+  const radius = Math.round(size * 0.27)
+  if (src) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', border: `1.5px solid ${color}30`, flexShrink: 0, background: color + '08' }}>
+        <img src={src} alt={name} width={size} height={size} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={() => setFailed(true)} />
+      </div>
+    )
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: radius, background: color + '18', border: `1.5px solid ${color}30`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: Math.round(size * 0.4), flexShrink: 0 }}>
+      {(name || '?')[0].toUpperCase()}
+    </div>
+  )
+}
+
 interface Props {
   voucher: Voucher
   onClick: () => void
@@ -75,14 +99,14 @@ export default function VoucherCard({
   const actualCost   = showVoucherValue && voucher.actual_cost != null ? voucher.actual_cost : null
 
   const catColor = getCatColor(voucher.categories)
-  const storeInitial = (superVoucherName || voucher.store_name || '?')[0].toUpperCase()
 
-  // Expiry chip colours
+  // Expiry chip colours — shown for every voucher that has a date
   const expiryChip = (() => {
-    if (!voucher.expiry_date || expiryStatus === 'ok') return null
+    if (!voucher.expiry_date) return null
     if (expiryStatus === 'expired')  return { color: '#6b7280', bg: '#f3f4f6' }
     if (expiryStatus === 'critical') return { color: '#ef4444', bg: '#fef2f2' }
-    return { color: '#d97706', bg: '#fffbeb' }
+    if (expiryStatus === 'warning')  return { color: '#d97706', bg: '#fffbeb' }
+    return { color: 'var(--c-text3)', bg: 'var(--c-bg)' }
   })()
 
   function snapTo(x: number, s: 'edit' | 'delete' | null) {
@@ -201,12 +225,7 @@ export default function VoucherCard({
             )}
 
             {/* Store avatar */}
-            <div
-              className="flex-shrink-0 flex items-center justify-center text-sm font-bold"
-              style={{ width: 36, height: 36, borderRadius: 10, background: catColor + '18', color: catColor }}
-            >
-              {storeInitial}
-            </div>
+            <StoreLogo name={superVoucherName || voucher.store_name} link={voucher.link} color={catColor} size={36} />
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -289,17 +308,7 @@ export default function VoucherCard({
           {/* Top row: avatar + name + balance */}
           <div className="flex items-center gap-3">
             {/* Store avatar */}
-            <div
-              className="flex-shrink-0 flex items-center justify-center font-extrabold text-lg"
-              style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: catColor + '18',
-                border: `1.5px solid ${catColor}30`,
-                color: catColor,
-              }}
-            >
-              {storeInitial}
-            </div>
+            <StoreLogo name={superVoucherName || voucher.store_name} link={voucher.link} color={catColor} size={44} />
 
             {/* Name */}
             <div className="flex-1 min-w-0">
@@ -373,9 +382,6 @@ export default function VoucherCard({
 
             <div className="flex items-center gap-2">
               {StatusIcons}
-              {voucher.is_locked && voucher.lock_reason !== 'for_sale' && (
-                <span className="text-orange-500"><Lock className="w-3.5 h-3.5" /></span>
-              )}
             </div>
           </div>
         </div>

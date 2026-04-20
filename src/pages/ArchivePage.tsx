@@ -38,8 +38,8 @@ export default function ArchivePage() {
           return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
         })
         break
-      default: // added - newest first
-        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      default: // archived — most recently archived first
+        result.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     }
     return result
   }, [archivedVouchers, search, sortKey, hiddenIds])

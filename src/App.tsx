@@ -244,7 +244,7 @@ function AppRoutes() {
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}
       <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
-      <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto">
+      <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto overflow-x-hidden">
         <OfflineBanner />
         <main id="main-content" className="flex-1 flex flex-col">
           <Routes>

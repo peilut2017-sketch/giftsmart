@@ -5,8 +5,9 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   ShoppingBag, Search, Star, X, CheckCircle, Loader2,
   Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
-  Bell, Plus, Trash2,
+  Bell, Plus, Trash2, SlidersHorizontal,
 } from 'lucide-react'
+import { formatDate } from '../utils/helpers'
 import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem } from '../types'
 import { supabase } from '../lib/supabase'
 import ChatModal from '../components/ChatModal'
@@ -313,7 +314,7 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
   const expiryColor = isExpired ? '#ef4444' : isExpiringSoon ? '#d97706' : '#8da5a2'
   const expiryBg = isExpired ? '#fef2f2' : isExpiringSoon ? '#fffbeb' : '#f2f4f3'
   const expiryLabel = expiryDate
-    ? (isExpired ? 'פג תוקף' : daysLeft === 0 ? 'היום' : `${daysLeft} ימים`)
+    ? (isExpired ? 'פג תוקף' : daysLeft === 0 ? 'פג היום' : formatDate(listing.expiry_date))
     : ''
 
   return (
@@ -714,6 +715,9 @@ export default function MarketplacePage() {
 
   const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>('all')
   const [search, setSearch] = useState('')
+  type MarketSortKey = 'discount' | 'balance' | 'expiry' | 'newest'
+  const [sortKey, setSortKey] = useState<MarketSortKey>('newest')
+  const [showSort, setShowSort] = useState(false)
   const [ratingPurchase, setRatingPurchase] = useState<MarketplacePurchase | null>(null)
   const [reportTarget, setReportTarget] = useState<{
     userId: string; name: string; purchaseId?: string; listingId?: string
@@ -812,7 +816,49 @@ export default function MarketplacePage() {
                 <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>{listings.length} מבצעים פעילים</div>
               )}
             </div>
+            {tab === 'all' && (
+              <button
+                onClick={() => setShowSort(s => !s)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: showSort ? 'var(--c-primary-light)' : 'var(--c-bg)',
+                  border: `1.5px solid ${showSort ? 'var(--c-primary)' : 'var(--c-border)'}`,
+                  borderRadius: 10, padding: '8px 12px', cursor: 'pointer',
+                  color: showSort ? 'var(--c-primary)' : 'var(--c-text2)',
+                  fontFamily: 'Heebo, sans-serif', transition: 'all 0.15s',
+                }}
+              >
+                <SlidersHorizontal size={14} />
+                <span style={{ fontSize: 13, fontWeight: 500 }}>
+                  {sortKey === 'discount' ? 'הנחה' : sortKey === 'balance' ? 'יתרה' : sortKey === 'expiry' ? 'תפוגה' : 'חדש'}
+                </span>
+              </button>
+            )}
           </div>
+          {showSort && tab === 'all' && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingBottom: 12 }}>
+              {([
+                { key: 'newest',   label: '🕐 חדש ביותר' },
+                { key: 'discount', label: '💰 הנחה גבוהה' },
+                { key: 'balance',  label: '₪ יתרה גבוהה' },
+                { key: 'expiry',   label: '📅 פג תוקף בקרוב' },
+              ] as { key: MarketSortKey; label: string }[]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => { setSortKey(key); setShowSort(false) }}
+                  style={{
+                    fontSize: 12, padding: '6px 12px', borderRadius: 999, fontWeight: 500,
+                    background: sortKey === key ? 'var(--c-primary-light)' : 'var(--c-bg)',
+                    color: sortKey === key ? 'var(--c-primary)' : 'var(--c-text3)',
+                    border: sortKey === key ? '1px solid var(--c-primary)' : '1px solid transparent',
+                    cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'Heebo, sans-serif',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 0 }}>
@@ -861,27 +907,46 @@ export default function MarketplacePage() {
 
       <div className="p-4 space-y-3 pb-32">
         {/* ── All listings ── */}
-        {tab === 'all' && (
-          <>
-            {loadingListings && listings.length === 0 ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
-            ) : listings.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 space-y-2">
-                <Tag className="w-10 h-10 mx-auto opacity-40" />
-                <p className="font-medium">אין שוברים למכירה כרגע</p>
-                {search && <p className="text-sm">נסה לחפש מילה אחרת</p>}
-              </div>
-            ) : (
-              listings.map(l => (
-                <ListingCard
-                  key={l.id}
-                  listing={l}
-                  onClick={() => navigate(`/market/listing/${l.id}`)}
-                />
-              ))
-            )}
-          </>
-        )}
+        {tab === 'all' && (() => {
+          const sorted = [...listings].sort((a, b) => {
+            switch (sortKey) {
+              case 'discount': {
+                const pctA = a.balance && a.balance > 0 ? (a.balance - a.asking_price) / a.balance : 0
+                const pctB = b.balance && b.balance > 0 ? (b.balance - b.asking_price) / b.balance : 0
+                return pctB - pctA
+              }
+              case 'balance': return (b.balance ?? 0) - (a.balance ?? 0)
+              case 'expiry': {
+                if (!a.expiry_date && !b.expiry_date) return 0
+                if (!a.expiry_date) return 1
+                if (!b.expiry_date) return -1
+                return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+              }
+              default: return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            }
+          })
+          return (
+            <>
+              {loadingListings && listings.length === 0 ? (
+                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
+              ) : sorted.length === 0 ? (
+                <div className="text-center py-12 text-gray-400 space-y-2">
+                  <Tag className="w-10 h-10 mx-auto opacity-40" />
+                  <p className="font-medium">אין שוברים למכירה כרגע</p>
+                  {search && <p className="text-sm">נסה לחפש מילה אחרת</p>}
+                </div>
+              ) : (
+                sorted.map(l => (
+                  <ListingCard
+                    key={l.id}
+                    listing={l}
+                    onClick={() => navigate(`/market/listing/${l.id}`)}
+                  />
+                ))
+              )}
+            </>
+          )
+        })()}
 
         {/* ── My listings ── */}
         {tab === 'mine' && (
