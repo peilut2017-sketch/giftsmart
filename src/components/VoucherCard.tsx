@@ -1,24 +1,59 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
 import { Edit2, Trash2, Archive, Star, Check, ExternalLink, Gift, Lock, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
+// Module-level cache: store name / domain → logo URL (or null if not found)
+const logoCache = new Map<string, string | null>()
+
+function domainLogoUrl(link?: string): string | null {
+  if (!link) return null
+  try {
+    const h = new URL(link).hostname.replace(/^www\./, '')
+    return `https://logo.clearbit.com/${h}`
+  } catch { return null }
+}
+
 function StoreLogo({ name, link, color, size }: { name: string; link?: string; color: string; size: number }) {
-  const [failed, setFailed] = useState(false)
-  let src: string | null = null
-  if (link && !failed) {
-    try {
-      const hostname = new URL(link).hostname.replace(/^www\./, '')
-      src = `https://logo.clearbit.com/${hostname}`
-    } catch { /* invalid URL */ }
+  const initial = domainLogoUrl(link)
+  const [src, setSrc] = useState<string | null>(initial)
+  const [triedDomain, setTriedDomain] = useState(!!initial)
+
+  const searchByName = useCallback(() => {
+    const key = `n:${name.toLowerCase()}`
+    if (logoCache.has(key)) { setSrc(logoCache.get(key) ?? null); return }
+    fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(name)}`)
+      .then(r => r.json())
+      .then((data: { logo?: string }[]) => {
+        const url = data?.[0]?.logo ?? null
+        logoCache.set(key, url)
+        setSrc(url)
+      })
+      .catch(() => { logoCache.set(key, null) })
+  }, [name])
+
+  // No link → search by name on mount
+  useEffect(() => {
+    if (!initial) searchByName()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function onError() {
+    if (triedDomain) {
+      // Domain logo failed → fall back to name search
+      setTriedDomain(false)
+      searchByName()
+    } else {
+      setSrc(null)
+    }
   }
+
   const radius = Math.round(size * 0.27)
   if (src) {
     return (
-      <div style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', border: `1.5px solid ${color}30`, flexShrink: 0, background: color + '08' }}>
-        <img src={src} alt={name} width={size} height={size} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={() => setFailed(true)} />
+      <div style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', border: `1.5px solid ${color}30`, flexShrink: 0, background: '#fff' }}>
+        <img src={src} alt={name} width={size} height={size} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={onError} />
       </div>
     )
   }
