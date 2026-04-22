@@ -4,8 +4,9 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
-import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag } from 'lucide-react'
+import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store } from 'lucide-react'
 import { GiftSmartIcon } from '../components/GiftSmartLogo'
+import InStoreMode from '../components/InStoreMode'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
@@ -321,6 +322,7 @@ export default function HomePage() {
   const isFiltered = search !== '' || filterTab !== 'all' || filterCats.length > 0
   const forSaleCount = vouchers.filter(v => v.is_locked && v.lock_reason === 'for_sale').length
   const [searchOpen, setSearchOpen] = useState(false)
+  const [showInStoreMode, setShowInStoreMode] = useState(false)
 
   return (
     <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
@@ -424,6 +426,13 @@ export default function HomePage() {
               <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{forSaleCount} למכירה</span>
             </div>
           )}
+          <button
+            onClick={() => setShowInStoreMode(true)}
+            style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
+          >
+            <Store size={12} color="rgba(255,255,255,0.8)" />
+            <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>אני בחנות</span>
+          </button>
         </div>
       </div>
 
@@ -674,6 +683,18 @@ export default function HomePage() {
           voucher={editingVoucher}
           onClose={() => { setShowForm(false); setEditingVoucher(undefined) }}
           onSave={handleSave}
+        />
+      )}
+
+      {/* In-Store Mode */}
+      {showInStoreMode && (
+        <InStoreMode
+          vouchers={vouchers}
+          superVouchers={superVouchers}
+          onUpdate={async (id, balance, storeUsed) => {
+            await updateVoucher(id, { balance }, storeUsed)
+          }}
+          onClose={() => setShowInStoreMode(false)}
         />
       )}
     </div>

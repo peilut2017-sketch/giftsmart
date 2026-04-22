@@ -6,6 +6,8 @@ import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
 import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown } from 'lucide-react'
+
+type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
 import { supabase } from '../lib/supabase'
@@ -51,12 +53,15 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [smsLoading, setSmsLoading] = useState(false)
   const [showImageMenu, setShowImageMenu] = useState(false)
+  const [amountUnit, setAmountUnit] = useState<AmountUnit>('₪')
+  const [showUnitPicker, setShowUnitPicker] = useState(false)
   const geminiAvailable = isGeminiAvailable()
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const imageCameraRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
   const imageMenuRef = useRef<HTMLDivElement>(null)
   const operatorPickerRef = useRef<HTMLDivElement>(null)
+  const unitPickerRef = useRef<HTMLDivElement>(null)
 
   // Operator quick-fill
   const [operators, setOperators] = useState<{ id: string; name: string; url: string }[]>([])
@@ -93,6 +98,22 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       document.removeEventListener('touchstart', onOutside)
     }
   }, [showOperatorPicker])
+
+  // Close unit picker on outside click
+  useEffect(() => {
+    if (!showUnitPicker) return
+    function onOutside(e: MouseEvent | TouchEvent) {
+      if (unitPickerRef.current && !unitPickerRef.current.contains(e.target as Node)) {
+        setShowUnitPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', onOutside)
+    document.addEventListener('touchstart', onOutside)
+    return () => {
+      document.removeEventListener('mousedown', onOutside)
+      document.removeEventListener('touchstart', onOutside)
+    }
+  }, [showUnitPicker])
 
   async function openOperatorPicker() {
     if (!operatorsLoaded) {
@@ -511,15 +532,43 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           {/* Amount + Balance / Usage */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700 mb-1 block">סכום מקורי (₪)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700">
+                  {amountUnit === 'פריט' ? 'פריט / שירות' : `סכום מקורי (${amountUnit})`}
+                </label>
+                <div className="relative" ref={unitPickerRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowUnitPicker(v => !v)}
+                    className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-xs font-semibold"
+                  >
+                    {amountUnit}
+                    <ChevronDown className="w-2.5 h-2.5" />
+                  </button>
+                  {showUnitPicker && (
+                    <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 min-w-[70px]">
+                      {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => { setAmountUnit(u); setShowUnitPicker(false) }}
+                          className={`w-full px-3 py-1.5 text-xs text-right hover:bg-gray-50 ${amountUnit === u ? 'text-green-600 font-semibold' : 'text-gray-700'}`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               <input
                 id="vf-amount"
-                type="number"
+                type={amountUnit === 'פריט' ? 'text' : 'number'}
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                placeholder="0"
+                placeholder={amountUnit === 'פריט' ? 'שם פריט...' : '0'}
                 className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
+                dir={amountUnit === 'פריט' ? 'rtl' : 'ltr'}
               />
             </div>
             {voucher ? (

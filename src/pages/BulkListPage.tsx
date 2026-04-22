@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -16,14 +16,19 @@ interface VoucherEntry {
 
 export default function BulkListPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { profile } = useAuth()
   const { vouchers } = useVouchers()
   const { listForSale } = useMarketplace()
 
   const listable = vouchers.filter(v => !v.is_archived && !v.is_locked && v.balance > 0)
 
+  const preselectedIds = new Set<string>(
+    (location.state as { voucherIds?: string[] } | null)?.voucherIds ?? []
+  )
+
   const [entries, setEntries] = useState<VoucherEntry[]>(
-    listable.map(v => ({ voucher: v, selected: false, price: '', description: '' }))
+    listable.map(v => ({ voucher: v, selected: preselectedIds.has(v.id), price: '', description: '' }))
   )
   const [submitting, setSubmitting] = useState(false)
   const [results, setResults] = useState<{ id: string; store: string; ok: boolean; error?: string }[]>([])

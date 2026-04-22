@@ -935,12 +935,12 @@ export default function SettingsPage() {
                     value={supportSubject}
                     onChange={e => setSupportSubject(e.target.value)}
                     placeholder="נושא"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+                    className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
                   />
                   <select
                     value={supportCategory}
                     onChange={e => setSupportCategory(e.target.value)}
-                    className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+                    className="shrink-0 w-28 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
                   >
                     <option value="general">💬 כללי</option>
                     <option value="billing">💳 חיוב</option>
