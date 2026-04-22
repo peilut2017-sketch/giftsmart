@@ -135,6 +135,11 @@ export default function VoucherCard({
 
   const catColor = getCatColor(voucher.categories)
 
+  // Detect item-mode vouchers saved with "📦 " prefix in notes
+  const itemLabel = voucher.notes?.startsWith('📦 ')
+    ? voucher.notes.split('\n')[0].slice('📦 '.length)
+    : null
+
   // Expiry chip colours — shown for every voucher that has a date
   const expiryChip = (() => {
     if (!voucher.expiry_date) return null
@@ -288,9 +293,17 @@ export default function VoucherCard({
                 </span>
               )}
               <div className="text-left">
-                <div className="text-base font-bold" style={{ color: 'var(--c-text)' }}>{formatCurrency(voucher.balance)}</div>
-                {valuePercent && (
-                  <div className="text-xs" style={{ color: 'var(--c-text3)' }}>ערך {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}</div>
+                {itemLabel ? (
+                  <div className="text-sm font-semibold leading-tight max-w-[90px] truncate" style={{ color: 'var(--c-text)' }}>
+                    📦 {itemLabel}
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-base font-bold" style={{ color: 'var(--c-text)' }}>{formatCurrency(voucher.balance)}</div>
+                    {valuePercent && (
+                      <div className="text-xs" style={{ color: 'var(--c-text3)' }}>ערך {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -369,20 +382,31 @@ export default function VoucherCard({
               )}
             </div>
 
-            {/* Balance */}
-            <div className="text-left flex-shrink-0">
-              <div className="font-extrabold" style={{ fontSize: 22, letterSpacing: '-0.5px', lineHeight: 1, color: 'var(--c-text)' }}>
-                {formatCurrency(voucher.balance)}
-              </div>
-              {voucher.amount !== voucher.balance && (
-                <div className="text-right mt-0.5" style={{ fontSize: 11, color: 'var(--c-text3)', textDecoration: 'line-through' }}>
-                  {formatCurrency(voucher.amount)}
+            {/* Balance / Item */}
+            <div className="text-left flex-shrink-0 max-w-[110px]">
+              {itemLabel ? (
+                <div className="text-right">
+                  <div style={{ fontSize: 18, lineHeight: 1 }}>📦</div>
+                  <div className="text-sm font-semibold mt-0.5 leading-tight" style={{ color: 'var(--c-text2)', wordBreak: 'break-word', maxWidth: 90 }}>
+                    {itemLabel}
+                  </div>
                 </div>
-              )}
-              {valuePercent && (
-                <div className="text-xs text-right mt-0.5" style={{ color: 'var(--c-text3)' }}>
-                  ערך {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}
-                </div>
+              ) : (
+                <>
+                  <div className="font-extrabold" style={{ fontSize: 22, letterSpacing: '-0.5px', lineHeight: 1, color: 'var(--c-text)' }}>
+                    {formatCurrency(voucher.balance)}
+                  </div>
+                  {voucher.amount !== voucher.balance && (
+                    <div className="text-right mt-0.5" style={{ fontSize: 11, color: 'var(--c-text3)', textDecoration: 'line-through' }}>
+                      {formatCurrency(voucher.amount)}
+                    </div>
+                  )}
+                  {valuePercent && (
+                    <div className="text-xs text-right mt-0.5" style={{ color: 'var(--c-text3)' }}>
+                      ערך {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
