@@ -324,6 +324,58 @@ export default function HomePage() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [showInStoreMode, setShowInStoreMode] = useState(false)
 
+  // Smart FAB state
+  const [fabOpen, setFabOpen] = useState(false)
+  const fabRef = useRef<HTMLDivElement>(null)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFired = useRef(false)
+
+  useEffect(() => {
+    if (!fabOpen) return
+    function onOutside(e: MouseEvent | TouchEvent) {
+      if (fabRef.current && !fabRef.current.contains(e.target as Node)) {
+        setFabOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onOutside)
+    document.addEventListener('touchstart', onOutside)
+    return () => {
+      document.removeEventListener('mousedown', onOutside)
+      document.removeEventListener('touchstart', onOutside)
+    }
+  }, [fabOpen])
+
+  function openAddForm() {
+    if (vouchers.length >= limits.maxVouchers) {
+      openUpgradeSheet(`הגעת למגבלת ${limits.maxVouchers} השוברים בחינמי`)
+      return
+    }
+    setFabOpen(false)
+    setEditingVoucher(undefined)
+    setShowForm(true)
+  }
+
+  function handleFabPointerDown(e: React.PointerEvent) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    longPressFired.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      openAddForm()
+    }, 500)
+  }
+
+  function handleFabPointerUp() {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    if (!longPressFired.current) {
+      if (fabOpen) openAddForm()
+      else setFabOpen(true)
+    }
+  }
+
+  function handleFabPointerLeave() {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+  }
+
   return (
     <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
       {confirm && (
@@ -376,15 +428,7 @@ export default function HomePage() {
             >
               <Search size={20} color={searchOpen ? '#fff' : 'rgba(255,255,255,0.75)'} />
             </button>
-            {!isSelectMode ? (
-              <button
-                onClick={() => setIsSelectMode(true)}
-                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Heebo, sans-serif' }}
-              >
-                <CheckSquare size={14} color="#fff" />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>בחר</span>
-              </button>
-            ) : (
+            {isSelectMode && (
               <button
                 onClick={exitSelectMode}
                 style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Heebo, sans-serif' }}
@@ -426,13 +470,6 @@ export default function HomePage() {
               <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{forSaleCount} למכירה</span>
             </div>
           )}
-          <button
-            onClick={() => setShowInStoreMode(true)}
-            style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
-          >
-            <Store size={12} color="rgba(255,255,255,0.8)" />
-            <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>אני בחנות</span>
-          </button>
         </div>
       </div>
 
@@ -644,10 +681,33 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* FAB */}
+      {/* Smart FAB */}
       {!isSelectMode && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-40 flex flex-col items-center gap-1">
-          {limits.maxVouchers < Infinity && vouchers.length >= limits.maxVouchers - 3 && (
+        <div ref={fabRef} className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-40 flex flex-col items-center gap-2">
+
+          {/* Speed-dial actions */}
+          {fabOpen && (
+            <div className="flex flex-col items-center gap-2 mb-1">
+              {[
+                { icon: <Search className="w-4 h-4" />,       label: 'חיפוש',        delay: '0.12s', action: () => { setSearchOpen(true); setFabOpen(false) } },
+                { icon: <Store className="w-4 h-4" />,        label: 'אני בחנות',    delay: '0.06s', action: () => { setShowInStoreMode(true); setFabOpen(false) } },
+                { icon: <CheckSquare className="w-4 h-4" />,  label: 'בחירה מרובה', delay: '0s',    action: () => { setIsSelectMode(true); setFabOpen(false) } },
+              ].map(({ icon, label, delay, action }) => (
+                <button
+                  key={label}
+                  onClick={action}
+                  className="speed-dial-item flex items-center gap-2 bg-white rounded-full shadow-lg px-4 py-2.5 text-gray-700 text-sm font-medium hover:bg-gray-50 active:scale-95 transition-transform"
+                  style={{ animationDelay: delay }}
+                >
+                  {icon}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Upgrade badge */}
+          {limits.maxVouchers < Infinity && vouchers.length >= limits.maxVouchers - 3 && !fabOpen && (
             <button
               onClick={() => openUpgradeSheet()}
               className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 shadow"
@@ -655,21 +715,19 @@ export default function HomePage() {
               {vouchers.length}/{limits.maxVouchers} שוברים
             </button>
           )}
+
+          {/* Main FAB — tap to open menu (or confirm add when menu open); long-press to add directly */}
           <button
-            onClick={() => {
-              if (vouchers.length >= limits.maxVouchers) {
-                openUpgradeSheet(`הגעת למגבלת ${limits.maxVouchers} השוברים בחינמי`)
-                return
-              }
-              setEditingVoucher(undefined)
-              setShowForm(true)
-            }}
-            className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full shadow-xl flex items-center justify-center hover:shadow-2xl transition-all active:scale-95"
+            onPointerDown={handleFabPointerDown}
+            onPointerUp={handleFabPointerUp}
+            onPointerLeave={handleFabPointerLeave}
+            onContextMenu={e => e.preventDefault()}
+            className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full shadow-xl flex items-center justify-center hover:shadow-2xl transition-all active:scale-95 select-none"
+            style={{ touchAction: 'manipulation' }}
+            aria-label={fabOpen ? 'הוסף שובר' : 'פתח תפריט'}
           >
             <svg viewBox="0 0 28 28" className="w-7 h-7" fill="none">
-              {/* diamond / gift-tag frame */}
               <rect x="6" y="6" width="16" height="16" rx="3" transform="rotate(45 14 14)" stroke="white" strokeWidth="2" fill="none"/>
-              {/* plus sign */}
               <line x1="14" y1="9" x2="14" y2="19" stroke="white" strokeWidth="2" strokeLinecap="round"/>
               <line x1="9" y1="14" x2="19" y2="14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
             </svg>
