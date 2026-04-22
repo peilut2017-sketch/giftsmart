@@ -694,6 +694,7 @@ export default function HomePage() {
           onUpdate={async (id, balance, storeUsed) => {
             await updateVoucher(id, { balance }, storeUsed)
           }}
+          onNavigate={id => { setShowInStoreMode(false); navigate(`/checkout/${id}`) }}
           onClose={() => setShowInStoreMode(false)}
         />
       )}

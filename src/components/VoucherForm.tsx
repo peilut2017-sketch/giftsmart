@@ -344,6 +344,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         ? Math.max(0, (voucher.balance ?? 0) - used)
         : (parseFloat(balance) || parsedAmount || 0)
 
+      // For item-mode: prepend the item name to notes
+      let notesValue = notes.trim()
+      if (amountUnit === 'פריט' && amount.trim()) {
+        notesValue = `📦 ${amount.trim()}${notesValue ? '\n' + notesValue : ''}`
+      }
+
       const v = {
         store_name: storeName,
         amount: parsedAmount,
@@ -355,7 +361,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         expiry_date: expiryDate || undefined,
         categories: selectedCats,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-        notes: notes.trim() || undefined,
+        notes: notesValue || undefined,
         link: link.trim() || undefined,
         source: source.trim() || undefined,
         is_archived: false,
@@ -564,6 +570,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <input
                 id="vf-amount"
                 type={amountUnit === 'פריט' ? 'text' : 'number'}
+                inputMode={amountUnit === 'פריט' ? undefined : 'decimal'}
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder={amountUnit === 'פריט' ? 'שם פריט...' : '0'}

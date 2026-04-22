@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react'
-import { X, Search, ShoppingCart, Check } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { X, Search, ShoppingCart, Check, QrCode, ArrowUpLeft } from 'lucide-react'
+import JsBarcode from 'jsbarcode'
+import QRCodeLib from 'qrcode'
 import type { Voucher, SuperVoucher } from '../types'
 import toast from 'react-hot-toast'
 
@@ -7,6 +9,7 @@ interface Props {
   vouchers: Voucher[]
   superVouchers: SuperVoucher[]
   onUpdate: (id: string, balance: number, storeUsed?: string | null) => Promise<void>
+  onNavigate: (id: string) => void
   onClose: () => void
 }
 
@@ -22,11 +25,52 @@ function sortGroup(vs: Voucher[]) {
   })
 }
 
-export default function InStoreMode({ vouchers, superVouchers, onUpdate, onClose }: Props) {
+function isAlphanumericCode(code: string) {
+  return /[a-zA-Z]/.test(code)
+}
+
+function BarcodeDisplay({ code }: { code: string }) {
+  const barcodeRef = useRef<SVGSVGElement>(null)
+  const qrRef = useRef<HTMLCanvasElement>(null)
+  const isAlpha = isAlphanumericCode(code)
+
+  useEffect(() => {
+    if (!code) return
+    if (!isAlpha && barcodeRef.current) {
+      try {
+        JsBarcode(barcodeRef.current, code, {
+          format: 'CODE128',
+          width: 2,
+          height: 60,
+          displayValue: false,
+          margin: 8,
+        })
+      } catch {}
+    }
+    if (isAlpha && qrRef.current) {
+      QRCodeLib.toCanvas(qrRef.current, code, {
+        width: 180,
+        margin: 2,
+        color: { dark: '#1e293b', light: '#ffffff' },
+      }).catch(() => {})
+    }
+  }, [code, isAlpha])
+
+  return (
+    <div className="flex justify-center py-2">
+      {!isAlpha
+        ? <svg ref={barcodeRef} className="max-w-full" />
+        : <canvas ref={qrRef} className="rounded-lg" />}
+    </div>
+  )
+}
+
+export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavigate, onClose }: Props) {
   const [search, setSearch] = useState('')
   const [payments, setPayments] = useState<Record<string, string>>({})
   const [transactionTotal, setTransactionTotal] = useState(0)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [expandedBarcode, setExpandedBarcode] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -63,6 +107,10 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onClose
     } finally {
       setUpdating(null)
     }
+  }
+
+  function toggleBarcode(id: string) {
+    setExpandedBarcode(prev => prev === id ? null : id)
   }
 
   return (
@@ -106,7 +154,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onClose
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="חפש חנות..."
-            className="flex-1 bg-transparent text-white text-sm focus:outline-none"
+            className="flex-1 bg-transparent text-sm focus:outline-none"
             style={{ color: '#fff' }}
           />
           {search && (
@@ -136,9 +184,12 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onClose
                 key={v.id}
                 voucher={v}
                 payment={payments[v.id] || ''}
+                barcodeOpen={expandedBarcode === v.id}
                 onPaymentChange={val => setPayments(p => ({ ...p, [v.id]: val }))}
                 onFill={() => setPayments(p => ({ ...p, [v.id]: v.balance.toString() }))}
                 onUpdate={() => handleUpdate(v)}
+                onToggleBarcode={() => toggleBarcode(v.id)}
+                onNavigate={() => onNavigate(v.id)}
                 updating={updating === v.id}
               />
             ))}
@@ -150,9 +201,12 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onClose
                 key={v.id}
                 voucher={v}
                 payment={payments[v.id] || ''}
+                barcodeOpen={expandedBarcode === v.id}
                 onPaymentChange={val => setPayments(p => ({ ...p, [v.id]: val }))}
                 onFill={() => setPayments(p => ({ ...p, [v.id]: v.balance.toString() }))}
                 onUpdate={() => handleUpdate(v)}
+                onToggleBarcode={() => toggleBarcode(v.id)}
+                onNavigate={() => onNavigate(v.id)}
                 updating={updating === v.id}
               />
             ))}
@@ -163,56 +217,104 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onClose
   )
 }
 
-function VoucherRow({ voucher: v, payment, onPaymentChange, onFill, onUpdate, updating }: {
+function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill, onUpdate, onToggleBarcode, onNavigate, updating }: {
   voucher: Voucher
   payment: string
+  barcodeOpen: boolean
   onPaymentChange: (val: string) => void
   onFill: () => void
   onUpdate: () => void
+  onToggleBarcode: () => void
+  onNavigate: () => void
   updating: boolean
 }) {
   const isEmpty = v.balance <= 0
+
+  async function copyCode() {
+    await navigator.clipboard.writeText(v.code).catch(() => {})
+    toast.success('קוד הועתק')
+  }
+
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm p-3 flex items-center gap-3 transition-opacity ${isEmpty ? 'opacity-40' : ''}`}>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-gray-900 text-sm truncate">{v.store_name}</p>
-        <p className={`text-xs font-bold ${isEmpty ? 'text-gray-400' : 'text-green-600'}`}>
-          ₪{v.balance.toLocaleString('he-IL')}
-        </p>
-        {v.expiry_date && (
-          <p className="text-xs text-gray-400">{v.expiry_date.slice(0, 10)}</p>
+    <div className={`bg-white rounded-2xl border shadow-sm transition-opacity ${isEmpty ? 'opacity-50' : ''}`}>
+      {/* Top row: store info + payment controls */}
+      <div className="p-3 flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-900 text-sm truncate">{v.store_name}</p>
+          <p className={`text-xs font-bold ${isEmpty ? 'text-gray-400' : 'text-green-600'}`}>
+            ₪{v.balance.toLocaleString('he-IL')}
+          </p>
+          {v.expiry_date && (
+            <p className="text-xs text-gray-400">{v.expiry_date.slice(0, 10)}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input
+            type="number"
+            inputMode="decimal"
+            value={payment}
+            onChange={e => onPaymentChange(e.target.value)}
+            placeholder="₪"
+            disabled={isEmpty}
+            min={0}
+            max={v.balance}
+            className="w-16 px-2 py-1.5 border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-300 disabled:opacity-40"
+            dir="ltr"
+          />
+          <button
+            type="button"
+            onClick={onFill}
+            disabled={isEmpty}
+            className="px-2.5 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 disabled:opacity-40 font-medium"
+          >
+            מלא
+          </button>
+          <button
+            type="button"
+            onClick={onUpdate}
+            disabled={isEmpty || updating || !payment}
+            className="px-2.5 py-1.5 text-xs bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-40 font-medium flex items-center justify-center"
+          >
+            {updating ? '...' : <Check className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Code row */}
+      <div className="px-3 pb-2.5 flex items-center gap-2 border-t border-gray-50 pt-2">
+        <button
+          onClick={copyCode}
+          className="flex-1 min-w-0 text-right"
+        >
+          <span className="font-mono text-xs text-gray-700 tracking-wider bg-gray-50 px-2.5 py-1 rounded-lg inline-block truncate max-w-full">
+            {v.code}
+          </span>
+        </button>
+        {v.cvv && (
+          <span className="text-xs text-gray-400 shrink-0">CVV: <span className="font-mono font-semibold text-gray-600">{v.cvv}</span></span>
         )}
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <input
-          type="number"
-          inputMode="decimal"
-          value={payment}
-          onChange={e => onPaymentChange(e.target.value)}
-          placeholder="₪"
-          disabled={isEmpty}
-          min={0}
-          max={v.balance}
-          className="w-16 px-2 py-1.5 border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-300 disabled:opacity-40"
-          dir="ltr"
-        />
         <button
-          type="button"
-          onClick={onFill}
-          disabled={isEmpty}
-          className="px-2.5 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 disabled:opacity-40 font-medium"
+          onClick={onToggleBarcode}
+          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium shrink-0 transition-colors ${barcodeOpen ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
         >
-          מלא
+          <QrCode className="w-3 h-3" />
+          {barcodeOpen ? 'סגור' : 'ברקוד'}
         </button>
         <button
-          type="button"
-          onClick={onUpdate}
-          disabled={isEmpty || updating || !payment}
-          className="px-2.5 py-1.5 text-xs bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-40 font-medium flex items-center justify-center"
+          onClick={onNavigate}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 shrink-0"
+          title="עבור לשובר"
         >
-          {updating ? '...' : <Check className="w-3.5 h-3.5" />}
+          <ArrowUpLeft className="w-3 h-3" />
         </button>
       </div>
+
+      {/* Barcode panel */}
+      {barcodeOpen && (
+        <div className="border-t border-gray-100 bg-gray-50 rounded-b-2xl overflow-hidden">
+          <BarcodeDisplay code={v.code} />
+        </div>
+      )}
     </div>
   )
 }
