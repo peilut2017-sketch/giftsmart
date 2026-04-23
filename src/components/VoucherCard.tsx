@@ -324,6 +324,7 @@ export default function VoucherCard({
   // ─── CARD MODE ─────────────────────────────────────────────────────────────
   return (
     <div
+      data-guide="voucher-card"
       className={`relative voucher-card overflow-hidden ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''}`}
       style={{ borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)' }}
     >

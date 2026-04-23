@@ -28,6 +28,7 @@ import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import { isBiometricEnabled } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
+import OnboardingGuide from './components/OnboardingGuide'
 import { Component, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 
@@ -264,6 +265,7 @@ function AppRoutes() {
         <BottomNav />
       </div>
       {widgetEnabled && <AccessibilityWidget />}
+      <OnboardingGuide />
     </MarketplaceProvider>
     </VoucherProvider>
     </SubscriptionProvider>

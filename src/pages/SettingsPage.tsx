@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Plus, Pencil } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Plus, Pencil, BookOpen } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -48,6 +49,7 @@ interface WalletMemberRow {
 }
 
 export default function SettingsPage() {
+  const navigate = useNavigate()
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember } = useVouchers()
@@ -1133,6 +1135,20 @@ export default function SettingsPage() {
 
         {/* Activity log */}
         <ActivityLog />
+
+        {/* Onboarding guide */}
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
+          <MenuItem
+            icon={BookOpen}
+            label="מדריך שימוש"
+            desc="הצג מחדש את מדריך הפיצ׳רים"
+            onClick={() => {
+              localStorage.removeItem('onboarding_seen_v2')
+              navigate('/')
+              setTimeout(() => window.dispatchEvent(new Event('show-onboarding')), 120)
+            }}
+          />
+        </div>
 
         {/* Sign out */}
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>

@@ -496,7 +496,7 @@ export default function HomePage() {
       )}
 
       {/* ── Sticky filter bar ── */}
-      <div className="sticky top-0 z-30" style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
+      <div data-guide="filter-bar" className="sticky top-0 z-30" style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
         {/* Tabs */}
         {!isSelectMode && (
           <div className="flex items-center px-4 py-2 gap-2 overflow-x-auto no-scrollbar">
@@ -718,6 +718,7 @@ export default function HomePage() {
 
           {/* Main FAB — tap to open menu (or confirm add when menu open); long-press to add directly */}
           <button
+            data-guide="fab"
             onPointerDown={handleFabPointerDown}
             onPointerUp={handleFabPointerUp}
             onPointerLeave={handleFabPointerLeave}

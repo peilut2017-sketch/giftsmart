@@ -30,6 +30,7 @@ export default function BottomNav() {
               onClick={() => nav(item.path)}
               aria-label={item.label}
               aria-current={active ? 'page' : undefined}
+              {...(item.path === '/market' ? { 'data-guide': 'market-nav' } : {})}
               className="relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-inset"
             >
               {/* Active pill background */}
