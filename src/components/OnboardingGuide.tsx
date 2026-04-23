@@ -174,20 +174,21 @@ function getSpotlightStyle(rect: DOMRect, padding: number): React.CSSProperties 
 
 function getTooltipStyle(rect: DOMRect | null, tipSide?: 'top' | 'bottom'): React.CSSProperties {
   const margin = 12
+  const maxW = `min(${TOOLTIP_W}px, calc(100vw - ${margin * 2}px))`
   if (!rect) {
     return {
       position: 'fixed',
       top: '50%',
       left: '50%',
       transform: 'translate(-50%, -50%)',
-      width: TOOLTIP_W,
+      width: maxW,
       zIndex: 10000,
     }
   }
 
   const vH = window.innerHeight
-  const vW = window.innerWidth
-  const clampedLeft = Math.max(margin, Math.min(vW - TOOLTIP_W - margin, rect.left + rect.width / 2 - TOOLTIP_W / 2))
+  const idealLeft = rect.left + rect.width / 2 - TOOLTIP_W / 2
+  const clampedLeft = `clamp(${margin}px, ${idealLeft}px, calc(100vw - ${TOOLTIP_W}px - ${margin}px))`
 
   const goAbove = tipSide === 'top' || (!tipSide && rect.bottom > vH * 0.55)
 
@@ -196,7 +197,7 @@ function getTooltipStyle(rect: DOMRect | null, tipSide?: 'top' | 'bottom'): Reac
       position: 'fixed',
       bottom: vH - rect.top + margin,
       left: clampedLeft,
-      width: TOOLTIP_W,
+      width: maxW,
       zIndex: 10000,
     }
   }
@@ -204,7 +205,7 @@ function getTooltipStyle(rect: DOMRect | null, tipSide?: 'top' | 'bottom'): Reac
     position: 'fixed',
     top: rect.bottom + margin,
     left: clampedLeft,
-    width: TOOLTIP_W,
+    width: maxW,
     zIndex: 10000,
   }
 }
