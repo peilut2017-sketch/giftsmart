@@ -151,12 +151,31 @@ body {
   right: 0;
   z-index: 50;
   height: calc(72px + env(safe-area-inset-bottom));
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(0,0,0,0.06);
+  /* Liquid glass base */
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  /* Glass rim: top specular highlight (light refracting on glass edge) */
+  border-top: none;
+  box-shadow:
+    0 -0.5px 0 0 rgba(255,255,255,0.85),
+    inset 0 1px 0 0 rgba(255,255,255,0.6),
+    0 -8px 32px 0 rgba(0,0,0,0.06);
   padding-bottom: env(safe-area-inset-bottom);
   overflow: hidden;
+}
+
+/* Subtle noise texture overlay gives the "frosted" depth */
+.bottom-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.18) 0%,
+    rgba(255,255,255,0.04) 100%
+  );
+  pointer-events: none;
 }
 
 /* Expiry colours */

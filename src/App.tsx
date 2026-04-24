@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import AnimatedRoutes from './components/AnimatedRoutes'
 import toast, { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
@@ -247,8 +248,8 @@ function AppRoutes() {
       <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
       <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto overflow-x-hidden">
         <OfflineBanner />
-        <main id="main-content" className="flex-1 flex flex-col">
-          <Routes>
+        <main id="main-content" className="flex-1 flex flex-col overflow-hidden">
+          <AnimatedRoutes>
             <Route path="/" element={<HomePage />} />
             <Route path="/checkout/:id" element={<CheckoutPage />} />
             <Route path="/archive" element={<ArchivePage />} />
@@ -260,7 +261,7 @@ function AppRoutes() {
             <Route path="/market/listing/:id" element={<ListingDetailPage />} />
             <Route path="/market/bulk" element={<BulkListPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          </AnimatedRoutes>
         </main>
         <BottomNav />
       </div>
