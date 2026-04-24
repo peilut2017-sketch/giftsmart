@@ -51,7 +51,7 @@ interface WalletMemberRow {
 export default function SettingsPage() {
   const navigate = useNavigate()
   const { user, profile, signOut, updateProfile } = useAuth()
-  const { isPro, openUpgradeSheet } = useSubscription()
+  const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember } = useVouchers()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
@@ -453,10 +453,15 @@ export default function SettingsPage() {
                 <>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{profile?.name || 'ללא שם'}</div>
                   <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{user?.email}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, background: isPro ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: 100 }}>
                       {isPro ? '⭐ Pro' : 'משתמש רגיל'}
                     </span>
+                    {isPro && proExpiryDate && (
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
+                        פעיל עד {new Date(proExpiryDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
+                    )}
                   </div>
                 </>
               ) : (

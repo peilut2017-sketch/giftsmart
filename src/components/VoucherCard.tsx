@@ -1,64 +1,27 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
 import { Edit2, Trash2, Archive, Star, Check, ExternalLink, Gift, Lock, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-// Module-level cache: store name / domain → logo URL (or null if not found)
-const logoCache = new Map<string, string | null>()
+const STORE_PALETTE = [
+  '#8b5cf6', '#f59e0b', '#3b82f6', '#ec4899', '#10b981',
+  '#0ea5e9', '#6366f1', '#f43f5e', '#a855f7', '#22c55e',
+  '#ef4444', '#f97316', '#84cc16', '#06b6d4', '#e11d48',
+]
 
-function domainLogoUrl(link?: string): string | null {
-  if (!link) return null
-  try {
-    const h = new URL(link).hostname.replace(/^www\./, '')
-    return `https://logo.clearbit.com/${h}`
-  } catch { return null }
+function storeColor(name: string): string {
+  let h = 0
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return STORE_PALETTE[h % STORE_PALETTE.length]
 }
 
-function StoreLogo({ name, link, color, size }: { name: string; link?: string; color: string; size: number }) {
-  const initial = domainLogoUrl(link)
-  const [src, setSrc] = useState<string | null>(initial)
-  const [triedDomain, setTriedDomain] = useState(!!initial)
-
-  const searchByName = useCallback(() => {
-    const key = `n:${name.toLowerCase()}`
-    if (logoCache.has(key)) { setSrc(logoCache.get(key) ?? null); return }
-    fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(name)}`)
-      .then(r => r.json())
-      .then((data: { logo?: string }[]) => {
-        const url = data?.[0]?.logo ?? null
-        logoCache.set(key, url)
-        setSrc(url)
-      })
-      .catch(() => { logoCache.set(key, null) })
-  }, [name])
-
-  // No link → search by name on mount
-  useEffect(() => {
-    if (!initial) searchByName()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function onError() {
-    if (triedDomain) {
-      // Domain logo failed → fall back to name search
-      setTriedDomain(false)
-      searchByName()
-    } else {
-      setSrc(null)
-    }
-  }
-
+function StoreAvatar({ name, size }: { name: string; size: number }) {
+  const color = storeColor(name)
   const radius = Math.round(size * 0.27)
-  if (src) {
-    return (
-      <div style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', border: `1.5px solid ${color}30`, flexShrink: 0, background: '#fff' }}>
-        <img src={src} alt={name} width={size} height={size} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={onError} />
-      </div>
-    )
-  }
   return (
-    <div style={{ width: size, height: size, borderRadius: radius, background: color + '18', border: `1.5px solid ${color}30`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: Math.round(size * 0.4), flexShrink: 0 }}>
+    <div style={{ width: size, height: size, borderRadius: radius, background: color + '22', border: `1.5px solid ${color}40`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: Math.round(size * 0.4), flexShrink: 0 }}>
       {(name || '?')[0].toUpperCase()}
     </div>
   )
@@ -265,7 +228,7 @@ export default function VoucherCard({
             )}
 
             {/* Store avatar */}
-            <StoreLogo name={superVoucherName || voucher.store_name} link={voucher.link} color={catColor} size={36} />
+            <StoreAvatar name={superVoucherName || voucher.store_name} size={36} />
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -357,7 +320,7 @@ export default function VoucherCard({
           {/* Top row: avatar + name + balance */}
           <div className="flex items-center gap-3">
             {/* Store avatar */}
-            <StoreLogo name={superVoucherName || voucher.store_name} link={voucher.link} color={catColor} size={44} />
+            <StoreAvatar name={superVoucherName || voucher.store_name} size={44} />
 
             {/* Name */}
             <div className="flex-1 min-w-0">

@@ -34,6 +34,7 @@ const PRO_LIMITS: PlanLimits = {
 interface SubscriptionContextType {
   plan: Plan
   isPro: boolean
+  proExpiryDate: string | null
   limits: PlanLimits
   upgradeSheetOpen: boolean
   upgradeReason: string
@@ -47,6 +48,7 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [plan, setPlan] = useState<Plan>('free')
+  const [proExpiryDate, setProExpiryDate] = useState<string | null>(null)
   const [premiumEnabled, setPremiumEnabled] = useState(true)
   const [upgradeSheetOpen, setUpgradeSheetOpen] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState('')
@@ -73,11 +75,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           (!data.current_period_end || new Date(data.current_period_end) > new Date())
         ) {
           setPlan('pro')
+          setProExpiryDate(data.current_period_end ?? null)
         } else {
           setPlan('free')
+          setProExpiryDate(null)
         }
       } catch {
         setPlan('free')
+        setProExpiryDate(null)
       }
     })()
   }, [user])
@@ -108,17 +113,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         (!data.current_period_end || new Date(data.current_period_end) > new Date())
       ) {
         setPlan('pro')
+        setProExpiryDate(data.current_period_end ?? null)
       } else {
         setPlan('free')
+        setProExpiryDate(null)
       }
     } catch {
       setPlan('free')
+      setProExpiryDate(null)
     }
   }
 
   return (
     <SubscriptionContext.Provider value={{
-      plan, isPro, limits,
+      plan, isPro, proExpiryDate, limits,
       upgradeSheetOpen, upgradeReason,
       openUpgradeSheet,
       closeUpgradeSheet: () => setUpgradeSheetOpen(false),

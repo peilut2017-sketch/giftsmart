@@ -15,6 +15,7 @@ interface UserRow {
   email: string
   name?: string
   created_at: string
+  pro_expires_at?: string | null
 }
 
 interface SystemStats {
@@ -248,7 +249,16 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) return
     supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
-    supabase.rpc('get_all_users').then(({ data }) => { if (data) setAllUsers(data) })
+    supabase.rpc('get_all_users').then(async ({ data }) => {
+      if (!data) return
+      const { data: subs } = await supabase
+        .from('subscriptions')
+        .select('user_id, current_period_end')
+        .eq('plan', 'pro')
+        .eq('status', 'active')
+      const subMap = new Map((subs ?? []).map(s => [s.user_id, s.current_period_end as string | null]))
+      setAllUsers(data.map((u: UserRow) => ({ ...u, pro_expires_at: subMap.has(u.id) ? subMap.get(u.id) ?? null : undefined })))
+    })
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
     supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(data !== false) })
   }, [isAdmin])
@@ -873,6 +883,16 @@ export default function AdminPage() {
                     {u.name && <p className="text-xs text-gray-400">{u.name}</p>}
                   </div>
                   <div className="flex items-center gap-3">
+                    {u.pro_expires_at !== undefined && (
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⭐ Pro</span>
+                        {u.pro_expires_at && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            עד {new Date(u.pro_expires_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <p className="text-xs text-gray-400">{formatDate(u.created_at)}</p>
                     {u.id !== user?.id && (
                       <button
