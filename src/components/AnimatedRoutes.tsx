@@ -97,7 +97,7 @@ export default function AnimatedRoutes({ children }: Props) {
         animate="center"
         exit="exit"
         transition={transition}
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, willChange: 'transform' }}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
       >
         <Routes location={location}>
           {children}
