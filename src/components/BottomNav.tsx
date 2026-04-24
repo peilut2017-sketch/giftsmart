@@ -33,11 +33,17 @@ export default function BottomNav() {
               {...(item.path === '/market' ? { 'data-guide': 'market-nav' } : {})}
               className="relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-inset"
             >
-              {/* Active pill background */}
+              {/* Active pill — liquid glass */}
               {active && (
                 <span
                   className="absolute inset-x-1 top-0.5 bottom-0.5 rounded-xl"
-                  style={{ background: 'var(--c-primary-light)' }}
+                  style={{
+                    background: 'rgba(255,255,255,0.52)',
+                    backdropFilter: 'blur(16px) saturate(160%)',
+                    WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 1px 6px rgba(0,0,0,0.07)',
+                    border: '1px solid rgba(255,255,255,0.7)',
+                  }}
                   aria-hidden="true"
                 />
               )}
