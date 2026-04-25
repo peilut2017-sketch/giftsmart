@@ -170,9 +170,12 @@ function AppRoutes() {
     const returnTo = sessionStorage.getItem('gift_return')
     if (returnTo) {
       sessionStorage.removeItem('gift_return')
-      navigate(returnTo, { replace: true })
+      // Reject open-redirect attempts: only allow simple internal paths
+      if (returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+        navigate(returnTo, { replace: true })
+      }
     }
-  }, [user])
+  }, [user, navigate])
 
   // After login: fetch all active banners to show in sequence
   useEffect(() => {

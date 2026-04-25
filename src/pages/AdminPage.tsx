@@ -68,7 +68,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 type Confirm = { title: string; message?: string; onConfirm: () => void }
 
 export default function AdminPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, updateWalletName } = useVouchers()
 
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
@@ -608,6 +608,14 @@ export default function AdminPage() {
   }, [showBroadcasts])
 
   if (!isAdmin) {
+    // Profile is still being fetched — don't flash "access restricted" for a real admin
+    if (user && !profile) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
+        </div>
+      )
+    }
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center p-8">

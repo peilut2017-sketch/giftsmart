@@ -44,7 +44,7 @@ export default function CheckoutPage() {
   const [customAmount, setCustomAmount] = useState('')
   const [customStore, setCustomStore] = useState('')
   const [copied, setCopied] = useState(false)
-  const [wakeLock, setWakeLock] = useState<any>(null)
+  const wakeLockRef = useRef<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -97,16 +97,14 @@ export default function CheckoutPage() {
     async function acquireWakeLock() {
       try {
         if ('wakeLock' in navigator) {
-          const wl = await (navigator as any).wakeLock.request('screen')
-          setWakeLock(wl)
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
         }
       } catch {}
     }
     acquireWakeLock()
     return () => {
-      if (wakeLock) {
-        try { wakeLock.release() } catch {}
-      }
+      try { wakeLockRef.current?.release() } catch {}
+      wakeLockRef.current = null
     }
   }, [])
 

@@ -568,8 +568,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
+        if (!user) return
         // Queue for later sync — optimistic update already applied above
-        enqueuePendingOp({ type: 'update', id, data: updated, storeUsed, voucherName: existing?.store_name, previousBalance: existing?.balance }, user!.id)
+        enqueuePendingOp({ type: 'update', id, data: updated, storeUsed, voucherName: existing?.store_name, previousBalance: existing?.balance }, user.id)
       } else {
         // Update through the view so pgsodium re-encrypts code/cvv if they changed
         await supabase.from(VOUCHERS_VIEW).update(updated).eq('id', id)
@@ -605,7 +606,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setArchivedVouchers(prev => prev.filter(v => v.id !== id))
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
-        enqueuePendingOp({ type: 'delete', id, voucherName: target?.store_name, balance: target?.balance }, user!.id)
+        if (!user) return
+        enqueuePendingOp({ type: 'delete', id, voucherName: target?.store_name, balance: target?.balance }, user.id)
       } else {
         await supabase.from('vouchers').delete().eq('id', id)
       }
@@ -625,7 +627,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setArchivedVouchers(newArchived)
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
-        enqueuePendingOp({ type: 'archive', id, voucherName: voucher.store_name, balance: voucher.balance }, user!.id)
+        if (!user) return
+        enqueuePendingOp({ type: 'archive', id, voucherName: voucher.store_name, balance: voucher.balance }, user.id)
       } else {
         await supabase.from('vouchers').update({ is_archived: true }).eq('id', id)
       }
@@ -644,7 +647,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     setArchivedVouchers(newArchived)
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
-        enqueuePendingOp({ type: 'unarchive', id, voucherName: voucher.store_name, balance: voucher.balance }, user!.id)
+        if (!user) return
+        enqueuePendingOp({ type: 'unarchive', id, voucherName: voucher.store_name, balance: voucher.balance }, user.id)
       } else {
         await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
       }
