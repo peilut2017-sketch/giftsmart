@@ -32,8 +32,9 @@ export function extractFromSMS(text: string): ExtractedVoucher {
     /(?:קוד|code|voucher|שובר|gift\s*card|גיפט)[:\s#]*([A-Z0-9\-]{4,20})/i,
     /(?:מספר)[:\s]*([A-Z0-9\-]{6,20})/i,
     /\b([A-Z]{2,4}[\-]?[0-9]{4,12})\b/,
-    /\b([0-9]{8,19})\b/,
     /(?:card\s*number|מספר כרטיס)[:\s]*([0-9\s]{12,19})/i,
+    // Broad fallback last — exclude Israeli phone numbers (05x / 07x / 02–09 landlines)
+    /\b(?!05\d)(?!07\d)(?!0[2-9]\d{7})([0-9]{8,19})\b/,
   ]
   for (const pattern of codePatterns) {
     const match = text.match(pattern)

@@ -100,6 +100,8 @@ export async function analyzeVoucherImage(file: File): Promise<ExtractedVoucher>
 /**
  * Send SMS / free text to the analyze-voucher Edge Function.
  */
+const MAX_TEXT_INPUT_CHARS = 5000
+
 export async function analyzeVoucherText(text: string): Promise<ExtractedVoucher> {
-  return normalise(await invoke({ text }))
+  return normalise(await invoke({ text: text.slice(0, MAX_TEXT_INPUT_CHARS) }))
 }

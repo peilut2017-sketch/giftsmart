@@ -123,9 +123,7 @@ export default function AccessibilityPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-gray-500 w-12">טלפון:</span>
-              <a href="tel:+972-XX-XXXXXXX" className="text-blue-600 hover:underline" dir="ltr">
-                XX-XXXXXXX
-              </a>
+              <span className="text-gray-400 text-sm">ראו פרטים באתר</span>
             </div>
           </div>
           <p className="text-xs text-gray-400 mt-3">

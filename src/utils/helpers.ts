@@ -99,6 +99,6 @@ export function parseBalanceInput(input: string): { amount: number | null; store
   const numberMatch = trimmed.match(/\d+([.,]\d+)?/)
   if (!numberMatch) return { amount: null, storeName: null }
   const amount = parseFloat(numberMatch[0].replace(',', '.'))
-  const storeName = trimmed.replace(numberMatch[0], '').trim() || null
+  const storeName = trimmed.replaceAll(numberMatch[0], '').trim() || null
   return { amount, storeName }
 }

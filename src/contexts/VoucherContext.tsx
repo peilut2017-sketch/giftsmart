@@ -310,12 +310,13 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
         withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').order('expiry_date', { ascending: true }).limit(500) as any),
         withTimeout<QueryResult>(
-          supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).limit(100).then(res => {
+          (async () => {
+            const res = await (supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).limit(100) as any)
             if (res.error?.code === '42703') {
-              return supabase.from('super_vouchers').select('*').eq('wallet_id', wId).limit(100)
+              return supabase.from('super_vouchers').select('*').eq('wallet_id', wId).limit(100) as any
             }
             return res
-          }) as any
+          })()
         ),
         withTimeout<QueryResult>(supabase.from('stores').select('id,name,logo_url,website').order('name').limit(500) as any),
         withTimeout<QueryResult>(supabase.from('categories').select('*').or(`wallet_id.eq.${wId},wallet_id.is.null`) as any),
@@ -516,7 +517,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
-      const newActive = [...vouchers, localVoucher]
+      const newActive = [...vouchersRef.current, localVoucher]
       setVouchers(newActive)
       saveToCache(user.id, newActive, archivedVouchers)
       return localVoucher

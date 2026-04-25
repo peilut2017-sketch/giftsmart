@@ -51,6 +51,8 @@ export function useMarketplace() {
   return ctx
 }
 
+const CACHE_TTL_MS = 60_000
+
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [listings, setListings] = useState<MarketplaceListing[]>([])
@@ -60,8 +62,6 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [loadingMyListings, setLoadingMyListings] = useState(false)
   const [loadingMyPurchases, setLoadingMyPurchases] = useState(false)
 
-  // TTL cache — avoids refetching data that's still fresh (60 s)
-  const CACHE_TTL_MS = 60_000
   const fetchedAt = useRef<{ listings: number; myListings: number; myPurchases: number }>({
     listings: 0, myListings: 0, myPurchases: 0,
   })

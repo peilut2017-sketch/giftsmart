@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Fingerprint, ShieldCheck, X } from 'lucide-react'
 import { verifyBiometric } from '../lib/passkey'
 import toast from 'react-hot-toast'
@@ -11,18 +11,20 @@ interface Props {
 export default function BiometricGate({ onUnlock, onSignOut }: Props) {
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
+  const isMountedRef = useRef(true)
 
-  // Auto-trigger biometric on mount
   useEffect(() => {
     handleVerify()
-  }, [])
+    return () => { isMountedRef.current = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleVerify() {
     if (loading) return
-    setLoading(true)
-    setFailed(false)
+    if (isMountedRef.current) setLoading(true)
+    if (isMountedRef.current) setFailed(false)
     try {
       const ok = await verifyBiometric()
+      if (!isMountedRef.current) return
       if (ok) {
         onUnlock()
       } else {
@@ -30,9 +32,9 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         toast.error('אימות ביומטרי נכשל')
       }
     } catch {
-      setFailed(true)
+      if (isMountedRef.current) setFailed(true)
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) setLoading(false)
     }
   }
 
