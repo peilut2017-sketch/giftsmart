@@ -603,7 +603,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (!showBroadcasts || broadcasts.length > 0) return
+    if (!showBroadcasts) return
     supabase.rpc('admin_get_broadcasts').then(({ data }) => { if (data) setBroadcasts(data) })
   }, [showBroadcasts])
 

@@ -404,6 +404,20 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [user])
 
+  const syncToCloud = useCallback(async () => {
+    if (!user || !walletIdRef.current) return
+    // Read from ref to get the post-fetchData vouchers, not a stale closure snapshot
+    const localVouchers = vouchersRef.current.filter(v => v.id.startsWith('local-'))
+    for (const v of localVouchers) {
+      const { id, ...rest } = v
+      const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletIdRef.current }).select().single()
+      if (data) {
+        setVouchers(prev => prev.map(pv => pv.id === id ? data : pv))
+        logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
+      }
+    }
+  }, [user, logAction])
+
   // Auto-sync when coming back online
   useEffect(() => {
     if (!user) return
@@ -606,8 +620,10 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   async function deleteVoucher(id: string) {
     const target = [...vouchers, ...archivedVouchers].find(v => v.id === id)
-    setVouchers(prev => prev.filter(v => v.id !== id))
-    setArchivedVouchers(prev => prev.filter(v => v.id !== id))
+    const newActive = vouchers.filter(v => v.id !== id)
+    const newArchived = archivedVouchers.filter(v => v.id !== id)
+    setVouchers(newActive)
+    setArchivedVouchers(newArchived)
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
         if (!user) return
@@ -616,8 +632,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         await supabase.from('vouchers').delete().eq('id', id)
       }
     }
-    const newActive = vouchers.filter(v => v.id !== id)
-    if (user) saveToCache(user.id, newActive, archivedVouchers.filter(v => v.id !== id))
+    if (user) saveToCache(user.id, newActive, newArchived)
     if (target) logAction('delete', target.store_name, id, { balance: target.balance })
   }
 
@@ -676,20 +691,6 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       logAction('archive', v.store_name, v.id, { balance: v.balance })
     }
   }
-
-  const syncToCloud = useCallback(async () => {
-    if (!user || !walletIdRef.current) return
-    // Read from ref to get the post-fetchData vouchers, not a stale closure snapshot
-    const localVouchers = vouchersRef.current.filter(v => v.id.startsWith('local-'))
-    for (const v of localVouchers) {
-      const { id, ...rest } = v
-      const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletIdRef.current }).select().single()
-      if (data) {
-        setVouchers(prev => prev.map(pv => pv.id === id ? data : pv))
-        logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
-      }
-    }
-  }, [user, logAction])
 
   async function addStore(name: string): Promise<Store> {
     const { data } = await supabase.from('stores').insert({ name }).select().single()

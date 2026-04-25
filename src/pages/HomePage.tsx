@@ -45,6 +45,9 @@ export default function HomePage() {
   type Confirm = { title: string; message?: string; onConfirm: () => void }
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
+  // Clear all pending undo-delete timers when unmounting to avoid stale async ops
+  useEffect(() => () => { pendingDeletesRef.current.forEach(clearTimeout) }, [])
+
   // Persist display preferences
   useEffect(() => { localStorage.setItem('hpViewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('hpSortKey', sortKey) }, [sortKey])

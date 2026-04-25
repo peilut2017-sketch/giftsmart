@@ -38,7 +38,7 @@ export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, profile } = useAuth()
-  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts, refreshVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const { listForSale, removeFromSale } = useMarketplace()
 
@@ -93,11 +93,13 @@ export default function CheckoutPage() {
   // Load voucher activity log
   useEffect(() => {
     if (!voucher?.id) return
+    let cancelled = false
     setLogLoading(true)
     getVoucherActivityLog(voucher.id)
-      .then(setVoucherLog)
+      .then(data => { if (!cancelled) setVoucherLog(data) })
       .catch(() => {})
-      .finally(() => setLogLoading(false))
+      .finally(() => { if (!cancelled) setLogLoading(false) })
+    return () => { cancelled = true }
   }, [voucher?.id])
 
   // WakeLock
@@ -425,8 +427,7 @@ export default function CheckoutPage() {
                       await removeFromSale(data.id)
                       toast.success('הוסר מהמכירה — השובר זמין לשימוש')
                       setLockConfirmed(false)
-                      // Refresh voucher state
-                      window.location.reload()
+                      await refreshVouchers()
                     }
                   } catch {
                     toast.error('שגיאה בהסרה מהמכירה')
@@ -505,8 +506,7 @@ export default function CheckoutPage() {
       setShowSellModal(false)
       setSellPrice('')
       setSellDescription('')
-      // Reload to reflect locked state
-      window.location.reload()
+      await refreshVouchers()
     } catch (err: any) {
       const msg = err?.message || ''
       if (msg.includes('already_listed')) toast.error('שובר זה כבר מוצע למכירה')

@@ -90,7 +90,7 @@ export default function SettingsPage() {
 
   // Admin broadcasts
   const [adminBroadcasts, setAdminBroadcasts] = useState<AdminBroadcast[]>([])
-  const [seenBroadcastIds] = useState<Set<string>>(
+  const [seenBroadcastIds, setSeenBroadcastIds] = useState<Set<string>>(
     () => new Set(JSON.parse(localStorage.getItem('seen_broadcast_ids') || '[]'))
   )
 
@@ -1120,8 +1120,12 @@ export default function SettingsPage() {
                     className={`px-4 py-3 ${isNew ? 'bg-blue-50/50' : ''}`}
                     onMouseEnter={() => {
                       if (isNew) {
-                        seenBroadcastIds.add(b.id)
-                        localStorage.setItem('seen_broadcast_ids', JSON.stringify([...seenBroadcastIds]))
+                        setSeenBroadcastIds(prev => {
+                          const next = new Set(prev)
+                          next.add(b.id)
+                          localStorage.setItem('seen_broadcast_ids', JSON.stringify([...next]))
+                          return next
+                        })
                         void supabase.rpc('record_broadcast_view', { p_broadcast_id: b.id })
                       }
                     }}
