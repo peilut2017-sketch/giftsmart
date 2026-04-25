@@ -348,7 +348,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
               })
               notification.onclick = () => {
                 window.focus()
-                window.location.href = `/market/listing/${msg.listing_id}`
+                // Validate UUID format before navigating to prevent path injection
+                if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msg.listing_id)) {
+                  window.location.href = `/market/listing/${msg.listing_id}`
+                }
               }
             }
           }

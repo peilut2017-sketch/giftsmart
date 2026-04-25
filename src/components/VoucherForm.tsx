@@ -115,6 +115,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     }
   }, [showUnitPicker])
 
+  // Stop camera stream when form unmounts (e.g. user closes modal mid-scan)
+  useEffect(() => () => { stopScanner() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function openOperatorPicker() {
     if (!operatorsLoaded) {
       const { data } = await supabase.rpc('get_balance_operators')

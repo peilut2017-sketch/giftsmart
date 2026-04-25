@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
 import { Copy, AlertTriangle, Gift, ChevronDown, Check, LogIn } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { Toaster } from 'react-hot-toast'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 
@@ -193,11 +192,6 @@ export default function GiftPage() {
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
-      <Toaster
-        position="top-center"
-        toastOptions={{ duration: 2000, style: { borderRadius: '16px', fontSize: '14px' } }}
-      />
-
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl shadow-lg mb-3">
           <Gift className="w-7 h-7 text-white" />

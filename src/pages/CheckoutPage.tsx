@@ -16,6 +16,14 @@ import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 
+function isSafeUrl(url: string | undefined): boolean {
+  if (!url) return false
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch { return false }
+}
+
 const QUICK_AMOUNTS = [50, 100]
 
 const CAT_COLORS: Record<string, string> = {
@@ -715,7 +723,7 @@ export default function CheckoutPage() {
               {copied ? 'הועתק!' : 'העתק קוד'}
             </button>
 
-            {voucher.link && (
+            {isSafeUrl(voucher.link) && (
               <a
                 href={voucher.link}
                 target="_blank"
@@ -904,7 +912,7 @@ export default function CheckoutPage() {
                 חנויות המכבדות את {sv.name}
                 {showStores ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
               </button>
-              {sv.balance_check_url && (
+              {isSafeUrl(sv.balance_check_url) && (
                 <a
                   href={sv.balance_check_url}
                   target="_blank"

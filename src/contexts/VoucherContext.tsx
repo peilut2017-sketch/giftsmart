@@ -104,6 +104,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const [sharedWithMe, setSharedWithMe] = useState<Voucher[]>([])
   const [walletId, setWalletId] = useState<string | null>(null)
   const walletIdRef = useRef<string | null>(null)
+  const vouchersRef = useRef<Voucher[]>([])
   const [walletName, setWalletName] = useState('ארנק השוברים שלי')
   const [walletError, setWalletError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -112,6 +113,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const pendingOpsRef = useRef<PendingOp[]>([])
 
   const prevIsOnlineRef = useRef(navigator.onLine)
+
+  // Keep ref in sync so async functions always read the latest vouchers
+  useEffect(() => { vouchersRef.current = vouchers }, [vouchers])
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -413,7 +417,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       await flushPendingOps(user.id)
       fetchData()
     })().catch(console.error)
-  }, [isOnline, user]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOnline, user, fetchData, syncToCloud, flushPendingOps])
 
   useEffect(() => {
     if (user) {
@@ -673,10 +677,10 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function syncToCloud() {
+  const syncToCloud = useCallback(async () => {
     if (!user || !walletIdRef.current) return
-    // Take a snapshot of local vouchers from current state
-    const localVouchers = vouchers.filter(v => v.id.startsWith('local-'))
+    // Read from ref to get the post-fetchData vouchers, not a stale closure snapshot
+    const localVouchers = vouchersRef.current.filter(v => v.id.startsWith('local-'))
     for (const v of localVouchers) {
       const { id, ...rest } = v
       const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletIdRef.current }).select().single()
@@ -685,7 +689,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
       }
     }
-  }
+  }, [user, logAction])
 
   async function addStore(name: string): Promise<Store> {
     const { data } = await supabase.from('stores').insert({ name }).select().single()
