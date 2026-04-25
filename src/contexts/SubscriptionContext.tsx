@@ -97,8 +97,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshPlan() {
-    const { data: premData } = await supabase.rpc('get_premium_enabled').catch(() => ({ data: null }))
-    setPremiumEnabled(premData !== false)
+    try {
+      const { data: premData } = await supabase.rpc('get_premium_enabled')
+      setPremiumEnabled(premData !== false)
+    } catch {}
     if (!user) { setPlan('free'); return }
     try {
       const { data } = await supabase
