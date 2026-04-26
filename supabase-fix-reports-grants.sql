@@ -3,7 +3,7 @@
 
 CREATE OR REPLACE FUNCTION admin_get_reports()
 RETURNS TABLE (
-  id                UUID,
+  report_id         UUID,
   reporter_email    TEXT,
   reported_email    TEXT,
   reason            TEXT,
@@ -21,7 +21,7 @@ BEGIN
 
   RETURN QUERY
   SELECT
-    ur.id,
+    ur.id             AS report_id,
     COALESCE(rp.email, '(משתמש נמחק)')  AS reporter_email,
     COALESCE(rd.email, '(משתמש נמחק)')  AS reported_email,
     ur.reason,

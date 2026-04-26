@@ -147,7 +147,7 @@ export default function AdminPage() {
   // Reports
   const [showReports, setShowReports] = useState(false)
   const [reports, setReports] = useState<{
-    id: string
+    report_id: string
     reporter_email: string
     reported_email: string
     reason: string
@@ -244,7 +244,7 @@ export default function AdminPage() {
         p_status: status,
       })
       if (error) throw error
-      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status } : r))
+      setReports(prev => prev.map(r => r.report_id === reportId ? { ...r, status } : r))
       toast.success('סטטוס עודכן')
     } catch {
       toast.error('שגיאה בעדכון')
@@ -2109,7 +2109,7 @@ export default function AdminPage() {
                 <p className="text-sm text-gray-400 text-center py-4">אין דיווחים</p>
               )}
               {reports.map(r => (
-                <div key={r.id} className={`border rounded-2xl p-4 space-y-2 ${r.status === 'pending' ? 'border-red-200 bg-red-50' : r.status === 'reviewed' ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div key={r.report_id} className={`border rounded-2xl p-4 space-y-2 ${r.status === 'pending' ? 'border-red-200 bg-red-50' : r.status === 'reviewed' ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium text-gray-800">{r.reason}</p>
@@ -2127,8 +2127,8 @@ export default function AdminPage() {
                   <div className="flex gap-2">
                     {r.status !== 'reviewed' && (
                       <button
-                        disabled={updatingReport === r.id}
-                        onClick={() => updateReportStatus(r.id, 'reviewed')}
+                        disabled={updatingReport === r.report_id}
+                        onClick={() => updateReportStatus(r.report_id, 'reviewed')}
                         className="px-3 py-1.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-xl hover:bg-yellow-200 disabled:opacity-50"
                       >
                         סמן כנבדק
@@ -2136,8 +2136,8 @@ export default function AdminPage() {
                     )}
                     {r.status !== 'resolved' && (
                       <button
-                        disabled={updatingReport === r.id}
-                        onClick={() => updateReportStatus(r.id, 'resolved')}
+                        disabled={updatingReport === r.report_id}
+                        onClick={() => updateReportStatus(r.report_id, 'resolved')}
                         className="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-xl hover:bg-green-200 disabled:opacity-50"
                       >
                         סגור
