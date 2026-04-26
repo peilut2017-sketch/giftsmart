@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
@@ -209,6 +209,18 @@ export default function AdminPage() {
       setHandlingAccess(null)
     }
   }
+
+  const accessByUser = useMemo(
+    () => new Map(accessRequests.map(r => [r.user_id, r.status])),
+    [accessRequests]
+  )
+
+  // Load access requests when users list is expanded in selective mode
+  useEffect(() => {
+    if (showUsers && marketplaceMode === 'selective' && !accessRequestsLoaded) {
+      loadAccessRequests()
+    }
+  }, [showUsers, marketplaceMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadReports() {
     setReportsLoaded(false)
@@ -1024,13 +1036,15 @@ export default function AdminPage() {
                 <p className="text-center text-sm text-gray-400 py-6">
                   הרץ את <code className="bg-gray-100 px-1 rounded text-xs">supabase-admin-functions.sql</code> כדי לראות נתונים
                 </p>
-              ) : allUsers.map(u => (
-                <div key={u.id} className="flex items-center justify-between px-4 py-2.5">
-                  <div>
-                    <p className="text-sm text-gray-800">{u.email}</p>
+              ) : allUsers.map(u => {
+                const mktStatus = marketplaceMode === 'selective' ? (accessByUser.get(u.id) ?? 'none') : null
+                return (
+                <div key={u.id} className="flex items-center justify-between px-4 py-2.5 gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-gray-800 truncate">{u.email}</p>
                     {u.name && <p className="text-xs text-gray-400">{u.name}</p>}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {u.pro_expires_at !== undefined && (
                       <div className="text-right">
                         <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⭐ Pro</span>
@@ -1038,6 +1052,39 @@ export default function AdminPage() {
                           <p className="text-[10px] text-gray-400 mt-0.5">
                             עד {new Date(u.pro_expires_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                           </p>
+                        )}
+                      </div>
+                    )}
+                    {mktStatus !== null && (
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          mktStatus === 'approved' ? 'bg-green-100 text-green-700' :
+                          mktStatus === 'pending'  ? 'bg-amber-100 text-amber-700' :
+                          mktStatus === 'rejected' ? 'bg-red-100 text-red-600' :
+                                                     'bg-gray-100 text-gray-500'
+                        }`}>
+                          {mktStatus === 'approved' ? '✓ שוק' :
+                           mktStatus === 'pending'  ? '⏳ ממתין' :
+                           mktStatus === 'rejected' ? '✗ נדחה' : '— שוק'}
+                        </span>
+                        {mktStatus !== 'approved' ? (
+                          <button
+                            onClick={() => handleAccessDecision(u.id, 'approved')}
+                            disabled={handlingAccess === u.id}
+                            className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full disabled:opacity-50"
+                            title="אשר גישה לשוק"
+                          >
+                            אשר
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleAccessDecision(u.id, 'rejected')}
+                            disabled={handlingAccess === u.id}
+                            className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full disabled:opacity-50"
+                            title="בטל גישה לשוק"
+                          >
+                            בטל
+                          </button>
                         )}
                       </div>
                     )}
@@ -1053,7 +1100,8 @@ export default function AdminPage() {
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

@@ -110,9 +110,12 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION admin_get_marketplace_requests TO authenticated;
 
--- 8. Admin: approve or reject a request
+-- 8. Admin: approve or reject (upsert — works even if user never submitted a request)
 CREATE OR REPLACE FUNCTION admin_set_marketplace_access(p_user_id UUID, p_status TEXT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_email TEXT;
+  v_name  TEXT;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true) THEN
     RAISE EXCEPTION 'Unauthorized';
@@ -120,9 +123,11 @@ BEGIN
   IF p_status NOT IN ('approved', 'rejected') THEN
     RAISE EXCEPTION 'Invalid status';
   END IF;
-  UPDATE marketplace_access_requests
-    SET status = p_status, updated_at = now()
-    WHERE user_id = p_user_id;
+  SELECT email, name INTO v_email, v_name FROM profiles WHERE id = p_user_id;
+  INSERT INTO marketplace_access_requests (user_id, user_email, user_name, message, status, updated_at)
+    VALUES (p_user_id, v_email, v_name, NULL, p_status, now())
+    ON CONFLICT (user_id) DO UPDATE
+      SET status = EXCLUDED.status, updated_at = now();
 END;
 $$;
 GRANT EXECUTE ON FUNCTION admin_set_marketplace_access TO authenticated;
