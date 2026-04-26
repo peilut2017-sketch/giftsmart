@@ -158,6 +158,7 @@ export default function AdminPage() {
     listing_id: string | null
   }[]>([])
   const [reportsLoaded, setReportsLoaded] = useState(false)
+  const [reportsError, setReportsError] = useState<string | null>(null)
   const [updatingReport, setUpdatingReport] = useState<string | null>(null)
   // Marketplace settings
   const [showMktSettings, setShowMktSettings] = useState(false)
@@ -224,10 +225,11 @@ export default function AdminPage() {
 
   async function loadReports() {
     setReportsLoaded(false)
+    setReportsError(null)
     const { data, error } = await supabase.rpc('admin_get_reports')
     if (error) {
       console.error('[admin] loadReports:', error)
-      toast.error('שגיאה בטעינת דיווחים')
+      setReportsError(error.message || 'שגיאה לא ידועה')
     } else {
       setReports((data as typeof reports) || [])
     }
@@ -2091,7 +2093,19 @@ export default function AdminPage() {
           {showReports && (
             <div className="px-4 pb-4 space-y-3 border-t pt-3">
               {!reportsLoaded && <p className="text-sm text-gray-400 text-center py-4">טוען...</p>}
-              {reportsLoaded && reports.length === 0 && (
+              {reportsLoaded && reportsError && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center space-y-2">
+                  <p className="text-sm font-semibold text-red-700">שגיאה בטעינת דיווחים</p>
+                  <p className="text-xs text-red-500 font-mono break-all">{reportsError}</p>
+                  <button
+                    onClick={loadReports}
+                    className="mt-1 px-4 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-xl"
+                  >
+                    נסה שנית
+                  </button>
+                </div>
+              )}
+              {reportsLoaded && !reportsError && reports.length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-4">אין דיווחים</p>
               )}
               {reports.map(r => (
