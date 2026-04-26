@@ -639,7 +639,6 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
-  -- Only admin can call this
   IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = TRUE) THEN
     RAISE EXCEPTION 'unauthorized';
   END IF;
@@ -647,8 +646,8 @@ BEGIN
   RETURN QUERY
   SELECT
     ur.id,
-    rp.email AS reporter_email,
-    rd.email AS reported_email,
+    COALESCE(rp.email, '(משתמש נמחק)')  AS reporter_email,
+    COALESCE(rd.email, '(משתמש נמחק)')  AS reported_email,
     ur.reason,
     ur.details,
     ur.status,
@@ -656,11 +655,12 @@ BEGIN
     ur.purchase_id,
     ur.listing_id
   FROM user_reports ur
-  JOIN profiles rp ON rp.id = ur.reporter_id
-  JOIN profiles rd ON rd.id = ur.reported_user_id
+  LEFT JOIN profiles rp ON rp.id = ur.reporter_id
+  LEFT JOIN profiles rd ON rd.id = ur.reported_user_id
   ORDER BY ur.created_at DESC;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION admin_get_reports TO authenticated;
 
 CREATE OR REPLACE FUNCTION admin_update_report_status(p_report_id UUID, p_status TEXT)
 RETURNS VOID
@@ -672,6 +672,7 @@ BEGIN
   UPDATE user_reports SET status = p_status WHERE id = p_report_id;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION admin_update_report_status TO authenticated;
 
 -- Enable realtime for marketplace tables
 ALTER PUBLICATION supabase_realtime ADD TABLE marketplace_purchases;
