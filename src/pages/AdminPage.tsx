@@ -301,14 +301,12 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) return
     supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
-    supabase.rpc('get_all_users').then(async ({ data }) => {
+    Promise.all([
+      supabase.rpc('get_all_users'),
+      supabase.from('subscriptions').select('user_id, current_period_end').eq('plan', 'pro').eq('status', 'active'),
+    ]).then(([{ data }, { data: subs }]) => {
       if (!data) return
-      const { data: subs } = await supabase
-        .from('subscriptions')
-        .select('user_id, current_period_end')
-        .eq('plan', 'pro')
-        .eq('status', 'active')
-      const subMap = new Map((subs ?? []).map(s => [s.user_id, s.current_period_end as string | null]))
+      const subMap = new Map((subs ?? []).map((s: { user_id: string; current_period_end: string | null }) => [s.user_id, s.current_period_end]))
       setAllUsers(data.map((u: UserRow) => ({ ...u, pro_expires_at: subMap.has(u.id) ? subMap.get(u.id) ?? null : undefined })))
     })
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
@@ -967,20 +965,34 @@ export default function AdminPage() {
             <div>
               <p className="text-xs text-slate-400">יתרה כוללת (כל הארנקים)</p>
               <p className="text-xl font-bold">
-                {systemStats ? formatCurrency(systemStats.total_balance) : '...'}
+                {systemStats
+                  ? formatCurrency(systemStats.total_balance)
+                  : <span className="inline-block w-24 h-6 bg-slate-600 rounded-lg animate-pulse" />}
               </p>
             </div>
             <div>
               <p className="text-xs text-slate-400">שוברים פעילים</p>
-              <p className="text-xl font-bold">{systemStats?.total_vouchers ?? '...'}</p>
+              <p className="text-xl font-bold">
+                {systemStats
+                  ? systemStats.total_vouchers
+                  : <span className="inline-block w-10 h-6 bg-slate-600 rounded-lg animate-pulse" />}
+              </p>
             </div>
             <div>
               <p className="text-xs text-slate-400">ארכיון</p>
-              <p className="text-xl font-bold">{systemStats?.total_archived ?? '...'}</p>
+              <p className="text-xl font-bold">
+                {systemStats
+                  ? systemStats.total_archived
+                  : <span className="inline-block w-10 h-6 bg-slate-600 rounded-lg animate-pulse" />}
+              </p>
             </div>
             <div>
               <p className="text-xs text-slate-400">ארנקים</p>
-              <p className="text-xl font-bold">{systemStats?.total_wallets ?? '...'}</p>
+              <p className="text-xl font-bold">
+                {systemStats
+                  ? systemStats.total_wallets
+                  : <span className="inline-block w-8 h-6 bg-slate-600 rounded-lg animate-pulse" />}
+              </p>
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-600 grid grid-cols-2 gap-3">
@@ -988,14 +1000,22 @@ export default function AdminPage() {
               <Users className="w-4 h-4 text-slate-400" />
               <span className="text-sm text-slate-300">
                 משתמשים:&nbsp;
-                <span className="font-bold text-white">{usersCount === null ? '...' : usersCount}</span>
+                <span className="font-bold text-white">
+                  {usersCount === null
+                    ? <span className="inline-block w-8 h-4 bg-slate-600 rounded animate-pulse align-middle" />
+                    : usersCount}
+                </span>
               </span>
             </div>
             <div className="flex items-center gap-2">
               <Crown className="w-4 h-4 text-amber-400" />
               <span className="text-sm text-slate-300">
                 מנויי Pro:&nbsp;
-                <span className="font-bold text-amber-300">{proCount === null ? '...' : proCount}</span>
+                <span className="font-bold text-amber-300">
+                  {proCount === null
+                    ? <span className="inline-block w-8 h-4 bg-slate-600 rounded animate-pulse align-middle" />
+                    : proCount}
+                </span>
               </span>
             </div>
           </div>

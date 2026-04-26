@@ -72,12 +72,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   })
 
   // Access control
-  const [marketplaceMode, setMarketplaceMode] = useState<MarketplaceMode>('enabled')
+  const [marketplaceMode, setMarketplaceMode] = useState<MarketplaceMode>(
+    () => (localStorage.getItem('gs_marketplace_mode') as MarketplaceMode) || 'enabled'
+  )
   const [myAccessStatus, setMyAccessStatus] = useState<MarketplaceAccessStatus>('none')
 
   useEffect(() => {
     supabase.rpc('get_marketplace_mode').then(({ data }) => {
-      if (data) setMarketplaceMode(data as MarketplaceMode)
+      if (data) {
+        setMarketplaceMode(data as MarketplaceMode)
+        try { localStorage.setItem('gs_marketplace_mode', data) } catch {}
+      }
     })
   }, [])
 

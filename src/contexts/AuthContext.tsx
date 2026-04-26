@@ -22,6 +22,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// ── Profile cache helpers ────────────────────────────────────────────────────
+// Keeps profile in sessionStorage so isAdmin is known synchronously on the
+// next page load without waiting for a Supabase round-trip.
+const profileCacheKey = (uid: string) => `gs_profile_${uid}`
+
+function readCachedProfile(uid: string): Profile | null {
+  try {
+    const raw = sessionStorage.getItem(profileCacheKey(uid))
+    return raw ? (JSON.parse(raw) as Profile) : null
+  } catch { return null }
+}
+
+function writeCachedProfile(p: Profile) {
+  try { sessionStorage.setItem(profileCacheKey(p.id), JSON.stringify(p)) } catch {}
+}
+
+function evictProfileCache() {
+  try {
+    for (const k of Object.keys(sessionStorage)) {
+      if (k.startsWith('gs_profile_')) sessionStorage.removeItem(k)
+    }
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -38,7 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ data: { session } }) => {
         setSession(session)
         setUser(session?.user ?? null)
-        if (session?.user) fetchProfile(session.user.id)
+        if (session?.user) {
+          // Hydrate from cache synchronously so isAdmin is immediately correct
+          const cached = readCachedProfile(session.user.id)
+          if (cached) setProfile(cached)
+          fetchProfile(session.user.id)
+        }
       })
       .catch(() => {
         // network error — treat as logged-out
@@ -56,9 +85,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        const cached = readCachedProfile(session.user.id)
+        if (cached) setProfile(cached)
         await fetchProfile(session.user.id)
       } else {
         setProfile(null)
+        evictProfileCache()
       }
     })
 
@@ -75,7 +107,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then(r => r.data)
         .catch(() => null)
       const data = await Promise.race([query, timeout])
-      if (data) setProfile(data)
+      if (data) {
+        setProfile(data)
+        writeCachedProfile(data)
+      }
     } catch {}
   }
 
@@ -121,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    evictProfileCache()
     await supabase.auth.signOut()
   }
 
@@ -141,7 +177,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function updateProfile(data: Partial<Profile>) {
     if (!user) return
     await supabase.from('profiles').update(data).eq('id', user.id)
-    setProfile(prev => prev ? { ...prev, ...data } : null)
+    setProfile(prev => {
+      const next = prev ? { ...prev, ...data } : null
+      if (next) writeCachedProfile(next)
+      return next
+    })
   }
 
   const isAdmin = profile?.is_admin === true

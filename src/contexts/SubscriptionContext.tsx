@@ -49,14 +49,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [plan, setPlan] = useState<Plan>('free')
   const [proExpiryDate, setProExpiryDate] = useState<string | null>(null)
-  const [premiumEnabled, setPremiumEnabled] = useState(true)
+  const [premiumEnabled, setPremiumEnabled] = useState(
+    () => localStorage.getItem('gs_premium_enabled') !== 'false'
+  )
   const [upgradeSheetOpen, setUpgradeSheetOpen] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState('')
 
-  // Fetch the admin-controlled premium flag once on mount
+  // Fetch the admin-controlled premium flag once on mount; persist to localStorage
   useEffect(() => {
     Promise.resolve(supabase.rpc('get_premium_enabled')).then(({ data }) => {
-      if (data === false) setPremiumEnabled(false)
+      const enabled = data !== false
+      setPremiumEnabled(enabled)
+      try { localStorage.setItem('gs_premium_enabled', String(enabled)) } catch {}
     }).catch(() => {})
   }, [])
 
