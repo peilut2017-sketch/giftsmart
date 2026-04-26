@@ -11,11 +11,13 @@ export default function BottomNav() {
   const navigate   = useNavigate()
   const location   = useLocation()
   const { isAdmin } = useAuth()
-  const { unreadChatCount } = useMarketplace()
+  const { unreadChatCount, marketplaceMode } = useMarketplace()
+
+  const showMarket = marketplaceMode !== 'disabled' || isAdmin
 
   const items = [
     { icon: Home,        label: 'ארנק',        path: '/'         },
-    { icon: ShoppingBag, label: 'שוק',         path: '/market'   },
+    ...(showMarket ? [{ icon: ShoppingBag, label: 'שוק', path: '/market' }] : []),
     { icon: Archive,     label: 'ארכיון',      path: '/archive'  },
     { icon: BarChart2,   label: 'סטטיסטיקות', path: '/stats'    },
     { icon: Settings,    label: 'הגדרות',      path: '/settings' },

@@ -169,6 +169,46 @@ export default function AdminPage() {
   const [verifiedSellers, setVerifiedSellers] = useState<{ user_id: string; name: string; email: string; is_verified: boolean; total_sales: number; avg_rating: number }[]>([])
   const [verifiedSellersLoaded, setVerifiedSellersLoaded] = useState(false)
   const [togglingVerified, setTogglingVerified] = useState<string | null>(null)
+  // Marketplace access control
+  const [marketplaceMode, setMarketplaceMode] = useState<'enabled' | 'disabled' | 'selective' | null>(null)
+  const [settingMktMode, setSettingMktMode] = useState(false)
+  const [showMktAccess, setShowMktAccess] = useState(false)
+  const [accessRequests, setAccessRequests] = useState<{ user_id: string; user_email: string | null; user_name: string | null; message: string | null; status: string; updated_at: string }[]>([])
+  const [accessRequestsLoaded, setAccessRequestsLoaded] = useState(false)
+  const [handlingAccess, setHandlingAccess] = useState<string | null>(null)
+
+  async function loadAccessRequests() {
+    setAccessRequestsLoaded(false)
+    const { data } = await supabase.rpc('admin_get_marketplace_requests')
+    if (data) setAccessRequests(data)
+    setAccessRequestsLoaded(true)
+  }
+
+  async function handleSetMarketplaceMode(mode: 'enabled' | 'disabled' | 'selective') {
+    setSettingMktMode(true)
+    try {
+      await supabase.rpc('admin_set_marketplace_mode', { p_mode: mode })
+      setMarketplaceMode(mode)
+      toast.success('מצב השוק עודכן')
+    } catch {
+      toast.error('שגיאה בשמירת הגדרות')
+    } finally {
+      setSettingMktMode(false)
+    }
+  }
+
+  async function handleAccessDecision(userId: string, status: 'approved' | 'rejected') {
+    setHandlingAccess(userId)
+    try {
+      await supabase.rpc('admin_set_marketplace_access', { p_user_id: userId, p_status: status })
+      setAccessRequests(prev => prev.map(r => r.user_id === userId ? { ...r, status } : r))
+      toast.success(status === 'approved' ? 'גישה אושרה' : 'גישה נדחתה')
+    } catch {
+      toast.error('שגיאה')
+    } finally {
+      setHandlingAccess(null)
+    }
+  }
 
   async function loadReports() {
     setReportsLoaded(false)
@@ -261,6 +301,7 @@ export default function AdminPage() {
     })
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
     supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(data !== false) })
+    supabase.rpc('get_marketplace_mode').then(({ data }) => { if (data) setMarketplaceMode(data as 'enabled' | 'disabled' | 'selective') })
   }, [isAdmin])
 
   async function handleTogglePremium() {
@@ -802,6 +843,105 @@ export default function AdminPage() {
             <p className="mt-2 text-xs text-green-700 bg-green-50 rounded-xl px-3 py-2">
               המנויים עדיין קיימים ב-DB — הפעלה מחדש תשחזר את ההגבלות
             </p>
+          )}
+        </div>
+
+        {/* ── Marketplace Access Control ── */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-purple-50">
+              <ShoppingBag className="w-5 h-5 text-purple-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800 text-sm">שוק השוברים</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {marketplaceMode === null ? 'טוען...' : marketplaceMode === 'enabled' ? 'פתוח לכולם' : marketplaceMode === 'disabled' ? 'סגור לכולם' : 'לפי הרשאה'}
+              </p>
+            </div>
+          </div>
+
+          {/* Mode selector */}
+          <div className="flex gap-2 mb-3">
+            {(['enabled', 'selective', 'disabled'] as const).map(mode => {
+              const labels = { enabled: 'פתוח לכולם', selective: 'לפי הרשאה', disabled: 'סגור' }
+              const colors = {
+                enabled:   { active: 'bg-green-500 text-white', inactive: 'bg-gray-100 text-gray-500' },
+                selective: { active: 'bg-purple-500 text-white', inactive: 'bg-gray-100 text-gray-500' },
+                disabled:  { active: 'bg-red-500 text-white', inactive: 'bg-gray-100 text-gray-500' },
+              }
+              const isActive = marketplaceMode === mode
+              return (
+                <button
+                  key={mode}
+                  onClick={() => handleSetMarketplaceMode(mode)}
+                  disabled={settingMktMode || marketplaceMode === null}
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 ${isActive ? colors[mode].active : colors[mode].inactive}`}
+                >
+                  {labels[mode]}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Access requests toggle */}
+          <button
+            onClick={() => { setShowMktAccess(!showMktAccess); if (!showMktAccess && !accessRequestsLoaded) loadAccessRequests() }}
+            className="w-full flex items-center justify-between text-sm text-gray-600 py-2"
+          >
+            <span className="font-medium">בקשות גישה</span>
+            <div className="flex items-center gap-1">
+              {accessRequests.filter(r => r.status === 'pending').length > 0 && (
+                <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {accessRequests.filter(r => r.status === 'pending').length}
+                </span>
+              )}
+              {showMktAccess ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </div>
+          </button>
+
+          {showMktAccess && (
+            <div className="mt-2 space-y-2">
+              {!accessRequestsLoaded ? (
+                <p className="text-xs text-gray-400 text-center py-3">טוען...</p>
+              ) : accessRequests.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">אין בקשות גישה</p>
+              ) : accessRequests.map(req => (
+                <div key={req.user_id} className="bg-gray-50 rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{req.user_name || req.user_email || req.user_id}</p>
+                      {req.user_email && req.user_name && <p className="text-xs text-gray-400 truncate">{req.user_email}</p>}
+                      {req.message && <p className="text-xs text-gray-500 mt-1 italic">"{req.message}"</p>}
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                      req.status === 'approved' ? 'bg-green-100 text-green-700'
+                      : req.status === 'rejected' ? 'bg-red-100 text-red-600'
+                      : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {req.status === 'approved' ? 'מאושר' : req.status === 'rejected' ? 'נדחה' : 'ממתין'}
+                    </span>
+                  </div>
+                  {req.status === 'pending' && (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handleAccessDecision(req.user_id, 'approved')}
+                        disabled={handlingAccess === req.user_id}
+                        className="flex-1 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                      >
+                        {handlingAccess === req.user_id ? '...' : 'אשר'}
+                      </button>
+                      <button
+                        onClick={() => handleAccessDecision(req.user_id, 'rejected')}
+                        disabled={handlingAccess === req.user_id}
+                        className="flex-1 py-1.5 bg-red-100 text-red-600 text-xs font-semibold rounded-lg disabled:opacity-50"
+                      >
+                        דחה
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
-import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage, ListingConversation } from '../types'
+import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage, ListingConversation, MarketplaceMode, MarketplaceAccessStatus } from '../types'
 import toast from 'react-hot-toast'
 
 interface MarketplaceContextValue {
@@ -41,6 +41,11 @@ interface MarketplaceContextValue {
   markChatRead: () => void
   registerActiveChat: (chatKey: string) => void
   unregisterActiveChat: (chatKey: string) => void
+
+  // Access control
+  marketplaceMode: MarketplaceMode
+  myAccessStatus: MarketplaceAccessStatus
+  requestMarketplaceAccess: (message?: string) => Promise<void>
 }
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null)
@@ -65,6 +70,28 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const fetchedAt = useRef<{ listings: number; myListings: number; myPurchases: number }>({
     listings: 0, myListings: 0, myPurchases: 0,
   })
+
+  // Access control
+  const [marketplaceMode, setMarketplaceMode] = useState<MarketplaceMode>('enabled')
+  const [myAccessStatus, setMyAccessStatus] = useState<MarketplaceAccessStatus>('none')
+
+  useEffect(() => {
+    supabase.rpc('get_marketplace_mode').then(({ data }) => {
+      if (data) setMarketplaceMode(data as MarketplaceMode)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!user) { setMyAccessStatus('none'); return }
+    supabase.rpc('get_my_marketplace_access').then(({ data }) => {
+      setMyAccessStatus((data as MarketplaceAccessStatus) || 'none')
+    })
+  }, [user])
+
+  const requestMarketplaceAccess = useCallback(async (message?: string) => {
+    await supabase.rpc('request_marketplace_access', { p_message: message ?? null })
+    setMyAccessStatus('pending')
+  }, [])
 
   // Unread chat badge + per-listing counts
   const [unreadChatCount, setUnreadChatCount] = useState(0)
@@ -453,6 +480,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         markChatRead,
         registerActiveChat,
         unregisterActiveChat,
+        marketplaceMode,
+        myAccessStatus,
+        requestMarketplaceAccess,
       }}
     >
       {children}

@@ -701,17 +701,79 @@ function MyPurchaseRow({
   )
 }
 
+// ─── Access Request Screen ─────────────────────────────────────────────────────
+function MarketplaceAccessGate() {
+  const { myAccessStatus, requestMarketplaceAccess } = useMarketplace()
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+
+  async function handleRequest() {
+    setSending(true)
+    try {
+      await requestMarketplaceAccess(message.trim() || undefined)
+      toast.success('הבקשה נשלחה למנהל')
+    } catch {
+      toast.error('שגיאה בשליחת הבקשה')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (myAccessStatus === 'pending') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
+          <ShoppingBag className="w-8 h-8 text-amber-500" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-800 mb-2">הבקשה בהמתנה</h2>
+        <p className="text-sm text-gray-500 max-w-xs">הבקשה שלך נשלחה למנהל ותטופל בקרוב. תקבל גישה ברגע שתאושר.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+      <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mb-4">
+        <ShoppingBag className="w-8 h-8 text-purple-500" />
+      </div>
+      <h2 className="text-lg font-bold text-gray-800 mb-1">שוק השוברים</h2>
+      {myAccessStatus === 'rejected' && (
+        <p className="text-sm text-red-500 mb-3">הבקשה הקודמת שלך נדחתה. ניתן לשלוח בקשה חדשה.</p>
+      )}
+      <p className="text-sm text-gray-500 mb-6 max-w-xs">
+        שוק השוברים מוגבל למשתמשים מורשים. שלח בקשת גישה למנהל.
+      </p>
+      <textarea
+        value={message}
+        onChange={e => setMessage(e.target.value)}
+        placeholder="הוסף הודעה למנהל (רשות)..."
+        rows={3}
+        className="w-full max-w-xs border border-gray-200 rounded-xl px-3 py-2 text-sm mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-purple-300"
+      />
+      <button
+        onClick={handleRequest}
+        disabled={sending}
+        className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2.5 rounded-xl font-semibold text-sm disabled:opacity-50"
+      >
+        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        שלח בקשת גישה
+      </button>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MarketplacePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  useAuth()
+  const { isAdmin } = useAuth()
   const {
     listings, myListings, myPurchases,
     loadingListings, loadingMyListings, loadingMyPurchases,
     fetchListings, fetchMyListings, fetchMyPurchases,
     removeFromSale, confirmPaymentReceived, cancelPurchase,
     unreadByListing, updateListingPrice,
+    marketplaceMode, myAccessStatus,
   } = useMarketplace()
 
   const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>(
@@ -745,6 +807,11 @@ export default function MarketplacePage() {
 
   // Conversations modal (seller picks buyer to chat with)
   const [convsListing, setConvsListing] = useState<MarketplaceListing | null>(null)
+
+  // Redirect non-admins when marketplace is fully disabled
+  useEffect(() => {
+    if (marketplaceMode === 'disabled' && !isAdmin) navigate('/', { replace: true })
+  }, [marketplaceMode, isAdmin, navigate])
 
   // Prefetch all three tabs in parallel on first mount — tab switches will be instant
   useEffect(() => {
@@ -805,6 +872,21 @@ export default function MarketplacePage() {
     } finally {
       setDeletingWatch(null)
     }
+  }
+
+  // Selective mode: non-approved users see the access request screen
+  if (marketplaceMode === 'selective' && !isAdmin && myAccessStatus !== 'approved') {
+    return (
+      <div className="flex flex-col min-h-dvh bg-gray-50">
+        <div className="bg-white border-b px-4 py-4">
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <ShoppingBag className="w-5 h-5 text-purple-600" />
+            שוק השוברים
+          </h1>
+        </div>
+        <MarketplaceAccessGate />
+      </div>
+    )
   }
 
   return (

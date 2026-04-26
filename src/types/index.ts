@@ -210,6 +210,19 @@ export interface Category {
   wallet_id?: string
 }
 
+export type MarketplaceMode = 'enabled' | 'disabled' | 'selective'
+export type MarketplaceAccessStatus = 'none' | 'pending' | 'approved' | 'rejected'
+
+export interface MarketplaceAccessRequest {
+  user_id: string
+  user_email: string | null
+  user_name: string | null
+  message: string | null
+  status: MarketplaceAccessStatus
+  created_at: string
+  updated_at: string
+}
+
 export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'fashion', name: 'אופנה', emoji: '👗' },
   { id: 'food', name: 'מזון', emoji: '🍕' },
