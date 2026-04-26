@@ -5,7 +5,6 @@ import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
 import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store } from 'lucide-react'
-import { GiftSmartIcon } from '../components/GiftSmartLogo'
 import InStoreMode from '../components/InStoreMode'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
@@ -406,7 +405,7 @@ export default function HomePage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <GiftSmartIcon size={22} variant="white" />
+              <img src="/logo.png" alt="GiftSmart" style={{ width: 26, height: 26, objectFit: 'contain' }} />
             </div>
             <div>
               <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, letterSpacing: '-0.3px' }}>GiftSmart</div>
