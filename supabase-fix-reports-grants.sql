@@ -1,6 +1,9 @@
 -- ── Fix: admin_get_reports was missing GRANT EXECUTE ─────────────────────────
 -- Run this in Supabase SQL Editor if the reports tab shows an error.
 
+-- Drop first so we can change the return type (id → report_id)
+DROP FUNCTION IF EXISTS admin_get_reports();
+
 CREATE OR REPLACE FUNCTION admin_get_reports()
 RETURNS TABLE (
   report_id         UUID,

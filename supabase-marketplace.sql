@@ -625,6 +625,7 @@ END;
 $$;
 
 -- ============ Admin: read all reports ============
+DROP FUNCTION IF EXISTS admin_get_reports();
 CREATE OR REPLACE FUNCTION admin_get_reports()
 RETURNS TABLE (
   report_id         UUID,
