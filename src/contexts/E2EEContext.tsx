@@ -5,6 +5,7 @@ import { deriveKey, encryptField, decryptField, isEncryptedField, generateSalt, 
 const SALT_KEY  = 'gs_e2ee_salt'
 const CHECK_KEY = 'gs_e2ee_chk'
 const SESSION_PASS_KEY = 'gs_e2ee_session'
+const HINT_KEY  = 'gs_e2ee_hint'
 const VERIFY_PLAINTEXT = 'GiftSmart-E2EE-OK'
 
 export interface DecryptedEntry { code: string; cvv: string | null }
@@ -12,7 +13,8 @@ export interface DecryptedEntry { code: string; cvv: string | null }
 interface E2EEContextValue {
   hasVault: boolean
   isVaultUnlocked: boolean
-  setupVault: (passphrase: string) => Promise<void>
+  hint: string | null
+  setupVault: (passphrase: string, hint?: string) => Promise<void>
   unlockVault: (passphrase: string) => Promise<boolean>
   lockVault: () => void
   resetVault: () => void
@@ -38,6 +40,7 @@ export function useE2EE() {
 export function E2EEProvider({ children }: { children: ReactNode }) {
   const [vaultKey, setVaultKey] = useState<CryptoKey | null>(null)
   const [hasVault, setHasVault] = useState(() => !!localStorage.getItem(CHECK_KEY))
+  const [hint, setHint] = useState<string | null>(() => localStorage.getItem(HINT_KEY))
   const [decryptedMap, setDecryptedMap] = useState<Map<string, DecryptedEntry>>(new Map())
   const autoUnlockAttempted = useRef(false)
 
@@ -57,13 +60,20 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       .catch(() => sessionStorage.removeItem(SESSION_PASS_KEY))
   }, [])
 
-  const setupVault = useCallback(async (passphrase: string) => {
+  const setupVault = useCallback(async (passphrase: string, hintText?: string) => {
     const salt = generateSalt()
     const key  = await deriveKey(passphrase, salt)
     const check = await encryptField(key, VERIFY_PLAINTEXT)
     localStorage.setItem(SALT_KEY, saltToB64(salt))
     localStorage.setItem(CHECK_KEY, check)
     sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
+    if (hintText?.trim()) {
+      localStorage.setItem(HINT_KEY, hintText.trim())
+      setHint(hintText.trim())
+    } else {
+      localStorage.removeItem(HINT_KEY)
+      setHint(null)
+    }
     setHasVault(true)
     setVaultKey(key)
   }, [])
@@ -93,9 +103,11 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const resetVault = useCallback(() => {
     localStorage.removeItem(SALT_KEY)
     localStorage.removeItem(CHECK_KEY)
+    localStorage.removeItem(HINT_KEY)
     sessionStorage.removeItem(SESSION_PASS_KEY)
     setVaultKey(null)
     setHasVault(false)
+    setHint(null)
     setDecryptedMap(new Map())
   }, [])
 
@@ -184,6 +196,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     <E2EEContext.Provider value={{
       hasVault,
       isVaultUnlocked: vaultKey !== null,
+      hint,
       setupVault,
       unlockVault,
       lockVault,

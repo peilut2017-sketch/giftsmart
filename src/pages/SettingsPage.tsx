@@ -52,7 +52,7 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, isVaultUnlocked, resetVault, changePassphrase } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, resetVault, changePassphrase } = useE2EE()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
@@ -593,6 +593,16 @@ export default function SettingsPage() {
 
             {showVaultSection && (
               <div className="px-4 pb-4 space-y-3">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
+                  <p className="font-bold">⚠️ חשוב:</p>
+                  <p>• שכחת הסיסמה = <strong>אובדן גישה קבוע</strong> לקודי שוברים מוצפנים — <strong>אין שחזור</strong></p>
+                  <p>• שיתוף קישור לשובר מוצפן חושף את הקוד בשרת לצורך שיתוף</p>
+                </div>
+                {hint && (
+                  <div className="bg-indigo-50 rounded-xl px-3 py-2 text-xs text-indigo-700">
+                    💡 רמז נוכחי: <span className="font-medium">{hint}</span>
+                  </div>
+                )}
                 <p className="text-xs text-indigo-600 bg-indigo-50 rounded-xl p-3">
                   שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.
                 </p>

@@ -23,7 +23,7 @@ export default function HomePage() {
   const navigate = useNavigate()
   const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { hasVault, isVaultUnlocked, unlockVault, lockVault, decryptedMap } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, unlockVault, lockVault, decryptedMap } = useE2EE()
   const [showVaultModal, setShowVaultModal] = useState(false)
   const [vaultPassInput, setVaultPassInput] = useState('')
   const [vaultUnlocking, setVaultUnlocking] = useState(false)
@@ -421,6 +421,10 @@ export default function HomePage() {
                 <p className="text-xs text-gray-400">להצגת שוברים מוצפנים בחיפוש</p>
               </div>
             </div>
+            {hint && (
+              <p className="text-xs text-indigo-500 mb-3 text-center">💡 רמז: <span className="font-medium">{hint}</span></p>
+            )}
+            <p className="text-xs text-amber-600 mb-3 text-center">שכחת הסיסמה = אובדן גישה קבוע — אין שחזור</p>
             <input
               type="password"
               value={vaultPassInput}

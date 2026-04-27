@@ -48,7 +48,7 @@ export default function CheckoutPage() {
   const isSharedVoucher = sharedWithMe.some(v => v.id === id)
   const sv = superVouchers.find(s => s.id === voucher?.super_voucher_id)
 
-  const { isVaultUnlocked, unlockVault, lockVault, decrypt } = useE2EE()
+  const { hint, isVaultUnlocked, unlockVault, lockVault, decrypt } = useE2EE()
   const [plainCode, setPlainCode] = useState<string | null>(null)
   const [plainCvv,  setPlainCvv]  = useState<string | null>(null)
   const [vaultPassInput, setVaultPassInput] = useState('')
@@ -740,7 +740,11 @@ export default function CheckoutPage() {
             <div className="py-6">
               <Shield className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
               <p className="text-sm font-semibold text-gray-700 mb-1">קוד מוצפן מקצה לקצה</p>
-              <p className="text-xs text-gray-400 mb-4">הזן ססמת כספת לצפייה בקוד</p>
+              {hint
+                ? <p className="text-xs text-indigo-500 mb-1">💡 רמז: <span className="font-medium">{hint}</span></p>
+                : <p className="text-xs text-gray-400 mb-1">הזן ססמת כספת לצפייה בקוד</p>
+              }
+              <p className="text-xs text-amber-600 mb-4">שכחת הסיסמה = אובדן גישה קבוע — אין שחזור</p>
               {!showVaultUnlock ? (
                 <button
                   onClick={() => setShowVaultUnlock(true)}
@@ -1213,9 +1217,15 @@ export default function CheckoutPage() {
             {/* ── Link tab ── */}
             {shareTab === 'link' && (
               <>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-3">
                   צור לינק ייחודי לשיתוף השובר. מי שיקבל את הלינק יוכל לראות את הקוד.
                 </p>
+                {voucher.is_e2ee && (
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-800">
+                    <Shield className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-500" />
+                    <span>שובר זה מוצפן. <strong>יצירת קישור תחשוף את הקוד בשרת</strong> לצורך שיתוף — הקוד יישמר רק ברשומת הקישור וייתמחק עם מחיקתו. נדרשת כספת פתוחה.</span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   {[

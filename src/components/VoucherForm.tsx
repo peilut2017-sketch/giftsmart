@@ -25,7 +25,7 @@ interface Props {
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { hasVault, isVaultUnlocked, setupVault, unlockVault, encrypt, decrypt, decryptedMap } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, setupVault, unlockVault, encrypt, decrypt, decryptedMap } = useE2EE()
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
@@ -66,6 +66,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [vaultModalMode, setVaultModalMode] = useState<'setup' | 'unlock'>('setup')
   const [vaultPassInput, setVaultPassInput] = useState('')
   const [vaultPass2Input, setVaultPass2Input] = useState('')
+  const [vaultHintInput, setVaultHintInput] = useState('')
   const [vaultLoading, setVaultLoading] = useState(false)
   const [vaultError, setVaultError] = useState('')
   const scannerRef = useRef<Html5Qrcode | null>(null)
@@ -349,7 +350,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       if (vaultModalMode === 'setup') {
         if (vaultPassInput.length < 6) { setVaultError('ססמה קצרה מדי (מינ. 6 תווים)'); return }
         if (vaultPassInput !== vaultPass2Input) { setVaultError('הססמאות אינן תואמות'); return }
-        await setupVault(vaultPassInput)
+        await setupVault(vaultPassInput, vaultHintInput)
       } else {
         const ok = await unlockVault(vaultPassInput)
         if (!ok) { setVaultError('ססמה שגויה'); return }
@@ -1083,37 +1084,57 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
         {/* Vault modal overlay */}
         {showVaultModal && (
-          <div className="absolute inset-0 bg-white/96 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 rounded-t-3xl sm:rounded-3xl">
-            <Shield className="w-12 h-12 text-indigo-500 mb-3" />
+          <div className="absolute inset-0 bg-white/96 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 rounded-t-3xl sm:rounded-3xl overflow-y-auto">
+            <Shield className="w-12 h-12 text-indigo-500 mb-3 flex-shrink-0" />
             <h3 className="text-lg font-bold text-gray-900 mb-1">
               {vaultModalMode === 'setup' ? 'הגדר כספת הצפנה' : 'פתח כספת הצפנה'}
             </h3>
-            <p className="text-xs text-gray-500 text-center mb-5 max-w-xs leading-relaxed">
-              {vaultModalMode === 'setup'
-                ? '⚠️ שמור על הססמה — אין אפשרות לשחזר שוברים מוצפנים אם תאבד אותה!'
-                : 'הזן את ססמת הכספת כדי להצפין את קוד השובר'}
-            </p>
+
+            {vaultModalMode === 'setup' ? (
+              <div className="w-full max-w-xs mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1 leading-relaxed">
+                <p className="font-bold">⚠️ קרא לפני שממשיך:</p>
+                <p>• קוד השובר יוצפן — רק מי שמחזיק בסיסמה יכול לקרוא אותו</p>
+                <p>• <strong>שכחת הסיסמה = אובדן גישה קבוע לקוד.</strong> אין שחזור.</p>
+                <p>• שיתוף קישור לשובר זה יחשוף את הקוד לשרת</p>
+                <p>• מומלץ לרשום רמז שיזכיר לך את הסיסמה</p>
+              </div>
+            ) : (
+              hint && (
+                <p className="text-xs text-indigo-500 mb-3 text-center">💡 רמז: <span className="font-medium">{hint}</span></p>
+              )
+            )}
+
             <div className="w-full max-w-xs space-y-2.5">
               <input
                 type="password"
                 value={vaultPassInput}
                 onChange={e => setVaultPassInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !vaultPass2Input && handleVaultSubmit()}
-                placeholder={vaultModalMode === 'setup' ? 'ססמת כספת חדשה (מינ. 6 תווים)' : 'ססמת כספת'}
+                placeholder={vaultModalMode === 'setup' ? 'ססמת כספת (מינ. 6 תווים)' : 'ססמת כספת'}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 dir="ltr"
                 autoFocus
               />
               {vaultModalMode === 'setup' && (
-                <input
-                  type="password"
-                  value={vaultPass2Input}
-                  onChange={e => setVaultPass2Input(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleVaultSubmit()}
-                  placeholder="אימות ססמה"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  dir="ltr"
-                />
+                <>
+                  <input
+                    type="password"
+                    value={vaultPass2Input}
+                    onChange={e => setVaultPass2Input(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleVaultSubmit()}
+                    placeholder="אימות ססמה"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    dir="ltr"
+                  />
+                  <input
+                    type="text"
+                    value={vaultHintInput}
+                    onChange={e => setVaultHintInput(e.target.value)}
+                    placeholder="רמז סיסמה (לא חובה) — יוצג בפתיחת הכספת"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 text-gray-600"
+                    dir="rtl"
+                  />
+                </>
               )}
               {vaultError && <p className="text-xs text-red-500 text-center">{vaultError}</p>}
               <div className="flex gap-2 pt-1">
@@ -1127,7 +1148,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultPass2Input(''); setVaultError('') }}
+                  onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultPass2Input(''); setVaultHintInput(''); setVaultError('') }}
                   className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium"
                 >
                   ביטול

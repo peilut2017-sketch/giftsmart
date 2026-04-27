@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { X, ChevronRight, ChevronLeft, Archive, Trash2, Edit2 } from 'lucide-react'
+import { X, ChevronRight, ChevronLeft, Archive, Trash2, Edit2, Shield } from 'lucide-react'
 
 const STORAGE_KEY = 'onboarding_seen_v2'
 const TOOLTIP_W = 310
@@ -146,6 +146,22 @@ const STEPS: Step[] = [
     target: '[data-guide="market-nav"]',
     padding: 8,
     tipSide: 'top',
+  },
+  {
+    id: 'e2ee',
+    title: 'הצפנה מקצה לקצה (E2EE)',
+    body: (
+      <>
+        <p>בטופס הוספת שובר תוכל להפעיל הצפנה מקצה לקצה — הקוד יישמר מוצפן גם בשרת, רק מי שמחזיק בסיסמת הכספת יוכל לקרוא אותו.</p>
+        <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
+          <p className="flex items-center gap-1.5 font-bold"><Shield className="w-3.5 h-3.5" /> חשוב לדעת:</p>
+          <p>• <strong>שכחת הסיסמה = אובדן גישה קבוע לקוד</strong> — אין שחזור בשרת</p>
+          <p>• שיתוף קישור לשובר מוצפן חושף את הקוד בשרת</p>
+          <p>• הגדר רמז סיסמה בעת ההגדרה כדי שלא לשכוח</p>
+          <p>• שנה ואפס כספת בהגדרות ← פרטי חשבון</p>
+        </div>
+      </>
+    ),
   },
   {
     id: 'done',
