@@ -529,7 +529,8 @@ export default function AdminPage() {
       message: `למחוק את הקופון "${code}"?`,
       onConfirm: async () => {
         setConfirm(null)
-        await supabase.rpc('admin_delete_coupon', { p_id: id })
+        const { error } = await supabase.rpc('admin_delete_coupon', { p_id: id })
+        if (error) { toast.error('שגיאה במחיקה: ' + error.message); return }
         setCoupons(prev => prev.filter(c => c.id !== id))
         toast.success('קופון נמחק')
       },
@@ -2124,7 +2125,7 @@ export default function AdminPage() {
                   </div>
                   {r.details && <p className="text-xs text-gray-600 bg-white rounded-xl p-2">{r.details}</p>}
                   <p className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString('he-IL')}</p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {r.status !== 'reviewed' && (
                       <button
                         disabled={updatingReport === r.report_id}
@@ -2141,6 +2142,22 @@ export default function AdminPage() {
                         className="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-xl hover:bg-green-200 disabled:opacity-50"
                       >
                         סגור
+                      </button>
+                    )}
+                    {r.status === 'resolved' && (
+                      <button
+                        disabled={updatingReport === r.report_id}
+                        onClick={async () => {
+                          setUpdatingReport(r.report_id)
+                          const { error } = await supabase.rpc('admin_delete_report', { p_report_id: r.report_id })
+                          setUpdatingReport(null)
+                          if (error) { toast.error('שגיאה במחיקה'); return }
+                          setReports(prev => prev.filter(x => x.report_id !== r.report_id))
+                          toast.success('דיווח נמחק')
+                        }}
+                        className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-600 rounded-xl hover:bg-red-200 disabled:opacity-50"
+                      >
+                        מחק
                       </button>
                     )}
                   </div>

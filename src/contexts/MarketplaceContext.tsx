@@ -178,27 +178,54 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_description: description || null,
     })
     if (error) throw error
-    fetchedAt.current.myListings = 0  // invalidate cache
-    await fetchMyListings()
-    return data as MarketplaceListing
-  }, [fetchMyListings])
-
-  const removeFromSale = useCallback(async (listingId: string) => {
-    const { error } = await supabase.rpc('remove_from_sale', { p_listing_id: listingId })
-    if (error) throw error
+    if (user) {
+      const { data: v } = await supabase.from('vouchers').select('store_name').eq('id', voucherId).single()
+      supabase.from('activity_log').insert({
+        user_id: user.id, wallet_id: null,
+        action: 'list_for_sale', voucher_id: voucherId,
+        voucher_name: v?.store_name ?? 'שובר',
+        details: { asking_price: askingPrice },
+      }).then(() => {}, () => {})
+    }
     fetchedAt.current.myListings = 0
     await fetchMyListings()
-  }, [fetchMyListings])
+    return data as MarketplaceListing
+  }, [fetchMyListings, user])
+
+  const removeFromSale = useCallback(async (listingId: string) => {
+    const listing = myListings.find(l => l.id === listingId)
+    const { error } = await supabase.rpc('remove_from_sale', { p_listing_id: listingId })
+    if (error) throw error
+    if (user && listing) {
+      supabase.from('activity_log').insert({
+        user_id: user.id, wallet_id: null,
+        action: 'cancel_sale', voucher_id: listing.voucher_id ?? null,
+        voucher_name: listing.store_name ?? 'שובר',
+        details: {},
+      }).then(() => {}, () => {})
+    }
+    fetchedAt.current.myListings = 0
+    await fetchMyListings()
+  }, [fetchMyListings, myListings, user])
 
   const confirmPaymentSent = useCallback(async (listingId: string, paymentMethod: string) => {
+    const listing = listings.find(l => l.id === listingId)
     const { error } = await supabase.rpc('buyer_confirm_payment', {
       p_listing_id: listingId,
       p_payment_method_used: paymentMethod,
     })
     if (error) throw error
+    if (user && listing) {
+      supabase.from('activity_log').insert({
+        user_id: user.id, wallet_id: null,
+        action: 'system_voucher_purchase', voucher_id: listing.voucher_id ?? null,
+        voucher_name: listing.store_name ?? 'שובר',
+        details: { store_name: listing.store_name, asking_price: listing.asking_price },
+      }).then(() => {}, () => {})
+    }
     fetchedAt.current.listings = 0; fetchedAt.current.myPurchases = 0
     await Promise.all([fetchListings(), fetchMyPurchases()])
-  }, [fetchListings, fetchMyPurchases])
+  }, [fetchListings, fetchMyPurchases, listings, user])
 
   const confirmPaymentReceived = useCallback(async (purchaseId: string) => {
     const { error } = await supabase.rpc('seller_confirm_payment', { p_purchase_id: purchaseId })

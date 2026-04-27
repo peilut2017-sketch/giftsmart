@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useVouchers } from '../contexts/VoucherContext'
 import {
   ShoppingBag, Search, Star, X, CheckCircle, Loader2,
   Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
-  Bell, Plus, Trash2, SlidersHorizontal,
+  Bell, Plus, Trash2, SlidersHorizontal, Check, Settings,
 } from 'lucide-react'
 import { formatDate } from '../utils/helpers'
-import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem } from '../types'
+import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem, PaymentMethod } from '../types'
+import { PAYMENT_METHOD_LABELS } from '../types'
 import { supabase } from '../lib/supabase'
 import ChatModal from '../components/ChatModal'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
@@ -766,7 +768,8 @@ function MarketplaceAccessGate() {
 export default function MarketplacePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAdmin } = useAuth()
+  const { isAdmin, user, profile } = useAuth()
+  const { logAction } = useVouchers()
   const {
     listings, myListings, myPurchases,
     loadingListings, loadingMyListings, loadingMyPurchases,
@@ -807,6 +810,53 @@ export default function MarketplacePage() {
 
   // Conversations modal (seller picks buyer to chat with)
   const [convsListing, setConvsListing] = useState<MarketplaceListing | null>(null)
+
+  // Payment methods
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(
+    () => (profile?.marketplace_payment_methods as PaymentMethod[]) || []
+  )
+  const [showPaymentSettings, setShowPaymentSettings] = useState(false)
+  const [addingPayment, setAddingPayment] = useState(false)
+  const [newPaymentType, setNewPaymentType] = useState<PaymentMethod['type']>('bit')
+  const [newPaymentValue, setNewPaymentValue] = useState('')
+  const [savingPayments, setSavingPayments] = useState(false)
+
+  useEffect(() => {
+    if (profile?.marketplace_payment_methods) {
+      setPaymentMethods(profile.marketplace_payment_methods as PaymentMethod[])
+    }
+  }, [profile])
+
+  async function savePaymentMethods(methods: PaymentMethod[]) {
+    setSavingPayments(true)
+    try {
+      const { error } = await supabase.from('profiles').update({ marketplace_payment_methods: methods }).eq('id', user!.id)
+      if (error) throw error
+      setPaymentMethods(methods)
+      toast.success('שיטות תשלום עודכנו')
+    } catch {
+      toast.error('שגיאה בשמירת שיטות תשלום')
+    } finally {
+      setSavingPayments(false)
+    }
+  }
+
+  function addPaymentMethod() {
+    if (!newPaymentValue.trim()) { toast.error('הזן ערך'); return }
+    const newMethod: PaymentMethod = { type: newPaymentType, value: newPaymentValue.trim() }
+    savePaymentMethods([...paymentMethods, newMethod]).then(() => {
+      logAction('system_payment_method_add', 'מערכת', undefined, { type: PAYMENT_METHOD_LABELS[newPaymentType] })
+    }).catch(() => {})
+    setNewPaymentValue('')
+    setAddingPayment(false)
+  }
+
+  function removePaymentMethod(index: number) {
+    const removed = paymentMethods[index]
+    savePaymentMethods(paymentMethods.filter((_, i) => i !== index)).then(() => {
+      logAction('system_payment_method_remove', 'מערכת', undefined, { type: PAYMENT_METHOD_LABELS[removed.type] })
+    }).catch(() => {})
+  }
 
   // Redirect non-admins when marketplace is fully disabled
   useEffect(() => {
@@ -1036,7 +1086,30 @@ export default function MarketplacePage() {
         {/* ── My listings ── */}
         {tab === 'mine' && (
           <>
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <button
+                onClick={() => setShowPaymentSettings(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: showPaymentSettings ? 'var(--c-primary-light)' : 'var(--c-bg)',
+                  border: `1.5px solid ${showPaymentSettings ? 'var(--c-primary)' : 'var(--c-border)'}`,
+                  borderRadius: 10, padding: '7px 12px', cursor: 'pointer',
+                  color: showPaymentSettings ? 'var(--c-primary)' : 'var(--c-text2)',
+                  fontFamily: 'Heebo, sans-serif', fontSize: 13, fontWeight: 500,
+                }}
+              >
+                <Settings size={14} />
+                שיטות תשלום
+                {paymentMethods.length > 0 && (
+                  <span style={{
+                    background: 'var(--c-primary)', color: '#fff',
+                    fontSize: 11, fontWeight: 700, borderRadius: 999,
+                    padding: '1px 6px', marginRight: 2,
+                  }}>
+                    {paymentMethods.length}
+                  </span>
+                )}
+              </button>
               <button
                 onClick={() => navigate('/market/bulk')}
                 className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-xl"
@@ -1044,6 +1117,78 @@ export default function MarketplacePage() {
                 <ShoppingBag className="w-3.5 h-3.5" /> פרסם מרובה
               </button>
             </div>
+
+            {/* Payment methods panel */}
+            {showPaymentSettings && (
+              <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
+                <div className="p-4 space-y-3">
+                  <p className="text-xs text-gray-500">שיטות תשלום יוצגו לקונים כאשר ירצו לרכוש ממך שובר</p>
+
+                  {paymentMethods.length === 0 && !addingPayment && (
+                    <p className="text-sm text-gray-400 text-center py-2">טרם הגדרת שיטות תשלום</p>
+                  )}
+
+                  {paymentMethods.map((m, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${m.type === 'paypal' ? 'bg-blue-500' : m.type === 'bit' ? 'bg-purple-500' : m.type === 'paybox' ? 'bg-orange-500' : 'bg-teal-500'}`}>
+                        {PAYMENT_METHOD_LABELS[m.type][0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{PAYMENT_METHOD_LABELS[m.type]}</p>
+                        <p className="text-xs text-gray-500 truncate">{m.value}</p>
+                      </div>
+                      <button
+                        onClick={() => removePaymentMethod(i)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                        aria-label="הסר שיטת תשלום"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {addingPayment && (
+                    <div className="space-y-2 border border-green-200 rounded-xl p-3">
+                      <select
+                        value={newPaymentType}
+                        onChange={e => setNewPaymentType(e.target.value as PaymentMethod['type'])}
+                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                      >
+                        {(Object.entries(PAYMENT_METHOD_LABELS) as [PaymentMethod['type'], string][]).map(([type, label]) => (
+                          <option key={type} value={type}>{label}</option>
+                        ))}
+                      </select>
+                      <input
+                        type={newPaymentType === 'paypal' ? 'email' : 'tel'}
+                        value={newPaymentValue}
+                        onChange={e => setNewPaymentValue(e.target.value)}
+                        placeholder={newPaymentType === 'paypal' ? 'כתובת PayPal (email)' : 'מספר טלפון'}
+                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                        dir="ltr"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={addPaymentMethod} disabled={savingPayments} className="flex-1 py-2 bg-green-500 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-1">
+                          <Check className="w-4 h-4" /> הוסף
+                        </button>
+                        <button onClick={() => { setAddingPayment(false); setNewPaymentValue('') }} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
+                          <X className="w-4 h-4" /> ביטול
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!addingPayment && paymentMethods.length < 5 && (
+                    <button
+                      onClick={() => setAddingPayment(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-green-400 hover:text-green-600 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      הוסף שיטת תשלום
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {loadingMyListings && myListings.length === 0 ? (
               <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
             ) : myListings.length === 0 ? (

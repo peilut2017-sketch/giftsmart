@@ -2,21 +2,37 @@ import { useEffect, useState } from 'react'
 import { useVouchers, type ActivityLogEntry } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
-import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Undo2, Zap, Gift, Link2, Mail } from 'lucide-react'
+import { History, Plus, Edit2, Archive, ArchiveRestore, Trash2, CreditCard, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Undo2, Zap, Gift, Link2, Mail, Share2, ShoppingBag, XCircle, KeyRound, Fingerprint, MessageSquare, Users, CreditCard as CardIcon, ShoppingCart } from 'lucide-react'
 import { formatCurrency } from '../utils/helpers'
 import toast from 'react-hot-toast'
 
 const ACTION_META: Record<ActivityLogEntry['action'], { label: string; Icon: any; color: string; bg: string }> = {
-  add:                 { label: 'הוספת שובר',       Icon: Plus,           color: 'text-green-600',  bg: 'bg-green-50'   },
-  edit:                { label: 'עריכת שובר',        Icon: Edit2,          color: 'text-blue-600',   bg: 'bg-blue-50'    },
-  balance_update:      { label: 'עדכון יתרה',        Icon: CreditCard,     color: 'text-purple-600', bg: 'bg-purple-50'  },
-  archive:             { label: 'העברה לארכיון',     Icon: Archive,        color: 'text-orange-600', bg: 'bg-orange-50'  },
-  unarchive:           { label: 'החזרה מהארכיון',    Icon: ArchiveRestore, color: 'text-teal-600',   bg: 'bg-teal-50'    },
-  delete:              { label: 'מחיקה',             Icon: Trash2,         color: 'text-red-600',    bg: 'bg-red-50'     },
-  gift_sent:           { label: 'מתנה נשלחה',        Icon: Mail,           color: 'text-pink-600',   bg: 'bg-pink-50'    },
-  gift_link:           { label: 'קישור מתנה נוצר',   Icon: Link2,          color: 'text-pink-600',   bg: 'bg-pink-50'    },
-  gift_received:       { label: 'מתנה התקבלה',       Icon: Gift,           color: 'text-rose-600',   bg: 'bg-rose-50'    },
-  gift_balance_update: { label: 'עדכון יתרה (מתנה)', Icon: CreditCard,     color: 'text-pink-600',   bg: 'bg-pink-50'    },
+  // Voucher actions
+  add:                          { label: 'הוספת שובר',           Icon: Plus,          color: 'text-green-600',  bg: 'bg-green-50'   },
+  edit:                         { label: 'עריכת פרטים',          Icon: Edit2,         color: 'text-blue-600',   bg: 'bg-blue-50'    },
+  balance_update:               { label: 'עדכון יתרה',           Icon: CreditCard,    color: 'text-purple-600', bg: 'bg-purple-50'  },
+  archive:                      { label: 'העברה לארכיון',        Icon: Archive,       color: 'text-orange-600', bg: 'bg-orange-50'  },
+  unarchive:                    { label: 'החזרה מארכיון',        Icon: ArchiveRestore,color: 'text-teal-600',   bg: 'bg-teal-50'    },
+  delete:                       { label: 'מחיקה',                Icon: Trash2,        color: 'text-red-600',    bg: 'bg-red-50'     },
+  // Sharing
+  share_link:                   { label: 'שיתוף בלינק',          Icon: Link2,         color: 'text-cyan-600',   bg: 'bg-cyan-50'    },
+  share_email:                  { label: 'שיתוף במייל',          Icon: Share2,        color: 'text-cyan-600',   bg: 'bg-cyan-50'    },
+  // Gift
+  gift_sent:                    { label: 'מתנה נשלחה',           Icon: Mail,          color: 'text-pink-600',   bg: 'bg-pink-50'    },
+  gift_link:                    { label: 'קישור מתנה נוצר',      Icon: Link2,         color: 'text-pink-600',   bg: 'bg-pink-50'    },
+  gift_received:                { label: 'מתנה התקבלה',          Icon: Gift,          color: 'text-rose-600',   bg: 'bg-rose-50'    },
+  gift_balance_update:          { label: 'עדכון יתרה (שותף)',    Icon: CreditCard,    color: 'text-pink-600',   bg: 'bg-pink-50'    },
+  // Marketplace
+  list_for_sale:                { label: 'הצעה למכירה',          Icon: ShoppingBag,   color: 'text-violet-600', bg: 'bg-violet-50'  },
+  cancel_sale:                  { label: 'ביטול מכירה',          Icon: XCircle,       color: 'text-violet-600', bg: 'bg-violet-50'  },
+  // System events
+  system_password_change:       { label: 'שינוי סיסמה',          Icon: KeyRound,      color: 'text-gray-600',   bg: 'bg-gray-100'   },
+  system_biometric_link:        { label: 'חיבור אימות ביומטרי',  Icon: Fingerprint,   color: 'text-gray-600',   bg: 'bg-gray-100'   },
+  system_telegram_link:         { label: 'חיבור טלגרם',          Icon: MessageSquare, color: 'text-gray-600',   bg: 'bg-gray-100'   },
+  system_wallet_share:          { label: 'שיתוף ארנק',           Icon: Users,         color: 'text-gray-600',   bg: 'bg-gray-100'   },
+  system_payment_method_add:    { label: 'הוספת שיטת תשלום',     Icon: CardIcon,      color: 'text-gray-600',   bg: 'bg-gray-100'   },
+  system_payment_method_remove: { label: 'הסרת שיטת תשלום',      Icon: CardIcon,      color: 'text-gray-600',   bg: 'bg-gray-100'   },
+  system_voucher_purchase:      { label: 'רכישת שובר',           Icon: ShoppingCart,  color: 'text-gray-600',   bg: 'bg-gray-100'   },
 }
 
 const UNDOABLE: ActivityLogEntry['action'][] = ['edit', 'balance_update', 'archive', 'unarchive']
@@ -65,6 +81,21 @@ function buildSubtitle(entry: ActivityLogEntry): string {
       const base = `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}`
       return d.store_used ? `${base} · ${d.store_used}` : base
     }
+    case 'share_link':
+      return d.expires_in_days ? `תוקף: ${d.expires_in_days} ימים` : 'ללא הגבלת זמן'
+    case 'share_email':
+      return d.recipient ? `ל: ${d.recipient}` : ''
+    case 'list_for_sale':
+      return d.asking_price ? `מחיר: ${formatCurrency(d.asking_price)}` : ''
+    case 'cancel_sale':
+      return ''
+    case 'system_payment_method_add':
+    case 'system_payment_method_remove':
+      return d.type ? d.type : ''
+    case 'system_wallet_share':
+      return d.email ? `ל: ${d.email}` : ''
+    case 'system_voucher_purchase':
+      return d.store_name ? d.store_name : ''
     default:
       return ''
   }

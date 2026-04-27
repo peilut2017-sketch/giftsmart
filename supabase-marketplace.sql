@@ -675,6 +675,17 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION admin_update_report_status TO authenticated;
 
+CREATE OR REPLACE FUNCTION admin_delete_report(p_report_id UUID)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = TRUE) THEN
+    RAISE EXCEPTION 'unauthorized';
+  END IF;
+  DELETE FROM user_reports WHERE id = p_report_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION admin_delete_report TO authenticated;
+
 -- Enable realtime for marketplace tables
 ALTER PUBLICATION supabase_realtime ADD TABLE marketplace_purchases;
 ALTER PUBLICATION supabase_realtime ADD TABLE marketplace_listings;

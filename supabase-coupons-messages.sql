@@ -233,6 +233,7 @@ begin
   delete from coupons where id = p_id;
 end;
 $$;
+GRANT EXECUTE ON FUNCTION admin_delete_coupon TO authenticated;
 
 -- All support messages (newest first)
 create or replace function admin_get_messages()

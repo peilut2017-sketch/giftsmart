@@ -6,12 +6,10 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, X, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Plus, Pencil, BookOpen } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
-import type { PaymentMethod } from '../types'
-import { PAYMENT_METHOD_LABELS } from '../types'
 
 interface SupportMessageReply {
   id: string
@@ -52,7 +50,7 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
-  const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember } = useVouchers()
+  const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember, logAction } = useVouchers()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
@@ -94,45 +92,6 @@ export default function SettingsPage() {
     () => new Set(JSON.parse(localStorage.getItem('seen_broadcast_ids') || '[]'))
   )
 
-  // Payment methods for marketplace
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(
-    () => (profile?.marketplace_payment_methods as PaymentMethod[]) || []
-  )
-  const [addingPayment, setAddingPayment] = useState(false)
-  const [newPaymentType, setNewPaymentType] = useState<PaymentMethod['type']>('bit')
-  const [newPaymentValue, setNewPaymentValue] = useState('')
-  const [savingPayments, setSavingPayments] = useState(false)
-
-  async function savePaymentMethods(methods: PaymentMethod[]) {
-    setSavingPayments(true)
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ marketplace_payment_methods: methods })
-        .eq('id', user!.id)
-      if (error) throw error
-      setPaymentMethods(methods)
-      toast.success('שיטות תשלום עודכנו')
-    } catch {
-      toast.error('שגיאה בשמירת שיטות תשלום')
-    } finally {
-      setSavingPayments(false)
-    }
-  }
-
-  function addPaymentMethod() {
-    if (!newPaymentValue.trim()) { toast.error('הזן ערך'); return }
-    const newMethod: PaymentMethod = { type: newPaymentType, value: newPaymentValue.trim() }
-    const updated = [...paymentMethods, newMethod]
-    savePaymentMethods(updated)
-    setNewPaymentValue('')
-    setAddingPayment(false)
-  }
-
-  function removePaymentMethod(index: number) {
-    savePaymentMethods(paymentMethods.filter((_, i) => i !== index))
-  }
-
   // Telegram
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
   const [telegramCode, setTelegramCode] = useState<string | null>(null)
@@ -159,7 +118,11 @@ export default function SettingsPage() {
     if (newPass.length < 6) return toast.error('סיסמה קצרה מדי')
     const { error } = await supabase.auth.updateUser({ password: newPass })
     if (error) toast.error('שגיאה בשינוי סיסמה')
-    else { toast.success('סיסמה שונתה!'); setEditPass(false); setNewPass(''); setNewPass2('') }
+    else {
+      toast.success('סיסמה שונתה!')
+      setEditPass(false); setNewPass(''); setNewPass2('')
+      logAction('system_password_change', 'מערכת')
+    }
   }
 
   async function handleSync() {
@@ -212,14 +175,18 @@ export default function SettingsPage() {
     setBiometricLoading(true)
     const ok = await registerBiometric(user?.id || '', profile?.name || user?.email || '', user?.email)
     setBiometricLoading(false)
-    if (ok) { setBiometricEnabled(true); toast.success('נעילה ביומטרית הופעלה!') }
-    else toast.error('לא ניתן לרשום אימות ביומטרי')
+    if (ok) {
+      setBiometricEnabled(true)
+      toast.success('נעילה ביומטרית הופעלה!')
+      logAction('system_biometric_link', 'מערכת', undefined, { type: 'enabled' })
+    } else toast.error('לא ניתן לרשום אימות ביומטרי')
   }
 
   function handleDisableBiometric() {
     disableBiometric()
     setBiometricEnabled(false)
     toast.success('נעילה ביומטרית בוטלה')
+    logAction('system_biometric_link', 'מערכת', undefined, { type: 'disabled' })
   }
 
   // Load wallet members
@@ -238,6 +205,7 @@ export default function SettingsPage() {
         setPendingInviteEmail(inviteEmail.trim())
       } else {
         toast.success('החבר נוסף לארנק!')
+        logAction('system_wallet_share', 'ארנק', undefined, { email: inviteEmail.trim() })
         setInviteEmail('')
         // Reload members
         if (walletId) {
@@ -400,6 +368,7 @@ export default function SettingsPage() {
     setTelegramLinked(false)
     setTelegramCode(null)
     toast.success('טלגרם נותק')
+    logAction('system_telegram_link', 'מערכת', undefined, { type: 'disconnected' })
   }
 
   async function handleCheckConnection() {
@@ -504,77 +473,6 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
-
-        {/* Payment Methods for Marketplace */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>שיטות תשלום בשוק</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-          <div className="p-4 space-y-3">
-            <p className="text-xs text-gray-500">שיטות אלה יוצגו לקונים בעת מכירת שוברים</p>
-
-            {paymentMethods.length === 0 && !addingPayment && (
-              <p className="text-sm text-gray-400 text-center py-2">טרם הגדרת שיטות תשלום</p>
-            )}
-
-            {paymentMethods.map((m, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${m.type === 'paypal' ? 'bg-blue-500' : m.type === 'bit' ? 'bg-purple-500' : m.type === 'paybox' ? 'bg-orange-500' : 'bg-teal-500'}`}>
-                  {PAYMENT_METHOD_LABELS[m.type][0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{PAYMENT_METHOD_LABELS[m.type]}</p>
-                  <p className="text-xs text-gray-500 truncate">{m.value}</p>
-                </div>
-                <button
-                  onClick={() => removePaymentMethod(i)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
-                  aria-label="הסר שיטת תשלום"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-
-            {addingPayment && (
-              <div className="space-y-2 border border-green-200 rounded-xl p-3">
-                <select
-                  value={newPaymentType}
-                  onChange={e => setNewPaymentType(e.target.value as PaymentMethod['type'])}
-                  className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                >
-                  {(Object.entries(PAYMENT_METHOD_LABELS) as [PaymentMethod['type'], string][]).map(([type, label]) => (
-                    <option key={type} value={type}>{label}</option>
-                  ))}
-                </select>
-                <input
-                  type={newPaymentType === 'paypal' ? 'email' : 'tel'}
-                  value={newPaymentValue}
-                  onChange={e => setNewPaymentValue(e.target.value)}
-                  placeholder={newPaymentType === 'paypal' ? 'כתובת PayPal (email)' : 'מספר טלפון'}
-                  className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                  dir="ltr"
-                />
-                <div className="flex gap-2">
-                  <button onClick={addPaymentMethod} disabled={savingPayments} className="flex-1 py-2 bg-green-500 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                    <Check className="w-4 h-4" /> הוסף
-                  </button>
-                  <button onClick={() => { setAddingPayment(false); setNewPaymentValue('') }} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                    <X className="w-4 h-4" /> ביטול
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {!addingPayment && paymentMethods.length < 5 && (
-              <button
-                onClick={() => setAddingPayment(true)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-green-400 hover:text-green-600 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                הוסף שיטת תשלום
-              </button>
-            )}
-          </div>
-        </div>
 
         {/* Password */}
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>אבטחה</div>

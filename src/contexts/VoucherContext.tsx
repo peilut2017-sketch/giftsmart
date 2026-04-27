@@ -50,6 +50,7 @@ interface VoucherContextType {
   updateSharedVoucherBalance: (voucherId: string, newBalance: number, storeUsed?: string | null) => Promise<void>
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
   getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
+  logAction: (action: ActivityLogEntry['action'], voucherName: string, voucherId?: string, details?: Record<string, any>) => void
   createGift: (voucherId: string, recipientEmail: string | null, message: string, sendAt: Date) => Promise<string | null>
   cancelGift: (giftId: string) => Promise<void>
   getPendingGifts: (voucherId: string) => Promise<PendingGift[]>
@@ -66,7 +67,13 @@ export interface PendingGift {
 
 export interface ActivityLogEntry {
   id: string
-  action: 'add' | 'edit' | 'balance_update' | 'archive' | 'unarchive' | 'delete' | 'gift_sent' | 'gift_link' | 'gift_received' | 'gift_balance_update'
+  action: 'add' | 'edit' | 'balance_update' | 'archive' | 'unarchive' | 'delete'
+    | 'gift_sent' | 'gift_link' | 'gift_received' | 'gift_balance_update'
+    | 'share_link' | 'share_email'
+    | 'list_for_sale' | 'cancel_sale'
+    | 'system_password_change' | 'system_biometric_link' | 'system_telegram_link'
+    | 'system_wallet_share' | 'system_payment_method_add' | 'system_payment_method_remove'
+    | 'system_voucher_purchase'
   voucher_id: string | null
   voucher_name: string
   details: Record<string, any>
@@ -761,9 +768,10 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (error) throw error
     const result = data as 'shared' | 'already_shared' | 'not_found'
     if (result === 'shared') {
-      // Mark the voucher as shared so it appears in the "shared" tab
+      const voucher = vouchersRef.current.find(v => v.id === voucherId)
       setVouchers(prev => prev.map(v => v.id === voucherId ? { ...v, is_shared: true } : v))
       supabase.from('vouchers').update({ is_shared: true }).eq('id', voucherId).then(() => {})
+      logAction('share_email', voucher?.store_name ?? 'שובר', voucherId, { recipient: email })
     }
     return result
   }
@@ -830,6 +838,15 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       if (error.code === '42P01' || error.message?.includes('schema cache')) throw new Error('TABLE_MISSING')
       throw new Error(error.message)
     }
+    // Mark voucher as shared so it appears in the "shared" filter tab
+    const voucher = vouchersRef.current.find(v => v.id === voucherId)
+    if (voucher && !voucher.is_shared) {
+      setVouchers(prev => prev.map(v => v.id === voucherId ? { ...v, is_shared: true } : v))
+      supabase.from('vouchers').update({ is_shared: true }).eq('id', voucherId).then(() => {})
+    }
+    logAction('share_link', voucher?.store_name ?? 'שובר', voucherId, {
+      expires_in_days: expiresInDays ?? null,
+    })
     return token
   }
 
@@ -936,7 +953,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       deleteSuperVoucher, addCategory, inviteMember, removeMember,
       updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
       shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance,
-      getActivityLog, getVoucherActivityLog,
+      getActivityLog, getVoucherActivityLog, logAction,
       createGift, cancelGift, getPendingGifts,
     }}>
       {children}
