@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
-import { Edit2, Trash2, Archive, Star, Check, ExternalLink, Gift, Lock, ShoppingBag } from 'lucide-react'
+import { Edit2, Trash2, Archive, Star, Check, ExternalLink, Gift, Lock, ShoppingBag, Shield } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 const STORE_PALETTE = [
@@ -193,6 +193,7 @@ export default function VoucherCard({
       {voucher.is_locked && voucher.lock_reason !== 'for_sale' && (
         <span className="text-orange-500"><Lock className="w-3.5 h-3.5" /></span>
       )}
+      {voucher.is_e2ee && <span className="text-indigo-500" title="מוצפן מקצה לקצה"><Shield className="w-3.5 h-3.5" /></span>}
       {voucher.is_gift && <span className="text-pink-500"><Gift className="w-3.5 h-3.5" /></span>}
       {safeLink && (
         <a href={safeLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-blue-500 hover:opacity-70">

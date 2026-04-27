@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { MarketplaceProvider } from './contexts/MarketplaceContext'
+import { E2EEProvider } from './contexts/E2EEContext'
 import { useExpiryNotifications } from './hooks/useNotifications'
 import { supabase } from './lib/supabase'
 import UpgradeSheet from './components/UpgradeSheet'
@@ -242,6 +243,7 @@ function AppRoutes() {
   }
 
   return (
+    <E2EEProvider>
     <SubscriptionProvider>
     <VoucherProvider>
     <MarketplaceProvider>
@@ -273,6 +275,7 @@ function AppRoutes() {
     </MarketplaceProvider>
     </VoucherProvider>
     </SubscriptionProvider>
+    </E2EEProvider>
   )
 }
 

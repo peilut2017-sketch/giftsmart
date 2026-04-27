@@ -5,12 +5,14 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield } from 'lucide-react'
 
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
 import toast from 'react-hot-toast'
 import { Html5Qrcode } from 'html5-qrcode'
 import { supabase } from '../lib/supabase'
+import { useE2EE } from '../contexts/E2EEContext'
+import { isEncryptedField } from '../lib/e2ee'
 
 const OCR_STORAGE_KEY = () => `ocr_scans_${new Date().toISOString().slice(0, 7)}` // YYYY-MM
 
@@ -23,6 +25,7 @@ interface Props {
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
+  const { hasVault, isVaultUnlocked, setupVault, unlockVault, encrypt, decrypt } = useE2EE()
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
@@ -56,6 +59,15 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [amountUnit, setAmountUnit] = useState<AmountUnit>('₪')
   const [showUnitPicker, setShowUnitPicker] = useState(false)
   const geminiAvailable = isGeminiAvailable()
+
+  // E2EE vault
+  const [e2eeEnabled, setE2eeEnabled] = useState(voucher?.is_e2ee || false)
+  const [showVaultModal, setShowVaultModal] = useState(false)
+  const [vaultModalMode, setVaultModalMode] = useState<'setup' | 'unlock'>('setup')
+  const [vaultPassInput, setVaultPassInput] = useState('')
+  const [vaultPass2Input, setVaultPass2Input] = useState('')
+  const [vaultLoading, setVaultLoading] = useState(false)
+  const [vaultError, setVaultError] = useState('')
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const imageCameraRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
@@ -308,6 +320,48 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setSelectedCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
   }
 
+  // Decrypt code/cvv when editing an E2EE voucher and vault just unlocked
+  useEffect(() => {
+    if (!voucher?.is_e2ee || !isVaultUnlocked) return
+    async function decryptInitial() {
+      if (isEncryptedField(code)) { try { setCode(await decrypt(code)) } catch {} }
+      if (isEncryptedField(cvv))  { try { setCvv(await decrypt(cvv)) }   catch {} }
+    }
+    decryptInitial()
+  }, [isVaultUnlocked]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleToggleE2EE() {
+    if (!e2eeEnabled) {
+      if (!isVaultUnlocked) {
+        setVaultModalMode(hasVault ? 'unlock' : 'setup')
+        setShowVaultModal(true)
+      } else {
+        setE2eeEnabled(true)
+      }
+    } else {
+      setE2eeEnabled(false)
+    }
+  }
+
+  async function handleVaultSubmit() {
+    setVaultLoading(true); setVaultError('')
+    try {
+      if (vaultModalMode === 'setup') {
+        if (vaultPassInput.length < 6) { setVaultError('ססמה קצרה מדי (מינ. 6 תווים)'); return }
+        if (vaultPassInput !== vaultPass2Input) { setVaultError('הססמאות אינן תואמות'); return }
+        await setupVault(vaultPassInput)
+      } else {
+        const ok = await unlockVault(vaultPassInput)
+        if (!ok) { setVaultError('ססמה שגויה'); return }
+      }
+      setE2eeEnabled(true)
+      setShowVaultModal(false)
+      setVaultPassInput(''); setVaultPass2Input(''); setVaultError('')
+    } finally {
+      setVaultLoading(false)
+    }
+  }
+
   async function handleAddStore() {
     if (!storeSearch.trim()) return
     const newStore = await addStore(storeSearch.trim())
@@ -328,15 +382,25 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (!storeName) return toast.error('יש לבחור שם חנות')
     if (!code) return toast.error('יש להזין קוד שובר')
 
-    // Duplicate check
-    const allVouchers = [...vouchers, ...archivedVouchers]
-    const duplicate = allVouchers.find(v =>
-      v.code.toLowerCase().trim() === code.toLowerCase().trim() &&
-      (!voucher || v.id !== voucher.id)
-    )
-    if (duplicate) {
-      const proceed = confirm(`קוד שובר זה כבר קיים (${duplicate.store_name}). האם להמשיך בכל זאת?`)
-      if (!proceed) return
+    // Duplicate check (skip for E2EE vouchers)
+    if (!e2eeEnabled) {
+      const allVouchers = [...vouchers, ...archivedVouchers]
+      const duplicate = allVouchers.find(v =>
+        !v.is_e2ee &&
+        v.code.toLowerCase().trim() === code.toLowerCase().trim() &&
+        (!voucher || v.id !== voucher.id)
+      )
+      if (duplicate) {
+        const proceed = confirm(`קוד שובר זה כבר קיים (${duplicate.store_name}). האם להמשיך בכל זאת?`)
+        if (!proceed) return
+      }
+    }
+
+    // E2EE: ensure vault is unlocked before encrypting
+    if (e2eeEnabled && !isVaultUnlocked) {
+      setVaultModalMode(hasVault ? 'unlock' : 'setup')
+      setShowVaultModal(true)
+      return
     }
 
     setLoading(true)
@@ -353,14 +417,22 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         notesValue = `📦 ${amount.trim()}${notesValue ? '\n' + notesValue : ''}`
       }
 
+      // Encrypt sensitive fields if E2EE is enabled
+      let finalCode = code.trim()
+      let finalCvv  = cvv.trim() || undefined
+      if (e2eeEnabled) {
+        if (!isEncryptedField(finalCode)) finalCode = await encrypt(finalCode)
+        if (finalCvv && !isEncryptedField(finalCvv)) finalCvv = await encrypt(finalCvv)
+      }
+
       const v = {
         store_name: storeName,
         amount: parsedAmount,
         balance: newBalance,
         actual_cost: actualCost ? parseFloat(actualCost) : null,
         value_percent: actualCost && parsedAmount > 0 ? (parseFloat(actualCost) / parsedAmount) * 100 : null,
-        code: code.trim(),
-        cvv: cvv.trim() || undefined,
+        code: finalCode,
+        cvv: finalCvv,
         expiry_date: expiryDate || undefined,
         categories: selectedCats,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -371,6 +443,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         is_shared: false,
         is_locked: isLocked,
         lock_reason: isLocked ? lockReason.trim() || undefined : undefined,
+        is_e2ee: e2eeEnabled,
         _storeUsed: (voucher && used > 0) ? (storeUsedInput.trim() || null) : undefined,
       }
       await onSave(v)
@@ -385,7 +458,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div
-        className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92dvh] flex flex-col animate-slide-up"
+        className="relative bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92dvh] flex flex-col animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -672,10 +745,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <input
                 id="vf-code"
                 type="text"
-                value={code}
+                value={isEncryptedField(code) && !isVaultUnlocked ? '' : code}
                 onChange={e => setCode(e.target.value)}
-                placeholder="הזן קוד שובר"
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+                disabled={isEncryptedField(code) && !isVaultUnlocked}
+                placeholder={isEncryptedField(code) && !isVaultUnlocked ? '🔐 מוצפן — פתח כספת' : 'הזן קוד שובר'}
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
                 dir="ltr"
               />
               <button
@@ -689,6 +763,26 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
           </div>
 
+          {/* E2EE toggle */}
+          <button
+            type="button"
+            onClick={handleToggleE2EE}
+            className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border transition-colors ${
+              e2eeEnabled ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Shield className={`w-4 h-4 ${e2eeEnabled ? 'text-indigo-600' : 'text-gray-400'}`} />
+              <div className="text-right">
+                <p className={`text-sm font-medium ${e2eeEnabled ? 'text-indigo-700' : 'text-gray-700'}`}>הצפנה מקצה לקצה</p>
+                <p className="text-xs text-gray-400">קוד וCVV מוצפנים — רק אתה יכול לקרוא</p>
+              </div>
+            </div>
+            <div className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${e2eeEnabled ? 'bg-indigo-500' : 'bg-gray-300'}`}>
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${e2eeEnabled ? 'translate-x-0.5' : 'right-0.5'}`} />
+            </div>
+          </button>
+
           {/* CVV + Expiry */}
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -696,10 +790,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <input
                 id="vf-cvv"
                 type="text"
-                value={cvv}
+                value={isEncryptedField(cvv) && !isVaultUnlocked ? '' : cvv}
                 onChange={e => setCvv(e.target.value)}
-                placeholder="אופציונלי"
-                className="w-full px-3 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono"
+                disabled={isEncryptedField(cvv) && !isVaultUnlocked}
+                placeholder={isEncryptedField(cvv) && !isVaultUnlocked ? '🔐 מוצפן' : 'אופציונלי'}
+                className="w-full px-3 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
                 dir="ltr"
               />
             </div>
@@ -976,6 +1071,62 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             {loading ? 'שומר...' : voucher ? 'שמור שינויים' : 'הוסף שובר'}
           </button>
         </div>
+
+        {/* Vault modal overlay */}
+        {showVaultModal && (
+          <div className="absolute inset-0 bg-white/96 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 rounded-t-3xl sm:rounded-3xl">
+            <Shield className="w-12 h-12 text-indigo-500 mb-3" />
+            <h3 className="text-lg font-bold text-gray-900 mb-1">
+              {vaultModalMode === 'setup' ? 'הגדר כספת הצפנה' : 'פתח כספת הצפנה'}
+            </h3>
+            <p className="text-xs text-gray-500 text-center mb-5 max-w-xs leading-relaxed">
+              {vaultModalMode === 'setup'
+                ? '⚠️ שמור על הססמה — אין אפשרות לשחזר שוברים מוצפנים אם תאבד אותה!'
+                : 'הזן את ססמת הכספת כדי להצפין את קוד השובר'}
+            </p>
+            <div className="w-full max-w-xs space-y-2.5">
+              <input
+                type="password"
+                value={vaultPassInput}
+                onChange={e => setVaultPassInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !vaultPass2Input && handleVaultSubmit()}
+                placeholder={vaultModalMode === 'setup' ? 'ססמת כספת חדשה (מינ. 6 תווים)' : 'ססמת כספת'}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                dir="ltr"
+                autoFocus
+              />
+              {vaultModalMode === 'setup' && (
+                <input
+                  type="password"
+                  value={vaultPass2Input}
+                  onChange={e => setVaultPass2Input(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleVaultSubmit()}
+                  placeholder="אימות ססמה"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  dir="ltr"
+                />
+              )}
+              {vaultError && <p className="text-xs text-red-500 text-center">{vaultError}</p>}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleVaultSubmit}
+                  disabled={vaultLoading || !vaultPassInput}
+                  className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                >
+                  {vaultLoading ? '...' : vaultModalMode === 'setup' ? 'צור כספת' : 'פתח'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultPass2Input(''); setVaultError('') }}
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium"
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -11,10 +11,12 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import { supabase } from '../lib/supabase'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock, ShoppingBag, Loader2 } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock, ShoppingBag, Loader2, Shield } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useE2EE } from '../contexts/E2EEContext'
+import { isEncryptedField } from '../lib/e2ee'
 
 function isSafeUrl(url: string | undefined): boolean {
   if (!url) return false
@@ -45,6 +47,14 @@ export default function CheckoutPage() {
   const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
   const isSharedVoucher = sharedWithMe.some(v => v.id === id)
   const sv = superVouchers.find(s => s.id === voucher?.super_voucher_id)
+
+  const { isVaultUnlocked, unlockVault, lockVault, decrypt } = useE2EE()
+  const [plainCode, setPlainCode] = useState<string | null>(null)
+  const [plainCvv,  setPlainCvv]  = useState<string | null>(null)
+  const [vaultPassInput, setVaultPassInput] = useState('')
+  const [vaultUnlocking, setVaultUnlocking] = useState(false)
+  const [vaultError, setVaultError] = useState('')
+  const [showVaultUnlock, setShowVaultUnlock] = useState(false)
 
   const barcodeRef = useRef<SVGSVGElement>(null)
   const qrRef = useRef<HTMLCanvasElement>(null)
@@ -118,14 +128,32 @@ export default function CheckoutPage() {
     }
   }, [])
 
+  // Decrypt E2EE fields when vault unlocks
+  useEffect(() => {
+    if (!voucher?.is_e2ee) { setPlainCode(null); setPlainCvv(null); return }
+    if (!isVaultUnlocked) { setPlainCode(null); setPlainCvv(null); return }
+    async function dec() {
+      try {
+        if (isEncryptedField(voucher!.code)) setPlainCode(await decrypt(voucher!.code))
+        else setPlainCode(voucher!.code)
+        if (voucher!.cvv && isEncryptedField(voucher!.cvv)) setPlainCvv(await decrypt(voucher!.cvv))
+        else setPlainCvv(voucher!.cvv || null)
+      } catch { setPlainCode(null); setPlainCvv(null) }
+    }
+    dec()
+  }, [voucher?.code, voucher?.cvv, isVaultUnlocked]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Effective code for display and barcode rendering
+  const effectiveCode = voucher?.is_e2ee ? (plainCode ?? null) : (voucher?.code ?? null)
+
   // Generate barcode or QR
   useEffect(() => {
-    if (!voucher?.code) return
-    const isAlpha = isAlphanumeric(voucher.code)
+    if (!effectiveCode) return
+    const isAlpha = isAlphanumeric(effectiveCode)
 
     if (!isAlpha && barcodeRef.current) {
       try {
-        JsBarcode(barcodeRef.current, voucher.code, {
+        JsBarcode(barcodeRef.current, effectiveCode, {
           format: 'CODE128',
           width: 2,
           height: 80,
@@ -137,17 +165,18 @@ export default function CheckoutPage() {
     }
 
     if (isAlpha && qrRef.current) {
-      QRCode.toCanvas(qrRef.current, voucher.code, {
+      QRCode.toCanvas(qrRef.current, effectiveCode, {
         width: 220,
         margin: 2,
         color: { dark: '#1e293b', light: '#ffffff' },
       }).catch(() => {})
     }
-  }, [voucher?.code, lockConfirmed])
+  }, [effectiveCode, lockConfirmed])
 
   async function copyCode() {
-    if (!voucher?.code) return
-    await navigator.clipboard.writeText(voucher.code).catch(() => {})
+    const codeToCopy = effectiveCode ?? voucher?.code
+    if (!codeToCopy) return
+    await navigator.clipboard.writeText(codeToCopy).catch(() => {})
     setCopied(true)
     toast.success('קוד הועתק!')
     setTimeout(() => setCopied(false), 2000)
@@ -700,6 +729,68 @@ export default function CheckoutPage() {
 
         {/* Barcode / QR */}
         <div className="text-center overflow-hidden" style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
+          {/* E2EE locked state */}
+          {voucher.is_e2ee && !isVaultUnlocked && (
+            <div className="py-6">
+              <Shield className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-gray-700 mb-1">קוד מוצפן מקצה לקצה</p>
+              <p className="text-xs text-gray-400 mb-4">הזן ססמת כספת לצפייה בקוד</p>
+              {!showVaultUnlock ? (
+                <button
+                  onClick={() => setShowVaultUnlock(true)}
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium"
+                >
+                  פתח כספת
+                </button>
+              ) : (
+                <div className="max-w-xs mx-auto space-y-2">
+                  <input
+                    type="password"
+                    value={vaultPassInput}
+                    onChange={e => setVaultPassInput(e.target.value)}
+                    onKeyDown={async e => {
+                      if (e.key !== 'Enter') return
+                      setVaultUnlocking(true); setVaultError('')
+                      const ok = await unlockVault(vaultPassInput)
+                      setVaultUnlocking(false)
+                      if (!ok) setVaultError('ססמה שגויה')
+                      else { setShowVaultUnlock(false); setVaultPassInput('') }
+                    }}
+                    placeholder="ססמת כספת"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    dir="ltr"
+                    autoFocus
+                  />
+                  {vaultError && <p className="text-xs text-red-500">{vaultError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        setVaultUnlocking(true); setVaultError('')
+                        const ok = await unlockVault(vaultPassInput)
+                        setVaultUnlocking(false)
+                        if (!ok) setVaultError('ססמה שגויה')
+                        else { setShowVaultUnlock(false); setVaultPassInput('') }
+                      }}
+                      disabled={vaultUnlocking || !vaultPassInput}
+                      className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                    >
+                      {vaultUnlocking ? '...' : 'פתח'}
+                    </button>
+                    <button
+                      onClick={() => { setShowVaultUnlock(false); setVaultPassInput(''); setVaultError('') }}
+                      className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm"
+                    >
+                      ביטול
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Normal code display (unlocked or non-E2EE) */}
+          {(!voucher.is_e2ee || isVaultUnlocked) && (
+            <>
           <div className="w-full overflow-hidden flex items-center justify-center mb-4">
             {isAlpha ? (
               <canvas ref={qrRef} className="rounded-xl" />
@@ -707,10 +798,16 @@ export default function CheckoutPage() {
               <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />
             )}
           </div>
-
-          <div className="font-mono text-lg font-bold tracking-widest text-gray-800 mb-3 break-all">
-            {voucher.code}
+          <div className="font-mono text-lg font-bold tracking-widest text-gray-800 mb-3 break-all flex items-center justify-center gap-2">
+            {effectiveCode ?? voucher.code}
+            {voucher.is_e2ee && isVaultUnlocked && (
+              <button onClick={lockVault} title="נעל כספת" className="text-indigo-300 hover:text-indigo-500 ml-1">
+                <Shield className="w-4 h-4" />
+              </button>
+            )}
           </div>
+            </>
+          )}
 
           <div className="flex items-center justify-center flex-wrap gap-2">
             <button
@@ -752,14 +849,23 @@ export default function CheckoutPage() {
         {voucher.cvv && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-center justify-between">
             <span className="text-sm font-medium text-yellow-800">CVV / קוד אבטחה</span>
-            <div className="flex items-center gap-2">
-              <span className="font-mono font-bold text-yellow-900 text-lg">
-                {showCvv ? voucher.cvv : '•'.repeat(voucher.cvv.length)}
+            {voucher.is_e2ee && !isVaultUnlocked ? (
+              <span className="text-xs text-indigo-400 flex items-center gap-1">
+                <Shield className="w-3.5 h-3.5" /> מוצפן
               </span>
-              <button onClick={() => setShowCvv(!showCvv)} className="text-yellow-600">
-                {showCvv ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-yellow-900 text-lg">
+                  {(() => {
+                    const display = voucher.is_e2ee ? (plainCvv ?? voucher.cvv) : voucher.cvv
+                    return showCvv ? display : '•'.repeat(display?.length ?? 4)
+                  })()}
+                </span>
+                <button onClick={() => setShowCvv(!showCvv)} className="text-yellow-600">
+                  {showCvv ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
