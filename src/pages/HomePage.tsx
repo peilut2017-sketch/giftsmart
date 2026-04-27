@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
+import { Shield } from 'lucide-react'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
@@ -22,7 +23,21 @@ export default function HomePage() {
   const navigate = useNavigate()
   const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { decryptedMap } = useE2EE()
+  const { hasVault, isVaultUnlocked, unlockVault, lockVault, decryptedMap } = useE2EE()
+  const [showVaultModal, setShowVaultModal] = useState(false)
+  const [vaultPassInput, setVaultPassInput] = useState('')
+  const [vaultUnlocking, setVaultUnlocking] = useState(false)
+  const [vaultError, setVaultError] = useState('')
+
+  async function handleVaultUnlock() {
+    if (!vaultPassInput) return
+    setVaultUnlocking(true)
+    setVaultError('')
+    const ok = await unlockVault(vaultPassInput)
+    setVaultUnlocking(false)
+    if (ok) { setShowVaultModal(false); setVaultPassInput('') }
+    else setVaultError('סיסמה שגויה')
+  }
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [search, setSearch] = useState(() => localStorage.getItem('hpSearch') || '')
@@ -393,6 +408,49 @@ export default function HomePage() {
         />
       )}
 
+      {/* ── Vault unlock modal ── */}
+      {showVaultModal && (
+        <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-6" onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-indigo-500" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-sm">פתח כספת הצפנה</p>
+                <p className="text-xs text-gray-400">להצגת שוברים מוצפנים בחיפוש</p>
+              </div>
+            </div>
+            <input
+              type="password"
+              value={vaultPassInput}
+              onChange={e => setVaultPassInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleVaultUnlock()}
+              placeholder="סיסמת כספת"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              dir="ltr"
+              autoFocus
+            />
+            {vaultError && <p className="text-xs text-red-500 mb-2">{vaultError}</p>}
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={handleVaultUnlock}
+                disabled={vaultUnlocking || !vaultPassInput}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-2xl text-sm font-semibold disabled:opacity-50"
+              >
+                {vaultUnlocking ? '...' : 'פתח'}
+              </button>
+              <button
+                onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-2xl text-sm"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Gradient Hero Header ── */}
       <div style={{
         background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 60%, #1a9e90 100%)',
@@ -424,6 +482,16 @@ export default function HomePage() {
               >
                 <Archive size={13} color="#fbbf24" />
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24' }}>פגויים ({expiredCount})</span>
+              </button>
+            )}
+            {hasVault && (
+              <button
+                onClick={() => isVaultUnlocked ? lockVault() : setShowVaultModal(true)}
+                style={{ background: isVaultUnlocked ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                aria-label={isVaultUnlocked ? 'נעל כספת' : 'פתח כספת'}
+                title={isVaultUnlocked ? 'כספת פתוחה — לחץ לנעילה' : 'פתח כספת הצפנה'}
+              >
+                <Shield size={17} color={isVaultUnlocked ? '#a5b4fc' : 'rgba(255,255,255,0.65)'} />
               </button>
             )}
             <button

@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { X, Search, ShoppingCart, Check, QrCode, ArrowUpLeft } from 'lucide-react'
+import { X, Search, ShoppingCart, Check, QrCode, ArrowUpLeft, Shield } from 'lucide-react'
 import JsBarcode from 'jsbarcode'
 import QRCodeLib from 'qrcode'
 import type { Voucher, SuperVoucher } from '../types'
 import toast from 'react-hot-toast'
+import { useE2EE } from '../contexts/E2EEContext'
+import { isEncryptedField } from '../lib/e2ee'
 
 interface Props {
   vouchers: Voucher[]
@@ -228,10 +230,19 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
   onNavigate: () => void
   updating: boolean
 }) {
+  const { decryptedMap, isVaultUnlocked } = useE2EE()
+  const effectiveCode = v.is_e2ee
+    ? (decryptedMap.get(v.id)?.code ?? v.code)
+    : v.code
+  const effectiveCvv = v.is_e2ee
+    ? (decryptedMap.get(v.id)?.cvv ?? v.cvv)
+    : v.cvv
+  const isLocked = v.is_e2ee && isEncryptedField(effectiveCode)
   const isEmpty = v.balance <= 0
 
   async function copyCode() {
-    await navigator.clipboard.writeText(v.code).catch(() => {})
+    if (isLocked) return
+    await navigator.clipboard.writeText(effectiveCode).catch(() => {})
     toast.success('קוד הועתק')
   }
 
@@ -284,14 +295,22 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
       <div className="px-3 pb-2.5 flex items-center gap-2 border-t border-gray-50 pt-2">
         <button
           onClick={copyCode}
+          disabled={isLocked}
           className="flex-1 min-w-0 text-right"
         >
-          <span className="font-mono text-xs text-gray-700 tracking-wider bg-gray-50 px-2.5 py-1 rounded-lg inline-block truncate max-w-full">
-            {v.code}
-          </span>
+          {isLocked ? (
+            <span className="flex items-center gap-1 text-xs text-indigo-400 bg-indigo-50 px-2.5 py-1 rounded-lg inline-flex">
+              <Shield className="w-3 h-3" />
+              {isVaultUnlocked ? 'שגיאת פענוח' : 'פתח כספת לצפייה'}
+            </span>
+          ) : (
+            <span className="font-mono text-xs text-gray-700 tracking-wider bg-gray-50 px-2.5 py-1 rounded-lg inline-block truncate max-w-full">
+              {effectiveCode}
+            </span>
+          )}
         </button>
-        {v.cvv && (
-          <span className="text-xs text-gray-400 shrink-0">CVV: <span className="font-mono font-semibold text-gray-600">{v.cvv}</span></span>
+        {v.cvv && !isLocked && (
+          <span className="text-xs text-gray-400 shrink-0">CVV: <span className="font-mono font-semibold text-gray-600">{effectiveCvv}</span></span>
         )}
         <button
           onClick={onToggleBarcode}
@@ -310,9 +329,9 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
       </div>
 
       {/* Barcode panel */}
-      {barcodeOpen && (
+      {barcodeOpen && !isLocked && (
         <div className="border-t border-gray-100 bg-gray-50 rounded-b-2xl overflow-hidden">
-          <BarcodeDisplay code={v.code} />
+          <BarcodeDisplay code={effectiveCode} />
         </div>
       )}
     </div>
