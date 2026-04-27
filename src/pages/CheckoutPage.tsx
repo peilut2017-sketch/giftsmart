@@ -365,9 +365,15 @@ export default function CheckoutPage() {
 
   async function handleCreateShareLink(days?: number) {
     if (!voucher) return
+    // E2EE vouchers: require vault open so recipient sees the real code
+    if (voucher.is_e2ee && !isVaultUnlocked) {
+      toast.error('פתח את הכספת תחילה כדי לשתף שובר מוצפן')
+      return
+    }
     setShareLoading(true)
     try {
-      const token = await createShareToken(voucher.id, days)
+      const codeOverride = voucher.is_e2ee && effectiveCode ? effectiveCode : undefined
+      const token = await createShareToken(voucher.id, days, codeOverride)
       const url = `${window.location.origin}/s/${token}`
       // Clipboard write is best-effort — failure must not hide the success
       try {
@@ -407,7 +413,7 @@ export default function CheckoutPage() {
     )
   }
 
-  const isAlpha = isAlphanumeric(voucher.code)
+  const isAlpha = isAlphanumeric(effectiveCode ?? voucher.code)
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
   const isArchived = archivedVouchers.some(v => v.id === id)

@@ -6,10 +6,11 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
+import { useE2EE } from '../contexts/E2EEContext'
 
 interface SupportMessageReply {
   id: string
@@ -50,7 +51,8 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
-  const { syncToCloud, isOnline, refreshVouchers, vouchers, walletId, walletName, inviteMember, removeMember, logAction } = useVouchers()
+  const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
+  const { hasVault, isVaultUnlocked, resetVault, changePassphrase } = useE2EE()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
@@ -91,6 +93,35 @@ export default function SettingsPage() {
   const [seenBroadcastIds, setSeenBroadcastIds] = useState<Set<string>>(
     () => new Set(JSON.parse(localStorage.getItem('seen_broadcast_ids') || '[]'))
   )
+
+  // Vault (E2EE passphrase management)
+  const [showVaultSection, setShowVaultSection] = useState(false)
+  const [vaultOldPass, setVaultOldPass] = useState('')
+  const [vaultNewPass, setVaultNewPass] = useState('')
+  const [vaultNewPass2, setVaultNewPass2] = useState('')
+  const [vaultChanging, setVaultChanging] = useState(false)
+  const [vaultResetConfirm, setVaultResetConfirm] = useState(false)
+
+  async function handleChangeVaultPassphrase() {
+    if (!vaultOldPass) return toast.error('הזן סיסמה נוכחית')
+    if (vaultNewPass.length < 8) return toast.error('סיסמה חדשה: לפחות 8 תווים')
+    if (vaultNewPass !== vaultNewPass2) return toast.error('הסיסמאות אינן תואמות')
+    setVaultChanging(true)
+    try {
+      const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
+      const { ok, entries } = await changePassphrase(vaultOldPass, vaultNewPass, e2eeVouchers)
+      if (!ok) { toast.error('סיסמה נוכחית שגויה'); return }
+      // Update all re-encrypted vouchers in DB
+      await Promise.all(entries.map(({ id, code, cvv }) =>
+        updateVoucher(id, { code, ...(cvv != null ? { cvv } : {}) })
+      ))
+      toast.success(`סיסמת כספת שונתה — ${entries.length} שוברים הוצפנו מחדש`)
+      setVaultOldPass(''); setVaultNewPass(''); setVaultNewPass2('')
+      setShowVaultSection(false)
+    } finally {
+      setVaultChanging(false)
+    }
+  }
 
   // Telegram
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
@@ -542,6 +573,96 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* E2EE Vault */}
+        {hasVault && (
+          <div className="border-t">
+            <button
+              onClick={() => setShowVaultSection(s => !s)}
+              className="flex items-center gap-3 w-full p-4 text-right hover:bg-gray-50"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                <Shield className="w-5 h-5 text-indigo-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">כספת הצפנה (E2EE)</p>
+                <p className="text-xs text-gray-400">{isVaultUnlocked ? 'פתוחה כעת' : 'נעולה'} · שנה סיסמה או אפס</p>
+              </div>
+              {showVaultSection ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </button>
+
+            {showVaultSection && (
+              <div className="px-4 pb-4 space-y-3">
+                <p className="text-xs text-indigo-600 bg-indigo-50 rounded-xl p-3">
+                  שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.
+                </p>
+
+                <input
+                  type="password"
+                  value={vaultOldPass}
+                  onChange={e => setVaultOldPass(e.target.value)}
+                  placeholder="סיסמה נוכחית"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  dir="ltr"
+                />
+                <input
+                  type="password"
+                  value={vaultNewPass}
+                  onChange={e => setVaultNewPass(e.target.value)}
+                  placeholder="סיסמה חדשה (לפחות 8 תווים)"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  dir="ltr"
+                />
+                <input
+                  type="password"
+                  value={vaultNewPass2}
+                  onChange={e => setVaultNewPass2(e.target.value)}
+                  placeholder="אימות סיסמה חדשה"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  dir="ltr"
+                />
+                <button
+                  onClick={handleChangeVaultPassphrase}
+                  disabled={vaultChanging || !vaultOldPass || !vaultNewPass || !vaultNewPass2}
+                  className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                >
+                  {vaultChanging ? 'מצפין מחדש...' : 'שנה סיסמת כספת'}
+                </button>
+
+                <div className="border-t pt-3">
+                  {!vaultResetConfirm ? (
+                    <button
+                      onClick={() => setVaultResetConfirm(true)}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      אפס כספת (מחק את כל ההצפנה)
+                    </button>
+                  ) : (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
+                      <p className="text-xs text-red-700 font-medium">
+                        אזהרה: איפוס הכספת ישאיר את קודי השוברים בDB מוצפנים ולא ניתן יהיה לקרוא אותם! יש לוודא תחילה שאין שוברי E2EE חשובים.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { resetVault(); toast.success('כספת אופסה'); setVaultResetConfirm(false); setShowVaultSection(false) }}
+                          className="flex-1 py-2 bg-red-500 text-white rounded-xl text-xs font-semibold"
+                        >
+                          אפס בכל זאת
+                        </button>
+                        <button
+                          onClick={() => setVaultResetConfirm(false)}
+                          className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                        >
+                          ביטול
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Reminder days */}
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>תזכורת תוקף</div>

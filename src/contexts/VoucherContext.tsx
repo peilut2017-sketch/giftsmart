@@ -41,7 +41,7 @@ interface VoucherContextType {
   removeMember: (userId: string) => Promise<void>
   updateWalletName: (name: string) => Promise<void>
   refreshVouchers: () => Promise<void>
-  createShareToken: (voucherId: string, expiresInDays?: number) => Promise<string>
+  createShareToken: (voucherId: string, expiresInDays?: number, codeOverride?: string) => Promise<string>
   deleteShareToken: (token: string) => Promise<void>
   getShareTokens: (voucherId: string) => Promise<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>
   shareVoucherWithUser: (voucherId: string, email: string) => Promise<'shared' | 'already_shared' | 'not_found'>
@@ -820,7 +820,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     await fetchData()
   }
 
-  async function createShareToken(voucherId: string, expiresInDays?: number): Promise<string> {
+  async function createShareToken(voucherId: string, expiresInDays?: number, codeOverride?: string): Promise<string> {
     if (!user) throw new Error('לא מחובר')
     const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
       .map(b => b.toString(16).padStart(2, '0'))
@@ -828,12 +828,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const expires_at = expiresInDays
       ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
       : null
-    const { error } = await supabase.from('shared_voucher_tokens').insert({
+    const row: Record<string, unknown> = {
       token,
       voucher_id: voucherId,
       created_by: user.id,
       expires_at,
-    })
+    }
+    if (codeOverride) row.code_override = codeOverride
+    const { error } = await supabase.from('shared_voucher_tokens').insert(row)
     if (error) {
       if (error.code === '42P01' || error.message?.includes('schema cache')) throw new Error('TABLE_MISSING')
       throw new Error(error.message)

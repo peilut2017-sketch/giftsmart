@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
+import { useE2EE } from '../contexts/E2EEContext'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
@@ -21,6 +22,7 @@ export default function HomePage() {
   const navigate = useNavigate()
   const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
+  const { decryptedMap } = useE2EE()
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [search, setSearch] = useState(() => localStorage.getItem('hpSearch') || '')
@@ -116,9 +118,10 @@ export default function HomePage() {
       const withScore = result
         .map(v => {
           const sv = superVouchers.find(s => s.id === v.super_voucher_id)
+          const decryptedCode = v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code
           const directMatch =
             v.store_name.toLowerCase().includes(q) ||
-            v.code.toLowerCase().includes(q) ||
+            decryptedCode.toLowerCase().includes(q) ||
             v.categories.some(c => c.toLowerCase().includes(q)) ||
             v.tags.some(t => t.toLowerCase().includes(q)) ||
             (v.notes && v.notes.toLowerCase().includes(q))
@@ -133,7 +136,7 @@ export default function HomePage() {
       result = withScore.sort((a, b) => a.score - b.score).map(x => x.v)
     }
     return result
-  }, [vouchers, filterTab, filterCats, search, sortKey, sortDir, superVouchers])
+  }, [vouchers, filterTab, filterCats, search, sortKey, sortDir, superVouchers, decryptedMap])
 
   // Filter out pending-delete vouchers from display
   const displayVouchers = useMemo(

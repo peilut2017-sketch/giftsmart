@@ -25,7 +25,7 @@ interface Props {
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { hasVault, isVaultUnlocked, setupVault, unlockVault, encrypt, decrypt } = useE2EE()
+  const { hasVault, isVaultUnlocked, setupVault, unlockVault, encrypt, decrypt, decryptedMap } = useE2EE()
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
@@ -382,14 +382,23 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (!storeName) return toast.error('יש לבחור שם חנות')
     if (!code) return toast.error('יש להזין קוד שובר')
 
-    // Duplicate check (skip for E2EE vouchers)
+    // Duplicate check — plain vouchers and E2EE vouchers (using decryptedMap)
     if (!e2eeEnabled) {
       const allVouchers = [...vouchers, ...archivedVouchers]
-      const duplicate = allVouchers.find(v =>
-        !v.is_e2ee &&
-        v.code.toLowerCase().trim() === code.toLowerCase().trim() &&
-        (!voucher || v.id !== voucher.id)
-      )
+      const normalizedCode = code.toLowerCase().trim()
+      const duplicate =
+        // plain-text match
+        allVouchers.find(v =>
+          !v.is_e2ee &&
+          v.code.toLowerCase().trim() === normalizedCode &&
+          (!voucher || v.id !== voucher.id)
+        ) ??
+        // decrypted E2EE match (only when vault is open)
+        allVouchers.find(v =>
+          v.is_e2ee &&
+          (decryptedMap.get(v.id)?.code ?? '').toLowerCase().trim() === normalizedCode &&
+          (!voucher || v.id !== voucher.id)
+        )
       if (duplicate) {
         const proceed = confirm(`קוד שובר זה כבר קיים (${duplicate.store_name}). האם להמשיך בכל זאת?`)
         if (!proceed) return

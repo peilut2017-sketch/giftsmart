@@ -31,7 +31,8 @@ import AccessibilityWidget from './components/AccessibilityWidget'
 import { isBiometricEnabled } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
-import { Component, useState, useEffect } from 'react'
+import { Component, useState, useEffect, useRef } from 'react'
+import { useE2EE } from './contexts/E2EEContext'
 import type { ReactNode } from 'react'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
@@ -68,6 +69,24 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 const A11Y_WIDGET_KEY = 'a11y_widget_enabled'
 
 const SEEN_PUSH_KEY = 'seen_push_broadcast_ids'
+
+// Builds the in-memory decrypted map whenever the vault opens or vouchers change
+function E2EEBridge() {
+  const { isVaultUnlocked, buildDecryptedMap } = useE2EE()
+  const { vouchers, archivedVouchers } = useVouchers()
+  const prevUnlocked = useRef(false)
+
+  useEffect(() => {
+    const justUnlocked = isVaultUnlocked && !prevUnlocked.current
+    prevUnlocked.current = isVaultUnlocked
+    if (!isVaultUnlocked) return
+    const all = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
+    if (all.length === 0 && !justUnlocked) return
+    buildDecryptedMap(all)
+  }, [isVaultUnlocked, vouchers, archivedVouchers]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null
+}
 
 function NotificationBridge() {
   const { vouchers } = useVouchers()
@@ -248,6 +267,7 @@ function AppRoutes() {
     <VoucherProvider>
     <MarketplaceProvider>
       <NotificationBridge />
+      <E2EEBridge />
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}
       <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>

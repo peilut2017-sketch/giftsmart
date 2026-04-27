@@ -15,6 +15,7 @@ interface SharedVoucher {
   expiry_date?: string | null
   notes?: string | null
   is_expired?: boolean
+  code_override?: string | null
 }
 
 export default function SharedVoucherPage() {
@@ -95,7 +96,17 @@ export default function SharedVoucherPage() {
         return
       }
 
-      setVoucher(row)
+      // If the token has a decrypted code override (E2EE share), use it
+      const { data: tokenRow } = await supabase
+        .from('shared_voucher_tokens')
+        .select('code_override')
+        .eq('token', token)
+        .maybeSingle()
+      const effectiveRow: SharedVoucher = tokenRow?.code_override
+        ? { ...row, code: tokenRow.code_override }
+        : row
+
+      setVoucher(effectiveRow)
 
       // Increment view count atomically via RPC
       supabase.rpc('increment_share_view_count', { p_token: token }).then(() => {})
