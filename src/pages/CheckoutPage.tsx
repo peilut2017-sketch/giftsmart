@@ -174,6 +174,10 @@ export default function CheckoutPage() {
   }, [effectiveCode, lockConfirmed])
 
   async function copyCode() {
+    if (voucher?.is_e2ee && !isVaultUnlocked) {
+      toast.error('פתח את הכספת כדי להעתיק את הקוד')
+      return
+    }
     const codeToCopy = effectiveCode ?? voucher?.code
     if (!codeToCopy) return
     await navigator.clipboard.writeText(codeToCopy).catch(() => {})
@@ -820,8 +824,12 @@ export default function CheckoutPage() {
           <div className="flex items-center justify-center flex-wrap gap-2">
             <button
               onClick={copyCode}
+              disabled={!!(voucher?.is_e2ee && !isVaultUnlocked)}
+              title={voucher?.is_e2ee && !isVaultUnlocked ? 'פתח כספת כדי להעתיק' : undefined}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all ${
-                copied ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                voucher?.is_e2ee && !isVaultUnlocked
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
+                  : copied ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
