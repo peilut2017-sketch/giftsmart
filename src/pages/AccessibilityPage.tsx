@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Check, AlertCircle, Info } from 'lucide-react'
 
+const LAST_UPDATED = 'אפריל 2026'
+
 export default function AccessibilityPage() {
   const navigate = useNavigate()
 
@@ -31,7 +33,7 @@ export default function AccessibilityPage() {
             הבינלאומיות <strong>WCAG 2.1 ברמת AA</strong>.
           </p>
           <p className="text-sm text-gray-500 mt-2">
-            הצהרה זו עודכנה לאחרונה: <time dateTime="2026-03-25">מרץ 2026</time>
+            הצהרה זו עודכנה לאחרונה: <time dateTime="2026-04">{LAST_UPDATED}</time>
           </p>
         </div>
 
@@ -63,26 +65,26 @@ export default function AccessibilityPage() {
         {/* Known issues */}
         <div className="bg-white rounded-3xl shadow-sm p-5">
           <h2 className="text-base font-bold text-gray-800 mb-3">אזורים שטרם הונגשו במלואם</h2>
-          <ul className="space-y-2.5" role="list">
-            {[
-              {
-                issue: 'סורק QR/ברקוד במצלמה',
-                reason: 'מוגבלות טכנית של ספריית הסריקה (Html5Qrcode) — אין תמיכה מלאה בקוראי מסך.',
-              },
-              {
-                issue: 'ניגודיות טקסט אפור קטן (text-gray-400)',
-                reason: 'חלק מטקסטי העזר האפורים עשויים להיות מתחת ליחס 4.5:1 — בבדיקה ותיקון.',
-              },
-              {
-                issue: 'תרשימי סטטיסטיקות',
-                reason: 'גרפים ותרשימים טרם כוללים תיאור טקסטואלי חלופי מלא.',
-              },
-            ].map(({ issue, reason }) => (
-              <li key={issue} className="flex items-start gap-2.5 text-sm text-gray-700">
-                <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-                <span><strong>{issue}:</strong> {reason}</span>
-              </li>
-            ))}
+          <ul className="space-y-4" role="list">
+            <li className="flex items-start gap-2.5 text-sm text-gray-700">
+              <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
+              <div>
+                <strong>סורק QR/ברקוד במצלמה:</strong>
+                <p className="mt-1 text-gray-600 leading-relaxed">
+                  בשל מגבלות טכנולוגיות של רכיב הסריקה, ייתכן קושי בשימוש בקורא מסך.
+                  חלופה נגישה: ניתן להזין את קוד השובר והפרטים באופן ידני בכל עת דרך כפתור
+                  "הוספה ידנית", וכן לצפות בפרטי הקוד בטקסט קריא בתוך דף השובר.
+                </p>
+              </div>
+            </li>
+            <li className="flex items-start gap-2.5 text-sm text-gray-700">
+              <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
+              <span><strong>ניגודיות טקסט אפור קטן (text-gray-400):</strong> חלק מטקסטי העזר האפורים עשויים להיות מתחת ליחס 4.5:1 — בבדיקה ותיקון.</span>
+            </li>
+            <li className="flex items-start gap-2.5 text-sm text-gray-700">
+              <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
+              <span><strong>תרשימי סטטיסטיקות:</strong> גרפים ותרשימים טרם כוללים תיאור טקסטואלי חלופי מלא.</span>
+            </li>
           </ul>
         </div>
 
@@ -136,6 +138,15 @@ export default function AccessibilityPage() {
           <p className="text-xs text-blue-700 leading-relaxed">
             הצהרה זו נכתבה בהתאם לדרישות תקנות שיווי זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות),
             התשע"ג-2013, ובהתאם לתקן ישראלי ת"י 5568 המבוסס על WCAG 2.1.
+          </p>
+        </div>
+
+        {/* Closing commitment */}
+        <div className="bg-green-50 rounded-3xl p-5">
+          <p className="text-sm text-green-800 leading-relaxed">
+            אנו ממשיכים במאמצים לשפר את נגישות השירות כחלק ממחויבותנו לאפשר לכלל האוכלוסייה,
+            כולל אנשים עם מוגבלויות, לקבל את השירות הנגיש ביותר.
+            אם נתקלתם בקושי, נשמח לשמוע על כך.
           </p>
         </div>
 
