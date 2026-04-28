@@ -242,7 +242,10 @@ function AppRoutes() {
   }
 
   if (passwordRecovery) return <AuthPage initialMode="newPassword" />
-  if (!user) return <AuthPage />
+  if (!user) {
+    if (window.location.pathname === '/privacy') return <PrivacyPage />
+    return <AuthPage />
+  }
 
   if (biometricLocked) {
     return (

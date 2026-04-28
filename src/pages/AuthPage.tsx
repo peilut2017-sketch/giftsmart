@@ -43,6 +43,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const [loading, setLoading] = useState(false)
   const [showStrength, setShowStrength] = useState(false)
   const [biometricLoading, setBiometricLoading] = useState(false)
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
 
   const strength = useMemo(() => getPasswordStrength(password), [password])
   const isRegisterOrNew = mode === 'register' || mode === 'newPassword'
@@ -127,6 +128,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       }
 
       // register
+      if (!privacyAccepted) return toast.error('יש לאשר את מדיניות הפרטיות')
       if (!email || !password) return toast.error('יש למלא אימייל וסיסמה')
       if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
       if (!validatePasswordStrong()) return
@@ -431,6 +433,30 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 </div>
               )}
 
+              {mode === 'register' && (
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={privacyAccepted}
+                    onChange={e => setPrivacyAccepted(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0"
+                  />
+                  <span className="text-xs text-gray-500 leading-relaxed">
+                    קראתי ואני מסכים/ה ל
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-green-600 underline font-medium mx-0.5"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      מדיניות הפרטיות
+                    </a>
+                    ומאשר/ת שאני בן/בת 16 ומעלה
+                  </span>
+                </label>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
@@ -451,8 +477,12 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               </div>
               <button
                 type="button"
-                disabled={googleLoading}
+                disabled={googleLoading || (mode === 'register' && !privacyAccepted)}
                 onClick={async () => {
+                  if (mode === 'register' && !privacyAccepted) {
+                    toast.error('יש לאשר את מדיניות הפרטיות')
+                    return
+                  }
                   setGoogleLoading(true)
                   const { error } = await signInWithGoogle()
                   if (error) { toast.error('שגיאה בהתחברות עם Google'); setGoogleLoading(false) }
