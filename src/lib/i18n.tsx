@@ -399,7 +399,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 export type LocaleContextValue = {
   locale: Locale
   setLocale: (l: Locale) => void
-  t: (key: string) => string
+  t: (key: string, vars?: Record<string, string | number>) => string
   dir: 'rtl' | 'ltr'
 }
 
@@ -423,16 +423,20 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   function setLocale(l: Locale) { setLocaleState(l) }
 
-  function t(key: string): string {
+  function t(key: string, vars?: Record<string, string | number>): string {
+    let result: string
     if (locale === 'he') {
-      // Hebrew: return base key value if exists, else key itself
-      return translations[key] ?? key
+      result = translations[key] ?? key
+    } else {
+      const enKey = key + '.en'
+      result = translations[enKey] ?? translations[key] ?? key
     }
-    // English: look for key + '.en' suffix
-    const enKey = key + '.en'
-    if (translations[enKey] !== undefined) return translations[enKey]
-    // Fallback to Hebrew
-    return translations[key] ?? key
+    if (vars) {
+      Object.entries(vars).forEach(([k, v]) => {
+        result = result.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
+      })
+    }
+    return result
   }
 
   return (
@@ -443,8 +447,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useT() {
-  const { t, locale, dir } = useContext(LocaleContext)
-  return { t, locale, dir }
+  const ctx = useContext(LocaleContext)
+  return { t: ctx.t, locale: ctx.locale, dir: ctx.dir }
 }
 
 export function useLocale() {
