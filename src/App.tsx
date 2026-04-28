@@ -24,6 +24,7 @@ import AccessibilityPage from './pages/AccessibilityPage'
 import MarketplacePage from './pages/MarketplacePage'
 import ListingDetailPage from './pages/ListingDetailPage'
 import BulkListPage from './pages/BulkListPage'
+import PrivacyPage from './pages/PrivacyPage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
 import OfflineBanner from './components/OfflineBanner'
@@ -288,6 +289,7 @@ function AppRoutes() {
             <Route path="/market" element={<MarketplacePage />} />
             <Route path="/market/listing/:id" element={<ListingDetailPage />} />
             <Route path="/market/bulk" element={<BulkListPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </AnimatedRoutes>
         </main>

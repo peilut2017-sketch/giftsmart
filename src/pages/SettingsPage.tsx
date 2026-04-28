@@ -1248,8 +1248,14 @@ export default function SettingsPage() {
           />
         </div>
 
-        {/* Sign out */}
+        {/* Privacy & Sign out */}
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
+          <MenuItem
+            icon={Shield}
+            label="מדיניות פרטיות"
+            desc="כיצד אנו מגינים על המידע שלך"
+            onClick={() => navigate('/privacy')}
+          />
           <MenuItem
             icon={LogOut}
             label="התנתק"
