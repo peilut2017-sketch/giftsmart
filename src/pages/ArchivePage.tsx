@@ -2,15 +2,18 @@ import { useState, useMemo, useRef } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useNavigate } from 'react-router-dom'
 import { formatCurrency, formatDate } from '../utils/helpers'
-import { RotateCcw, Trash2, Archive, SlidersHorizontal } from 'lucide-react'
+import { RotateCcw, Trash2, Archive, SlidersHorizontal, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useE2EE } from '../contexts/E2EEContext'
+import { isEncryptedField } from '../lib/e2ee'
 
 type SortKey = 'added' | 'store' | 'balance' | 'expiry'
 
 export default function ArchivePage() {
   const navigate = useNavigate()
   const { archivedVouchers, unarchiveVoucher, deleteVoucher } = useVouchers()
+  const { isVaultUnlocked, decryptedMap } = useE2EE()
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('added')
   const [showSort, setShowSort] = useState(false)
@@ -78,7 +81,7 @@ export default function ArchivePage() {
           </button>
         </span>
       ),
-      { duration: 5000, icon: '🗑️' }
+      { duration: 5000 }
     )
   }
 
@@ -157,7 +160,7 @@ export default function ArchivePage() {
       <div className="p-4 pb-24">
         {sortedFiltered.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-5xl mb-3">🗄️</div>
+            <Package className="w-14 h-14 mx-auto mb-3" style={{ color: 'var(--c-border)' }} />
             <p className="text-gray-500">{search ? 'לא נמצאו שוברים' : 'הארכיון ריק'}</p>
           </div>
         ) : (
@@ -178,7 +181,13 @@ export default function ArchivePage() {
                   {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.store_name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--c-text3)', fontFamily: 'monospace', marginTop: 2 }}>{v.code}</div>
+                    {(() => {
+                      const isE2EE = isEncryptedField(v.code)
+                      const decrypted = decryptedMap.get(v.id)
+                      if (isE2EE && !isVaultUnlocked) return null
+                      const displayCode = isE2EE && decrypted ? decrypted.code : v.code
+                      return <div style={{ fontSize: 11, color: 'var(--c-text3)', fontFamily: 'monospace', marginTop: 2 }}>{displayCode}</div>
+                    })()}
                     {v.expiry_date && (
                       <div style={{ fontSize: 11, color: 'var(--c-text3)', marginTop: 2 }}>תוקף: {formatDate(v.expiry_date)}</div>
                     )}

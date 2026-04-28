@@ -424,33 +424,36 @@ export default function HomePage() {
             {hint && (
               <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
             )}
-            <p className="text-xs text-amber-600 mb-3 text-center">שכחת הסיסמה = אובדן גישה קבוע — אין שחזור</p>
-            <input
-              type="password"
-              value={vaultPassInput}
-              onChange={e => setVaultPassInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleVaultUnlock()}
-              placeholder="סיסמת כספת"
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              dir="ltr"
-              autoFocus
-            />
-            {vaultError && <p className="text-xs text-red-500 mb-2">{vaultError}</p>}
-            <div className="flex gap-2 mt-1">
-              <button
-                onClick={handleVaultUnlock}
-                disabled={vaultUnlocking || !vaultPassInput}
-                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-2xl text-sm font-semibold disabled:opacity-50"
-              >
-                {vaultUnlocking ? '...' : 'פתח'}
-              </button>
-              <button
-                onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }}
-                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-2xl text-sm"
-              >
-                ביטול
-              </button>
-            </div>
+            <form onSubmit={e => { e.preventDefault(); handleVaultUnlock() }}>
+              <input
+                type="password"
+                value={vaultPassInput}
+                onChange={e => setVaultPassInput(e.target.value)}
+                placeholder="סיסמת כספת"
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                dir="ltr"
+                autoFocus
+                autoComplete="current-password"
+                name="vault-password"
+              />
+              {vaultError && <p className="text-xs text-red-500 mb-2">{vaultError}</p>}
+              <div className="flex gap-2 mt-1">
+                <button
+                  type="submit"
+                  disabled={vaultUnlocking || !vaultPassInput}
+                  className="flex-1 py-2.5 bg-indigo-600 text-white rounded-2xl text-sm font-semibold disabled:opacity-50"
+                >
+                  {vaultUnlocking ? '...' : 'פתח'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }}
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-2xl text-sm"
+                >
+                  ביטול
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -744,7 +744,6 @@ export default function CheckoutPage() {
                 ? <p className="text-xs text-indigo-500 mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
                 : <p className="text-xs text-gray-400 mb-1">הזן ססמת כספת לצפייה בקוד</p>
               }
-              <p className="text-xs text-amber-600 mb-4">שכחת הסיסמה = אובדן גישה קבוע — אין שחזור</p>
               {!showVaultUnlock ? (
                 <button
                   onClick={() => setShowVaultUnlock(true)}
@@ -753,47 +752,46 @@ export default function CheckoutPage() {
                   פתח כספת
                 </button>
               ) : (
-                <div className="max-w-xs mx-auto space-y-2">
+                <form
+                  className="max-w-xs mx-auto space-y-2"
+                  onSubmit={async e => {
+                    e.preventDefault()
+                    setVaultUnlocking(true); setVaultError('')
+                    const ok = await unlockVault(vaultPassInput)
+                    setVaultUnlocking(false)
+                    if (!ok) setVaultError('סיסמה שגויה')
+                    else { setShowVaultUnlock(false); setVaultPassInput('') }
+                  }}
+                >
                   <input
                     type="password"
                     value={vaultPassInput}
                     onChange={e => setVaultPassInput(e.target.value)}
-                    onKeyDown={async e => {
-                      if (e.key !== 'Enter') return
-                      setVaultUnlocking(true); setVaultError('')
-                      const ok = await unlockVault(vaultPassInput)
-                      setVaultUnlocking(false)
-                      if (!ok) setVaultError('ססמה שגויה')
-                      else { setShowVaultUnlock(false); setVaultPassInput('') }
-                    }}
-                    placeholder="ססמת כספת"
+                    placeholder="סיסמת כספת"
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     dir="ltr"
                     autoFocus
+                    autoComplete="current-password"
+                    name="vault-password"
                   />
                   {vaultError && <p className="text-xs text-red-500">{vaultError}</p>}
                   <div className="flex gap-2">
                     <button
-                      onClick={async () => {
-                        setVaultUnlocking(true); setVaultError('')
-                        const ok = await unlockVault(vaultPassInput)
-                        setVaultUnlocking(false)
-                        if (!ok) setVaultError('ססמה שגויה')
-                        else { setShowVaultUnlock(false); setVaultPassInput('') }
-                      }}
+                      type="submit"
                       disabled={vaultUnlocking || !vaultPassInput}
                       className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
                     >
                       {vaultUnlocking ? '...' : 'פתח'}
                     </button>
                     <button
+                      type="button"
                       onClick={() => { setShowVaultUnlock(false); setVaultPassInput(''); setVaultError('') }}
                       className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm"
                     >
                       ביטול
                     </button>
                   </div>
-                </div>
+                </form>
               )}
             </div>
           )}
@@ -1223,7 +1221,7 @@ export default function CheckoutPage() {
                 {voucher.is_e2ee && (
                   <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-800">
                     <Shield className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-500" />
-                    <span>שובר זה מוצפן. <strong>יצירת קישור תחשוף את הקוד בשרת</strong> לצורך שיתוף — הקוד יישמר רק ברשומת הקישור וייתמחק עם מחיקתו. נדרשת כספת פתוחה.</span>
+                    <span>שובר זה מוצפן. <strong>יצירת קישור תחשוף את הקוד בשרת</strong> לצורך שיתוף. הקוד יישמר זמנית על גבי השרת עד להפסקת השיתוף. נדרשת כספת פתוחה.</span>
                   </div>
                 )}
 

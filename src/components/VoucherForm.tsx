@@ -1110,10 +1110,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 value={vaultPassInput}
                 onChange={e => setVaultPassInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !vaultPass2Input && handleVaultSubmit()}
-                placeholder={vaultModalMode === 'setup' ? 'ססמת כספת (מינ. 6 תווים)' : 'ססמת כספת'}
+                placeholder={vaultModalMode === 'setup' ? 'סיסמת כספת (מינ. 6 תווים)' : 'סיסמת כספת'}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 dir="ltr"
                 autoFocus
+                autoComplete={vaultModalMode === 'setup' ? 'new-password' : 'current-password'}
+                name="vault-password"
               />
               {vaultModalMode === 'setup' && (
                 <>
@@ -1122,9 +1124,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     value={vaultPass2Input}
                     onChange={e => setVaultPass2Input(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleVaultSubmit()}
-                    placeholder="אימות ססמה"
+                    placeholder="אימות סיסמה"
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     dir="ltr"
+                    autoComplete="new-password"
+                    name="vault-password-confirm"
                   />
                   <input
                     type="text"

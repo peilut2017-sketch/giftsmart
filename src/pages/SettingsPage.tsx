@@ -599,8 +599,8 @@ export default function SettingsPage() {
               <div className="px-4 pb-4 space-y-3">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
                   <p className="font-bold flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> חשוב:</p>
-                  <p>• שכחת הסיסמה = <strong>אובדן גישה קבוע</strong> לקודי שוברים מוצפנים — <strong>אין שחזור</strong></p>
-                  <p>• שיתוף קישור לשובר מוצפן חושף את הקוד בשרת לצורך שיתוף</p>
+                  <p>• עליך לזכור את הסיסמה. שמור אותה במקום בטוח. <strong>הסיסמה אינה ניתנת לשחזור</strong> ואיבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים</p>
+                  <p>• שיתוף שובר מוצפן חושף את הקוד בשרת לצורך שיתוף</p>
                 </div>
                 {hint && (
                   <div className="bg-indigo-50 rounded-xl px-3 py-2 text-xs text-indigo-700">
@@ -618,6 +618,8 @@ export default function SettingsPage() {
                   placeholder="סיסמה נוכחית"
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   dir="ltr"
+                  autoComplete="current-password"
+                  name="vault-current-password"
                 />
                 <input
                   type="password"
@@ -626,6 +628,8 @@ export default function SettingsPage() {
                   placeholder="סיסמה חדשה (לפחות 8 תווים)"
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   dir="ltr"
+                  autoComplete="new-password"
+                  name="vault-new-password"
                 />
                 <input
                   type="password"
@@ -634,6 +638,8 @@ export default function SettingsPage() {
                   placeholder="אימות סיסמה חדשה"
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   dir="ltr"
+                  autoComplete="new-password"
+                  name="vault-new-password-confirm"
                 />
                 <button
                   onClick={handleChangeVaultPassphrase}
