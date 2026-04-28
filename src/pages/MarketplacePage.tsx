@@ -973,10 +973,10 @@ export default function MarketplacePage() {
           {showSort && tab === 'all' && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingBottom: 12 }}>
               {([
-                { key: 'newest',   label: '🕐 חדש ביותר' },
-                { key: 'discount', label: '💰 הנחה גבוהה' },
+                { key: 'newest',   label: 'חדש ביותר' },
+                { key: 'discount', label: 'הנחה גבוהה' },
                 { key: 'balance',  label: '₪ יתרה גבוהה' },
-                { key: 'expiry',   label: '📅 פג תוקף בקרוב' },
+                { key: 'expiry',   label: 'פג תוקף בקרוב' },
               ] as { key: MarketSortKey; label: string }[]).map(({ key, label }) => (
                 <button
                   key={key}
@@ -1309,7 +1309,7 @@ export default function MarketplacePage() {
                   <p className="font-semibold text-gray-800 truncate">{w.store_name}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     הנחה מינ': {w.min_discount_pct}% ·
-                    {w.notify_push ? ' 🔔 דחיפה' : ''}{w.notify_email ? ' 📧 דוא"ל' : ''}
+                    {w.notify_push ? ' · דחיפה' : ''}{w.notify_email ? ' · דוא"ל' : ''}
                   </p>
                 </div>
                 <button

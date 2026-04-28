@@ -60,8 +60,8 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
       )
 
       const title = urgent.length > 0
-        ? `🚨 ${urgent.length} שובר${urgent.length > 1 ? 'ים' : ''} פגים בקרוב!`
-        : `⚠️ ${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${EXPIRY_WINDOW_DAYS} יום`
+        ? `${urgent.length} שובר${urgent.length > 1 ? 'ים' : ''} פגים בקרוב!`
+        : `${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${EXPIRY_WINDOW_DAYS} יום`
 
       const body = expiring
         .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
@@ -100,8 +100,8 @@ export async function sendUsageNotification(storeName: string, usedAmount: numbe
   const fullyRedeemed = newBalance <= 0
   const storeLabel = storeUsed ? ` — ${storeUsed}` : ''
   const title = fullyRedeemed
-    ? `✅ שובר ${storeName} נוצל במלואו${storeLabel}`
-    : `💳 שימוש בשובר ${storeName}${storeLabel}`
+    ? `שובר ${storeName} נוצל במלואו${storeLabel}`
+    : `שימוש בשובר ${storeName}${storeLabel}`
   const body = fullyRedeemed
     ? `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} — השובר נוצל`
     : `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} | יתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`

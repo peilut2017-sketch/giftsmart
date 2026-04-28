@@ -438,10 +438,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const updated = payload.new as { status: string; listing_id: string }
           if (updated.status === 'buyer_confirmed') {
-            toast('קונה אישר ששלח תשלום! בדוק את הרשימות שלך.', {
-              icon: '💰',
-              duration: 6000,
-            })
+            toast('קונה אישר ששלח תשלום! בדוק את הרשימות שלך.', { duration: 6000 })
             fetchMyListings()
           }
         },

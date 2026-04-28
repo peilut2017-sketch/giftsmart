@@ -83,10 +83,10 @@ export default function ArchivePage() {
   }
 
   const sortLabels: Record<SortKey, string> = {
-    added: '🕐 חדש→ישן',
-    store: '🏪 חנות א-ב',
+    added: 'חדש→ישן',
+    store: 'חנות א-ב',
     balance: '₪ יתרה',
-    expiry: '📅 תפוגה',
+    expiry: 'תפוגה',
   }
 
   return (

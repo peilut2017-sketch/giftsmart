@@ -59,10 +59,10 @@ interface SupportMessage {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  billing: '💳 חיוב',
-  bug: '🐛 באג',
-  feature: '💡 פיצ\'ר',
-  general: '💬 כללי',
+  billing: 'חיוב',
+  bug: 'באג',
+  feature: 'פיצ\'ר',
+  general: 'כללי',
 }
 
 type Confirm = { title: string; message?: string; onConfirm: () => void }
@@ -324,7 +324,7 @@ export default function AdminPage() {
     setPremiumToggling(false)
     if (error) { toast.error('שגיאה: ' + error.message); return }
     setPremiumEnabled(next)
-    toast.success(next ? '💎 מערך מנויים הופעל' : '🔓 מערך מנויים הושבת — כולם Pro')
+    toast.success(next ? 'מערך מנויים הופעל' : 'מערך מנויים הושבת — כולם Pro')
   }
 
   async function loadBanners() {
@@ -1025,7 +1025,7 @@ export default function AdminPage() {
           {expiringSoon > 0 && (
             <div className="mt-2 pt-2 border-t border-slate-600">
               <span className="text-xs bg-orange-400/20 text-orange-300 px-2 py-1 rounded-lg">
-                ⚠️ {expiringSoon} שוברים פגים בקרוב
+                {expiringSoon} שוברים פגים בקרוב
               </span>
             </div>
           )}
@@ -1070,7 +1070,7 @@ export default function AdminPage() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {u.pro_expires_at !== undefined && (
                       <div className="text-right">
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⭐ Pro</span>
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Pro ★</span>
                         {u.pro_expires_at && (
                           <p className="text-[10px] text-gray-400 mt-0.5">
                             עד {new Date(u.pro_expires_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -1131,7 +1131,7 @@ export default function AdminPage() {
 
         {/* Wallet name */}
         <div className="bg-white rounded-3xl shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">🏷️ שם הארנק</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">שם הארנק</h3>
           {!editingWalletName ? (
             <div className="flex items-center justify-between">
               <span className="text-gray-800">{walletName}</span>
@@ -1388,8 +1388,8 @@ export default function AdminPage() {
                       onChange={e => setCouponForm(f => ({ ...f, discount_type: e.target.value as any }))}
                       className="px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
                     >
-                      <option value="months_free">🎁 חודשים חינם</option>
-                      <option value="days_free">📅 ימים חינם</option>
+                      <option value="months_free">חודשים חינם</option>
+                      <option value="days_free">ימים חינם</option>
                       <option value="percent">% הנחה באחוזים</option>
                       <option value="fixed">₪ הנחה קבועה</option>
                     </select>
@@ -1479,12 +1479,12 @@ export default function AdminPage() {
                         </div>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400 flex-wrap">
                           <span>
-                            {c.discount_type === 'months_free' ? `🎁 ${c.discount_value} חודשי Pro` :
-                             c.discount_type === 'days_free' ? `📅 ${c.discount_value} ימי Pro` :
+                            {c.discount_type === 'months_free' ? `${c.discount_value} חודשי Pro` :
+                             c.discount_type === 'days_free' ? `${c.discount_value} ימי Pro` :
                              c.discount_type === 'percent' ? `% ${c.discount_value}% הנחה` :
                              `₪ ${c.discount_value}₪ הנחה`}
                           </span>
-                          <span>📊 {c.uses_count}{c.max_uses ? `/${c.max_uses}` : ''} שימושים</span>
+                          <span>{c.uses_count}{c.max_uses ? `/${c.max_uses}` : ''} שימושים</span>
                           {c.valid_until && <span>⏰ עד {formatDate(c.valid_until)}</span>}
                           {c.stripe_coupon_code && <span className="font-mono text-purple-400">{c.stripe_coupon_code}</span>}
                         </div>
@@ -2263,7 +2263,7 @@ export default function AdminPage() {
                       <p className="text-sm font-medium text-gray-800 truncate">{s.name || s.email}</p>
                       {s.is_verified && <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" />}
                     </div>
-                    <p className="text-xs text-gray-400">⭐ {Number(s.avg_rating).toFixed(1)} · {s.total_sales} מכירות</p>
+                    <p className="text-xs text-gray-400">★ {Number(s.avg_rating).toFixed(1)} · {s.total_sales} מכירות</p>
                   </div>
                   <button
                     disabled={togglingVerified === s.user_id}

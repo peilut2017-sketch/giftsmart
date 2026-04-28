@@ -11,7 +11,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import { supabase } from '../lib/supabase'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock, ShoppingBag, Loader2, Shield } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock, ShoppingBag, Loader2, Shield, Lightbulb } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -310,7 +310,7 @@ export default function CheckoutPage() {
       if (giftMode === 'link') {
         setGiftLink(link)
         await navigator.clipboard.writeText(link).catch(() => {})
-        toast.success('🎁 קישור מתנה נוצר והועתק!')
+        toast.success('קישור מתנה נוצר והועתק!')
       } else {
         const sendNow = !giftScheduled || !giftDate || sendAt <= new Date()
         if (sendNow) {
@@ -323,7 +323,7 @@ export default function CheckoutPage() {
               balance: voucher.balance,
               gift_link: link,
             })
-            toast.success(`🎁 מתנה נשלחה ל-${giftEmail.trim()}!`)
+            toast.success(`מתנה נשלחה ל-${giftEmail.trim()}!`)
           } catch (emailErr: any) {
             // Gift was created but email failed — show link as fallback
             setGiftLink(link)
@@ -331,7 +331,7 @@ export default function CheckoutPage() {
             console.error('Gift email error:', emailErr)
           }
         } else {
-          toast.success(`🎁 מתנה מתוזמנת ל-${new Date(giftDate).toLocaleDateString('he-IL')}`)
+          toast.success(`מתנה מתוזמנת ל-${new Date(giftDate).toLocaleDateString('he-IL')}`)
         }
         setGiftEmail('')
       }
@@ -741,7 +741,7 @@ export default function CheckoutPage() {
               <Shield className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
               <p className="text-sm font-semibold text-gray-700 mb-1">קוד מוצפן מקצה לקצה</p>
               {hint
-                ? <p className="text-xs text-indigo-500 mb-1">💡 רמז: <span className="font-medium">{hint}</span></p>
+                ? <p className="text-xs text-indigo-500 mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
                 : <p className="text-xs text-gray-400 mb-1">הזן ססמת כספת לצפייה בקוד</p>
               }
               <p className="text-xs text-amber-600 mb-4">שכחת הסיסמה = אובדן גישה קבוע — אין שחזור</p>
@@ -1459,7 +1459,7 @@ export default function CheckoutPage() {
                 {/* Created link display */}
                 {giftLink && (
                   <div className="bg-green-50 border border-green-200 rounded-2xl p-3 space-y-2">
-                    <p className="text-xs font-medium text-green-700">🎁 קישור המתנה (שתף עם הנמען):</p>
+                    <p className="text-xs font-medium text-green-700 flex items-center gap-1"><Gift className="w-3.5 h-3.5" /> קישור המתנה (שתף עם הנמען):</p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-green-800 font-mono break-all flex-1">{giftLink}</p>
                       <button

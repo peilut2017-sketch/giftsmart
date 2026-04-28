@@ -5,7 +5,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb } from 'lucide-react'
 
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
 import toast from 'react-hot-toast'
@@ -1092,7 +1092,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
             {vaultModalMode === 'setup' ? (
               <div className="w-full max-w-xs mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1 leading-relaxed">
-                <p className="font-bold">⚠️ קרא לפני שממשיך:</p>
+                <p className="font-bold flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> קרא לפני שממשיך:</p>
                 <p>• קוד השובר יוצפן — רק מי שמחזיק בסיסמה יכול לקרוא אותו</p>
                 <p>• <strong>שכחת הסיסמה = אובדן גישה קבוע לקוד.</strong> אין שחזור.</p>
                 <p>• שיתוף קישור לשובר זה יחשוף את הקוד לשרת</p>
@@ -1100,7 +1100,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               </div>
             ) : (
               hint && (
-                <p className="text-xs text-indigo-500 mb-3 text-center">💡 רמז: <span className="font-medium">{hint}</span></p>
+                <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
               )
             )}
 

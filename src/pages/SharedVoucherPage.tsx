@@ -178,7 +178,7 @@ export default function SharedVoucherPage() {
           </button>
         </span>
       ),
-      { duration: 5000, icon: '✅' }
+      { duration: 5000 }
     )
   }
 

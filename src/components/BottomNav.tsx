@@ -4,6 +4,7 @@ import { motion, useMotionValue, useVelocity, useTransform, animate } from 'fram
 import { Home, Archive, BarChart2, Settings, Shield, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
+import { useT } from '../lib/i18n'
 
 const SPRING = { type: 'spring' as const, stiffness: 460, damping: 40, mass: 0.75 }
 
@@ -14,14 +15,15 @@ export default function BottomNav() {
   const { unreadChatCount, marketplaceMode } = useMarketplace()
 
   const showMarket = marketplaceMode !== 'disabled' || isAdmin
+  const { t } = useT()
 
   const items = [
-    { icon: Home,        label: 'ארנק',        path: '/'         },
-    ...(showMarket ? [{ icon: ShoppingBag, label: 'שוק', path: '/market' }] : []),
-    { icon: Archive,     label: 'ארכיון',      path: '/archive'  },
-    { icon: BarChart2,   label: 'סטטיסטיקות', path: '/stats'    },
-    { icon: Settings,    label: 'הגדרות',      path: '/settings' },
-    ...(isAdmin ? [{ icon: Shield, label: 'מנהל', path: '/admin' }] : []),
+    { icon: Home,        label: t('nav.home'),     path: '/'         },
+    ...(showMarket ? [{ icon: ShoppingBag, label: t('nav.market'), path: '/market' }] : []),
+    { icon: Archive,     label: t('nav.archive'),  path: '/archive'  },
+    { icon: BarChart2,   label: t('nav.stats'),    path: '/stats'    },
+    { icon: Settings,    label: t('nav.settings'), path: '/settings' },
+    ...(isAdmin ? [{ icon: Shield, label: t('nav.admin'), path: '/admin' }] : []),
   ]
 
   const activeIdx = (() => {

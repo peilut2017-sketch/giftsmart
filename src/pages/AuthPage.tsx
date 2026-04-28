@@ -74,7 +74,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       const { error } = await signInWithBiometric()
       if (error) {
         // Session expired — fall back to password
-        toast('הסשן פג תוקף — יש להזין סיסמה פעם אחת', { icon: '🔒' })
+        toast('הסשן פג תוקף — יש להזין סיסמה פעם אחת')
         setLoginStep('password')
       }
     } finally {

@@ -179,7 +179,7 @@ export default function GiftPage() {
           </button>
         </span>
       ),
-      { duration: 5000, icon: '✅' }
+      { duration: 5000 }
     )
   }
 

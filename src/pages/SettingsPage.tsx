@@ -6,11 +6,13 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
 import { useE2EE } from '../contexts/E2EEContext'
+import { useTheme } from '../contexts/ThemeContext'
+import { useLocale } from '../lib/i18n'
 
 interface SupportMessageReply {
   id: string
@@ -53,6 +55,8 @@ export default function SettingsPage() {
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
   const { hasVault, hint, isVaultUnlocked, resetVault, changePassphrase } = useE2EE()
+  const { theme, setTheme } = useTheme()
+  const { locale, setLocale } = useLocale()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
@@ -177,7 +181,7 @@ export default function SettingsPage() {
       const days = getDaysUntilExpiry(v.expiry_date)
       return days !== null && days >= 0 && days <= reminderDays
     })
-    if (expiring.length === 0) return toast(`אין שוברים שפגים ב-${reminderDays} הימים הקרובים`, { icon: '✅' })
+    if (expiring.length === 0) return toast(`אין שוברים שפגים ב-${reminderDays} הימים הקרובים`)
     setSendingReminder(true)
     try {
       const vouchers_list = expiring
@@ -407,7 +411,7 @@ export default function SettingsPage() {
     try {
       const { error } = await supabase.from('profiles').select('id').limit(1)
       if (error) throw error
-      toast.success('חיבור לבסיס הנתונים תקין ✅')
+      toast.success('חיבור לבסיס הנתונים תקין')
     } catch (err: any) {
       const msg = err?.message || 'שגיאה לא ידועה'
       if (msg.includes('JWT')) toast.error('בעיית אימות — נסה להתחבר מחדש')
@@ -455,7 +459,7 @@ export default function SettingsPage() {
                   <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{user?.email}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, background: isPro ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: 100 }}>
-                      {isPro ? '⭐ Pro' : 'משתמש רגיל'}
+                      {isPro ? 'Pro ★' : 'משתמש רגיל'}
                     </span>
                     {isPro && proExpiryDate && (
                       <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
@@ -594,13 +598,13 @@ export default function SettingsPage() {
             {showVaultSection && (
               <div className="px-4 pb-4 space-y-3">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
-                  <p className="font-bold">⚠️ חשוב:</p>
+                  <p className="font-bold flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> חשוב:</p>
                   <p>• שכחת הסיסמה = <strong>אובדן גישה קבוע</strong> לקודי שוברים מוצפנים — <strong>אין שחזור</strong></p>
                   <p>• שיתוף קישור לשובר מוצפן חושף את הקוד בשרת לצורך שיתוף</p>
                 </div>
                 {hint && (
                   <div className="bg-indigo-50 rounded-xl px-3 py-2 text-xs text-indigo-700">
-                    💡 רמז נוכחי: <span className="font-medium">{hint}</span>
+                    רמז נוכחי: <span className="font-medium">{hint}</span>
                   </div>
                 )}
                 <p className="text-xs text-indigo-600 bg-indigo-50 rounded-xl p-3">
@@ -978,10 +982,10 @@ export default function SettingsPage() {
                     onChange={e => setSupportCategory(e.target.value)}
                     className="shrink-0 w-28 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
                   >
-                    <option value="general">💬 כללי</option>
-                    <option value="billing">💳 חיוב</option>
-                    <option value="bug">🐛 באג</option>
-                    <option value="feature">💡 פיצ'ר</option>
+                    <option value="general">כללי</option>
+                    <option value="billing">חיוב</option>
+                    <option value="bug">באג</option>
+                    <option value="feature">פיצ'ר</option>
                   </select>
                 </div>
                 <textarea
@@ -1173,6 +1177,56 @@ export default function SettingsPage() {
 
         {/* Activity log */}
         <ActivityLog />
+
+        {/* Appearance: Dark mode + Language */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>מראה ושפה</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
+          {/* Dark mode toggle */}
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--c-border)' }}>
+            <div className="flex items-center gap-3">
+              {theme === 'dark' ? <Moon className="w-5 h-5" style={{ color: 'var(--c-primary)' }} /> : <Sun className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />}
+              <div>
+                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>מצב לילה</div>
+                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+              style={{ background: theme === 'dark' ? 'var(--c-primary)' : 'var(--c-border)' }}
+            >
+              <span
+                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+                style={{ transform: theme === 'dark' ? 'translateX(-24px)' : 'translateX(-4px)' }}
+              />
+            </button>
+          </div>
+          {/* Language switcher */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Globe className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />
+              <div>
+                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>שפה / Language</div>
+                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{locale === 'he' ? 'עברית' : 'English'}</div>
+              </div>
+            </div>
+            <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--c-border)' }}>
+              {(['he', 'en'] as const).map(l => (
+                <button
+                  key={l}
+                  onClick={() => setLocale(l)}
+                  className="px-3 py-1 text-xs font-semibold transition-colors"
+                  style={{
+                    background: locale === l ? 'var(--c-primary)' : 'var(--c-surface)',
+                    color: locale === l ? '#fff' : 'var(--c-text2)',
+                  }}
+                >
+                  {l === 'he' ? 'עב' : 'EN'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
         {/* Onboarding guide */}
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>

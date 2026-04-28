@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
-import { X, Shield } from 'lucide-react'
+import { X, Shield, Gift, Camera, MessageSquare, BarChart2, Bell, Users, Rocket } from 'lucide-react'
 
 interface Props {
   userId: string
 }
 
 const FEATURES = [
-  { icon: '🎁', title: 'ניהול שוברים וגיפט קארדים', desc: 'הוסף, ערוך ועקוב אחרי כל השוברים שלך במקום אחד' },
-  { icon: '📷', title: 'סריקת ברקוד / QR', desc: 'סרוק שובר ישירות עם המצלמה בלי להקליד ידנית' },
-  { icon: '📨', title: 'חילוץ מ-SMS ומייל', desc: 'הדבק הודעת SMS — הפרטים יחולצו אוטומטית' },
-  { icon: '📊', title: 'סטטיסטיקות ויתרות', desc: 'ראה כמה שוברים יש לך, כמה נוצל ומה עומד לפוג' },
-  { icon: '🔔', title: 'תזכורות לפני תפוגה', desc: 'קבל מייל בזמן לפני שהשובר יפוג' },
-  { icon: '🤝', title: 'ארנק משותף', desc: 'שתף את הארנק עם בני משפחה — כולם רואים ומעדכנים' },
+  { icon: Gift,         title: 'ניהול שוברים וגיפט קארדים', desc: 'הוסף, ערוך ועקוב אחרי כל השוברים שלך במקום אחד' },
+  { icon: Camera,       title: 'סריקת ברקוד / QR',           desc: 'סרוק שובר ישירות עם המצלמה בלי להקליד ידנית' },
+  { icon: MessageSquare,title: 'חילוץ מ-SMS ומייל',          desc: 'הדבק הודעת SMS — הפרטים יחולצו אוטומטית' },
+  { icon: BarChart2,    title: 'סטטיסטיקות ויתרות',          desc: 'ראה כמה שוברים יש לך, כמה נוצל ומה עומד לפוג' },
+  { icon: Bell,         title: 'תזכורות לפני תפוגה',          desc: 'קבל מייל בזמן לפני שהשובר יפוג' },
+  { icon: Users,        title: 'ארנק משותף',                  desc: 'שתף את הארנק עם בני משפחה — כולם רואים ומעדכנים' },
 ]
 
 export default function WelcomeModal({ userId }: Props) {
@@ -42,7 +42,7 @@ export default function WelcomeModal({ userId }: Props) {
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
-          <div className="text-4xl mb-2">🎁</div>
+          <Gift className="w-12 h-12 mx-auto mb-2 text-green-500" />
           <h2 className="text-xl font-bold text-gray-900">ברוך הבא לארנק שוברים!</h2>
           <p className="text-sm text-gray-500 mt-1">הנה מה שאפשר לעשות עם האפליקציה</p>
         </div>
@@ -51,7 +51,7 @@ export default function WelcomeModal({ userId }: Props) {
         <div className="overflow-y-auto flex-1 p-4 space-y-3">
           {FEATURES.map((f, i) => (
             <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-2xl">
-              <span className="text-2xl leading-none mt-0.5">{f.icon}</span>
+              <f.icon className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--c-primary)' }} />
               <div>
                 <p className="text-sm font-semibold text-gray-800">{f.title}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{f.desc}</p>
@@ -75,9 +75,10 @@ export default function WelcomeModal({ userId }: Props) {
         <div className="p-4 border-t safe-area-bottom">
           <button
             onClick={dismiss}
-            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3.5 rounded-2xl font-semibold shadow-md"
+            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3.5 rounded-2xl font-semibold shadow-md flex items-center justify-center gap-2"
           >
-            בואו נתחיל! 🚀
+            <Rocket className="w-4 h-4" />
+            בואו נתחיל!
           </button>
         </div>
       </div>

@@ -6,7 +6,7 @@ import { Shield } from 'lucide-react'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher } from '../types'
-import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store } from 'lucide-react'
+import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store, AlertTriangle, Users, Handshake, Gift, Lightbulb } from 'lucide-react'
 import InStoreMode from '../components/InStoreMode'
 import toast from 'react-hot-toast'
 import { formatCurrency, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
@@ -422,7 +422,7 @@ export default function HomePage() {
               </div>
             </div>
             {hint && (
-              <p className="text-xs text-indigo-500 mb-3 text-center">💡 רמז: <span className="font-medium">{hint}</span></p>
+              <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
             )}
             <p className="text-xs text-amber-600 mb-3 text-center">שכחת הסיסמה = אובדן גישה קבוע — אין שחזור</p>
             <input
@@ -578,18 +578,19 @@ export default function HomePage() {
         {!isSelectMode && (
           <div className="flex items-center px-4 py-2 gap-2 overflow-x-auto no-scrollbar">
             {([
-              { key: 'all', label: `הכל (${vouchers.length})` },
-              { key: 'expiring', label: '⚠️ פג בקרוב' },
-              { key: 'shared', label: '👥 משותף' },
-              { key: 'shared_with_me', label: `🤝 שותף איתי${sharedWithMe.length > 0 ? ` (${sharedWithMe.length})` : ''}` },
-            ] as { key: FilterTab; label: string }[]).map(({ key, label }) => (
+              { key: 'all',           label: `הכל (${vouchers.length})`,                                                     icon: null },
+              { key: 'expiring',      label: 'פג בקרוב',                                                                     icon: AlertTriangle },
+              { key: 'shared',        label: 'משותף',                                                                        icon: Users },
+              { key: 'shared_with_me', label: `שותף איתי${sharedWithMe.length > 0 ? ` (${sharedWithMe.length})` : ''}`,    icon: Handshake },
+            ] as { key: FilterTab; label: string; icon: React.ElementType | null }[]).map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setFilterTab(key)}
-                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
                   filterTab === key ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
+                {Icon && <Icon className="w-3 h-3" />}
                 {label}
               </button>
             ))}
@@ -640,10 +641,10 @@ export default function HomePage() {
                   onChange={e => setSortKey(e.target.value as SortKey)}
                   className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
                 >
-                  <option value="expiry">📅 תפוגה</option>
+                  <option value="expiry">תפוגה</option>
                   <option value="balance">₪ יתרה</option>
-                  <option value="store">🏪 חנות</option>
-                  <option value="added">🕐 הוספה</option>
+                  <option value="store">חנות</option>
+                  <option value="added">הוספה</option>
                 </select>
                 <button
                   onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
@@ -696,7 +697,7 @@ export default function HomePage() {
           </div>
         ) : displayVouchers.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-5xl mb-4">🎁</div>
+            <Gift className="w-14 h-14 mx-auto mb-4" style={{ color: 'var(--c-border)' }} />
             <p className="text-gray-500 font-medium">
               {search || filterCats.length > 0 || filterTab !== 'all' ? 'לא נמצאו שוברים' : 'אין שוברים עדיין'}
             </p>

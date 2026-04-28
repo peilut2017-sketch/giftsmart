@@ -6,6 +6,8 @@ import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { MarketplaceProvider } from './contexts/MarketplaceContext'
 import { E2EEProvider } from './contexts/E2EEContext'
+import { ThemeProvider } from './contexts/ThemeContext'
+import { LocaleProvider, useLocale } from './lib/i18n'
 import { useExpiryNotifications } from './hooks/useNotifications'
 import { supabase } from './lib/supabase'
 import UpgradeSheet from './components/UpgradeSheet'
@@ -31,6 +33,7 @@ import AccessibilityWidget from './components/AccessibilityWidget'
 import { isBiometricEnabled } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
+import { AlertTriangle } from 'lucide-react'
 import { Component, useState, useEffect, useRef } from 'react'
 import { useE2EE } from './contexts/E2EEContext'
 import type { ReactNode } from 'react'
@@ -50,7 +53,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center" dir="rtl">
-          <p className="text-4xl">⚠️</p>
+          <AlertTriangle className="w-12 h-12 text-amber-500" />
           <h1 className="text-xl font-bold">משהו השתבש</h1>
           <p className="text-sm text-gray-500">{this.state.message}</p>
           <button
@@ -155,7 +158,7 @@ function NotificationBridge() {
           store_used?: string | null
         }
         const locationSuffix = store_used ? ` · ${store_used}` : ''
-        toast(`🔔 יתרת "${store_name}" עודכנה: ₪${old_balance} ← ₪${new_balance}${locationSuffix}`, { duration: 6000 })
+        toast(`יתרת "${store_name}" עודכנה: ₪${old_balance} ← ₪${new_balance}${locationSuffix}`, { duration: 6000 })
         if (Notification.permission === 'granted') {
           new Notification('יתרת שובר עודכנה', {
             body: `${store_name}: ₪${old_balance} → ₪${new_balance}${locationSuffix}`,
@@ -299,9 +302,30 @@ function AppRoutes() {
   )
 }
 
+function ToasterWithLocale() {
+  const { dir } = useLocale()
+  return (
+    <Toaster
+      position="top-center"
+      toastOptions={{
+        duration: 2500,
+        style: {
+          fontFamily: 'Heebo, sans-serif',
+          direction: dir,
+          borderRadius: '16px',
+          fontSize: '14px',
+          fontWeight: '500',
+        },
+      }}
+    />
+  )
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
+    <ThemeProvider>
+    <LocaleProvider>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -309,21 +333,11 @@ export default function App() {
           <Route path="/gift/:token" element={<GiftPage />} />
           <Route path="/*" element={<AppRoutes />} />
         </Routes>
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 2500,
-            style: {
-              fontFamily: 'Heebo, sans-serif',
-              direction: 'rtl',
-              borderRadius: '16px',
-              fontSize: '14px',
-              fontWeight: '500',
-            },
-          }}
-        />
+        <ToasterWithLocale />
       </AuthProvider>
     </BrowserRouter>
+    </LocaleProvider>
+    </ThemeProvider>
     </ErrorBoundary>
   )
 }
