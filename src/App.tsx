@@ -295,11 +295,11 @@ function AppRoutes() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </AnimatedRoutes>
+          {!widgetEnabled && <AccessibilityFooterLink />}
         </main>
         <BottomNav />
       </div>
       {widgetEnabled && <AccessibilityWidget />}
-      {!widgetEnabled && <AccessibilityFooterLink />}
       <OnboardingGuide />
     </MarketplaceProvider>
     </VoucherProvider>
@@ -310,28 +310,15 @@ function AppRoutes() {
 
 function AccessibilityFooterLink() {
   return (
-    <a
-      href="/accessibility"
-      aria-label="הצהרת נגישות"
-      style={{
-        position: 'fixed',
-        bottom: 'calc(72px + env(safe-area-inset-bottom) + 6px)',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 40,
-        fontSize: 11,
-        color: 'var(--c-text3)',
-        textDecoration: 'underline',
-        background: 'var(--c-surface)',
-        padding: '2px 10px',
-        borderRadius: 999,
-        border: '1px solid var(--c-border)',
-        whiteSpace: 'nowrap',
-        opacity: 0.8,
-      }}
-    >
-      הצהרת נגישות
-    </a>
+    <div className="text-center py-3 pb-2" dir="rtl">
+      <a
+        href="/accessibility"
+        className="text-xs underline"
+        style={{ color: 'var(--c-text3)' }}
+      >
+        הצהרת נגישות
+      </a>
+    </div>
   )
 }
 
