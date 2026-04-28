@@ -6,7 +6,9 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, ShoppingBag, Plus, X as XIcon } from 'lucide-react'
+import { PAYMENT_METHOD_LABELS } from '../types'
+import type { PaymentMethod } from '../types'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -57,6 +59,33 @@ export default function SettingsPage() {
   const { hasVault, hint, isVaultUnlocked, resetVault, changePassphrase } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
+
+  // Payment methods for marketplace
+  const [pmMethods, setPmMethods] = useState<PaymentMethod[]>(() => profile?.marketplace_payment_methods || [])
+  useEffect(() => { setPmMethods(profile?.marketplace_payment_methods || []) }, [profile])
+  const [pmType, setPmType] = useState<PaymentMethod['type']>('bit')
+  const [pmValue, setPmValue] = useState('')
+  const [pmSaving, setPmSaving] = useState(false)
+
+  async function addPaymentMethod() {
+    if (!pmValue.trim()) return toast.error('הזן כתובת דוא"ל או מספר טלפון')
+    const updated = [...pmMethods, { type: pmType, value: pmValue.trim() }]
+    setPmSaving(true)
+    try {
+      await updateProfile({ marketplace_payment_methods: updated })
+      setPmMethods(updated)
+      setPmValue('')
+      toast.success('שיטת תשלום נוספה')
+    } finally {
+      setPmSaving(false)
+    }
+  }
+
+  async function removePaymentMethod(idx: number) {
+    const updated = pmMethods.filter((_, i) => i !== idx)
+    await updateProfile({ marketplace_payment_methods: updated } as any)
+    setPmMethods(updated)
+  }
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
@@ -712,6 +741,61 @@ export default function SettingsPage() {
           <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
             <span>1 יום</span>
             <span>90 ימים</span>
+          </div>
+        </div>
+
+        {/* Marketplace payment methods */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>שוק — שיטות תשלום</div>
+        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '14px 16px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <ShoppingBag className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
+            <p className="text-sm" style={{ color: 'var(--c-text2)' }}>הגדר כיצד קונים ישלמו לך בשוק השוברים</p>
+          </div>
+          {pmMethods.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {pmMethods.map((m, i) => (
+                <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--c-bg)' }}>
+                  <span className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>{PAYMENT_METHOD_LABELS[m.type]}</span>
+                  <span className="text-sm flex-1 font-mono" style={{ color: 'var(--c-text2)' }} dir="ltr">{m.value}</span>
+                  <button
+                    onClick={() => removePaymentMethod(i)}
+                    className="p-1 rounded-full hover:bg-red-50"
+                    style={{ color: '#ef4444' }}
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <select
+              value={pmType}
+              onChange={e => setPmType(e.target.value as PaymentMethod['type'])}
+              className="px-3 py-2 rounded-xl text-sm border focus:outline-none focus:ring-2 focus:ring-green-300"
+              style={{ background: 'var(--c-bg)', borderColor: 'var(--c-border)', color: 'var(--c-text)' }}
+            >
+              {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod['type'][]).map(k => (
+                <option key={k} value={k}>{PAYMENT_METHOD_LABELS[k]}</option>
+              ))}
+            </select>
+            <input
+              type={pmType === 'paypal' ? 'email' : 'tel'}
+              value={pmValue}
+              onChange={e => setPmValue(e.target.value)}
+              placeholder={pmType === 'paypal' ? 'כתובת דוא"ל' : 'מספר טלפון'}
+              className="flex-1 px-3 py-2 rounded-xl text-sm border focus:outline-none focus:ring-2 focus:ring-green-300"
+              style={{ background: 'var(--c-bg)', borderColor: 'var(--c-border)', color: 'var(--c-text)' }}
+              dir="ltr"
+            />
+            <button
+              onClick={addPaymentMethod}
+              disabled={pmSaving || !pmValue.trim()}
+              className="p-2 rounded-xl disabled:opacity-40"
+              style={{ background: 'var(--c-primary)', color: '#fff' }}
+            >
+              <Plus className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
