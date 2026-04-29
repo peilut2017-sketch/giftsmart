@@ -1256,16 +1256,16 @@ export default function CheckoutPage() {
                 {shareTokens.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-gray-500">{t('checkout.share.active.links')}:</p>
-                    {shareTokens.map(t => {
-                      const url = `${window.location.origin}/s/${t.token}`
-                      const expired = t.expires_at && new Date(t.expires_at) < new Date()
+                    {shareTokens.map(tok => {
+                      const url = `${window.location.origin}/s/${tok.token}`
+                      const expired = tok.expires_at && new Date(tok.expires_at) < new Date()
                       return (
-                        <div key={t.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200'}`}>
+                        <div key={tok.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200'}`}>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-mono text-gray-600 truncate">{url}</p>
                             <p className="text-xs text-gray-400 mt-0.5">
-                              {expired ? `⛔ ${t('checkout.share.link.expired')}` : t.expires_at ? `${t('checkout.share.link.until')} ${new Date(t.expires_at).toLocaleDateString('he-IL')}` : t('checkout.share.link.no.limit')}
-                              {' · '}{t.view_count} {t('checkout.share.link.views')}
+                              {expired ? `⛔ ${t('checkout.share.link.expired')}` : tok.expires_at ? `${t('checkout.share.link.until')} ${new Date(tok.expires_at).toLocaleDateString('he-IL')}` : t('checkout.share.link.no.limit')}
+                              {' · '}{tok.view_count} {t('checkout.share.link.views')}
                             </p>
                           </div>
                           <button
@@ -1275,7 +1275,7 @@ export default function CheckoutPage() {
                             <Copy className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteShareToken(t.token)}
+                            onClick={() => handleDeleteShareToken(tok.token)}
                             className="p-2 text-red-400 hover:bg-red-50 rounded-lg"
                           >
                             <Trash2 className="w-4 h-4" />
