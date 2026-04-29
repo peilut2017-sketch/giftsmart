@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useT } from '../lib/i18n'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
@@ -58,16 +59,17 @@ interface SupportMessage {
   user_read_at: string | null
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  billing: 'חיוב',
-  bug: 'באג',
-  feature: 'פיצ\'ר',
-  general: 'כללי',
+const CATEGORY_LABELS_KEYS: Record<string, string> = {
+  billing: 'admin.category.billing',
+  bug: 'admin.category.bug',
+  feature: 'admin.category.feature',
+  general: 'admin.category.general',
 }
 
 type Confirm = { title: string; message?: string; onConfirm: () => void }
 
 export default function AdminPage() {
+  const { t } = useT()
   const { user, profile, isAdmin } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, updateWalletName } = useVouchers()
 
@@ -190,9 +192,9 @@ export default function AdminPage() {
     try {
       await supabase.rpc('admin_set_marketplace_mode', { p_mode: mode })
       setMarketplaceMode(mode)
-      toast.success('מצב השוק עודכן')
+      toast.success(t('admin.market.mode.updated'))
     } catch {
-      toast.error('שגיאה בשמירת הגדרות')
+      toast.error(t('admin.save.error'))
     } finally {
       setSettingMktMode(false)
     }
@@ -203,9 +205,9 @@ export default function AdminPage() {
     try {
       await supabase.rpc('admin_set_marketplace_access', { p_user_id: userId, p_status: status })
       setAccessRequests(prev => prev.map(r => r.user_id === userId ? { ...r, status } : r))
-      toast.success(status === 'approved' ? 'גישה אושרה' : 'גישה נדחתה')
+      toast.success(status === 'approved' ? t('admin.access.approved') : t('admin.access.rejected'))
     } catch {
-      toast.error('שגיאה')
+      toast.error(t('admin.error'))
     } finally {
       setHandlingAccess(null)
     }
@@ -245,9 +247,9 @@ export default function AdminPage() {
       })
       if (error) throw error
       setReports(prev => prev.map(r => r.report_id === reportId ? { ...r, status } : r))
-      toast.success('סטטוס עודכן')
+      toast.success(t('admin.status.updated'))
     } catch {
-      toast.error('שגיאה בעדכון')
+      toast.error(t('admin.update.error'))
     } finally {
       setUpdatingReport(null)
     }
@@ -271,9 +273,9 @@ export default function AdminPage() {
         p_watchlist_pro_only: mktSettings.watchlist_pro_only,
       })
       if (error) throw error
-      toast.success('הגדרות שוק עודכנו')
+      toast.success(t('admin.mkt.settings.updated'))
     } catch {
-      toast.error('שגיאה בשמירה')
+      toast.error(t('admin.save.error'))
     } finally {
       setSavingMktSettings(false)
     }
@@ -292,9 +294,9 @@ export default function AdminPage() {
       const { error } = await supabase.rpc('admin_set_verified_seller', { p_user_id: userId, p_verified: verified })
       if (error) throw error
       setVerifiedSellers(prev => prev.map(s => s.user_id === userId ? { ...s, is_verified: verified } : s))
-      toast.success(verified ? 'מוכר אומת' : 'אימות הוסר')
+      toast.success(verified ? t('admin.seller.verified') : t('admin.seller.unverified'))
     } catch {
-      toast.error('שגיאה')
+      toast.error(t('admin.error'))
     } finally {
       setTogglingVerified(null)
     }
@@ -322,9 +324,9 @@ export default function AdminPage() {
     setPremiumToggling(true)
     const { error } = await supabase.rpc('admin_set_premium_enabled', { p_enabled: next })
     setPremiumToggling(false)
-    if (error) { toast.error('שגיאה: ' + error.message); return }
+    if (error) { toast.error(t('admin.error') + ': ' + error.message); return }
     setPremiumEnabled(next)
-    toast.success(next ? 'מערך מנויים הופעל' : 'מערך מנויים הושבת — כולם Pro')
+    toast.success(next ? t('admin.premium.enabled') : t('admin.premium.disabled'))
   }
 
   async function loadBanners() {
@@ -337,22 +339,22 @@ export default function AdminPage() {
   async function handleUploadBanner(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) { toast.error('יש להעלות קובץ תמונה'); return }
+    if (!file.type.startsWith('image/')) { toast.error(t('admin.banner.image.required')); return }
     setUploadingBanner(true)
     try {
       const ext = file.name.split('.').pop() ?? 'jpg'
       const path = `banner-${Date.now()}.${ext}`
       const { error: uploadErr } = await supabase.storage.from('banners').upload(path, file, { upsert: true })
-      if (uploadErr) { toast.error('שגיאה בהעלאה: ' + uploadErr.message); return }
+      if (uploadErr) { toast.error(t('admin.banner.upload.error') + ': ' + uploadErr.message); return }
       const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(path)
       const { data, error } = await supabase.rpc('admin_add_banner', {
         p_image_url: publicUrl,
         p_display_duration: 5,
         p_skip_allowed: true,
       })
-      if (error) { toast.error('שגיאה בשמירה: ' + error.message); return }
+      if (error) { toast.error(t('admin.save.error') + ': ' + error.message); return }
       if (data) setBanners(prev => [data, ...prev])
-      toast.success('באנר הועלה בהצלחה!')
+      toast.success(t('admin.banner.uploaded'))
     } finally {
       setUploadingBanner(false)
       e.target.value = ''
@@ -366,8 +368,8 @@ export default function AdminPage() {
 
   async function handleDeleteBanner(id: string, imageUrl: string) {
     setConfirm({
-      title: 'מחיקת באנר',
-      message: 'למחוק את הבאנר?',
+      title: t('admin.banner.delete.title'),
+      message: t('admin.banner.delete.message'),
       onConfirm: async () => {
         setConfirm(null)
         // Delete from storage
@@ -375,7 +377,7 @@ export default function AdminPage() {
         if (path) await supabase.storage.from('banners').remove([path])
         await supabase.rpc('admin_delete_banner', { p_id: id })
         setBanners(prev => prev.filter(b => b.id !== id))
-        toast.success('באנר נמחק')
+        toast.success(t('admin.banner.deleted'))
       },
     })
   }
@@ -384,7 +386,7 @@ export default function AdminPage() {
     await supabase.rpc('admin_update_banner_settings', { p_id: id, p_display_duration: duration, p_skip_allowed: skip })
     setBanners(prev => prev.map(b => b.id === id ? { ...b, display_duration: duration, skip_allowed: skip } : b))
     setEditingBannerId(null)
-    toast.success('הגדרות באנר עודכנו')
+    toast.success(t('admin.banner.settings.updated'))
   }
 
   async function handleReorderBanners(newOrder: typeof banners) {
@@ -422,13 +424,13 @@ export default function AdminPage() {
   }
 
   async function handleCreateOperator() {
-    if (!operatorForm.name.trim() || !operatorForm.url.trim()) return toast.error('שם וקישור הם שדות חובה')
+    if (!operatorForm.name.trim() || !operatorForm.url.trim()) return toast.error(t('admin.operator.required'))
     const { data, error } = await supabase.rpc('admin_create_operator', { p_name: operatorForm.name.trim(), p_url: operatorForm.url.trim() })
-    if (error) return toast.error('שגיאה: ' + error.message)
+    if (error) return toast.error(t('admin.error') + ': ' + error.message)
     if (data) setOperators(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
     setOperatorForm({ name: '', url: '' })
     setShowAddOperator(false)
-    toast.success('מפעיל נוסף')
+    toast.success(t('admin.operator.added'))
   }
 
   async function handleUpdateOperator() {
@@ -436,18 +438,18 @@ export default function AdminPage() {
     await supabase.rpc('admin_update_operator', { p_id: editingOperator.id, p_name: editingOperator.name, p_url: editingOperator.url })
     setOperators(prev => prev.map(o => o.id === editingOperator.id ? editingOperator : o).sort((a, b) => a.name.localeCompare(b.name, 'he')))
     setEditingOperator(null)
-    toast.success('מפעיל עודכן')
+    toast.success(t('admin.operator.updated'))
   }
 
   async function handleDeleteOperator(id: string, name: string) {
     setConfirm({
-      title: 'מחיקת מפעיל',
-      message: `למחוק את "${name}"?`,
+      title: t('admin.operator.delete.title'),
+      message: t('admin.operator.delete.message', { name }),
       onConfirm: async () => {
         setConfirm(null)
         await supabase.rpc('admin_delete_operator', { p_id: id })
         setOperators(prev => prev.filter(o => o.id !== id))
-        toast.success('מפעיל נמחק')
+        toast.success(t('admin.operator.deleted'))
       },
     })
   }
@@ -463,8 +465,8 @@ export default function AdminPage() {
         const msg = payload.new as SupportMessage
         setMessages(prev => [msg, ...prev])
         if (Notification.permission === 'granted') {
-          new Notification('הודעה חדשה', {
-            body: `${msg.user_email || 'משתמש'}: ${msg.subject}`,
+          new Notification(t('admin.new.message'), {
+            body: `${msg.user_email || t('admin.user')}: ${msg.subject}`,
             icon: '/logo.png',
           })
         }
@@ -498,7 +500,7 @@ export default function AdminPage() {
   }, [showMessages])
 
   async function handleCreateCoupon() {
-    if (!couponForm.code || !couponForm.name) return toast.error('קוד ושם הם שדות חובה')
+    if (!couponForm.code || !couponForm.name) return toast.error(t('admin.coupon.required'))
     const { data, error } = await supabase.rpc('admin_create_coupon', {
       p_code: couponForm.code,
       p_name: couponForm.name,
@@ -511,11 +513,11 @@ export default function AdminPage() {
       p_first_time_only: couponForm.first_time_only,
       p_stripe_coupon_code: couponForm.stripe_coupon_code || null,
     })
-    if (error) return toast.error('שגיאה: ' + error.message)
+    if (error) return toast.error(t('admin.error') + ': ' + error.message)
     setCoupons(prev => [data, ...prev])
     setShowAddCoupon(false)
     setCouponForm({ code: '', name: '', type: 'general', discount_type: 'months_free', discount_value: 1, max_uses: '', valid_until: '', restricted_to_email: '', first_time_only: false, stripe_coupon_code: '' })
-    toast.success('קופון נוצר!')
+    toast.success(t('admin.coupon.created'))
   }
 
   async function handleToggleCoupon(id: string, active: boolean) {
@@ -525,14 +527,14 @@ export default function AdminPage() {
 
   async function handleDeleteCoupon(id: string, code: string) {
     setConfirm({
-      title: 'מחיקת קופון',
-      message: `למחוק את הקופון "${code}"?`,
+      title: t('admin.coupon.delete.title'),
+      message: t('admin.coupon.delete.message', { code }),
       onConfirm: async () => {
         setConfirm(null)
         const { error } = await supabase.rpc('admin_delete_coupon', { p_id: id })
-        if (error) { toast.error('שגיאה במחיקה: ' + error.message); return }
+        if (error) { toast.error(t('admin.delete.error') + ': ' + error.message); return }
         setCoupons(prev => prev.filter(c => c.id !== id))
-        toast.success('קופון נמחק')
+        toast.success(t('admin.coupon.deleted'))
       },
     })
   }
@@ -557,65 +559,65 @@ export default function AdminPage() {
     setSendingReply(msg.id)
     const { error } = await supabase.rpc('admin_reply_message', { p_id: msg.id, p_reply: reply })
     setSendingReply(null)
-    if (error) return toast.error('שגיאה: ' + error.message)
+    if (error) return toast.error(t('admin.error') + ': ' + error.message)
     const newReply = { id: crypto.randomUUID(), sender: 'admin', body: reply, created_at: new Date().toISOString() }
     setMsgReplies(prev => ({ ...prev, [msg.id]: [...(prev[msg.id] || []), newReply] }))
     setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'replied', admin_reply: reply } : m))
     setReplyTexts(prev => ({ ...prev, [msg.id]: '' }))
-    toast.success('תשובה נשלחה')
+    toast.success(t('admin.reply.sent'))
   }
 
   async function handleEditReply(replyId: string, msgId: string) {
     const newBody = editingReplyText.trim()
     if (!newBody) return
     const { error } = await supabase.rpc('admin_edit_reply', { p_reply_id: replyId, p_body: newBody })
-    if (error) return toast.error('שגיאה בעריכה: ' + error.message)
+    if (error) return toast.error(t('admin.edit.error') + ': ' + error.message)
     setMsgReplies(prev => ({
       ...prev,
       [msgId]: (prev[msgId] || []).map(r => r.id === replyId ? { ...r, body: newBody } : r),
     }))
     setEditingReplyId(null)
-    toast.success('התשובה עודכנה')
+    toast.success(t('admin.reply.updated'))
   }
 
   async function handleDeleteReply(replyId: string, msgId: string) {
     setConfirm({
-      title: 'מחיקת תשובה',
-      message: 'למחוק את התשובה?',
+      title: t('admin.reply.delete.title'),
+      message: t('admin.reply.delete.message'),
       onConfirm: async () => {
         setConfirm(null)
         const { error } = await supabase.rpc('admin_delete_reply', { p_reply_id: replyId })
-        if (error) return toast.error('שגיאה במחיקה: ' + error.message)
+        if (error) return toast.error(t('admin.delete.error') + ': ' + error.message)
         setMsgReplies(prev => ({
           ...prev,
           [msgId]: (prev[msgId] || []).filter(r => r.id !== replyId),
         }))
-        toast.success('התשובה נמחקה')
+        toast.success(t('admin.reply.deleted'))
       },
     })
   }
 
   async function handleDeleteBroadcast(id: string) {
     setConfirm({
-      title: 'מחיקת הודעה',
-      message: 'למחוק את ההודעה לכלל המשתמשים?',
+      title: t('admin.broadcast.delete.title'),
+      message: t('admin.broadcast.delete.message'),
       onConfirm: async () => {
         setConfirm(null)
         await supabase.rpc('admin_delete_broadcast', { p_id: id })
         setBroadcasts(prev => prev.filter(b => b.id !== id))
-        toast.success('הודעה נמחקה')
+        toast.success(t('admin.broadcast.deleted'))
       },
     })
   }
 
   async function handleSaveEditBroadcast(id: string) {
     const { subject, body } = editingBroadcastForm
-    if (!subject.trim() || !body.trim()) return toast.error('נושא וגוף חובה')
+    if (!subject.trim() || !body.trim()) return toast.error(t('admin.broadcast.required'))
     const { error } = await supabase.rpc('admin_edit_broadcast', { p_id: id, p_subject: subject.trim(), p_body: body.trim() })
-    if (error) return toast.error('שגיאה בעדכון: ' + error.message)
+    if (error) return toast.error(t('admin.update.error') + ': ' + error.message)
     setBroadcasts(prev => prev.map(b => b.id === id ? { ...b, subject: subject.trim(), body: body.trim() } : b))
     setEditingBroadcastId(null)
-    toast.success('הודעה עודכנה')
+    toast.success(t('admin.broadcast.updated'))
   }
 
   async function handleLoadBroadcastViewers(id: string) {
@@ -623,37 +625,37 @@ export default function AdminPage() {
     setLoadingViewersFor(id)
     const { data, error } = await supabase.rpc('admin_get_broadcast_views', { p_broadcast_id: id })
     setLoadingViewersFor(null)
-    if (error) return toast.error('שגיאה: ' + error.message)
+    if (error) return toast.error(t('admin.error') + ': ' + error.message)
     setBroadcastViewers(prev => ({ ...prev, [id]: data || [] }))
     setShowViewersFor(id)
   }
 
   async function handleCreateBroadcast() {
-    if (!broadcastForm.subject.trim() || !broadcastForm.body.trim()) return toast.error('נושא וגוף חובה')
+    if (!broadcastForm.subject.trim() || !broadcastForm.body.trim()) return toast.error(t('admin.broadcast.required'))
     setSendingBroadcast(true)
     const { data, error } = await supabase.rpc('admin_create_broadcast', {
       p_subject: broadcastForm.subject.trim(),
       p_body: broadcastForm.body.trim(),
     })
     setSendingBroadcast(false)
-    if (error) return toast.error('שגיאה: ' + error.message)
+    if (error) return toast.error(t('admin.error') + ': ' + error.message)
     setBroadcasts(prev => [data, ...prev])
     setBroadcastForm({ subject: '', body: '' })
-    toast.success('הודעה נשלחה לכל המשתמשים!')
+    toast.success(t('admin.broadcast.sent'))
   }
 
   async function handleCreatePushBroadcast() {
-    if (!pushForm.title.trim() || !pushForm.body.trim()) return toast.error('כותרת וגוף חובה')
+    if (!pushForm.title.trim() || !pushForm.body.trim()) return toast.error(t('admin.push.required'))
     setSendingPush(true)
     const { data, error } = await supabase.rpc('admin_create_push_broadcast', {
       p_title: pushForm.title.trim(),
       p_body: pushForm.body.trim(),
     })
     setSendingPush(false)
-    if (error) return toast.error('שגיאה: ' + error.message)
+    if (error) return toast.error(t('admin.error') + ': ' + error.message)
     if (data) setBroadcasts(prev => prev) // push broadcasts are separate
     setPushForm({ title: '', body: '' })
-    toast.success('התראת פוש נשלחה לכל המשתמשים!')
+    toast.success(t('admin.push.sent'))
   }
 
   useEffect(() => {
@@ -685,7 +687,7 @@ export default function AdminPage() {
   async function handleSaveWalletName() {
     await updateWalletName(newWalletName)
     setEditingWalletName(false)
-    toast.success('שם הארנק עודכן')
+    toast.success(t('admin.wallet.name.updated'))
   }
 
   async function handleAddSV() {
@@ -697,26 +699,26 @@ export default function AdminPage() {
       is_global: svGlobal,
       balance_check_url: svBalanceUrl.trim() || undefined,
     })
-    toast.success(svGlobal ? 'שובר-על גלובלי נוסף' : 'שובר-על נוסף')
+    toast.success(svGlobal ? t('admin.sv.global.added') : t('admin.sv.added'))
     setSvName(''); setSvStores(''); setSvDesc(''); setSvGlobal(false); setSvBalanceUrl('')
     setShowAddSV(false)
   }
 
   async function handleQuickAddSV(name: string, stores: string[]) {
     const alreadyExists = superVouchers.some(sv => sv.name === name)
-    if (alreadyExists) return toast(`"${name}" כבר קיים`, { icon: 'ℹ️' })
+    if (alreadyExists) return toast(t('admin.sv.already.exists', { name }), { icon: 'ℹ️' })
     await addSuperVoucher({ name, stores, is_global: true })
-    toast.success(`"${name}" נוסף כשובר-על גלובלי`)
+    toast.success(t('admin.sv.quick.added', { name }))
   }
 
   function handleDeleteSV(id: string, name: string) {
     setConfirm({
-      title: 'מחיקת שובר-על',
-      message: `למחוק את "${name}"? הפעולה אינה ניתנת לביטול.`,
+      title: t('admin.sv.delete.title'),
+      message: t('admin.sv.delete.message', { name }),
       onConfirm: async () => {
         setConfirm(null)
         await deleteSuperVoucher(id)
-        toast.success('נמחק')
+        toast.success(t('admin.sv.deleted'))
       },
     })
   }
@@ -1556,7 +1558,7 @@ export default function AdminPage() {
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs text-gray-400">{msg.user_email || msg.user_name || 'משתמש'}</span>
                               <span className="text-xs text-gray-300">·</span>
-                              <span className="text-xs text-gray-400">{CATEGORY_LABELS[msg.category] || msg.category}</span>
+                              <span className="text-xs text-gray-400">{CATEGORY_LABELS_KEYS[msg.category] ? t(CATEGORY_LABELS_KEYS[msg.category]) : msg.category}</span>
                               {msg.user_read_at && (
                                 <>
                                   <span className="text-xs text-gray-300">·</span>

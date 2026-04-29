@@ -7,6 +7,7 @@ import { Copy, AlertTriangle, Gift, ChevronDown, Check, LogIn } from 'lucide-rea
 import toast from 'react-hot-toast'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
+import { useT } from '../lib/i18n'
 
 interface GiftData {
   gift_id: string
@@ -23,6 +24,7 @@ interface GiftData {
 }
 
 export default function GiftPage() {
+  const { t } = useT()
   const { token } = useParams<{ token: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -44,7 +46,7 @@ export default function GiftPage() {
   const usedInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!token) { setError('לינק לא תקין'); setLoading(false); return }
+    if (!token) { setError(t('gift.error.invalid_link')); setLoading(false); return }
     loadGift()
   }, [token])
 
@@ -78,19 +80,19 @@ export default function GiftPage() {
         console.error('get_gift_by_token RPC error:', rpcError)
         // Distinguish between "function missing" and "not found"
         const isMissing = rpcError.code === '42883' || rpcError.message?.includes('does not exist')
-        setError(isMissing ? 'שגיאת הגדרה — צור קשר עם התמיכה' : 'לינק מתנה לא נמצא')
+        setError(isMissing ? t('gift.error.config') : t('gift.error.not_found'))
         setLoading(false)
         return
       }
       if (!data || data.length === 0) {
-        setError('לינק מתנה לא נמצא')
+        setError(t('gift.error.not_found'))
         setLoading(false)
         return
       }
       setGift(data[0] as GiftData)
     } catch (err) {
       console.error('loadGift exception:', err)
-      setError('שגיאה בטעינת המתנה')
+      setError(t('gift.error.load'))
     } finally {
       setLoading(false)
     }
@@ -100,7 +102,7 @@ export default function GiftPage() {
     if (!gift?.code) return
     navigator.clipboard.writeText(gift.code).then(() => {
       setCopied(true)
-      toast.success('הקוד הועתק!')
+      toast.success(t('gift.toast.copied'))
       setTimeout(() => setCopied(false), 2000)
     })
   }
@@ -118,23 +120,23 @@ export default function GiftPage() {
 
     if (error || !data?.success) {
       const msg = data?.error as string | undefined
-      if (msg === 'already_claimed') toast.error('מתנה זו כבר נתבעה')
-      else if (msg === 'own_gift') toast.error('לא ניתן לתבוע מתנה שאתה שלחת')
-      else if (msg === 'no_wallet') toast.error('לא נמצא ארנק — צור ארנק בהגדרות ונסה שוב')
-      else toast.error('שגיאה בתביעת המתנה')
+      if (msg === 'already_claimed') toast.error(t('gift.toast.already_claimed'))
+      else if (msg === 'own_gift') toast.error(t('gift.toast.own_gift'))
+      else if (msg === 'no_wallet') toast.error(t('gift.toast.no_wallet'))
+      else toast.error(t('gift.toast.claim_error'))
       return
     }
 
     // Refresh gift to show claimed state
     setGift(g => g ? { ...g, claimed_at: new Date().toISOString() } : g)
-    toast.success('🎉 השובר נוסף לארנק שלך!')
+    toast.success(t('gift.toast.claimed'))
   }
 
   async function handleUpdateBalance() {
     if (!gift || !token) return
     const used = parseFloat(usedAmount)
-    if (isNaN(used) || used < 0) return toast.error('סכום לא תקין')
-    if (used > gift.balance) return toast.error(`לא ניתן לנצל יותר מהיתרה (₪${gift.balance})`)
+    if (isNaN(used) || used < 0) return toast.error(t('gift.toast.invalid_amount'))
+    if (used > gift.balance) return toast.error(t('gift.toast.exceeds_balance', { balance: gift.balance }))
 
     const newBalance = Math.max(0, gift.balance - used)
     const oldBalance = gift.balance
@@ -149,7 +151,7 @@ export default function GiftPage() {
     setUpdating(false)
 
     if (error || !data?.success) {
-      toast.error('שגיאה בעדכון יתרה')
+      toast.error(t('gift.toast.update_error'))
       return
     }
 
@@ -159,23 +161,23 @@ export default function GiftPage() {
     setShowUpdateForm(false)
 
     toast(
-      (t) => (
+      (toastItem) => (
         <span className="flex items-center gap-2">
-          <span>יתרה עודכנה: {formatCurrency(oldBalance)} ← {formatCurrency(newBalance)}</span>
+          <span>{t('gift.toast.balance_updated', { from: formatCurrency(oldBalance), to: formatCurrency(newBalance) })}</span>
           <button
             onClick={async () => {
-              toast.dismiss(t.id)
+              toast.dismiss(toastItem.id)
               const { data: undoData } = await supabase.rpc('update_gift_voucher_balance', {
                 p_token: token, p_new_balance: oldBalance,
               })
               if (undoData?.success) {
                 setGift(g => g ? { ...g, balance: oldBalance } : g)
-                toast.success('הפעולה בוטלה')
+                toast.success(t('gift.toast.undone'))
               }
             }}
             className="text-blue-600 font-semibold underline text-sm"
           >
-            ביטול
+            {t('gift.btn.cancel')}
           </button>
         </span>
       ),
@@ -196,9 +198,9 @@ export default function GiftPage() {
         <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl shadow-lg mb-3">
           <Gift className="w-7 h-7 text-white" />
         </div>
-        <h1 className="text-lg font-bold text-gray-700">קיבלת מתנה!</h1>
+        <h1 className="text-lg font-bold text-gray-700">{t('gift.heading')}</h1>
         {gift?.sender_name && (
-          <p className="text-sm text-gray-500 mt-1">מאת {gift.sender_name}</p>
+          <p className="text-sm text-gray-500 mt-1">{t('gift.from', { name: gift.sender_name })}</p>
         )}
       </div>
 
@@ -206,7 +208,7 @@ export default function GiftPage() {
         {loading && (
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
             <div className="w-10 h-10 border-4 border-green-200 border-t-green-500 rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-gray-500 mt-3">טוען מתנה...</p>
+            <p className="text-sm text-gray-500 mt-3">{t('gift.loading')}</p>
           </div>
         )}
 
@@ -214,7 +216,7 @@ export default function GiftPage() {
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
             <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
             <p className="text-gray-700 font-semibold">{error}</p>
-            <p className="text-sm text-gray-400 mt-1">בדוק את הלינק שקיבלת ונסה שוב</p>
+            <p className="text-sm text-gray-400 mt-1">{t('gift.error.hint')}</p>
           </div>
         )}
 
@@ -254,7 +256,7 @@ export default function GiftPage() {
                 <div className="text-left">
                   <div className="text-2xl font-bold text-gray-900">{formatCurrency(gift.balance)}</div>
                   {gift.amount !== gift.balance && gift.amount > 0 && (
-                    <div className="text-xs text-gray-400">מתוך {formatCurrency(gift.amount)}</div>
+                    <div className="text-xs text-gray-400">{t('gift.of', { amount: formatCurrency(gift.amount) })}</div>
                   )}
                 </div>
               </div>
@@ -275,7 +277,7 @@ export default function GiftPage() {
                     : <svg ref={barcodeRef} className="max-w-full" />
                   }
                 </div>
-                <p className="text-xs text-gray-400 mb-1">קוד שובר</p>
+                <p className="text-xs text-gray-400 mb-1">{t('gift.voucher_code')}</p>
                 <p className="text-xl font-mono font-bold text-gray-800 tracking-wider mb-3">{gift.code}</p>
                 <button
                   onClick={copyCode}
@@ -284,13 +286,13 @@ export default function GiftPage() {
                   }`}
                 >
                   <Copy className="w-4 h-4" />
-                  {copied ? 'הועתק!' : 'העתק קוד'}
+                  {copied ? t('gift.btn.copied') : t('gift.btn.copy_code')}
                 </button>
               </div>
 
               {gift.expiry_date && (
                 <p className="text-xs text-gray-400 text-center mt-3">
-                  תוקף עד: {formatDate(gift.expiry_date)}
+                  {t('gift.valid_until', { date: formatDate(gift.expiry_date) })}
                 </p>
               )}
               {gift.notes && (
@@ -307,11 +309,11 @@ export default function GiftPage() {
                     className="w-full flex items-center justify-center gap-2 px-6 py-4 text-sm font-semibold text-green-700 hover:bg-green-50 transition-colors"
                   >
                     <ChevronDown className="w-4 h-4" />
-                    עדכן יתרה לאחר שימוש
+                    {t('gift.btn.update_balance')}
                   </button>
                 ) : (
                   <div className="p-4 space-y-3 bg-green-50">
-                    <p className="text-sm font-semibold text-gray-700 text-center">עדכון יתרה</p>
+                    <p className="text-sm font-semibold text-gray-700 text-center">{t('gift.update_balance_title')}</p>
                     <div className="flex gap-2">
                       <input
                         ref={usedInputRef}
@@ -320,7 +322,7 @@ export default function GiftPage() {
                         value={usedAmount}
                         onChange={e => setUsedAmount(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
-                        placeholder="סכום שימוש"
+                        placeholder={t('gift.placeholder.used_amount')}
                         className="flex-1 text-center text-lg font-bold border border-gray-200 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white"
                         dir="ltr"
                       />
@@ -333,7 +335,7 @@ export default function GiftPage() {
                           ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           : <Check className="w-4 h-4" />
                         }
-                        אשר
+                        {t('gift.btn.confirm')}
                       </button>
                     </div>
                     {parseFloat(usedAmount) > 0 && parseFloat(usedAmount) <= gift.balance && (
@@ -342,7 +344,7 @@ export default function GiftPage() {
                         value={storeUsed}
                         onChange={e => setStoreUsed(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
-                        placeholder="באיזה חנות? (אופציונלי)"
+                        placeholder={t('gift.placeholder.store_used')}
                         className="w-full text-sm border border-gray-200 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white"
                         dir="rtl"
                       />
@@ -352,7 +354,7 @@ export default function GiftPage() {
                       if (isNaN(amount) || amount <= 0 || amount > gift.balance) return null
                       return (
                         <p className="text-xs text-center text-gray-500">
-                          יתרה חדשה: <strong className="text-green-700">{formatCurrency(Math.max(0, gift.balance - amount))}</strong>
+                          {t('gift.new_balance_preview')}: <strong className="text-green-700">{formatCurrency(Math.max(0, gift.balance - amount))}</strong>
                         </p>
                       )
                     })()}
@@ -360,7 +362,7 @@ export default function GiftPage() {
                       onClick={() => { setShowUpdateForm(false); setUsedAmount(''); setStoreUsed('') }}
                       className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
                     >
-                      ביטול
+                      {t('gift.btn.cancel')}
                     </button>
                   </div>
                 )}
@@ -372,7 +374,7 @@ export default function GiftPage() {
               {isClaimed ? (
                 <div className="flex items-center justify-center gap-2 text-green-600 text-sm font-semibold py-1">
                   <Check className="w-4 h-4" />
-                  השובר נוסף לארנק שלך
+                  {t('gift.claimed_label')}
                 </div>
               ) : (
                 <button
@@ -385,12 +387,12 @@ export default function GiftPage() {
                   ) : user ? (
                     <>
                       <Gift className="w-4 h-4" />
-                      הוסף לארנק GiftSmart שלי
+                      {t('gift.btn.add_to_wallet')}
                     </>
                   ) : (
                     <>
                       <LogIn className="w-4 h-4" />
-                      התחבר/י כדי לקבל את המתנה
+                      {t('gift.btn.login_to_claim')}
                     </>
                   )}
                 </button>
@@ -398,7 +400,7 @@ export default function GiftPage() {
             </div>
 
             <div className="bg-gray-50 px-6 py-3 text-center border-t border-gray-100">
-              <p className="text-xs text-gray-400">נשלח דרך GiftSmart</p>
+              <p className="text-xs text-gray-400">{t('gift.footer')}</p>
             </div>
           </div>
         )}

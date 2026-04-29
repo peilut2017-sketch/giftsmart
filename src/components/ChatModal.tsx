@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import type { MarketplaceMessage } from '../types'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
+import { useT } from '../lib/i18n'
 
 interface ChatModalProps {
   listingId: string
@@ -27,6 +28,7 @@ export default function ChatModal({
   storeName,
   onClose,
 }: ChatModalProps) {
+  const { t } = useT()
   const { user } = useAuth()
   const { sendMessage, sendPriceOffer, fetchChat, respondToPriceOffer,
           registerActiveChat, unregisterActiveChat, markMessagesRead } = useMarketplace()
@@ -61,7 +63,7 @@ export default function ChatModal({
       // Mark the other user's messages as read now that we've loaded them
       markMessagesRead(listingId, otherUserId)
     } catch {
-      toast.error('שגיאה בטעינת ההודעות')
+      toast.error(t('chat.load.error'))
     } finally {
       setLoading(false)
     }
@@ -164,8 +166,8 @@ export default function ChatModal({
       setMessages(prev => prev.filter(m => m.id !== tempId))
       setText(trimmed)
       const msg = err?.message || ''
-      if (msg.includes('listing_not_available')) toast.error('המודעה כבר אינה זמינה')
-      else toast.error('שגיאה בשליחת ההודעה')
+      if (msg.includes('listing_not_available')) toast.error(t('chat.listing.unavailable'))
+      else toast.error(t('chat.send.error'))
     } finally {
       setSending(false)
     }
@@ -173,17 +175,17 @@ export default function ChatModal({
 
   async function handleSendOffer() {
     const amount = parseFloat(offerAmount)
-    if (!amount || amount <= 0) { toast.error('הזן מחיר תקין'); return }
-    if (amount >= currentAskingPrice) { toast.error('המחיר המוצע חייב להיות נמוך מהמחיר הנוכחי'); return }
+    if (!amount || amount <= 0) { toast.error(t('chat.offer.invalid.price')); return }
+    if (amount >= currentAskingPrice) { toast.error(t('chat.offer.must.be.lower')); return }
     setSending(true)
     try {
-      await sendPriceOffer(listingId, otherUserId, amount, `הצעת מחיר: ₪${amount}`)
+      await sendPriceOffer(listingId, otherUserId, amount, `${t('chat.offer.label')}: ₪${amount}`)
       setOfferAmount('')
       setShowOfferInput(false)
     } catch (err: any) {
       const msg = err?.message || ''
-      if (msg.includes('offer_not_lower_than_asking_price')) toast.error('ההצעה חייבת להיות נמוכה מהמחיר הנוכחי')
-      else toast.error('שגיאה בשליחת ההצעה')
+      if (msg.includes('offer_not_lower_than_asking_price')) toast.error(t('chat.offer.must.be.lower'))
+      else toast.error(t('chat.offer.send.error'))
     } finally {
       setSending(false)
     }
@@ -194,18 +196,18 @@ export default function ChatModal({
     try {
       await respondToPriceOffer(messageId, response)
       if (response === 'accepted') {
-        const msg = messages.find(m => m.id === messageId)
+        const offerMsg = messages.find(m => m.id === messageId)
         toast.success(
           isSeller
-            ? `שמרת מחיר לקונה: ₪${msg?.offer_amount}`
-            : `המחיר שמור לך: ₪${msg?.offer_amount}`,
+            ? `${t('chat.offer.accepted.seller')}: ₪${offerMsg?.offer_amount}`
+            : `${t('chat.offer.accepted.buyer')}: ₪${offerMsg?.offer_amount}`,
         )
       } else {
-        toast('דחית את ההצעה', { icon: '✋' })
+        toast(t('chat.offer.rejected'), { icon: '✋' })
       }
       await loadMessages()
     } catch {
-      toast.error('שגיאה בטיפול בהצעה')
+      toast.error(t('chat.offer.respond.error'))
     } finally {
       setRespondingTo(null)
     }
@@ -218,7 +220,7 @@ export default function ChatModal({
     }
   }
 
-  const otherDisplayName = otherUserName || 'משתמש'
+  const otherDisplayName = otherUserName || t('chat.default.user')
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
@@ -235,7 +237,7 @@ export default function ChatModal({
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-900 truncate">{otherDisplayName}</p>
-            <p className="text-xs text-gray-500 truncate">{storeName} · מחיר נוכחי: ₪{currentAskingPrice}</p>
+            <p className="text-xs text-gray-500 truncate">{storeName} · {t('chat.current.price')}: ₪{currentAskingPrice}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 shrink-0">
             <X className="w-5 h-5" />
@@ -253,8 +255,8 @@ export default function ChatModal({
               <MessageCircle className="w-10 h-10 opacity-30" />
               <p className="text-sm">
                 {isSeller
-                  ? 'הקונה ישלח הודעה בקרוב'
-                  : 'שלח הודעה למוכר כדי לשאול שאלות או להתמקח על המחיר'}
+                  ? t('chat.empty.seller')
+                  : t('chat.empty.buyer')}
               </p>
             </div>
           ) : (
@@ -274,7 +276,7 @@ export default function ChatModal({
         {showOfferInput && (
           <div className="px-4 py-3 bg-green-50 border-t border-green-100 shrink-0">
             <p className="text-xs font-medium text-green-700 mb-2">
-              {isSeller ? `הצע מחיר חדש (נמוך מ-₪${currentAskingPrice})` : `הצע מחיר (נמוך מ-₪${currentAskingPrice})`}
+              {isSeller ? `${t('chat.offer.new.price')} (${t('chat.offer.below')} ₪${currentAskingPrice})` : `${t('chat.offer.propose')} (${t('chat.offer.below')} ₪${currentAskingPrice})`}
             </p>
             <div className="flex gap-2">
               <input
@@ -282,7 +284,7 @@ export default function ChatModal({
                 inputMode="decimal"
                 value={offerAmount}
                 onChange={e => setOfferAmount(e.target.value)}
-                placeholder={`עד ₪${currentAskingPrice - 1}`}
+                placeholder={`${t('chat.offer.up.to')} ₪${currentAskingPrice - 1}`}
                 className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                 autoFocus
               />
@@ -291,13 +293,13 @@ export default function ChatModal({
                 disabled={sending || !offerAmount}
                 className="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
               >
-                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שלח'}
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : t('chat.send')}
               </button>
               <button
                 onClick={() => { setShowOfferInput(false); setOfferAmount('') }}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-500"
               >
-                ביטול
+                {t('chat.cancel')}
               </button>
             </div>
           </div>
@@ -312,7 +314,7 @@ export default function ChatModal({
               className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full hover:bg-green-100 transition-colors"
             >
               <Tag className="w-3.5 h-3.5" />
-              {isSeller ? 'הורד מחיר' : 'הצע מחיר'}
+              {isSeller ? t('chat.lower.price') : t('chat.offer.price')}
             </button>
           )}
           <div className="flex gap-2 items-end">
@@ -321,7 +323,7 @@ export default function ChatModal({
               value={text}
               onChange={e => setText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="כתוב הודעה..."
+              placeholder={t('chat.input.placeholder')}
               rows={1}
               className="flex-1 border rounded-2xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-400 max-h-24 overflow-y-auto leading-5"
               style={{ minHeight: '40px' }}
@@ -350,6 +352,7 @@ function MessageBubble({
   onRespond: (id: string, r: 'accepted' | 'rejected') => void
   respondingTo: string | null
 }) {
+  const { t } = useT()
   const isMe = msg.is_mine
   const isPriceOffer = msg.msg_type === 'price_offer'
 
@@ -359,7 +362,7 @@ function MessageBubble({
         <div className="max-w-[75%] bg-white border-2 border-green-300 rounded-2xl p-3 space-y-2 shadow-sm">
           <div className="flex items-center gap-2">
             <Tag className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-semibold text-green-800">הצעת מחיר</span>
+            <span className="text-sm font-semibold text-green-800">{t('chat.offer.label')}</span>
           </div>
           <p className="text-2xl font-bold text-green-600">₪{msg.offer_amount}</p>
           <p className="text-xs text-gray-400">{formatTime(msg.created_at)}</p>
@@ -367,12 +370,12 @@ function MessageBubble({
           {/* Offer status */}
           {msg.offer_status === 'accepted' && (
             <div className="flex items-center gap-1 text-green-600 text-xs font-medium">
-              <Check className="w-3.5 h-3.5" /> התקבל
+              <Check className="w-3.5 h-3.5" /> {t('chat.offer.status.accepted')}
             </div>
           )}
           {msg.offer_status === 'rejected' && (
             <div className="flex items-center gap-1 text-red-500 text-xs font-medium">
-              <XCircle className="w-3.5 h-3.5" /> נדחה
+              <XCircle className="w-3.5 h-3.5" /> {t('chat.offer.status.rejected')}
             </div>
           )}
 
@@ -384,14 +387,14 @@ function MessageBubble({
                 disabled={respondingTo === msg.id}
                 className="flex-1 py-1.5 bg-green-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
               >
-                {respondingTo === msg.id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : 'קבל'}
+                {respondingTo === msg.id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : t('chat.offer.accept')}
               </button>
               <button
                 onClick={() => onRespond(msg.id, 'rejected')}
                 disabled={respondingTo === msg.id}
                 className="flex-1 py-1.5 border border-red-200 text-red-500 rounded-xl text-xs font-semibold disabled:opacity-50"
               >
-                דחה
+                {t('chat.offer.reject')}
               </button>
             </div>
           )}

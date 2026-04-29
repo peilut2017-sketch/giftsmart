@@ -6,6 +6,7 @@ import { Copy, AlertTriangle, Wallet, ChevronDown, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
+import { useT } from '../lib/i18n'
 
 interface SharedVoucher {
   store_name: string
@@ -19,6 +20,7 @@ interface SharedVoucher {
 }
 
 export default function SharedVoucherPage() {
+  const { t } = useT()
   const { token } = useParams<{ token: string }>()
   const [voucher, setVoucher] = useState<SharedVoucher | null>(null)
   const [loading, setLoading] = useState(true)
@@ -36,7 +38,7 @@ export default function SharedVoucherPage() {
   const usedInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!token) { setError('לינק לא תקין'); setLoading(false); return }
+    if (!token) { setError(t('shared.error.invalid_link')); setLoading(false); return }
     loadSharedVoucher()
   }, [token])
 
@@ -77,7 +79,7 @@ export default function SharedVoucherPage() {
         .rpc('get_shared_voucher_live', { p_token: token })
 
       if (rpcError || !data || data.length === 0) {
-        setError('לינק לא נמצא או שפג תוקפו')
+        setError(t('shared.error.not_found'))
         setLoading(false)
         return
       }
@@ -85,13 +87,13 @@ export default function SharedVoucherPage() {
       const row = data[0] as SharedVoucher
 
       if (row.is_expired) {
-        setError('פג תוקף הלינק')
+        setError(t('shared.error.expired'))
         setLoading(false)
         return
       }
 
       if (!row.code) {
-        setError('נתוני השובר אינם זמינים')
+        setError(t('shared.error.no_data'))
         setLoading(false)
         return
       }
@@ -111,7 +113,7 @@ export default function SharedVoucherPage() {
       // Increment view count atomically via RPC
       supabase.rpc('increment_share_view_count', { p_token: token }).then(() => {})
     } catch {
-      setError('שגיאה בטעינת השובר')
+      setError(t('shared.error.load'))
     } finally {
       setLoading(false)
     }
@@ -121,7 +123,7 @@ export default function SharedVoucherPage() {
     if (!voucher?.code) return
     navigator.clipboard.writeText(voucher.code).then(() => {
       setCopied(true)
-      toast.success('הקוד הועתק!')
+      toast.success(t('shared.toast.copied'))
       setTimeout(() => setCopied(false), 2000)
     })
   }
@@ -129,8 +131,8 @@ export default function SharedVoucherPage() {
   async function handleUpdateBalance() {
     if (!voucher || !token) return
     const used = parseFloat(usedAmount)
-    if (isNaN(used) || used < 0) return toast.error('סכום לא תקין')
-    if (used > voucher.balance) return toast.error(`לא ניתן לנצל יותר מהיתרה (₪${voucher.balance})`)
+    if (isNaN(used) || used < 0) return toast.error(t('shared.toast.invalid_amount'))
+    if (used > voucher.balance) return toast.error(t('shared.toast.exceeds_balance', { balance: voucher.balance }))
 
     const newBalance = Math.max(0, voucher.balance - used)
     const oldBalance = voucher.balance
@@ -146,8 +148,8 @@ export default function SharedVoucherPage() {
 
     if (error || !data?.success) {
       const msg = (data?.error as string) || error?.message || 'שגיאה'
-      if (msg === 'token_expired') toast.error('הלינק פג תוקף')
-      else toast.error('שגיאה בעדכון יתרה')
+      if (msg === 'token_expired') toast.error(t('shared.toast.link_expired'))
+      else toast.error(t('shared.toast.update_error'))
       return
     }
 
@@ -157,24 +159,24 @@ export default function SharedVoucherPage() {
     setShowUpdateForm(false)
 
     toast(
-      (t) => (
+      (toastItem) => (
         <span className="flex items-center gap-2">
-          <span>יתרה עודכנה: {formatCurrency(oldBalance)} ← {formatCurrency(newBalance)}</span>
+          <span>{t('shared.toast.balance_updated', { from: formatCurrency(oldBalance), to: formatCurrency(newBalance) })}</span>
           <button
             onClick={async () => {
-              toast.dismiss(t.id)
+              toast.dismiss(toastItem.id)
               const { data: undoData } = await supabase.rpc('update_voucher_balance_by_token', {
                 p_token: token,
                 p_new_balance: oldBalance,
               })
               if (undoData?.success) {
                 setVoucher(v => v ? { ...v, balance: oldBalance } : v)
-                toast.success('הפעולה בוטלה')
+                toast.success(t('shared.toast.undone'))
               }
             }}
             className="text-blue-600 font-semibold underline text-sm"
           >
-            ביטול
+            {t('shared.btn.cancel')}
           </button>
         </span>
       ),
@@ -194,14 +196,14 @@ export default function SharedVoucherPage() {
         <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl shadow-lg mb-3">
           <Wallet className="w-7 h-7 text-white" />
         </div>
-        <h1 className="text-lg font-bold text-gray-700">שובר שותף אתך</h1>
+        <h1 className="text-lg font-bold text-gray-700">{t('shared.heading')}</h1>
       </div>
 
       <div className="w-full max-w-sm">
         {loading && (
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
             <div className="w-10 h-10 border-4 border-green-200 border-t-green-500 rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-gray-500 mt-3">טוען שובר...</p>
+            <p className="text-sm text-gray-500 mt-3">{t('shared.loading')}</p>
           </div>
         )}
 
@@ -209,7 +211,7 @@ export default function SharedVoucherPage() {
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
             <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
             <p className="text-gray-700 font-semibold">{error}</p>
-            <p className="text-sm text-gray-400 mt-1">בדוק את הלינק שקיבלת ונסה שוב</p>
+            <p className="text-sm text-gray-400 mt-1">{t('shared.error.hint')}</p>
           </div>
         )}
 
@@ -239,7 +241,7 @@ export default function SharedVoucherPage() {
                 <div className="text-left">
                   <div className="text-2xl font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
                   {voucher.amount !== voucher.balance && voucher.amount > 0 && (
-                    <div className="text-xs text-gray-400">מתוך {formatCurrency(voucher.amount)}</div>
+                    <div className="text-xs text-gray-400">{t('shared.of', { amount: formatCurrency(voucher.amount) })}</div>
                   )}
                 </div>
               </div>
@@ -260,7 +262,7 @@ export default function SharedVoucherPage() {
                     <svg ref={barcodeRef} className="max-w-full" />
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mb-1">קוד שובר</p>
+                <p className="text-xs text-gray-400 mb-1">{t('shared.voucher_code')}</p>
                 <p className="text-xl font-mono font-bold text-gray-800 tracking-wider mb-3">{voucher.code}</p>
                 <button
                   onClick={copyCode}
@@ -269,13 +271,13 @@ export default function SharedVoucherPage() {
                   }`}
                 >
                   <Copy className="w-4 h-4" />
-                  {copied ? 'הועתק!' : 'העתק קוד'}
+                  {copied ? t('shared.btn.copied') : t('shared.btn.copy_code')}
                 </button>
               </div>
 
               {voucher.expiry_date && (
                 <p className="text-xs text-gray-400 text-center mt-3">
-                  תוקף עד: {formatDate(voucher.expiry_date)}
+                  {t('shared.valid_until', { date: formatDate(voucher.expiry_date) })}
                 </p>
               )}
               {voucher.notes && (
