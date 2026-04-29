@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { isBiometricEnabled, getBiometricEmail, verifyBiometric } from '../lib/passkey'
+import { useT } from '../lib/i18n'
 
 const APP_VERSION = '1.0.0'
 
@@ -16,22 +17,23 @@ interface PasswordStrength {
   checks: { label: string; ok: boolean }[]
 }
 
-function getPasswordStrength(password: string): PasswordStrength {
+function getPasswordStrength(password: string, t: (k: string) => string): PasswordStrength {
   const checks = [
-    { label: 'לפחות 8 תווים', ok: password.length >= 8 },
-    { label: 'אותיות גדולות (A-Z)', ok: /[A-Z]/.test(password) },
-    { label: 'אותיות קטנות (a-z)', ok: /[a-z]/.test(password) },
-    { label: 'מספרים (0-9)', ok: /\d/.test(password) },
-    { label: 'תווים מיוחדים (!@#$...)', ok: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) },
+    { label: t('auth.check.length'), ok: password.length >= 8 },
+    { label: t('auth.check.upper'), ok: /[A-Z]/.test(password) },
+    { label: t('auth.check.lower'), ok: /[a-z]/.test(password) },
+    { label: t('auth.check.digit'), ok: /\d/.test(password) },
+    { label: t('auth.check.special'), ok: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) },
   ]
   const score = checks.filter(c => c.ok).length
-  const labels = ['חלשה מאוד', 'חלשה', 'בינונית', 'חזקה', 'חזקה מאוד']
+  const labels = [t('auth.strength.very.weak'), t('auth.strength.weak'), t('auth.strength.medium'), t('auth.strength.strong'), t('auth.strength.very.strong')]
   const colors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-green-600']
   return { score, label: labels[score] ?? labels[0], color: colors[score] ?? colors[0], checks }
 }
 
 export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode }) {
   const { signIn, signInWithBiometric, signUp, signInWithGoogle, resetPassword, updatePassword } = useAuth()
+  const { t } = useT()
   const [googleLoading, setGoogleLoading] = useState(false)
   const [mode, setMode] = useState<Mode>(initialMode)
   const [loginStep, setLoginStep] = useState<LoginStep>('email')
@@ -45,7 +47,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const [biometricLoading, setBiometricLoading] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
 
-  const strength = useMemo(() => getPasswordStrength(password), [password])
+  const strength = useMemo(() => getPasswordStrength(password, t), [password, t])
   const isRegisterOrNew = mode === 'register' || mode === 'newPassword'
 
   // When "Continue" is clicked on the email step
@@ -156,9 +158,9 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             </div>
 
             <p className="text-xs text-gray-400 mb-1 font-mono" dir="ltr">{email}</p>
-            <h2 className="text-xl font-bold text-gray-800 mb-2">כניסה ביומטרית</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">{t('auth.biometric.title')}</h2>
             <p className="text-sm text-gray-500 mb-6">
-              {biometricLoading ? 'ממתין לאימות...' : 'השתמש בזיהוי פנים או טביעת אצבע'}
+              {biometricLoading ? t('auth.biometric.waiting') : t('auth.biometric.prompt')}
             </p>
 
             <button
@@ -169,21 +171,21 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               {biometricLoading
                 ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 : <Fingerprint className="w-5 h-5" />}
-              {biometricLoading ? 'מאמת...' : 'אמת זהות'}
+              {biometricLoading ? t('auth.biometric.verifying') : t('auth.biometric.verify')}
             </button>
 
             <button
               onClick={() => setLoginStep('password')}
               className="w-full text-sm text-gray-400 hover:text-green-600 transition-colors py-2"
             >
-              כניסה עם סיסמה
+              {t('auth.use.password')}
             </button>
             <button
               onClick={() => { setLoginStep('email'); setEmail('') }}
               className="flex items-center justify-center gap-1 text-sm text-gray-300 hover:text-gray-500 transition-colors py-1 mx-auto"
             >
               <ArrowRight className="w-3.5 h-3.5" />
-              שנה חשבון
+              {t('auth.change.account')}
             </button>
           </div>
         </div>
@@ -197,7 +199,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
         {/* Logo */}
         <div className="text-center mb-8">
           <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
-          <span className="text-xs text-gray-400 mt-1 block">גרסה {APP_VERSION}</span>
+          <span className="text-xs text-gray-400 mt-1 block">{t('auth.version')} {APP_VERSION}</span>
         </div>
 
         {/* Card */}
@@ -212,16 +214,16 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-3"
                 >
                   <ArrowRight className="w-4 h-4" />
-                  חזרה
+                  {t('app.back')}
                 </button>
               )}
               <h2 className="text-lg font-bold text-gray-800">
-                {mode === 'forgot' ? 'איפוס סיסמה' : 'סיסמה חדשה'}
+                {mode === 'forgot' ? t('auth.reset.title') : t('auth.new.password.title')}
               </h2>
               <p className="text-sm text-gray-500 mt-1">
                 {mode === 'forgot'
-                  ? 'הזן את האימייל שלך ונשלח לך קישור לאיפוס'
-                  : 'הזן סיסמה חדשה לחשבון שלך'}
+                  ? t('auth.reset.desc')
+                  : t('auth.new.password.desc')}
               </p>
             </div>
           ) : (
@@ -233,7 +235,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   mode === 'login' ? 'bg-white shadow text-green-600' : 'text-gray-500'
                 }`}
               >
-                כניסה
+                {t('auth.login.tab')}
               </button>
               <button
                 onClick={() => setMode('register')}
@@ -241,7 +243,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   mode === 'register' ? 'bg-white shadow text-green-600' : 'text-gray-500'
                 }`}
               >
-                הרשמה
+                {t('auth.register.tab')}
               </button>
             </div>
           )}
@@ -254,8 +256,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 <input
                   id="auth-email"
                   type="email"
-                  placeholder="כתובת אימייל"
-                  aria-label="כתובת אימייל"
+                  placeholder={t('auth.email.placeholder')}
+                  aria-label={t('auth.email.placeholder')}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -268,7 +270,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 type="submit"
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all"
               >
-                המשך
+                {t('auth.continue')}
               </button>
             </form>
           )}
@@ -292,8 +294,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <input
                     id="auth-password"
                     type={showPass ? 'text' : 'password'}
-                    placeholder="סיסמה"
-                    aria-label="סיסמה"
+                    placeholder={t('auth.password.placeholder')}
+                    aria-label={t('auth.password.placeholder')}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -304,7 +306,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
-                    aria-label={showPass ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                    aria-label={showPass ? t('auth.hide.password') : t('auth.show.password')}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                   >
                     {showPass ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
@@ -317,7 +319,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 disabled={loading}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
               >
-                {loading ? '...' : 'כניסה'}
+                {loading ? '...' : t('auth.login.tab')}
               </button>
 
               <button
@@ -325,7 +327,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 onClick={() => { setMode('forgot') }}
                 className="w-full text-center text-sm text-gray-400 hover:text-green-600 transition-colors pt-1"
               >
-                שכחתי סיסמה
+                {t('auth.forgot.password')}
               </button>
             </form>
           )}
@@ -339,8 +341,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <input
                     id="auth-name"
                     type="text"
-                    placeholder="שם מלא"
-                    aria-label="שם מלא"
+                    placeholder={t('auth.name.placeholder')}
+                    aria-label={t('auth.name.placeholder')}
                     value={name}
                     onChange={e => setName(e.target.value)}
                     className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -354,8 +356,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <input
                     id="auth-email"
                     type="email"
-                    placeholder="כתובת אימייל"
-                    aria-label="כתובת אימייל"
+                    placeholder={t('auth.email.placeholder')}
+                    aria-label={t('auth.email.placeholder')}
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -371,8 +373,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <input
                     id="auth-password"
                     type={showPass ? 'text' : 'password'}
-                    placeholder={mode === 'newPassword' ? 'סיסמה חדשה' : 'סיסמה'}
-                    aria-label={mode === 'newPassword' ? 'סיסמה חדשה' : 'סיסמה'}
+                    placeholder={mode === 'newPassword' ? t('auth.password.new.placeholder') : t('auth.password.placeholder')}
+                    aria-label={mode === 'newPassword' ? t('auth.password.new.placeholder') : t('auth.password.placeholder')}
                     value={password}
                     onChange={e => { setPassword(e.target.value); if (isRegisterOrNew) setShowStrength(true) }}
                     className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -382,7 +384,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
-                    aria-label={showPass ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                    aria-label={showPass ? t('auth.hide.password') : t('auth.show.password')}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                   >
                     {showPass ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
@@ -423,7 +425,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type={showPass ? 'text' : 'password'}
-                    placeholder="אימות סיסמה"
+                    placeholder={t('auth.password.confirm.placeholder')}
                     value={password2}
                     onChange={e => setPassword2(e.target.value)}
                     className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
@@ -442,7 +444,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                     className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0"
                   />
                   <span className="text-xs text-gray-500 leading-relaxed">
-                    קראתי ואני מסכים/ה ל
+                    {t('auth.privacy.agree')}
                     <a
                       href="/privacy"
                       target="_blank"
@@ -450,9 +452,9 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                       className="text-green-600 underline font-medium mx-0.5"
                       onClick={e => e.stopPropagation()}
                     >
-                      מדיניות הפרטיות
+                      {t('auth.privacy.policy')}
                     </a>
-                    ומאשר/ת שאני בן/בת 16 ומעלה
+                    {t('auth.privacy.age')}
                   </span>
                 </label>
               )}
@@ -462,7 +464,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 disabled={loading}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
               >
-                {loading ? '...' : mode === 'register' ? 'הרשמה' : mode === 'forgot' ? 'שלח קישור' : 'עדכן סיסמה'}
+                {loading ? '...' : mode === 'register' ? t('auth.register.tab') : mode === 'forgot' ? t('auth.send.link') : t('auth.update.password')}
               </button>
             </form>
           )}
@@ -472,7 +474,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             <>
               <div className="flex items-center gap-3 my-4">
                 <div className="flex-1 h-px bg-gray-200" />
-                <span className="text-xs text-gray-400">או</span>
+                <span className="text-xs text-gray-400">{t('auth.or')}</span>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
               <button
@@ -499,14 +501,14 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                   </svg>
                 )}
-                {mode === 'login' ? 'כניסה עם Google' : 'הרשמה עם Google'}
+                {mode === 'login' ? t('auth.google.login') : t('auth.google.register')}
               </button>
             </>
           )}
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          ארנק שוברים — ניהול חכם של הנכסים הדיגיטליים שלך
+          {t('auth.footer')}
         </p>
       </div>
     </div>

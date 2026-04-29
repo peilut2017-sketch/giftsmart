@@ -12,7 +12,7 @@ import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { useLocale } from '../lib/i18n'
+import { useLocale, useT } from '../lib/i18n'
 
 interface SupportMessageReply {
   id: string
@@ -54,9 +54,10 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, hint, isVaultUnlocked, resetVault, changePassphrase } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, resetVault, changePassphrase, disableVault } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
+  const { t } = useT()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
@@ -105,6 +106,9 @@ export default function SettingsPage() {
   const [vaultNewPass2, setVaultNewPass2] = useState('')
   const [vaultChanging, setVaultChanging] = useState(false)
   const [vaultResetConfirm, setVaultResetConfirm] = useState(false)
+  const [vaultDisablePass, setVaultDisablePass] = useState('')
+  const [vaultDisabling, setVaultDisabling] = useState(false)
+  const [vaultDisableConfirm, setVaultDisableConfirm] = useState(false)
 
   async function handleChangeVaultPassphrase() {
     if (!vaultOldPass) return toast.error('הזן סיסמה נוכחית')
@@ -124,6 +128,25 @@ export default function SettingsPage() {
       setShowVaultSection(false)
     } finally {
       setVaultChanging(false)
+    }
+  }
+
+  async function handleDisableVault() {
+    if (!vaultDisablePass) return toast.error('הזן סיסמה נוכחית')
+    setVaultDisabling(true)
+    try {
+      const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
+      const { ok, entries } = await disableVault(vaultDisablePass, e2eeVouchers)
+      if (!ok) { toast.error('סיסמה שגויה'); return }
+      await Promise.all(entries.map(({ id, code, cvv }) =>
+        updateVoucher(id, { code, is_e2ee: false, ...(cvv != null ? { cvv } : {}) })
+      ))
+      toast.success(`ההצפנה הוסרה — ${entries.length} שוברים פוענחו ונשמרו`)
+      setVaultDisablePass('')
+      setVaultDisableConfirm(false)
+      setShowVaultSection(false)
+    } finally {
+      setVaultDisabling(false)
     }
   }
 
@@ -473,8 +496,8 @@ export default function SettingsPage() {
                   <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="שם מלא" style={{ height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 15, padding: '0 12px', fontFamily: 'Heebo, sans-serif', outline: 'none' }} />
                   <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="טלפון" dir="ltr" style={{ height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 15, padding: '0 12px', fontFamily: 'Heebo, sans-serif', outline: 'none' }} />
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={saveProfile} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>שמור</button>
-                    <button onClick={() => setEditName(false)} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(0,0,0,0.15)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>ביטול</button>
+                    <button onClick={saveProfile} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>{t('app.save')}</button>
+                    <button onClick={() => setEditName(false)} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(0,0,0,0.15)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>{t('app.cancel')}</button>
                   </div>
                 </div>
               )}
@@ -510,7 +533,7 @@ export default function SettingsPage() {
         )}
 
         {/* Password */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>אבטחה</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{t('settings.security')}</div>
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
 
           {!editPass ? (
@@ -538,7 +561,7 @@ export default function SettingsPage() {
                   שנה סיסמה
                 </button>
                 <button onClick={() => setEditPass(false)} className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium">
-                  ביטול
+                  {t('app.cancel')}
                 </button>
               </div>
             </div>
@@ -589,7 +612,7 @@ export default function SettingsPage() {
                 <Shield className="w-5 h-5 text-indigo-500" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800">כספת הצפנה (E2EE)</p>
+                <p className="text-sm font-medium text-gray-800">{t('settings.vault')}</p>
                 <p className="text-xs text-gray-400">{isVaultUnlocked ? 'פתוחה כעת' : 'נעולה'} · שנה סיסמה או אפס</p>
               </div>
               {showVaultSection ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -646,10 +669,50 @@ export default function SettingsPage() {
                   disabled={vaultChanging || !vaultOldPass || !vaultNewPass || !vaultNewPass2}
                   className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
                 >
-                  {vaultChanging ? 'מצפין מחדש...' : 'שנה סיסמת כספת'}
+                  {vaultChanging ? 'מצפין מחדש...' : t('e2ee.change')}
                 </button>
 
-                <div className="border-t pt-3">
+                <div className="border-t pt-3 space-y-3">
+                  {/* Remove encryption (decrypt in place) */}
+                  {!vaultDisableConfirm ? (
+                    <button
+                      onClick={() => setVaultDisableConfirm(true)}
+                      className="text-xs text-orange-500 hover:text-orange-700"
+                    >
+                      הסר הצפנה (פענח שוברים ושמור בטקסט רגיל)
+                    </button>
+                  ) : (
+                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
+                      <p className="text-xs text-orange-800 font-medium">
+                        הקודים יפוענחו ויישמרו ב-DB ללא הצפנה. הנתונים לא ימחקו.
+                      </p>
+                      <input
+                        type="password"
+                        placeholder="סיסמת כספת נוכחית"
+                        value={vaultDisablePass}
+                        onChange={e => setVaultDisablePass(e.target.value)}
+                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        autoComplete="current-password"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleDisableVault}
+                          disabled={vaultDisabling || !vaultDisablePass}
+                          className="flex-1 py-2 bg-orange-500 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                        >
+                          {vaultDisabling ? 'מפענח...' : 'הסר הצפנה'}
+                        </button>
+                        <button
+                          onClick={() => { setVaultDisableConfirm(false); setVaultDisablePass('') }}
+                          className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                        >
+                          {t('app.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hard reset (data stays encrypted, unreadable) */}
                   {!vaultResetConfirm ? (
                     <button
                       onClick={() => setVaultResetConfirm(true)}
@@ -667,13 +730,13 @@ export default function SettingsPage() {
                           onClick={() => { resetVault(); toast.success('כספת אופסה'); setVaultResetConfirm(false); setShowVaultSection(false) }}
                           className="flex-1 py-2 bg-red-500 text-white rounded-xl text-xs font-semibold"
                         >
-                          אפס בכל זאת
+                          {t('e2ee.reset')}
                         </button>
                         <button
                           onClick={() => setVaultResetConfirm(false)}
                           className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
                         >
-                          ביטול
+                          {t('app.cancel')}
                         </button>
                       </div>
                     </div>
@@ -716,7 +779,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Accessibility widget toggle */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>נגישות</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{t('settings.accessibility')}</div>
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '16px' }}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1">
@@ -919,7 +982,7 @@ export default function SettingsPage() {
                     onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }}
                     className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium"
                   >
-                    ביטול
+                    {t('app.cancel')}
                   </button>
                 </div>
               </div>
@@ -1192,7 +1255,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               {theme === 'dark' ? <Moon className="w-5 h-5" style={{ color: 'var(--c-primary)' }} /> : <Sun className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />}
               <div>
-                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>מצב לילה</div>
+                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>{t('settings.dark.mode')}</div>
                 <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
               </div>
             </div>
@@ -1238,7 +1301,7 @@ export default function SettingsPage() {
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
           <MenuItem
             icon={BookOpen}
-            label="מדריך שימוש"
+            label={t('settings.onboarding')}
             desc="הצג מחדש את מדריך הפיצ׳רים"
             onClick={() => {
               localStorage.removeItem('onboarding_seen_v2')
@@ -1258,7 +1321,7 @@ export default function SettingsPage() {
           />
           <MenuItem
             icon={LogOut}
-            label="התנתק"
+            label={t('settings.logout')}
             desc="יציאה מהחשבון"
             onClick={() => { if (confirm('להתנתק?')) signOut() }}
             danger

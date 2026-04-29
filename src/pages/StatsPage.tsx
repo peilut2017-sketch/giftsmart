@@ -7,10 +7,12 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recha
 import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { useT } from '../lib/i18n'
 
 export default function StatsPage() {
   const { vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
+  const { t } = useT()
 
   const stats = useMemo(() => {
     const active = vouchers.filter(v => !v.is_archived)
@@ -216,9 +218,9 @@ export default function StatsPage() {
       }
 
       doc.save(`vouchers-${new Date().toISOString().split('T')[0]}.pdf`)
-      toast.success('PDF יוצא בהצלחה!')
+      toast.success(t('stats.export.success'))
     } catch {
-      toast.error('שגיאה בייצוא PDF')
+      toast.error(t('stats.export.error'))
     }
   }
 
@@ -252,9 +254,9 @@ export default function StatsPage() {
       <span className="text-sm font-medium text-gray-700 mb-2 block">{label}</span>
       <div className="grid grid-cols-3 gap-2">
         {[
-          { period: 'היום', count: today, amount: todayAmount },
-          { period: 'השבוע', count: week, amount: weekAmount },
-          { period: 'החודש', count: month, amount: monthAmount },
+          { period: t('stats.today'), count: today, amount: todayAmount },
+          { period: t('stats.this.week'), count: week, amount: weekAmount },
+          { period: t('stats.this.month'), count: month, amount: monthAmount },
         ].map(({ period, count, amount }) => (
           <div key={period} className="bg-gray-50 rounded-xl px-2 py-2.5 text-center">
             <p className="text-xs text-gray-400 mb-1">{period}</p>
@@ -271,8 +273,8 @@ export default function StatsPage() {
       <div style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)', padding: '20px 20px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>סטטיסטיקות</div>
-            <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>סיכום הארנק שלך</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>{t('stats.title')}</div>
+            <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>{t('stats.subtitle')}</div>
           </div>
           {limits.canExport ? (
             <button
@@ -284,7 +286,7 @@ export default function StatsPage() {
             </button>
           ) : (
             <button
-              onClick={() => openUpgradeSheet('ייצוא PDF זמין במנוי Pro')}
+              onClick={() => openUpgradeSheet(t('stats.export.pro'))}
               className="flex items-center gap-1.5 text-sm bg-amber-50 text-amber-600 px-3 py-2 rounded-xl font-medium hover:bg-amber-100 transition-colors"
             >
               <Zap className="w-4 h-4" />
@@ -297,12 +299,12 @@ export default function StatsPage() {
       <div className="p-4 pb-24 space-y-4">
         {/* Total balance */}
         <div style={{ background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 60%, #1a9e90 100%)', borderRadius: 20, padding: 24, color: '#fff' }}>
-          <p className="text-green-100 text-sm mb-1">יתרה פנויה כוללת</p>
+          <p className="text-green-100 text-sm mb-1">{t('stats.available.balance')}</p>
           <p className="text-4xl font-bold mb-1">{formatCurrency(stats.totalBalance)}</p>
           <div className="flex items-center gap-3 text-green-100 text-sm">
-            <span>{stats.activeCount} שוברים פעילים</span>
+            <span>{stats.activeCount} {t('stats.active.vouchers')}</span>
             {stats.totalOriginal > stats.totalBalance && (
-              <span>• נוצל: {formatCurrency(stats.totalOriginal - stats.totalBalance)}</span>
+              <span>• {t('stats.used.label')} {formatCurrency(stats.totalOriginal - stats.totalBalance)}</span>
             )}
           </div>
         </div>
@@ -311,7 +313,7 @@ export default function StatsPage() {
         {stats.totalOriginal > 0 && (
           <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 16 }}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">ניצול שוברים</span>
+              <span className="text-sm font-medium text-gray-700">{t('stats.usage.title')}</span>
               <span className="text-sm font-bold text-gray-800">{stats.utilized}%</span>
             </div>
             <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -321,8 +323,8 @@ export default function StatsPage() {
               />
             </div>
             <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>מקורי: {formatCurrency(stats.totalOriginal)}</span>
-              <span>נותר: {formatCurrency(stats.totalBalance)}</span>
+              <span>{t('stats.original')} {formatCurrency(stats.totalOriginal)}</span>
+              <span>{t('stats.remaining')} {formatCurrency(stats.totalBalance)}</span>
             </div>
           </div>
         )}
@@ -331,17 +333,17 @@ export default function StatsPage() {
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
           <h3 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-500" />
-            פעילות לאורך זמן
+            {t('stats.activity.title')}
           </h3>
           <div className="space-y-4">
             <TimeStatRow
-              label="שוברים שנוספו"
+              label={t('stats.added.count')}
               today={stats.addedToday} todayAmount={stats.addedTodayAmount}
               week={stats.addedThisWeek} weekAmount={stats.addedThisWeekAmount}
               month={stats.addedThisMonth} monthAmount={stats.addedThisMonthAmount}
             />
             <TimeStatRow
-              label="שוברים שנוצלו"
+              label={t('stats.utilized.count')}
               today={stats.usedToday} todayAmount={stats.usedTodayAmount}
               week={stats.usedThisWeek} weekAmount={stats.usedThisWeekAmount}
               month={stats.usedThisMonth} monthAmount={stats.usedThisMonthAmount}
@@ -357,52 +359,52 @@ export default function StatsPage() {
         <div className="grid grid-cols-2 gap-3">
           <StatCard
             icon={Wallet}
-            label="ממוצע לשובר"
+            label={t('stats.avg.voucher')}
             value={formatCurrency(stats.avgBalance)}
             color="text-green-600"
           />
           <StatCard
             icon={AlertTriangle}
-            label="פגים תוך 14 יום"
+            label={t('stats.expiring.14')}
             value={stats.expiringSoon}
             color={stats.expiringSoon > 0 ? 'text-orange-500' : 'text-gray-400'}
           />
           <StatCard
             icon={Archive}
-            label="בארכיון"
+            label={t('stats.archived.count')}
             value={stats.archivedCount}
             color="text-gray-500"
           />
           <StatCard
             icon={TrendingUp}
-            label="פגי תוקף (פעילים)"
+            label={t('stats.expired.active')}
             value={stats.expired}
             color={stats.expired > 0 ? 'text-red-500' : 'text-gray-400'}
           />
           <StatCard
             icon={Users}
-            label="שוברים משותפים"
+            label={t('stats.shared.count')}
             value={stats.shared}
             color="text-blue-500"
           />
           <StatCard
             icon={ShoppingBag}
-            label="כמעט ריקים (<10%)"
+            label={t('stats.near.empty')}
             value={stats.nearZero}
             color={stats.nearZero > 0 ? 'text-amber-500' : 'text-gray-400'}
-            sub={stats.nearZero > 0 ? 'כדאי לנצל אותם' : undefined}
+            sub={stats.nearZero > 0 ? t('stats.near.empty.hint') : undefined}
           />
           {stats.giftVouchers > 0 && (
             <StatCard
               icon={Gift}
-              label="שוברי מתנה"
+              label={t('stats.gift.count')}
               value={stats.giftVouchers}
               color="text-pink-500"
             />
           )}
           <StatCard
             icon={PlusCircle}
-            label="נוספו החודש"
+            label={t('stats.added.month')}
             value={stats.addedThisMonth}
             color="text-indigo-500"
           />
@@ -411,7 +413,7 @@ export default function StatsPage() {
         {/* Top stores */}
         {stats.topStores.length > 0 && (
           <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
-            <h3 className="font-semibold text-gray-700 mb-4">חנויות מובילות לפי יתרה</h3>
+            <h3 className="font-semibold text-gray-700 mb-4">{t('stats.top.stores')}</h3>
             <div className="space-y-3">
               {stats.topStores.map((store, i) => {
                 const maxBalance = stats.topStores[0].balance
@@ -443,12 +445,12 @@ export default function StatsPage() {
         {stats.categoryData.length > 0 && (
           <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
             <div className="flex items-start justify-between mb-1">
-              <h3 className="font-semibold text-gray-700">התפלגות לפי קטגוריה</h3>
+              <h3 className="font-semibold text-gray-700">{t('stats.by.category')}</h3>
             </div>
             {stats.multiCategoryCount > 0 && (
               <p className="text-xs text-gray-400 mb-3 flex items-start gap-1">
                 <Info className="w-3 h-3 mt-0.5 shrink-0" />
-                {stats.multiCategoryCount} שובר/ים משויכים למספר קטגוריות — כל אחד מוצג בכל קטגוריה שלו ביתרה המלאה שלו
+                {t('stats.multi.cat.note')}
               </p>
             )}
             <ResponsiveContainer width="100%" height={220}>

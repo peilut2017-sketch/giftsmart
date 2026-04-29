@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useT } from '../lib/i18n'
 import {
   ShoppingBag, Search, Star, X, CheckCircle, Loader2,
   Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
@@ -18,6 +19,7 @@ import toast from 'react-hot-toast'
 
 // ─── Rating Stars ────────────────────────────────────────────────────────────
 function StarRating({ value, max = 5, onChange }: { value: number; max?: number; onChange?: (v: number) => void }) {
+  const { t } = useT()
   return (
     <div className="flex gap-0.5">
       {Array.from({ length: max }).map((_, i) => (
@@ -27,7 +29,7 @@ function StarRating({ value, max = 5, onChange }: { value: number; max?: number;
           disabled={!onChange}
           onClick={() => onChange?.(i + 1)}
           className={`${onChange ? 'cursor-pointer' : 'cursor-default'} focus:outline-none`}
-          aria-label={`${i + 1} כוכבים`}
+          aria-label={`${i + 1} ${t('market.stars')}`}
         >
           <Star className={`w-5 h-5 ${i < value ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
         </button>
@@ -39,20 +41,21 @@ function StarRating({ value, max = 5, onChange }: { value: number; max?: number;
 // ─── Rate Modal ───────────────────────────────────────────────────────────────
 function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClose: () => void }) {
   const { rateUser } = useMarketplace()
+  const { t } = useT()
   const [rating, setRating] = useState(purchase.my_rating ?? 0)
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
   useBodyScrollLock()
 
   async function submit() {
-    if (rating === 0) { toast.error('בחר דירוג'); return }
+    if (rating === 0) { toast.error(t('market.rate.choose')); return }
     setSaving(true)
     try {
       await rateUser(purchase.purchase_id, purchase.seller_id!, rating, comment || undefined)
-      toast.success('הדירוג נשמר')
+      toast.success(t('market.rate.saved'))
       onClose()
     } catch {
-      toast.error('שגיאה בשמירת הדירוג')
+      toast.error(t('market.rate.error'))
     } finally {
       setSaving(false)
     }
@@ -66,7 +69,7 @@ function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClo
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h2 className="font-bold text-lg">דרג את המוכר</h2>
+          <h2 className="font-bold text-lg">{t('market.rate.seller')}</h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
         </div>
 
@@ -78,7 +81,7 @@ function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClo
           <StarRating value={rating} onChange={setRating} />
           <textarea
             className="w-full border rounded-xl p-3 text-sm resize-none h-24 focus:outline-none focus:ring-2 focus:ring-green-400"
-            placeholder="הוסף תגובה (אופציונלי)..."
+            placeholder={t('market.rate.comment.placeholder')}
             value={comment}
             onChange={e => setComment(e.target.value)}
           />
@@ -91,7 +94,7 @@ function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClo
             disabled={saving || rating === 0}
             className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שמור דירוג'}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.rate.save')}
           </button>
         </div>
       </div>
@@ -110,29 +113,30 @@ function ReportModal({
   onClose: () => void
 }) {
   const { reportUser } = useMarketplace()
+  const { t } = useT()
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
   useBodyScrollLock()
 
   const reasons = [
-    'תשלום לא התקבל',
-    'שובר לא תקין / פג תוקף',
-    'הונאה / מרמה',
-    'התנהגות פוגעת',
-    'מידע כוזב במודעה',
-    'אחר',
+    t('market.report.reason.payment'),
+    t('market.report.reason.invalid'),
+    t('market.report.reason.fraud'),
+    t('market.report.reason.abusive'),
+    t('market.report.reason.false'),
+    t('market.report.reason.other'),
   ]
 
   async function submit() {
-    if (!reason) { toast.error('בחר סיבה'); return }
+    if (!reason) { toast.error(t('market.report.choose')); return }
     setSaving(true)
     try {
       await reportUser(reportedUserId, reason, details || undefined, purchaseId, listingId)
-      toast.success('הדיווח נשלח למנהל')
+      toast.success(t('market.report.sent'))
       onClose()
     } catch {
-      toast.error('שגיאה בשליחת הדיווח')
+      toast.error(t('market.report.error'))
     } finally {
       setSaving(false)
     }
@@ -147,14 +151,14 @@ function ReportModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
           <h2 className="font-bold text-lg flex items-center gap-2">
-            <Flag className="w-5 h-5 text-red-500" /> דווח על משתמש
+            <Flag className="w-5 h-5 text-red-500" /> {t('market.report.title')}
           </h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
         </div>
 
         {/* Scrollable body */}
         <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-3">
-          <p className="text-sm text-gray-500">דיווח על: {reportedName}</p>
+          <p className="text-sm text-gray-500">{t('market.report.on')}: {reportedName}</p>
           <div className="space-y-2">
             {reasons.map(r => (
               <button
@@ -170,7 +174,7 @@ function ReportModal({
           </div>
           <textarea
             className="w-full border rounded-xl p-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-red-400"
-            placeholder="פרטים נוספים (אופציונלי)..."
+            placeholder={t('market.report.details.placeholder')}
             value={details}
             onChange={e => setDetails(e.target.value)}
           />
@@ -183,7 +187,7 @@ function ReportModal({
             disabled={saving || !reason}
             className="w-full py-3 bg-red-600 text-white rounded-2xl font-semibold disabled:opacity-50"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שלח דיווח'}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.report.submit')}
           </button>
         </div>
       </div>
@@ -202,6 +206,7 @@ function ConversationsModal({
   onClose: () => void
 }) {
   const { getListingConversations } = useMarketplace()
+  const { t } = useT()
   const [convs, setConvs] = useState<ListingConversation[]>([])
   const [loading, setLoading] = useState(true)
   useBodyScrollLock()
@@ -214,11 +219,11 @@ function ConversationsModal({
         if (data.length === 1) {
           onSelectConversation(
             data[0].other_user_id,
-            data[0].other_user_name || data[0].other_user_email || 'קונה',
+            data[0].other_user_name || data[0].other_user_email || t('market.buyer'),
           )
         }
       })
-      .catch(() => toast.error('שגיאה בטעינת השיחות'))
+      .catch(() => toast.error(t('market.convs.load.error')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -230,7 +235,7 @@ function ConversationsModal({
       >
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
           <div>
-            <h2 className="font-bold text-lg">שיחות</h2>
+            <h2 className="font-bold text-lg">{t('market.convs.title')}</h2>
             <p className="text-xs text-gray-500">{listing.store_name}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
@@ -242,7 +247,7 @@ function ConversationsModal({
           ) : convs.length === 0 ? (
             <div className="text-center py-10 text-gray-400 space-y-2">
               <MessageCircle className="w-10 h-10 mx-auto opacity-30" />
-              <p className="text-sm">אין שיחות עדיין</p>
+              <p className="text-sm">{t('market.convs.empty')}</p>
             </div>
           ) : (
             convs.map(c => {
@@ -252,7 +257,7 @@ function ConversationsModal({
                   key={c.other_user_id}
                   onClick={() => onSelectConversation(
                     c.other_user_id,
-                    c.other_user_name || c.other_user_email || 'קונה',
+                    c.other_user_name || c.other_user_email || t('market.buyer'),
                   )}
                   className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 border transition-colors text-right ${
                     hasUnread ? 'border-green-300 bg-green-50' : 'border-gray-100'
@@ -277,7 +282,7 @@ function ConversationsModal({
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="text-xs text-gray-400">{c.message_count} הודעות</span>
+                    <span className="text-xs text-gray-400">{c.message_count} {t('market.messages')}</span>
                     <ChevronRight className="w-4 h-4 text-gray-300" />
                   </div>
                 </button>
@@ -304,6 +309,7 @@ function listingColor(name: string) {
 }
 
 function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClick: () => void }) {
+  const { t } = useT()
   const expiryDate = listing.expiry_date ? new Date(listing.expiry_date) : null
   const daysLeft = expiryDate ? Math.ceil((expiryDate.getTime() - Date.now()) / 86400000) : null
   const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 30
@@ -316,7 +322,7 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
   const expiryColor = isExpired ? '#ef4444' : isExpiringSoon ? '#d97706' : '#8da5a2'
   const expiryBg = isExpired ? '#fef2f2' : isExpiringSoon ? '#fffbeb' : '#f2f4f3'
   const expiryLabel = expiryDate
-    ? (isExpired ? 'פג תוקף' : daysLeft === 0 ? 'פג היום' : formatDate(listing.expiry_date))
+    ? (isExpired ? t('market.expired') : daysLeft === 0 ? t('market.expires.today') : formatDate(listing.expiry_date))
     : ''
 
   return (
@@ -363,7 +369,7 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
               {listing.store_name}
             </div>
             <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>
-              שובר · ₪{listing.balance}
+              {t('market.voucher')} · ₪{listing.balance}
             </div>
           </div>
           <div style={{ textAlign: 'left', flexShrink: 0, marginRight: 8 }}>
@@ -441,6 +447,7 @@ function MyListingRow({
   unreadCount?: number
   onUpdatePrice: (newPrice: number) => Promise<void>
 }) {
+  const { t } = useT()
   const [removing, setRemoving] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [showPriceInput, setShowPriceInput] = useState(false)
@@ -448,10 +455,10 @@ function MyListingRow({
   const [updatingPrice, setUpdatingPrice] = useState(false)
 
   const statusLabel: Record<string, string> = {
-    active: 'פעיל',
-    pending_payment: 'ממתין לאישור',
-    sold: 'נמכר',
-    cancelled: 'בוטל',
+    active: t('market.status.active'),
+    pending_payment: t('market.listing.status.pending'),
+    sold: t('market.status.sold'),
+    cancelled: t('market.status.cancelled'),
   }
   const statusColor: Record<string, string> = {
     active: 'bg-green-100 text-green-700',
@@ -465,7 +472,7 @@ function MyListingRow({
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{listing.store_name}</p>
-          <p className="text-xs text-gray-500 mt-0.5">יתרה: ₪{listing.balance} · מחיר: ₪{listing.asking_price}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{t('market.balance.label')}: ₪{listing.balance} · {t('market.price.label')}: ₪{listing.asking_price}</p>
         </div>
         <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${statusColor[listing.status]}`}>
           {statusLabel[listing.status]}
@@ -476,11 +483,11 @@ function MyListingRow({
       {listing.purchase_status === 'buyer_confirmed' && listing.buyer_name && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-2">
           <p className="text-sm font-medium text-yellow-800">
-            {listing.buyer_name || listing.buyer_email} שלח/ה תשלום
+            {listing.buyer_name || listing.buyer_email} {t('market.listing.buyer.sent.payment')}
           </p>
           {listing.payment_method_used && (
             <p className="text-xs text-yellow-700">
-              שיטת תשלום: <span className="font-semibold">{listing.payment_method_used}</span>
+              {t('market.listing.payment.method')}: <span className="font-semibold">{listing.payment_method_used}</span>
             </p>
           )}
           <div className="flex gap-2">
@@ -492,12 +499,12 @@ function MyListingRow({
               }}
               className="flex-1 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
             >
-              {confirming ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'אשר קבלת תשלום'}
+              {confirming ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.confirm.received')}
             </button>
             <button
               onClick={onReport}
               className="p-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50"
-              aria-label="דווח על קונה"
+              aria-label={t('market.report.buyer.aria')}
             >
               <Flag className="w-4 h-4" />
             </button>
@@ -513,7 +520,7 @@ function MyListingRow({
             inputMode="decimal"
             value={newPriceInput}
             onChange={e => setNewPriceInput(e.target.value)}
-            placeholder={`מחיר נוכחי: ₪${listing.asking_price}`}
+            placeholder={`${t('market.listing.current.price')}: ₪${listing.asking_price}`}
             className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
             autoFocus
           />
@@ -533,13 +540,13 @@ function MyListingRow({
             }}
             className="px-3 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
           >
-            {updatingPrice ? <Loader2 className="w-4 h-4 animate-spin" /> : 'עדכן'}
+            {updatingPrice ? <Loader2 className="w-4 h-4 animate-spin" /> : t('app.update')}
           </button>
           <button
             onClick={() => { setShowPriceInput(false); setNewPriceInput('') }}
             className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-500"
           >
-            ביטול
+            {t('app.cancel')}
           </button>
         </div>
       )}
@@ -553,7 +560,7 @@ function MyListingRow({
             className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
           >
             <MessageCircle className="w-4 h-4 text-green-600" />
-            שיחות
+            {t('market.chats')}
             {unreadCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -569,7 +576,7 @@ function MyListingRow({
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
-            עדכן מחיר
+            {t('market.update.price')}
           </button>
         )}
 
@@ -583,7 +590,7 @@ function MyListingRow({
             }}
             className="flex-1 py-2 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-50 disabled:opacity-50"
           >
-            {removing ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'הסר ממכירה'}
+            {removing ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.remove')}
           </button>
         )}
       </div>
@@ -591,7 +598,7 @@ function MyListingRow({
       {listing.status === 'sold' && (
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <CheckCircle className="w-4 h-4 text-green-500" />
-          השובר הועבר לקונה בהצלחה
+          {t('market.listing.sold.transferred')}
         </div>
       )}
     </div>
@@ -614,11 +621,13 @@ function MyPurchaseRow({
   onChat: () => void
   unreadCount?: number
 }) {
+  const { t } = useT()
+
   const statusLabel: Record<string, string> = {
-    pending_buyer_payment: 'ממתין לתשלום',
-    buyer_confirmed: 'ממתין לאישור מוכר',
-    completed: 'הושלם',
-    cancelled: 'בוטל',
+    pending_buyer_payment: t('market.purchase.status.pending'),
+    buyer_confirmed: t('market.purchase.status.confirmed'),
+    completed: t('market.purchase.status.completed'),
+    cancelled: t('market.status.cancelled'),
   }
   const statusColor: Record<string, string> = {
     pending_buyer_payment: 'bg-blue-100 text-blue-700',
@@ -633,7 +642,7 @@ function MyPurchaseRow({
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{purchase.store_name}</p>
           <p className="text-xs text-gray-500 mt-0.5">
-            ₪{purchase.asking_price} · מוכר: {purchase.seller_name || purchase.seller_email?.split('@')[0]}
+            ₪{purchase.asking_price} · {t('market.seller')}: {purchase.seller_name || purchase.seller_email?.split('@')[0]}
           </p>
         </div>
         <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${statusColor[purchase.status]}`}>
@@ -644,14 +653,14 @@ function MyPurchaseRow({
       {purchase.status === 'buyer_confirmed' && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">
           <AlertCircle className="w-4 h-4 inline ml-1" />
-          ממתין לאישור המוכר — הוא/היא יאשרו ברגע שיבדקו את התשלום
+          {t('market.purchase.awaiting.seller')}
         </div>
       )}
 
       {purchase.status === 'completed' && (
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <CheckCircle className="w-4 h-4 text-green-500" />
-          השובר הועבר לארנק שלך
+          {t('market.purchase.transferred')}
         </div>
       )}
 
@@ -663,7 +672,7 @@ function MyPurchaseRow({
             className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
           >
             <MessageCircle className="w-4 h-4 text-green-600" />
-            שוחח עם המוכר
+            {t('market.chat.with.seller')}
             {unreadCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -678,14 +687,14 @@ function MyPurchaseRow({
             className="flex-1 py-2 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-xl text-sm font-medium hover:bg-yellow-100 flex items-center justify-center gap-1"
           >
             <Star className="w-4 h-4" />
-            {purchase.my_rating ? `דירגת (${purchase.my_rating}★)` : 'דרג מוכר'}
+            {purchase.my_rating ? `${t('market.rated')} (${purchase.my_rating}★)` : t('market.rate.seller.short')}
           </button>
         )}
         {(purchase.status === 'buyer_confirmed' || purchase.status === 'completed') && (
           <button
             onClick={onReport}
             className="p-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50"
-            aria-label="דווח על מוכר"
+            aria-label={t('market.report.seller.aria')}
           >
             <Flag className="w-4 h-4" />
           </button>
@@ -695,7 +704,7 @@ function MyPurchaseRow({
             onClick={onCancel}
             className="px-3 py-2 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50"
           >
-            בטל
+            {t('market.cancel')}
           </button>
         )}
       </div>
@@ -706,6 +715,7 @@ function MyPurchaseRow({
 // ─── Access Request Screen ─────────────────────────────────────────────────────
 function MarketplaceAccessGate() {
   const { myAccessStatus, requestMarketplaceAccess } = useMarketplace()
+  const { t } = useT()
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
 
@@ -713,9 +723,9 @@ function MarketplaceAccessGate() {
     setSending(true)
     try {
       await requestMarketplaceAccess(message.trim() || undefined)
-      toast.success('הבקשה נשלחה למנהל')
+      toast.success(t('market.access.sent'))
     } catch {
-      toast.error('שגיאה בשליחת הבקשה')
+      toast.error(t('market.access.error'))
     } finally {
       setSending(false)
     }
@@ -727,8 +737,8 @@ function MarketplaceAccessGate() {
         <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
           <ShoppingBag className="w-8 h-8 text-amber-500" />
         </div>
-        <h2 className="text-lg font-bold text-gray-800 mb-2">הבקשה בהמתנה</h2>
-        <p className="text-sm text-gray-500 max-w-xs">הבקשה שלך נשלחה למנהל ותטופל בקרוב. תקבל גישה ברגע שתאושר.</p>
+        <h2 className="text-lg font-bold text-gray-800 mb-2">{t('market.access.pending.title')}</h2>
+        <p className="text-sm text-gray-500 max-w-xs">{t('market.access.pending.body')}</p>
       </div>
     )
   }
@@ -738,17 +748,17 @@ function MarketplaceAccessGate() {
       <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mb-4">
         <ShoppingBag className="w-8 h-8 text-purple-500" />
       </div>
-      <h2 className="text-lg font-bold text-gray-800 mb-1">שוק השוברים</h2>
+      <h2 className="text-lg font-bold text-gray-800 mb-1">{t('market.title')}</h2>
       {myAccessStatus === 'rejected' && (
-        <p className="text-sm text-red-500 mb-3">הבקשה הקודמת שלך נדחתה. ניתן לשלוח בקשה חדשה.</p>
+        <p className="text-sm text-red-500 mb-3">{t('market.access.rejected')}</p>
       )}
       <p className="text-sm text-gray-500 mb-6 max-w-xs">
-        שוק השוברים מוגבל למשתמשים מורשים. שלח בקשת גישה למנהל.
+        {t('market.access.desc')}
       </p>
       <textarea
         value={message}
         onChange={e => setMessage(e.target.value)}
-        placeholder="הוסף הודעה למנהל (רשות)..."
+        placeholder={t('market.access.message.placeholder')}
         rows={3}
         className="w-full max-w-xs border border-gray-200 rounded-xl px-3 py-2 text-sm mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-purple-300"
       />
@@ -758,7 +768,7 @@ function MarketplaceAccessGate() {
         className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2.5 rounded-xl font-semibold text-sm disabled:opacity-50"
       >
         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-        שלח בקשת גישה
+        {t('market.access.request')}
       </button>
     </div>
   )
@@ -770,6 +780,7 @@ export default function MarketplacePage() {
   const location = useLocation()
   const { isAdmin, user, profile } = useAuth()
   const { logAction } = useVouchers()
+  const { t } = useT()
   const {
     listings, myListings, myPurchases,
     loadingListings, loadingMyListings, loadingMyPurchases,
@@ -833,16 +844,16 @@ export default function MarketplacePage() {
       const { error } = await supabase.from('profiles').update({ marketplace_payment_methods: methods }).eq('id', user!.id)
       if (error) throw error
       setPaymentMethods(methods)
-      toast.success('שיטות תשלום עודכנו')
+      toast.success(t('market.payment.updated'))
     } catch {
-      toast.error('שגיאה בשמירת שיטות תשלום')
+      toast.error(t('market.payment.save.error'))
     } finally {
       setSavingPayments(false)
     }
   }
 
   function addPaymentMethod() {
-    if (!newPaymentValue.trim()) { toast.error('הזן ערך'); return }
+    if (!newPaymentValue.trim()) { toast.error(t('market.payment.enter.value')); return }
     const newMethod: PaymentMethod = { type: newPaymentType, value: newPaymentValue.trim() }
     savePaymentMethods([...paymentMethods, newMethod]).then(() => {
       logAction('system_payment_method_add', 'מערכת', undefined, { type: PAYMENT_METHOD_LABELS[newPaymentType] })
@@ -890,7 +901,7 @@ export default function MarketplacePage() {
   }, [tab, watchlistLoaded])
 
   async function addWatchItem() {
-    if (!watchForm.store_name.trim()) { toast.error('הכנס שם חנות'); return }
+    if (!watchForm.store_name.trim()) { toast.error(t('market.watch.store.required')); return }
     setSavingWatch(true)
     try {
       const { data, error } = await supabase.rpc('add_watchlist_item', {
@@ -903,10 +914,10 @@ export default function MarketplacePage() {
       if (data) setWatchlist(prev => [data, ...prev])
       setShowAddWatch(false)
       setWatchForm({ store_name: '', min_discount_pct: 0, notify_push: true, notify_email: false })
-      toast.success('התראה נוספה')
+      toast.success(t('market.watch.added'))
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message || ''
-      toast.error(msg.includes('pro_required') ? 'פונקציה זו זמינה למנויי פרו בלבד' : 'שגיאה בהוספה')
+      toast.error(msg.includes('pro_required') ? t('market.watch.pro.required') : t('market.watch.add.error'))
     } finally {
       setSavingWatch(false)
     }
@@ -918,7 +929,7 @@ export default function MarketplacePage() {
       await supabase.rpc('delete_watchlist_item', { p_id: id })
       setWatchlist(prev => prev.filter(w => w.id !== id))
     } catch {
-      toast.error('שגיאה במחיקה')
+      toast.error(t('market.watch.delete.error'))
     } finally {
       setDeletingWatch(null)
     }
@@ -931,7 +942,7 @@ export default function MarketplacePage() {
         <div className="bg-white border-b px-4 py-4">
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-purple-600" />
-            שוק השוברים
+            {t('market.title')}
           </h1>
         </div>
         <MarketplaceAccessGate />
@@ -946,9 +957,9 @@ export default function MarketplacePage() {
         <div style={{ padding: '16px 20px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>מרקטפלייס</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>{t('market.marketplace')}</div>
               {listings.length > 0 && (
-                <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>{listings.length} מבצעים פעילים</div>
+                <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>{listings.length} {t('market.active.deals')}</div>
               )}
             </div>
             {tab === 'all' && (
@@ -965,7 +976,7 @@ export default function MarketplacePage() {
               >
                 <SlidersHorizontal size={14} />
                 <span style={{ fontSize: 13, fontWeight: 500 }}>
-                  {sortKey === 'discount' ? 'הנחה' : sortKey === 'balance' ? 'יתרה' : sortKey === 'expiry' ? 'תפוגה' : 'חדש'}
+                  {sortKey === 'discount' ? t('market.sort.discount') : sortKey === 'balance' ? t('market.sort.balance') : sortKey === 'expiry' ? t('market.sort.expiry') : t('market.sort.newest')}
                 </span>
               </button>
             )}
@@ -973,10 +984,10 @@ export default function MarketplacePage() {
           {showSort && tab === 'all' && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingBottom: 12 }}>
               {([
-                { key: 'newest',   label: 'חדש ביותר' },
-                { key: 'discount', label: 'הנחה גבוהה' },
-                { key: 'balance',  label: '₪ יתרה גבוהה' },
-                { key: 'expiry',   label: 'פג תוקף בקרוב' },
+                { key: 'newest',   label: t('market.sort.newest.full') },
+                { key: 'discount', label: t('market.sort.discount.full') },
+                { key: 'balance',  label: t('market.sort.balance.full') },
+                { key: 'expiry',   label: t('market.sort.expiry.full') },
               ] as { key: MarketSortKey; label: string }[]).map(({ key, label }) => (
                 <button
                   key={key}
@@ -997,20 +1008,20 @@ export default function MarketplacePage() {
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 0 }}>
-            {([['all', 'שוק'], ['mine', 'שלי'], ['purchases', 'רכישות'], ['watchlist', 'התראות']] as const).map(([t, label]) => (
+            {([['all', t('market.tab.market')], ['mine', t('market.tab.mine')], ['purchases', t('market.tab.purchases')], ['watchlist', t('market.tab.watchlist')]] as const).map(([tabKey, label]) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={tabKey}
+                onClick={() => setTab(tabKey)}
                 style={{
                   flex: 1, padding: '10px 0', border: 'none', background: 'none',
                   cursor: 'pointer', position: 'relative', fontFamily: 'Heebo, sans-serif',
-                  fontSize: 14, fontWeight: tab === t ? 700 : 400,
-                  color: tab === t ? 'var(--c-primary)' : 'var(--c-text3)',
+                  fontSize: 14, fontWeight: tab === tabKey ? 700 : 400,
+                  color: tab === tabKey ? 'var(--c-primary)' : 'var(--c-text3)',
                   transition: 'color 0.2s',
                 }}
               >
                 {label}
-                {tab === t && (
+                {tab === tabKey && (
                   <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 28, height: 3, borderRadius: '3px 3px 0 0', background: 'var(--c-primary)' }} />
                 )}
               </button>
@@ -1027,7 +1038,7 @@ export default function MarketplacePage() {
             <input
               type="text"
               style={{ flex: 1, height: 40, border: 'none', background: 'transparent', fontSize: 15, color: 'var(--c-text)', fontFamily: 'Heebo, sans-serif', outline: 'none', direction: 'rtl' }}
-              placeholder="חפש לפי שם חנות..."
+              placeholder={t('market.search.by.store')}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -1067,8 +1078,8 @@ export default function MarketplacePage() {
               ) : sorted.length === 0 ? (
                 <div className="text-center py-12 text-gray-400 space-y-2">
                   <Tag className="w-10 h-10 mx-auto opacity-40" />
-                  <p className="font-medium">אין שוברים למכירה כרגע</p>
-                  {search && <p className="text-sm">נסה לחפש מילה אחרת</p>}
+                  <p className="font-medium">{t('market.no.listings.now')}</p>
+                  {search && <p className="text-sm">{t('market.try.other.search')}</p>}
                 </div>
               ) : (
                 sorted.map(l => (
@@ -1099,7 +1110,7 @@ export default function MarketplacePage() {
                 }}
               >
                 <Settings size={14} />
-                שיטות תשלום
+                {t('market.payment.methods')}
                 {paymentMethods.length > 0 && (
                   <span style={{
                     background: 'var(--c-primary)', color: '#fff',
@@ -1114,7 +1125,7 @@ export default function MarketplacePage() {
                 onClick={() => navigate('/market/bulk')}
                 className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-xl"
               >
-                <ShoppingBag className="w-3.5 h-3.5" /> פרסם מרובה
+                <ShoppingBag className="w-3.5 h-3.5" /> {t('market.bulk.publish')}
               </button>
             </div>
 
@@ -1122,10 +1133,10 @@ export default function MarketplacePage() {
             {showPaymentSettings && (
               <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
                 <div className="p-4 space-y-3">
-                  <p className="text-xs text-gray-500">שיטות תשלום יוצגו לקונים כאשר ירצו לרכוש ממך שובר</p>
+                  <p className="text-xs text-gray-500">{t('market.payment.methods.hint')}</p>
 
                   {paymentMethods.length === 0 && !addingPayment && (
-                    <p className="text-sm text-gray-400 text-center py-2">טרם הגדרת שיטות תשלום</p>
+                    <p className="text-sm text-gray-400 text-center py-2">{t('market.payment.methods.empty')}</p>
                   )}
 
                   {paymentMethods.map((m, i) => (
@@ -1140,7 +1151,7 @@ export default function MarketplacePage() {
                       <button
                         onClick={() => removePaymentMethod(i)}
                         className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
-                        aria-label="הסר שיטת תשלום"
+                        aria-label={t('market.payment.remove.aria')}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1162,16 +1173,16 @@ export default function MarketplacePage() {
                         type={newPaymentType === 'paypal' ? 'email' : 'tel'}
                         value={newPaymentValue}
                         onChange={e => setNewPaymentValue(e.target.value)}
-                        placeholder={newPaymentType === 'paypal' ? 'כתובת PayPal (email)' : 'מספר טלפון'}
+                        placeholder={newPaymentType === 'paypal' ? t('market.payment.paypal.placeholder') : t('market.payment.phone.placeholder')}
                         className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                         dir="ltr"
                       />
                       <div className="flex gap-2">
                         <button onClick={addPaymentMethod} disabled={savingPayments} className="flex-1 py-2 bg-green-500 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                          <Check className="w-4 h-4" /> הוסף
+                          <Check className="w-4 h-4" /> {t('app.add')}
                         </button>
                         <button onClick={() => { setAddingPayment(false); setNewPaymentValue('') }} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                          <X className="w-4 h-4" /> ביטול
+                          <X className="w-4 h-4" /> {t('app.cancel')}
                         </button>
                       </div>
                     </div>
@@ -1183,7 +1194,7 @@ export default function MarketplacePage() {
                       className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-green-400 hover:text-green-600 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
-                      הוסף שיטת תשלום
+                      {t('market.payment.add')}
                     </button>
                   )}
                 </div>
@@ -1194,8 +1205,8 @@ export default function MarketplacePage() {
             ) : myListings.length === 0 ? (
               <div className="text-center py-12 text-gray-400 space-y-2">
                 <ShoppingBag className="w-10 h-10 mx-auto opacity-40" />
-                <p className="font-medium">לא הצעת שוברים למכירה</p>
-                <p className="text-sm">פתח שובר ולחץ "הצע למכירה"</p>
+                <p className="font-medium">{t('market.mine.empty')}</p>
+                <p className="text-sm">{t('market.mine.empty.hint')}</p>
               </div>
             ) : (
               myListings.map(l => (
@@ -1204,16 +1215,16 @@ export default function MarketplacePage() {
                   listing={l}
                   unreadCount={unreadByListing[l.id] ?? 0}
                   onRemove={async () => {
-                    try { await removeFromSale(l.id); toast.success('הוסר מהמכירה') }
-                    catch { toast.error('שגיאה בהסרה') }
+                    try { await removeFromSale(l.id); toast.success(t('market.listing.removed')) }
+                    catch { toast.error(t('market.listing.remove.error')) }
                   }}
                   onConfirm={async () => {
-                    try { await confirmPaymentReceived(l.purchase_id!); toast.success('אושר! השובר הועבר לקונה') }
-                    catch { toast.error('שגיאה באישור') }
+                    try { await confirmPaymentReceived(l.purchase_id!); toast.success(t('market.listing.confirmed')) }
+                    catch { toast.error(t('market.listing.confirm.error')) }
                   }}
                   onReport={() => setReportTarget({
                     userId: l.buyer_id || '',
-                    name: l.buyer_name || l.buyer_email || 'קונה',
+                    name: l.buyer_name || l.buyer_email || t('market.buyer'),
                     purchaseId: l.purchase_id,
                     listingId: l.id,
                   })}
@@ -1222,9 +1233,9 @@ export default function MarketplacePage() {
                     try {
                       await updateListingPrice(l.id, price)
                       await fetchMyListings()
-                      toast.success('המחיר עודכן')
+                      toast.success(t('market.price.updated'))
                     } catch {
-                      toast.error('שגיאה בעדכון המחיר')
+                      toast.error(t('market.price.update.error'))
                     }
                   }}
                 />
@@ -1238,13 +1249,13 @@ export default function MarketplacePage() {
           <>
             <div className="flex items-center justify-between mb-1">
               <h2 className="font-semibold text-gray-800 flex items-center gap-1.5">
-                <Bell className="w-4 h-4 text-indigo-500" /> התראות מעקב
+                <Bell className="w-4 h-4 text-indigo-500" /> {t('market.watch.title')}
               </h2>
               <button
                 onClick={() => setShowAddWatch(v => !v)}
                 className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-xl"
               >
-                <Plus className="w-3.5 h-3.5" /> הוסף
+                <Plus className="w-3.5 h-3.5" /> {t('app.add')}
               </button>
             </div>
 
@@ -1252,13 +1263,13 @@ export default function MarketplacePage() {
               <div className="bg-white rounded-2xl border border-indigo-100 p-4 space-y-3">
                 <input
                   type="text"
-                  placeholder="שם חנות (למשל: H&M)"
+                  placeholder={t('market.watch.store.placeholder')}
                   value={watchForm.store_name}
                   onChange={e => setWatchForm(f => ({ ...f, store_name: e.target.value }))}
                   className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-600 shrink-0">אחוז הנחה מינימלי:</label>
+                  <label className="text-xs text-gray-600 shrink-0">{t('market.watch.min.discount')}:</label>
                   <input
                     type="number" min={0} max={99} value={watchForm.min_discount_pct}
                     onChange={e => setWatchForm(f => ({ ...f, min_discount_pct: parseInt(e.target.value) || 0 }))}
@@ -1271,23 +1282,23 @@ export default function MarketplacePage() {
                     <input type="checkbox" checked={watchForm.notify_push}
                       onChange={e => setWatchForm(f => ({ ...f, notify_push: e.target.checked }))}
                       className="rounded" />
-                    התראה בדחיפה
+                    {t('market.watch.notify.push')}
                   </label>
                   <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
                     <input type="checkbox" checked={watchForm.notify_email}
                       onChange={e => setWatchForm(f => ({ ...f, notify_email: e.target.checked }))}
                       className="rounded" />
-                    דוא"ל
+                    {t('market.watch.notify.email')}
                   </label>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={addWatchItem} disabled={savingWatch}
                     className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
-                    {savingWatch ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שמור'}
+                    {savingWatch ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('app.save')}
                   </button>
                   <button onClick={() => setShowAddWatch(false)}
                     className="px-4 py-2 border rounded-xl text-sm text-gray-500">
-                    ביטול
+                    {t('app.cancel')}
                   </button>
                 </div>
               </div>
@@ -1299,8 +1310,8 @@ export default function MarketplacePage() {
             {watchlistLoaded && watchlist.length === 0 && !showAddWatch && (
               <div className="text-center py-12 text-gray-400 space-y-2">
                 <Bell className="w-10 h-10 mx-auto opacity-30" />
-                <p className="font-medium">אין התראות פעילות</p>
-                <p className="text-sm">לחץ "הוסף" כדי לעקוב אחרי חנות</p>
+                <p className="font-medium">{t('market.watch.empty')}</p>
+                <p className="text-sm">{t('market.watch.empty.hint')}</p>
               </div>
             )}
             {watchlist.map(w => (
@@ -1308,8 +1319,8 @@ export default function MarketplacePage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-800 truncate">{w.store_name}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    הנחה מינ': {w.min_discount_pct}% ·
-                    {w.notify_push ? ' · דחיפה' : ''}{w.notify_email ? ' · דוא"ל' : ''}
+                    {t('market.watch.min.discount.label')}: {w.min_discount_pct}% ·
+                    {w.notify_push ? ` · ${t('market.watch.push')}` : ''}{w.notify_email ? ` · ${t('market.watch.email')}` : ''}
                   </p>
                 </div>
                 <button
@@ -1332,7 +1343,7 @@ export default function MarketplacePage() {
             ) : myPurchases.length === 0 ? (
               <div className="text-center py-12 text-gray-400 space-y-2">
                 <ShoppingBag className="w-10 h-10 mx-auto opacity-40" />
-                <p className="font-medium">טרם ביצעת רכישות</p>
+                <p className="font-medium">{t('market.purchases.empty')}</p>
               </div>
             ) : (
               myPurchases.map(p => (
@@ -1343,19 +1354,19 @@ export default function MarketplacePage() {
                   onRate={() => setRatingPurchase(p)}
                   onReport={() => setReportTarget({
                     userId: p.seller_id!,
-                    name: p.seller_name || p.seller_email || 'מוכר',
+                    name: p.seller_name || p.seller_email || t('market.seller'),
                     purchaseId: p.purchase_id,
                   })}
                   onCancel={async () => {
-                    try { await cancelPurchase(p.purchase_id); toast.success('הרכישה בוטלה') }
-                    catch { toast.error('שגיאה בביטול') }
+                    try { await cancelPurchase(p.purchase_id); toast.success(t('market.purchase.cancelled')) }
+                    catch { toast.error(t('market.purchase.cancel.error')) }
                   }}
                   onChat={() => {
                     if (!p.seller_id) return
                     setChatTarget({
                       listingId: p.listing_id,
                       otherUserId: p.seller_id,
-                      otherUserName: p.seller_name || p.seller_email?.split('@')[0] || 'מוכר',
+                      otherUserName: p.seller_name || p.seller_email?.split('@')[0] || t('market.seller'),
                       isSeller: false,
                       askingPrice: p.asking_price ?? 0,
                       storeName: p.store_name ?? '',

@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
+import { useT } from '../lib/i18n'
 
 function isSafeUrl(url: string | undefined): boolean {
   if (!url) return false
@@ -37,6 +38,7 @@ const CAT_COLORS: Record<string, string> = {
 }
 
 export default function CheckoutPage() {
+  const { t } = useT()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, profile } = useAuth()
@@ -175,21 +177,21 @@ export default function CheckoutPage() {
 
   async function copyCode() {
     if (voucher?.is_e2ee && !isVaultUnlocked) {
-      toast.error('פתח את הכספת כדי להעתיק את הקוד')
+      toast.error(t('checkout.copy.vault.locked'))
       return
     }
     const codeToCopy = effectiveCode ?? voucher?.code
     if (!codeToCopy) return
     await navigator.clipboard.writeText(codeToCopy).catch(() => {})
     setCopied(true)
-    toast.success('קוד הועתק!')
+    toast.success(t('checkout.code.copied'))
     setTimeout(() => setCopied(false), 2000)
   }
 
   async function updateBalance(newBalance: number, usedAmount?: number, storeUsed?: string | null) {
     if (!voucher) return
     if (!isOnline && isSharedVoucher) {
-      toast.error('אין חיבור לאינטרנט')
+      toast.error(t('checkout.offline'))
       return
     }
     const clamped = Math.max(0, newBalance)
@@ -198,7 +200,7 @@ export default function CheckoutPage() {
     } else {
       await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
       if (!isOnline) {
-        toast.success('יתרה עודכנה (תסונכרן בחיבור)')
+        toast.success(t('checkout.balance.updated.offline'))
         if (clamped <= 0) setConfirmArchive(true)
         const used = usedAmount ?? (voucher.balance - clamped)
         if (used > 0) sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null)
@@ -206,10 +208,10 @@ export default function CheckoutPage() {
       }
     }
     if (clamped <= 0) {
-      toast.success('יתרה אופסה!')
+      toast.success(t('checkout.balance.zeroed'))
       setConfirmArchive(true)
     } else {
-      toast.success('יתרה עודכנה')
+      toast.success(t('checkout.balance.updated'))
     }
     const used = usedAmount ?? (voucher.balance - clamped)
     if (used > 0) {
@@ -239,7 +241,7 @@ export default function CheckoutPage() {
   async function handleShareWithUser() {
     if (!voucher || !shareEmail.trim()) return
     if (voucherShares.length >= limits.maxSharedVouchers) {
-      openUpgradeSheet(`הגעת למגבלת ${limits.maxSharedVouchers} השיתופים בחינמי`)
+      openUpgradeSheet(t('checkout.share.limit', { max: limits.maxSharedVouchers }))
       return
     }
     setShareEmailLoading(true)
@@ -248,7 +250,7 @@ export default function CheckoutPage() {
       if (result === 'not_found') {
         setPendingShareEmail(shareEmail.trim())
       } else if (result === 'already_shared') {
-        toast('שובר זה כבר שותף עם משתמש זה', { icon: 'ℹ️' })
+        toast(t('checkout.already.shared'), { icon: 'ℹ️' })
       } else {
         // Send notification email (non-blocking)
         sendVoucherSharedEmail({
@@ -256,14 +258,14 @@ export default function CheckoutPage() {
           to_name: shareEmail.trim(),
           from_name: profile?.name || user?.email || '',
           store_name: voucher.store_name,
-        }).catch((err) => console.error('שגיאה בשליחת מייל שיתוף:', err))
-        toast.success(`שובר שותף עם ${shareEmail.trim()}`)
+        }).catch((err) => console.error('share email error:', err))
+        toast.success(t('checkout.shared.with', { email: shareEmail.trim() }))
         setShareEmail('')
         const shares = await getVoucherShares(voucher.id)
         setVoucherShares(shares)
       }
     } catch (err: any) {
-      toast.error(err?.message || 'שגיאה בשיתוף')
+      toast.error(err?.message || t('checkout.share.error'))
     } finally {
       setShareEmailLoading(false)
     }
@@ -277,9 +279,9 @@ export default function CheckoutPage() {
         from_name: profile?.name || user?.email || '',
         store_name: voucher.store_name,
       })
-      toast.success(`הזמנה נשלחה ל-${pendingShareEmail}`)
+      toast.success(t('checkout.invite.sent', { email: pendingShareEmail }))
     } catch {
-      toast.error('שגיאה בשליחת הזמנה')
+      toast.error(t('checkout.invite.error'))
     } finally {
       setPendingShareEmail(null)
       setShareEmail('')
@@ -298,7 +300,7 @@ export default function CheckoutPage() {
     if (giftMode === 'email' && !giftEmail.trim()) return
     // Block sending gift to yourself
     if (giftMode === 'email' && giftEmail.trim().toLowerCase() === user?.email?.toLowerCase()) {
-      toast.error('לא ניתן לשלוח מתנה לעצמך')
+      toast.error(t('checkout.gift.self.error'))
       return
     }
     const sendAt = giftScheduled && giftDate ? new Date(giftDate) : new Date()
@@ -307,14 +309,14 @@ export default function CheckoutPage() {
     try {
       const email = giftMode === 'email' ? giftEmail.trim() : null
       const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt)
-      if (!token) { toast.error('שגיאה ביצירת המתנה'); return }
+      if (!token) { toast.error(t('checkout.gift.create.error')); return }
 
       const link = `${window.location.origin}/gift/${token}`
 
       if (giftMode === 'link') {
         setGiftLink(link)
         await navigator.clipboard.writeText(link).catch(() => {})
-        toast.success('קישור מתנה נוצר והועתק!')
+        toast.success(t('checkout.gift.link.created'))
       } else {
         const sendNow = !giftScheduled || !giftDate || sendAt <= new Date()
         if (sendNow) {
@@ -327,15 +329,15 @@ export default function CheckoutPage() {
               balance: voucher.balance,
               gift_link: link,
             })
-            toast.success(`מתנה נשלחה ל-${giftEmail.trim()}!`)
+            toast.success(t('checkout.gift.sent', { email: giftEmail.trim() }))
           } catch (emailErr: any) {
             // Gift was created but email failed — show link as fallback
             setGiftLink(link)
-            toast.error('המתנה נוצרה אך שליחת המייל נכשלה — שלח את הקישור ידנית')
+            toast.error(t('checkout.gift.email.failed'))
             console.error('Gift email error:', emailErr)
           }
         } else {
-          toast.success(`מתנה מתוזמנת ל-${new Date(giftDate).toLocaleDateString('he-IL')}`)
+          toast.success(t('checkout.gift.scheduled', { date: new Date(giftDate).toLocaleDateString('he-IL') }))
         }
         setGiftEmail('')
       }
@@ -348,7 +350,7 @@ export default function CheckoutPage() {
       setPendingGifts(gifts)
       setGiftsLoaded(true)
     } catch (err: any) {
-      toast.error('שגיאה ביצירת המתנה: ' + (err?.message || ''))
+      toast.error(t('checkout.gift.create.error') + (err?.message ? ': ' + err.message : ''))
     } finally {
       setGiftSending(false)
     }
@@ -357,21 +359,21 @@ export default function CheckoutPage() {
   async function handleCancelGift(giftId: string) {
     await cancelGift(giftId)
     setPendingGifts(prev => prev.filter(g => g.id !== giftId))
-    toast.success('מתנה בוטלה')
+    toast.success(t('checkout.gift.cancelled'))
   }
 
   async function handleUnshare(email: string) {
     if (!voucher) return
     await unshareVoucher(voucher.id, email)
     setVoucherShares(prev => prev.filter(s => s.shared_with_email !== email))
-    toast.success('שיתוף הוסר')
+    toast.success(t('checkout.unshared'))
   }
 
   async function handleCreateShareLink(days?: number) {
     if (!voucher) return
     // E2EE vouchers: require vault open so recipient sees the real code
     if (voucher.is_e2ee && !isVaultUnlocked) {
-      toast.error('פתח את הכספת תחילה כדי לשתף שובר מוצפן')
+      toast.error(t('checkout.share.vault.locked'))
       return
     }
     setShareLoading(true)
@@ -382,17 +384,17 @@ export default function CheckoutPage() {
       // Clipboard write is best-effort — failure must not hide the success
       try {
         await navigator.clipboard.writeText(url)
-        toast.success('לינק שיתוף הועתק!')
+        toast.success(t('checkout.share.link.copied'))
       } catch {
-        toast.success('לינק שיתוף נוצר! העתק אותו מרשימת הלינקים.')
+        toast.success(t('checkout.share.link.created'))
       }
       const tokens = await getShareTokens(voucher.id)
       setShareTokens(tokens)
     } catch (err: any) {
       if (err?.message === 'TABLE_MISSING') {
-        toast.error('טבלת shared_voucher_tokens חסרה — הרץ את ה-SQL מקובץ supabase-schema.sql', { duration: 6000 })
+        toast.error(t('checkout.share.table.missing'), { duration: 6000 })
       } else {
-        toast.error('שגיאה ביצירת לינק: ' + (err?.message || ''))
+        toast.error(t('checkout.share.link.error') + (err?.message ? ': ' + err.message : ''))
       }
     } finally {
       setShareLoading(false)
@@ -402,7 +404,7 @@ export default function CheckoutPage() {
   async function handleDeleteShareToken(token: string) {
     await deleteShareToken(token)
     setShareTokens(prev => prev.filter(t => t.token !== token))
-    toast.success('לינק נמחק')
+    toast.success(t('checkout.share.link.deleted'))
   }
 
 
@@ -410,8 +412,8 @@ export default function CheckoutPage() {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-500">שובר לא נמצא</p>
-          <button onClick={() => navigate(-1)} className="mt-4 text-green-600 underline text-sm">חזור</button>
+          <p className="text-gray-500">{t('checkout.not.found')}</p>
+          <button onClick={() => navigate(-1)} className="mt-4 text-green-600 underline text-sm">{t('checkout.back')}</button>
         </div>
       </div>
     )
@@ -447,8 +449,8 @@ export default function CheckoutPage() {
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <ShoppingBag className="w-8 h-8 text-blue-500" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">שובר מוצע למכירה</h2>
-              <p className="text-sm text-gray-500 mb-6">שובר זה נעול כי הוצע למכירה בשוק. לא ניתן להשתמש בו עד שיוסר מהמכירה.</p>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">{t('checkout.for.sale.title')}</h2>
+              <p className="text-sm text-gray-500 mb-6">{t('checkout.for.sale.desc')}</p>
               <button
                 disabled={removingFromSale}
                 onClick={async () => {
@@ -464,12 +466,12 @@ export default function CheckoutPage() {
                       .single()
                     if (data?.id) {
                       await removeFromSale(data.id)
-                      toast.success('הוסר מהמכירה — השובר זמין לשימוש')
+                      toast.success(t('checkout.removed.from.sale'))
                       setLockConfirmed(false)
                       await refreshVouchers()
                     }
                   } catch {
-                    toast.error('שגיאה בהסרה מהמכירה')
+                    toast.error(t('checkout.remove.sale.error'))
                   } finally {
                     setRemovingFromSale(false)
                   }
@@ -477,19 +479,19 @@ export default function CheckoutPage() {
                 className="w-full flex items-center justify-center gap-2 bg-red-500 text-white py-3.5 rounded-2xl font-semibold shadow-md hover:bg-red-600 transition-all disabled:opacity-50"
               >
                 {removingFromSale ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                הסר ממכירה
+                {t('checkout.remove.from.sale')}
               </button>
               <button
                 onClick={() => navigate('/market')}
                 className="w-full mt-3 py-3 text-blue-500 text-sm font-medium hover:text-blue-700"
               >
-                עבור לשוק
+                {t('checkout.go.to.market')}
               </button>
               <button
                 onClick={() => navigate(-1)}
                 className="w-full mt-1 py-3 text-gray-500 text-sm font-medium hover:text-gray-700"
               >
-                חזור
+                {t('checkout.back')}
               </button>
             </div>
           ) : (
@@ -498,28 +500,28 @@ export default function CheckoutPage() {
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Lock className="w-8 h-8 text-orange-500" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">שובר נעול</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">{t('checkout.locked.title')}</h2>
               {voucher.lock_reason ? (
                 <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-6 text-right">
-                  <p className="text-xs text-orange-600 font-medium mb-1">סיבת נעילה:</p>
+                  <p className="text-xs text-orange-600 font-medium mb-1">{t('checkout.lock.reason.label')}</p>
                   <p className="text-sm text-orange-800 font-medium">{voucher.lock_reason}</p>
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 mb-6">שובר זה נעול ומיועד לשימוש עתידי</p>
+                <p className="text-sm text-gray-500 mb-6">{t('checkout.locked.desc')}</p>
               )}
-              <p className="text-xs text-gray-400 mb-6">לחץ על הכפתור כדי לפתוח את השובר ולהשתמש בו</p>
+              <p className="text-xs text-gray-400 mb-6">{t('checkout.locked.hint')}</p>
               <button
                 onClick={() => setLockConfirmed(true)}
                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-400 to-amber-500 text-white py-3.5 rounded-2xl font-semibold shadow-md hover:shadow-lg transition-all"
               >
                 <Unlock className="w-4 h-4" />
-                פתח שובר
+                {t('checkout.unlock.voucher')}
               </button>
               <button
                 onClick={() => navigate(-1)}
                 className="w-full mt-3 py-3 text-gray-500 text-sm font-medium hover:text-gray-700"
               >
-                חזור
+                {t('checkout.back')}
               </button>
             </div>
           )}
@@ -530,26 +532,26 @@ export default function CheckoutPage() {
 
   async function handleListForSale() {
     const price = parseFloat(sellPrice)
-    if (!price || price <= 0) { toast.error('הזן מחיר תקין'); return }
+    if (!price || price <= 0) { toast.error(t('checkout.sell.invalid.price')); return }
     // Check payment methods
     const methods = profile?.marketplace_payment_methods || []
     if (methods.length === 0) {
-      toast.error('הגדר שיטת תשלום בהגדרות תחילה')
+      toast.error(t('checkout.sell.no.payment.method'))
       navigate('/settings')
       return
     }
     setSellLoading(true)
     try {
       await listForSale(voucher!.id, price, sellDescription || undefined)
-      toast.success('השובר הוצע למכירה!')
+      toast.success(t('checkout.sell.listed'))
       setShowSellModal(false)
       setSellPrice('')
       setSellDescription('')
       await refreshVouchers()
     } catch (err: any) {
       const msg = err?.message || ''
-      if (msg.includes('already_listed')) toast.error('שובר זה כבר מוצע למכירה')
-      else toast.error('שגיאה בהצעת השובר למכירה')
+      if (msg.includes('already_listed')) toast.error(t('checkout.sell.already.listed'))
+      else toast.error(t('checkout.sell.error'))
     } finally {
       setSellLoading(false)
     }
@@ -565,7 +567,7 @@ export default function CheckoutPage() {
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
               <h2 className="font-bold text-lg flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-green-600" />
-                הצע שובר למכירה
+                {t('checkout.sell.modal.title')}
               </h2>
               <button onClick={() => setShowSellModal(false)} className="p-2 rounded-full hover:bg-gray-100">
                 <X className="w-5 h-5" />
@@ -575,31 +577,31 @@ export default function CheckoutPage() {
             <div className="modal-scroll flex-1 overflow-y-auto min-h-0 px-6 space-y-4 pb-4">
               <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
                 <p className="font-semibold">{voucher!.store_name}</p>
-                <p className="text-sm text-gray-500">יתרה: ₪{voucher!.balance}</p>
+                <p className="text-sm text-gray-500">{t('checkout.sell.balance.label')}: ₪{voucher!.balance}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">מחיר מבוקש (₪)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('checkout.sell.price.label')}</label>
                 <input
                   type="number"
                   inputMode="decimal"
                   value={sellPrice}
                   onChange={e => setSellPrice(e.target.value)}
-                  placeholder="לדוגמה: 80"
+                  placeholder={t('checkout.sell.price.placeholder')}
                   className="w-full border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-400"
                   dir="ltr"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">תיאור (אופציונלי)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('checkout.sell.desc.label')}</label>
                 <textarea
                   value={sellDescription}
                   onChange={e => setSellDescription(e.target.value)}
-                  placeholder="מידע נוסף על השובר..."
+                  placeholder={t('checkout.sell.desc.placeholder')}
                   className="w-full border rounded-xl px-4 py-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-green-400"
                 />
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-                השובר יינעל לשימוש אישי עד שיוסר מהמכירה. שיטות התשלום שהגדרת בפרופיל יוצגו לקונים.
+                {t('checkout.sell.notice')}
               </div>
             </div>
             {/* Footer — כפתור קבוע */}
@@ -609,7 +611,7 @@ export default function CheckoutPage() {
                 disabled={sellLoading || !sellPrice}
                 className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
               >
-                {sellLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'פרסם למכירה'}
+                {sellLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('checkout.sell.publish')}
               </button>
             </div>
           </div>
@@ -618,23 +620,23 @@ export default function CheckoutPage() {
 
       {confirmArchive && (
         <ConfirmDialog
-          title="העברה לארכיון"
-          message="להעביר את השובר לארכיון?"
+          title={t('checkout.archive.confirm.title')}
+          message={t('checkout.archive.confirm.msg')}
           onConfirm={() => {
             setConfirmArchive(false)
-            archiveVoucher(voucher.id).then(() => { toast.success('הועבר לארכיון'); navigate(-1) })
+            archiveVoucher(voucher.id).then(() => { toast.success(t('checkout.archived')); navigate(-1) })
           }}
           onCancel={() => setConfirmArchive(false)}
         />
       )}
       {confirmDelete && (
         <ConfirmDialog
-          title="מחיקת שובר"
-          message="פעולה זו אינה ניתנת לביטול."
+          title={t('checkout.delete.confirm.title')}
+          message={t('checkout.delete.confirm.msg')}
           onConfirm={async () => {
             setConfirmDelete(false)
             await deleteVoucher(voucher.id)
-            toast.success('שובר נמחק')
+            toast.success(t('checkout.deleted'))
             navigate(-1)
           }}
           onCancel={() => setConfirmDelete(false)}
@@ -645,7 +647,7 @@ export default function CheckoutPage() {
           voucher={voucher}
           onSave={async (vData) => {
             await updateVoucher(voucher.id, vData)
-            toast.success('שובר עודכן')
+            toast.success(t('checkout.voucher.updated'))
             setShowEditForm(false)
           }}
           onClose={() => setShowEditForm(false)}
@@ -697,13 +699,13 @@ export default function CheckoutPage() {
             {(sv?.name || voucher.store_name).charAt(0)}
           </div>
           <div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 3, fontWeight: 500 }}>יתרה נוכחית</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 3, fontWeight: 500 }}>{t('checkout.current.balance')}</div>
             <div style={{ fontSize: 36, fontWeight: 900, color: '#fff', letterSpacing: '-1px', lineHeight: 1 }}>
               {formatCurrency(voucher.balance)}
             </div>
             {voucher.amount > 0 && voucher.amount !== voucher.balance && (
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>
-                מתוך {formatCurrency(voucher.amount)} מקורי
+                {t('checkout.original.of')} {formatCurrency(voucher.amount)} {t('checkout.original.label')}
               </div>
             )}
             {sv && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{voucher.store_name}</div>}
@@ -716,7 +718,7 @@ export default function CheckoutPage() {
         <div style={{ background: 'var(--c-gold-light)', borderBottom: '1px solid #f6d680', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Lock className="w-4 h-4" style={{ color: 'var(--c-gold)', flexShrink: 0 }} />
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-gold)' }}>
-            {voucher.lock_reason === 'for_sale' ? 'נעול — השובר מפורסם למכירה' : `נעול: ${voucher.lock_reason}`}
+            {voucher.lock_reason === 'for_sale' ? t('checkout.lock.banner.for.sale') : `${t('checkout.lock.banner.locked')}: ${voucher.lock_reason}`}
           </span>
         </div>
       )}
@@ -726,7 +728,7 @@ export default function CheckoutPage() {
         {!isOnline && voucher.is_shared && (
           <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center gap-2 text-sm text-orange-700">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            מצב אופליין — לא ניתן לעדכן שובר משותף
+            {t('checkout.offline.shared')}
           </div>
         )}
 
@@ -743,17 +745,17 @@ export default function CheckoutPage() {
           {voucher.is_e2ee && !isVaultUnlocked && (
             <div className="py-6">
               <Shield className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-gray-700 mb-1">קוד מוצפן מקצה לקצה</p>
+              <p className="text-sm font-semibold text-gray-700 mb-1">{t('checkout.e2ee.encrypted.label')}</p>
               {hint
-                ? <p className="text-xs text-indigo-500 mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
-                : <p className="text-xs text-gray-400 mb-1">הזן ססמת כספת לצפייה בקוד</p>
+                ? <p className="text-xs text-indigo-500 mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> {t('checkout.e2ee.hint.label')}: <span className="font-medium">{hint}</span></p>
+                : <p className="text-xs text-gray-400 mb-1">{t('checkout.e2ee.enter.passphrase')}</p>
               }
               {!showVaultUnlock ? (
                 <button
                   onClick={() => setShowVaultUnlock(true)}
                   className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium"
                 >
-                  פתח כספת
+                  {t('checkout.e2ee.open.vault')}
                 </button>
               ) : (
                 <form
@@ -763,7 +765,7 @@ export default function CheckoutPage() {
                     setVaultUnlocking(true); setVaultError('')
                     const ok = await unlockVault(vaultPassInput)
                     setVaultUnlocking(false)
-                    if (!ok) setVaultError('סיסמה שגויה')
+                    if (!ok) setVaultError(t('checkout.e2ee.wrong.password'))
                     else { setShowVaultUnlock(false); setVaultPassInput('') }
                   }}
                 >
@@ -771,7 +773,7 @@ export default function CheckoutPage() {
                     type="password"
                     value={vaultPassInput}
                     onChange={e => setVaultPassInput(e.target.value)}
-                    placeholder="סיסמת כספת"
+                    placeholder={t('checkout.e2ee.passphrase.placeholder')}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     dir="ltr"
                     autoFocus
@@ -785,14 +787,14 @@ export default function CheckoutPage() {
                       disabled={vaultUnlocking || !vaultPassInput}
                       className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
                     >
-                      {vaultUnlocking ? '...' : 'פתח'}
+                      {vaultUnlocking ? '...' : t('checkout.e2ee.open')}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setShowVaultUnlock(false); setVaultPassInput(''); setVaultError('') }}
                       className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm"
                     >
-                      ביטול
+                      {t('checkout.cancel')}
                     </button>
                   </div>
                 </form>
@@ -813,7 +815,7 @@ export default function CheckoutPage() {
           <div className="font-mono text-lg font-bold tracking-widest text-gray-800 mb-3 break-all flex items-center justify-center gap-2">
             {effectiveCode ?? voucher.code}
             {voucher.is_e2ee && isVaultUnlocked && (
-              <button onClick={lockVault} title="נעל כספת" className="text-indigo-300 hover:text-indigo-500 ml-1">
+              <button onClick={lockVault} title={t('checkout.e2ee.lock.vault.title')} className="text-indigo-300 hover:text-indigo-500 ml-1">
                 <Shield className="w-4 h-4" />
               </button>
             )}
@@ -825,7 +827,7 @@ export default function CheckoutPage() {
             <button
               onClick={copyCode}
               disabled={!!(voucher?.is_e2ee && !isVaultUnlocked)}
-              title={voucher?.is_e2ee && !isVaultUnlocked ? 'פתח כספת כדי להעתיק' : undefined}
+              title={voucher?.is_e2ee && !isVaultUnlocked ? t('checkout.copy.vault.locked.title') : undefined}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all ${
                 voucher?.is_e2ee && !isVaultUnlocked
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
@@ -833,7 +835,7 @@ export default function CheckoutPage() {
               }`}
             >
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'הועתק!' : 'העתק קוד'}
+              {copied ? t('checkout.copied') : t('checkout.copy.code')}
             </button>
 
             {isSafeUrl(voucher.link) && (
@@ -844,7 +846,7 @@ export default function CheckoutPage() {
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
               >
                 <ExternalLink className="w-4 h-4" />
-                פתח קישור
+                {t('checkout.open.link')}
               </a>
             )}
 
@@ -854,7 +856,7 @@ export default function CheckoutPage() {
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-purple-50 text-purple-600 hover:bg-purple-100"
               >
                 <Share2 className="w-4 h-4" />
-                שתף
+                {t('checkout.share')}
               </button>
             )}
 
@@ -864,10 +866,10 @@ export default function CheckoutPage() {
         {/* CVV */}
         {voucher.cvv && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-center justify-between">
-            <span className="text-sm font-medium text-yellow-800">CVV / קוד אבטחה</span>
+            <span className="text-sm font-medium text-yellow-800">{t('checkout.cvv.label')}</span>
             {voucher.is_e2ee && !isVaultUnlocked ? (
               <span className="text-xs text-indigo-400 flex items-center gap-1">
-                <Shield className="w-3.5 h-3.5" /> מוצפן
+                <Shield className="w-3.5 h-3.5" /> {t('checkout.e2ee.encrypted')}
               </span>
             ) : (
               <div className="flex items-center gap-2">
@@ -888,11 +890,11 @@ export default function CheckoutPage() {
         {/* Balance Card */}
         <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 20 }}>
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-gray-500">יתרה נוכחית</span>
+            <span className="text-sm text-gray-500">{t('checkout.current.balance')}</span>
             <div className="text-right">
               <div className="text-3xl font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
               {profile?.show_voucher_value && voucher.value_percent != null && voucher.value_percent > 0 && voucher.value_percent < 100 && (
-                <div className="text-xs text-gray-400 mt-0.5">ערך {voucher.value_percent.toFixed(0)}%{voucher.actual_cost != null ? ` | עלה ${voucher.actual_cost.toLocaleString('he-IL')} ₪` : ''}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{t('checkout.value.label')} {voucher.value_percent.toFixed(0)}%{voucher.actual_cost != null ? ` | ${t('checkout.cost.label')} ${voucher.actual_cost.toLocaleString('he-IL')} ₪` : ''}</div>
               )}
             </div>
           </div>
@@ -931,14 +933,14 @@ export default function CheckoutPage() {
           {/* Quick amounts */}
           {!isArchived && (
             <>
-              <div className="text-xs font-medium text-gray-500 mb-2">עדכן יתרה — ניכוי מהירה</div>
+              <div className="text-xs font-medium text-gray-500 mb-2">{t('checkout.quick.deduct.label')}</div>
 
               {/* Shared store input for all balance updates */}
               <input
                 type="text"
                 value={customStore}
                 onChange={e => setCustomStore(e.target.value)}
-                placeholder="באיזה חנות השתמשת? (אופציונלי)"
+                placeholder={t('checkout.store.used.placeholder')}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300 text-sm mb-3"
                 dir="rtl"
               />
@@ -965,7 +967,7 @@ export default function CheckoutPage() {
                   }}
                   className="py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all"
                 >
-                  מחצית
+                  {t('checkout.half')}
                 </button>
                 <button
                   onClick={() => {
@@ -974,19 +976,19 @@ export default function CheckoutPage() {
                   }}
                   className="py-2 bg-red-50 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-all"
                 >
-                  מלא
+                  {t('checkout.full')}
                 </button>
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1.5">סכום שימוש</p>
+                <p className="text-xs font-medium text-gray-500 mb-1.5">{t('checkout.usage.amount')}</p>
                 <div className="flex gap-2 mb-2">
                   <input
                     type="number"
                     inputMode="decimal"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
-                    placeholder="סכום שימוש..."
+                    placeholder={t('checkout.usage.amount.placeholder')}
                     className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300"
                     style={{ fontSize: '16px' }}
                     dir="ltr"
@@ -1003,7 +1005,7 @@ export default function CheckoutPage() {
                     disabled={!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0}
                     className="shrink-0 px-3 py-2 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-600 transition-all"
                   >
-                    עדכן
+                    {t('checkout.update')}
                   </button>
                 </div>
                 {(() => {
@@ -1012,7 +1014,7 @@ export default function CheckoutPage() {
                   const newBal = Math.max(0, voucher.balance - amount)
                   return (
                     <p className={`text-xs mt-1.5 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                      יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}
+                      {t('checkout.new.balance.preview')}: ₪{newBal.toLocaleString('he-IL')}
                     </p>
                   )
                 })()}
@@ -1031,7 +1033,7 @@ export default function CheckoutPage() {
                 className="flex items-center gap-1.5 text-sm font-semibold text-gray-700"
               >
                 <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                חנויות המכבדות את {sv.name}
+                {t('checkout.super.stores.label')} {sv.name}
                 {showStores ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
               </button>
               {isSafeUrl(sv.balance_check_url) && (
@@ -1042,7 +1044,7 @@ export default function CheckoutPage() {
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  בדיקת יתרה
+                  {t('checkout.check.balance')}
                 </a>
               )}
             </div>
@@ -1071,14 +1073,14 @@ export default function CheckoutPage() {
         <div className="bg-white rounded-3xl shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-1.5">
             <Clock className="w-4 h-4 text-gray-400" />
-            היסטוריית פעילות
+            {t('checkout.activity.title')}
           </h3>
           {logLoading ? (
             <div className="flex justify-center py-4">
               <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin" />
             </div>
           ) : voucherLog.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-2">אין פעילות רשומה</p>
+            <p className="text-xs text-gray-400 text-center py-2">{t('checkout.activity.empty')}</p>
           ) : (
             <div className="relative">
               {/* Vertical line */}
@@ -1098,14 +1100,14 @@ export default function CheckoutPage() {
                     case 'add':
                       icon = <PlusCircle className="w-3.5 h-3.5" />
                       dotColor = 'bg-green-500 text-white'
-                      label = 'נוסף לארנק'
+                      label = t('checkout.log.added')
                       if (entry.details?.amount != null)
-                        detail = `סכום: ₪${Number(entry.details.amount).toLocaleString('he-IL')}`
+                        detail = `${t('checkout.log.amount')}: ₪${Number(entry.details.amount).toLocaleString('he-IL')}`
                       break
                     case 'balance_update':
                       icon = <MinusCircle className="w-3.5 h-3.5" />
                       dotColor = 'bg-blue-500 text-white'
-                      label = 'עדכון יתרה'
+                      label = t('checkout.log.balance.update')
                       if (entry.details?.from != null && entry.details?.to != null) {
                         detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
                         if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
@@ -1114,41 +1116,41 @@ export default function CheckoutPage() {
                     case 'edit':
                       icon = <Pencil className="w-3.5 h-3.5" />
                       dotColor = 'bg-indigo-500 text-white'
-                      label = 'פרטים עודכנו'
+                      label = t('checkout.log.edited')
                       break
                     case 'archive':
                       icon = <PackageCheck className="w-3.5 h-3.5" />
                       dotColor = 'bg-orange-400 text-white'
-                      label = 'הועבר לארכיון'
+                      label = t('checkout.log.archived')
                       if (entry.details?.balance != null)
-                        detail = `יתרה: ₪${Number(entry.details.balance).toLocaleString('he-IL')}`
+                        detail = `${t('checkout.log.balance.detail')}: ₪${Number(entry.details.balance).toLocaleString('he-IL')}`
                       break
                     case 'unarchive':
                       icon = <Undo2 className="w-3.5 h-3.5" />
                       dotColor = 'bg-teal-500 text-white'
-                      label = 'הוחזר לארנק'
+                      label = t('checkout.log.unarchived')
                       break
                     case 'gift_sent':
                       icon = <Mail className="w-3.5 h-3.5" />
                       dotColor = 'bg-pink-500 text-white'
-                      label = 'מתנה נשלחה'
-                      if (entry.details?.recipient) detail = `ל: ${entry.details.recipient}`
+                      label = t('checkout.log.gift.sent')
+                      if (entry.details?.recipient) detail = `${t('checkout.log.to')}: ${entry.details.recipient}`
                       break
                     case 'gift_link':
                       icon = <Link2 className="w-3.5 h-3.5" />
                       dotColor = 'bg-pink-400 text-white'
-                      label = 'קישור מתנה נוצר'
+                      label = t('checkout.log.gift.link')
                       break
                     case 'gift_received':
                       icon = <Gift className="w-3.5 h-3.5" />
                       dotColor = 'bg-rose-500 text-white'
-                      label = 'מתנה התקבלה'
-                      if (entry.details?.sender) detail = `מ: ${entry.details.sender}`
+                      label = t('checkout.log.gift.received')
+                      if (entry.details?.sender) detail = `${t('checkout.log.from')}: ${entry.details.sender}`
                       break
                     case 'gift_balance_update':
                       icon = <MinusCircle className="w-3.5 h-3.5" />
                       dotColor = 'bg-pink-600 text-white'
-                      label = 'עדכון יתרה (מתנה)'
+                      label = t('checkout.log.gift.balance.update')
                       if (entry.details?.from != null && entry.details?.to != null) {
                         detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
                         if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
@@ -1190,7 +1192,7 @@ export default function CheckoutPage() {
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowShareModal(false)}>
           <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 animate-slide-up max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-gray-800">שיתוף שובר</h3>
+              <h3 className="text-base font-bold text-gray-800">{t('checkout.share.modal.title')}</h3>
               <button onClick={() => setShowShareModal(false)} className="p-2 rounded-full hover:bg-gray-100">
                 <X className="w-5 h-5" />
               </button>
@@ -1203,19 +1205,19 @@ export default function CheckoutPage() {
                   onClick={() => setShareTab('link')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'link' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}
                 >
-                  <Link2 className="w-3.5 h-3.5" /> בלינק
+                  <Link2 className="w-3.5 h-3.5" /> {t('checkout.share.tab.link')}
                 </button>
                 <button
                   onClick={() => setShareTab('user')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'user' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}
                 >
-                  <Users className="w-3.5 h-3.5" /> משתמש
+                  <Users className="w-3.5 h-3.5" /> {t('checkout.share.tab.user')}
                 </button>
                 <button
                   onClick={() => { setShareTab('gift'); loadPendingGifts() }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${shareTab === 'gift' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500'}`}
                 >
-                  <Gift className="w-3.5 h-3.5" /> שלח מתנה
+                  <Gift className="w-3.5 h-3.5" /> {t('checkout.share.tab.gift')}
                 </button>
               </div>
             )}
@@ -1224,20 +1226,20 @@ export default function CheckoutPage() {
             {shareTab === 'link' && (
               <>
                 <p className="text-sm text-gray-500 mb-3">
-                  צור לינק ייחודי לשיתוף השובר. מי שיקבל את הלינק יוכל לראות את הקוד.
+                  {t('checkout.share.link.desc')}
                 </p>
                 {voucher.is_e2ee && (
                   <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-800">
                     <Shield className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-500" />
-                    <span>שובר זה מוצפן. <strong>יצירת קישור תחשוף את הקוד בשרת</strong> לצורך שיתוף. הקוד יישמר זמנית על גבי השרת עד להפסקת השיתוף. נדרשת כספת פתוחה.</span>
+                    <span>{t('checkout.share.e2ee.warning')}</span>
                   </div>
                 )}
 
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   {[
-                    { label: 'יום אחד', days: 1 },
-                    { label: 'שבוע', days: 7 },
-                    { label: 'ללא הגבלה', days: undefined },
+                    { label: t('checkout.share.link.1day'), days: 1 },
+                    { label: t('checkout.share.link.1week'), days: 7 },
+                    { label: t('checkout.share.link.unlimited'), days: undefined },
                   ].map(opt => (
                     <button
                       key={opt.label}
@@ -1253,7 +1255,7 @@ export default function CheckoutPage() {
 
                 {shareTokens.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-gray-500">לינקים פעילים:</p>
+                    <p className="text-xs font-medium text-gray-500">{t('checkout.share.active.links')}:</p>
                     {shareTokens.map(t => {
                       const url = `${window.location.origin}/s/${t.token}`
                       const expired = t.expires_at && new Date(t.expires_at) < new Date()
@@ -1262,12 +1264,12 @@ export default function CheckoutPage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-mono text-gray-600 truncate">{url}</p>
                             <p className="text-xs text-gray-400 mt-0.5">
-                              {expired ? '⛔ פג תוקף' : t.expires_at ? `עד ${new Date(t.expires_at).toLocaleDateString('he-IL')}` : 'ללא הגבלת זמן'}
-                              {' · '}{t.view_count} צפיות
+                              {expired ? `⛔ ${t('checkout.share.link.expired')}` : t.expires_at ? `${t('checkout.share.link.until')} ${new Date(t.expires_at).toLocaleDateString('he-IL')}` : t('checkout.share.link.no.limit')}
+                              {' · '}{t.view_count} {t('checkout.share.link.views')}
                             </p>
                           </div>
                           <button
-                            onClick={async () => { await navigator.clipboard.writeText(url); toast.success('הועתק!') }}
+                            onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }}
                             className="p-2 text-purple-500 hover:bg-purple-50 rounded-lg"
                           >
                             <Copy className="w-4 h-4" />
@@ -1296,28 +1298,27 @@ export default function CheckoutPage() {
             {shareTab === 'user' && !isSharedVoucher && (
               <div className="space-y-4">
                 <p className="text-sm text-gray-500">
-                  שתף שובר זה עם משתמש רשום — הם יראו אותו בלשונית "שותף איתי" ויוכלו לעדכן יתרה.
+                  {t('checkout.share.user.desc')}
                 </p>
 
                 {/* "User not found" confirm */}
                 {pendingShareEmail && (
                   <div className="bg-orange-50 rounded-2xl p-3 space-y-2">
                     <p className="text-sm text-orange-700">
-                      המשתמש <strong>{pendingShareEmail}</strong> אינו רשום באפליקציה.
-                      לשלוח הזמנה?
+                      {t('checkout.share.user.not.found.prefix')} <strong>{pendingShareEmail}</strong> {t('checkout.share.user.not.found.suffix')}
                     </p>
                     <div className="flex gap-2">
                       <button
                         onClick={handleSendVoucherInvite}
                         className="flex-1 bg-orange-500 text-white py-2 rounded-xl text-sm font-medium"
                       >
-                        שלח הזמנה
+                        {t('checkout.share.send.invite')}
                       </button>
                       <button
                         onClick={() => { setPendingShareEmail(null); setShareEmail('') }}
                         className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium"
                       >
-                        ביטול
+                        {t('checkout.cancel')}
                       </button>
                     </div>
                   </div>
@@ -1332,7 +1333,7 @@ export default function CheckoutPage() {
                         value={shareEmail}
                         onChange={e => setShareEmail(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleShareWithUser()}
-                        placeholder="כתובת מייל"
+                        placeholder={t('checkout.share.email.placeholder')}
                         className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-purple-300"
                         dir="ltr"
                       />
@@ -1344,7 +1345,7 @@ export default function CheckoutPage() {
                     >
                       {shareEmailLoading
                         ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        : 'שתף'}
+                        : t('checkout.share')}
                     </button>
                   </div>
                 )}
@@ -1352,7 +1353,7 @@ export default function CheckoutPage() {
                 {/* Existing user shares */}
                 {sharesLoaded && voucherShares.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-500">שותף עם:</p>
+                    <p className="text-xs font-medium text-gray-500">{t('checkout.share.shared.with')}:</p>
                     {voucherShares.map(s => (
                       <div key={s.id} className="flex items-center justify-between py-2 border-b last:border-0">
                         <p className="text-sm text-gray-700">{s.shared_with_email}</p>
@@ -1373,7 +1374,7 @@ export default function CheckoutPage() {
             {shareTab === 'gift' && !isSharedVoucher && (
               <div className="space-y-4">
                 <p className="text-sm text-gray-500">
-                  שלח שובר זה כמתנה — הנמען יוכל לצפות ולהוסיפו לארנק שלו. השובר יועבר לארכיון כשייתבע.
+                  {t('checkout.gift.desc')}
                 </p>
 
                 {/* Mode toggle */}
@@ -1385,7 +1386,7 @@ export default function CheckoutPage() {
                     }`}
                   >
                     <LinkIcon className="w-3.5 h-3.5" />
-                    צור קישור
+                    {t('checkout.gift.create.link')}
                   </button>
                   <button
                     onClick={() => { setGiftMode('email'); setGiftLink(null) }}
@@ -1394,7 +1395,7 @@ export default function CheckoutPage() {
                     }`}
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    שלח למייל
+                    {t('checkout.gift.send.email')}
                   </button>
                 </div>
 
@@ -1406,7 +1407,7 @@ export default function CheckoutPage() {
                       type="email"
                       value={giftEmail}
                       onChange={e => setGiftEmail(e.target.value)}
-                      placeholder="מייל הנמען"
+                      placeholder={t('checkout.gift.recipient.email')}
                       className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                       dir="ltr"
                     />
@@ -1417,7 +1418,7 @@ export default function CheckoutPage() {
                 <textarea
                   value={giftMessage}
                   onChange={e => setGiftMessage(e.target.value)}
-                  placeholder="הודעה אישית (אופציונלי)"
+                  placeholder={t('checkout.gift.message.placeholder')}
                   rows={2}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                   dir="rtl"
@@ -1433,7 +1434,7 @@ export default function CheckoutPage() {
                       }`}
                     >
                       <Calendar className="w-3.5 h-3.5" />
-                      תזמן לתאריך ספציפי
+                      {t('checkout.gift.schedule')}
                     </button>
                   </div>
                 )}
@@ -1459,19 +1460,19 @@ export default function CheckoutPage() {
                     ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     : giftMode === 'link' ? <LinkIcon className="w-4 h-4" /> : <Gift className="w-4 h-4" />
                   }
-                  {giftSending ? 'יוצר...' : giftMode === 'link' ? 'צור קישור מתנה' : giftScheduled && giftDate ? 'תזמן שליחה' : 'שלח מתנה עכשיו'}
+                  {giftSending ? t('checkout.gift.creating') : giftMode === 'link' ? t('checkout.gift.create.link.btn') : giftScheduled && giftDate ? t('checkout.gift.schedule.btn') : t('checkout.gift.send.now')}
                 </button>
 
                 {/* Created link display */}
                 {giftLink && (
                   <div className="bg-green-50 border border-green-200 rounded-2xl p-3 space-y-2">
-                    <p className="text-xs font-medium text-green-700 flex items-center gap-1"><Gift className="w-3.5 h-3.5" /> קישור המתנה (שתף עם הנמען):</p>
+                    <p className="text-xs font-medium text-green-700 flex items-center gap-1"><Gift className="w-3.5 h-3.5" /> {t('checkout.gift.link.label')}:</p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-green-800 font-mono break-all flex-1">{giftLink}</p>
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(giftLink).catch(() => {})
-                          toast.success('הועתק!')
+                          toast.success(t('checkout.copied'))
                         }}
                         className="flex-shrink-0 p-2 bg-green-100 hover:bg-green-200 rounded-xl transition-colors"
                       >
@@ -1484,21 +1485,21 @@ export default function CheckoutPage() {
                 {/* Pending gifts list */}
                 {giftsLoaded && pendingGifts.length > 0 && (
                   <div className="space-y-1 border-t pt-3">
-                    <p className="text-xs font-medium text-gray-500">מתנות שטרם נתבעו:</p>
+                    <p className="text-xs font-medium text-gray-500">{t('checkout.gift.pending.label')}:</p>
                     {pendingGifts.map(g => (
                       <div key={g.id} className="flex items-center justify-between py-2 border-b last:border-0">
                         <div>
                           <p className="text-sm text-gray-700">
-                            {g.recipient_email || <span className="text-gray-400 italic">קישור בלבד</span>}
+                            {g.recipient_email || <span className="text-gray-400 italic">{t('checkout.gift.link.only')}</span>}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {g.email_sent_at ? 'נשלח' : `מתוזמן: ${new Date(g.send_at).toLocaleDateString('he-IL')}`}
+                            {g.email_sent_at ? t('checkout.gift.sent.label') : `${t('checkout.gift.scheduled.label')}: ${new Date(g.send_at).toLocaleDateString('he-IL')}`}
                           </p>
                         </div>
                         <button
                           onClick={() => handleCancelGift(g.id)}
                           className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
-                          title="בטל מתנה"
+                          title={t('checkout.gift.cancel.title')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

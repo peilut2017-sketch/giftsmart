@@ -29,6 +29,7 @@ import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
 import OfflineBanner from './components/OfflineBanner'
 import LoginBanner from './components/LoginBanner'
+import PWAInstallBanner from './components/PWAInstallBanner'
 import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import { isBiometricEnabled } from './lib/passkey'
@@ -297,6 +298,7 @@ function AppRoutes() {
           </AnimatedRoutes>
           {!widgetEnabled && <AccessibilityFooterLink />}
         </main>
+        <PWAInstallBanner />
         <BottomNav />
       </div>
       {widgetEnabled && <AccessibilityWidget />}

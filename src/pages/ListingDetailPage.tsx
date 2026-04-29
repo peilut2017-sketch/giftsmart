@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useT } from '../lib/i18n'
 import { formatDate } from '../utils/helpers'
 import {
   ArrowRight, Star, Clock, ShoppingBag, X, Loader2, Flag,
@@ -60,28 +61,29 @@ function ReportModal({
   onClose: () => void
 }) {
   const { reportUser } = useMarketplace()
+  const { t } = useT()
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
   useBodyScrollLock()
 
   const reasons = [
-    'מידע כוזב במודעה',
-    'שובר לא תקין / פג תוקף',
-    'הונאה / מרמה',
-    'התנהגות פוגעת',
-    'אחר',
+    t('listing.report.reason.false_info'),
+    t('listing.report.reason.invalid_voucher'),
+    t('listing.report.reason.fraud'),
+    t('listing.report.reason.offensive'),
+    t('listing.report.reason.other'),
   ]
 
   async function submit() {
-    if (!reason) { toast.error('בחר סיבה'); return }
+    if (!reason) { toast.error(t('listing.report.select_reason')); return }
     setSaving(true)
     try {
       await reportUser(reportedUserId, reason, details || undefined, undefined, listingId)
-      toast.success('הדיווח נשלח למנהל')
+      toast.success(t('listing.report.sent'))
       onClose()
     } catch {
-      toast.error('שגיאה בשליחת הדיווח')
+      toast.error(t('listing.report.error'))
     } finally {
       setSaving(false)
     }
@@ -96,7 +98,7 @@ function ReportModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
           <h2 className="font-bold text-lg flex items-center gap-2">
-            <Flag className="w-5 h-5 text-red-500" /> דווח על מוכר
+            <Flag className="w-5 h-5 text-red-500" /> {t('listing.report.title')}
           </h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
             <X className="w-5 h-5" />
@@ -105,7 +107,7 @@ function ReportModal({
 
         {/* Scrollable body */}
         <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-3">
-          <p className="text-sm text-gray-500">דיווח על: {reportedName}</p>
+          <p className="text-sm text-gray-500">{t('listing.report.about')}: {reportedName}</p>
           <div className="space-y-2">
             {reasons.map(r => (
               <button
@@ -121,7 +123,7 @@ function ReportModal({
           </div>
           <textarea
             className="w-full border rounded-xl p-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-red-400"
-            placeholder="פרטים נוספים (אופציונלי)..."
+            placeholder={t('listing.report.details_placeholder')}
             value={details}
             onChange={e => setDetails(e.target.value)}
           />
@@ -134,7 +136,7 @@ function ReportModal({
             disabled={saving || !reason}
             className="w-full py-3 bg-red-600 text-white rounded-2xl font-semibold disabled:opacity-50"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'שלח דיווח'}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('listing.report.submit')}
           </button>
         </div>
       </div>
@@ -155,6 +157,7 @@ function BuyModal({
   onChat: () => void
 }) {
   const { confirmPaymentSent } = useMarketplace()
+  const { t } = useT()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -173,17 +176,17 @@ function BuyModal({
     : null
 
   async function handleConfirm() {
-    if (!selectedMethod) { toast.error('בחר שיטת תשלום'); return }
+    if (!selectedMethod) { toast.error(t('listing.buy.select_method')); return }
     setSending(true)
     try {
       await confirmPaymentSent(listing.id, PAYMENT_METHOD_LABELS[selectedMethod.type])
-      toast.success('אישרת ששלחת תשלום. ממתין לאישור המוכר.')
+      toast.success(t('listing.buy.payment_sent'))
       onSuccess()
     } catch (err: any) {
       const msg = err?.message || ''
-      if (msg.includes('already_purchased')) toast.error('כבר ביצעת רכישה עבור מודעה זו')
-      else if (msg.includes('cannot_buy_own_listing')) toast.error('לא ניתן לקנות מודעה משלך')
-      else toast.error('שגיאה בביצוע הרכישה')
+      if (msg.includes('already_purchased')) toast.error(t('listing.buy.already_purchased'))
+      else if (msg.includes('cannot_buy_own_listing')) toast.error(t('listing.buy.own_listing'))
+      else toast.error(t('listing.buy.error'))
     } finally {
       setSending(false)
     }
@@ -197,7 +200,7 @@ function BuyModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h2 className="font-bold text-lg">קנה את השובר</h2>
+          <h2 className="font-bold text-lg">{t('listing.buy.title')}</h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
             <X className="w-5 h-5" />
           </button>
@@ -209,7 +212,7 @@ function BuyModal({
           <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
             <p className="font-semibold">{listing.store_name}</p>
             <p className="text-sm text-gray-500">
-              יתרה: ₪{listing.balance} · מחיר:{' '}
+              {t('listing.buy.balance_label')}: ₪{listing.balance} · {t('listing.buy.price_label')}:{' '}
               <span className="text-green-600 font-bold">₪{listing.asking_price}</span>
             </p>
           </div>
@@ -220,19 +223,19 @@ function BuyModal({
             className="w-full flex items-center gap-2 p-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <MessageCircle className="w-4 h-4 text-green-600" />
-            <span>שאל שאלה או התמקח על המחיר</span>
+            <span>{t('listing.buy.chat_prompt')}</span>
           </button>
 
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800 flex gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>שלח/י תשלום למוכר ישירות, לאחר מכן חזור/י לכאן ואשר/י.</span>
+            <span>{t('listing.buy.warning')}</span>
           </div>
 
           {/* Payment methods */}
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-gray-700">שיטות תשלום של המוכר:</p>
+            <p className="text-sm font-semibold text-gray-700">{t('listing.buy.methods_label')}</p>
             {methods.length === 0 ? (
-              <p className="text-sm text-gray-400">המוכר לא הגדיר שיטות תשלום</p>
+              <p className="text-sm text-gray-400">{t('listing.buy.no_methods')}</p>
             ) : (
               methods.map((m, i) => (
                 <button
@@ -269,7 +272,7 @@ function BuyModal({
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-blue-800">
-                  שלח/י ₪{listing.asking_price} דרך {PAYMENT_METHOD_LABELS[selectedMethod.type]} ל:
+                  {t('listing.buy.send_instruction', { amount: listing.asking_price!, method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
                 </p>
                 <div className="flex items-center gap-2">
                   <p className="font-mono text-base text-blue-900 flex-1 break-all">{selectedMethod.value}</p>
@@ -280,7 +283,7 @@ function BuyModal({
                       setTimeout(() => setCopied(false), 2000)
                     }}
                     className="p-1.5 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors shrink-0"
-                    aria-label="העתק"
+                    aria-label={t('listing.buy.copy_aria')}
                   >
                     {copied ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                   </button>
@@ -295,7 +298,7 @@ function BuyModal({
                   className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 ${METHOD_COLORS[selectedMethod.type]}`}
                 >
                   <ExternalLink className="w-4 h-4" />
-                  פתח ב-{PAYMENT_METHOD_LABELS[selectedMethod.type]} ושלח ₪{listing.asking_price}
+                  {t('listing.buy.open_app', { method: PAYMENT_METHOD_LABELS[selectedMethod.type], amount: listing.asking_price! })}
                 </a>
               )}
             </div>
@@ -311,7 +314,7 @@ function BuyModal({
           >
             {sending
               ? <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-              : 'שלחתי את התשלום — המשך'}
+              : t('listing.buy.confirm_button')}
           </button>
         </div>
       </div>
@@ -325,6 +328,7 @@ export default function ListingDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { listings, fetchListings } = useMarketplace()
+  const { t } = useT()
 
   const [listing, setListing] = useState<MarketplaceListing | null>(null)
   const [loading, setLoading] = useState(true)
@@ -373,9 +377,9 @@ export default function ListingDetailPage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center" dir="rtl">
         <ShoppingBag className="w-12 h-12 text-gray-300" />
-        <p className="font-medium text-gray-500">המודעה לא נמצאה או הוסרה</p>
+        <p className="font-medium text-gray-500">{t('listing.not_found')}</p>
         <button onClick={() => navigate('/market')} className="px-6 py-2 bg-green-600 text-white rounded-full text-sm font-medium">
-          חזור לשוק
+          {t('listing.back_to_market')}
         </button>
       </div>
     )
@@ -402,7 +406,7 @@ export default function ListingDetailPage() {
             <button
               onClick={() => setShowChat(true)}
               className="p-2 rounded-full hover:bg-green-50 text-green-600"
-              aria-label="שוחח עם המוכר"
+              aria-label={t('listing.chat_aria')}
             >
               <MessageCircle className="w-5 h-5" />
             </button>
@@ -410,7 +414,7 @@ export default function ListingDetailPage() {
           <button
             onClick={() => setShowReport(true)}
             className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500"
-            aria-label="דווח על מוכר"
+            aria-label={t('listing.report_aria')}
           >
             <Flag className="w-5 h-5" />
           </button>
@@ -426,18 +430,18 @@ export default function ListingDetailPage() {
               {myReservedPrice != null ? (
                 <div className="flex items-center gap-1 mt-1">
                   <Tag className="w-3.5 h-3.5 text-green-600" />
-                  <p className="text-sm text-green-700 font-medium">מחיר שוריין לך</p>
+                  <p className="text-sm text-green-700 font-medium">{t('listing.reserved_price')}</p>
                   {listing.asking_price !== myReservedPrice && (
                     <p className="text-xs text-gray-400 line-through">₪{listing.asking_price}</p>
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 mt-1">מחיר מבוקש</p>
+                <p className="text-sm text-gray-500 mt-1">{t('listing.asking_price')}</p>
               )}
             </div>
             <div className="text-left space-y-1">
               <p className="text-xl font-semibold text-gray-800">₪{listing.balance}</p>
-              <p className="text-sm text-gray-500">יתרה בשובר</p>
+              <p className="text-sm text-gray-500">{t('listing.voucher_balance')}</p>
               {(() => {
                 const b = listing.balance ?? 0
                 const p = displayPrice ?? 0
@@ -446,7 +450,7 @@ export default function ListingDetailPage() {
                   <span className={`block text-center text-xs font-bold px-2 py-0.5 rounded-full ${
                     pct >= 30 ? 'bg-green-500 text-white' : pct >= 15 ? 'bg-orange-400 text-white' : 'bg-gray-200 text-gray-600'
                   }`}>
-                    חסוך {pct}%
+                    {t('listing.save_pct', { pct: String(pct) })}
                   </span>
                 ) : null
               })()}
@@ -457,8 +461,8 @@ export default function ListingDetailPage() {
             <div className={`flex items-center gap-2 text-sm ${daysLeft && daysLeft < 30 ? 'text-orange-600' : 'text-gray-500'}`}>
               <Clock className="w-4 h-4" />
               <span>
-                תוקף עד: {formatDate(listing.expiry_date!)}
-                {daysLeft !== null && daysLeft > 0 && ` · עוד ${daysLeft} ימים`}
+                {t('listing.valid_until')}: {formatDate(listing.expiry_date!)}
+                {daysLeft !== null && daysLeft > 0 && ` · ${t('listing.days_left', { days: String(daysLeft) })}`}
               </span>
             </div>
           )}
@@ -470,7 +474,7 @@ export default function ListingDetailPage() {
 
         {/* Seller card */}
         <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-400 font-medium mb-3">על המוכר</p>
+          <p className="text-xs text-gray-400 font-medium mb-3">{t('listing.about_seller')}</p>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-teal-500 rounded-full flex items-center justify-center text-white font-bold">
               {(listing.seller_name || listing.seller_email || '?')[0].toUpperCase()}
@@ -493,11 +497,11 @@ export default function ListingDetailPage() {
                     />
                   ))}
                   <span className="text-xs text-gray-500 mr-1">
-                    {Number(listing.avg_rating).toFixed(1)} ({listing.rating_count} דירוגים)
+                    {Number(listing.avg_rating).toFixed(1)} ({listing.rating_count} {t('listing.ratings')})
                   </span>
                 </div>
               ) : (
-                <p className="text-xs text-gray-400">טרם דורג</p>
+                <p className="text-xs text-gray-400">{t('listing.not_rated')}</p>
               )}
             </div>
             {!isOwnListing && listing.status === 'active' && (
@@ -506,7 +510,7 @@ export default function ListingDetailPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-green-200 text-green-700 text-xs font-medium hover:bg-green-50 transition-colors"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
-                שוחח
+                {t('listing.chat_button')}
               </button>
             )}
           </div>
@@ -515,7 +519,7 @@ export default function ListingDetailPage() {
         {/* Payment methods preview */}
         {(listing.seller_payment_methods?.length ?? 0) > 0 && (
           <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-gray-400 font-medium mb-3">שיטות תשלום מקובלות</p>
+            <p className="text-xs text-gray-400 font-medium mb-3">{t('listing.payment_methods')}</p>
             <div className="flex flex-wrap gap-2">
               {listing.seller_payment_methods!.map((m, i) => (
                 <span
@@ -533,13 +537,13 @@ export default function ListingDetailPage() {
         {purchased && (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-center space-y-2">
             <CheckCircle className="w-8 h-8 text-green-500 mx-auto" />
-            <p className="font-semibold text-green-800">אישרת ששלחת תשלום!</p>
-            <p className="text-sm text-green-600">המוכר יאשר את הקבלה בקרוב. עקוב אחר הסטטוס ב"רכישות שלי".</p>
+            <p className="font-semibold text-green-800">{t('listing.purchased.title')}</p>
+            <p className="text-sm text-green-600">{t('listing.purchased.body')}</p>
             <button
               onClick={() => navigate('/market', { state: { initialTab: 'purchases' } })}
               className="mt-1 text-sm text-green-700 underline"
             >
-              עבור לרכישות שלי
+              {t('listing.purchased.go')}
             </button>
           </div>
         )}
@@ -556,7 +560,7 @@ export default function ListingDetailPage() {
             className="w-full py-3.5 bg-green-600 text-white rounded-2xl font-bold text-base shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
           >
             <ShoppingBag className="w-5 h-5" />
-            קנה עכשיו · ₪{displayPrice}
+            {t('listing.buy_now_price', { price: String(displayPrice) })}
           </button>
         </div>
       )}
@@ -566,7 +570,7 @@ export default function ListingDetailPage() {
           className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
           style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
         >
-          <p className="text-center text-sm text-gray-500">זו מודעה שלך</p>
+          <p className="text-center text-sm text-gray-500">{t('listing.own_listing')}</p>
         </div>
       )}
 
@@ -575,7 +579,7 @@ export default function ListingDetailPage() {
           className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
           style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
         >
-          <p className="text-center text-sm text-gray-400">מודעה זו אינה זמינה לרכישה</p>
+          <p className="text-center text-sm text-gray-400">{t('listing.unavailable')}</p>
         </div>
       )}
 

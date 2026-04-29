@@ -27,6 +27,10 @@ interface E2EEContextValue {
     newPass: string,
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
+  disableVault: (
+    passphrase: string,
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
+  ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
 }
 
 const E2EEContext = createContext<E2EEContextValue | null>(null)
@@ -192,6 +196,46 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     return { ok: true, entries }
   }, [])
 
+  // Decrypt all E2EE vouchers to plaintext, then wipe vault metadata
+  const disableVault = useCallback(async (
+    passphrase: string,
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
+  ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
+    const saltB64 = localStorage.getItem(SALT_KEY)
+    const check   = localStorage.getItem(CHECK_KEY)
+    if (!saltB64 || !check) return { ok: false, entries: [] }
+    let key: CryptoKey
+    try {
+      key = await deriveKey(passphrase, saltFromB64(saltB64))
+      const dec = await decryptField(key, check)
+      if (dec !== VERIFY_PLAINTEXT) return { ok: false, entries: [] }
+    } catch {
+      return { ok: false, entries: [] }
+    }
+
+    const entries: Array<{id: string; code: string; cvv: string|null}> = []
+    for (const v of e2eeVouchers) {
+      try {
+        const code = v.code && isEncryptedField(v.code) ? await decryptField(key, v.code) : (v.code ?? '')
+        const cvv  = v.cvv  && isEncryptedField(v.cvv)  ? await decryptField(key, v.cvv)  : (v.cvv  ?? null)
+        entries.push({ id: v.id, code, cvv })
+      } catch {
+        // skip unreadable entries
+      }
+    }
+
+    localStorage.removeItem(SALT_KEY)
+    localStorage.removeItem(CHECK_KEY)
+    localStorage.removeItem(HINT_KEY)
+    sessionStorage.removeItem(SESSION_PASS_KEY)
+    setVaultKey(null)
+    setHasVault(false)
+    setHint(null)
+    setDecryptedMap(new Map())
+
+    return { ok: true, entries }
+  }, [])
+
   return (
     <E2EEContext.Provider value={{
       hasVault,
@@ -206,6 +250,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       decryptedMap,
       buildDecryptedMap,
       changePassphrase,
+      disableVault,
     }}>
       {children}
     </E2EEContext.Provider>

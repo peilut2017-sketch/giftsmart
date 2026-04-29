@@ -4,6 +4,7 @@ import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
 import { Edit2, Trash2, Archive, Star, Check, ExternalLink, Gift, Lock, ShoppingBag, Shield } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useT } from '../lib/i18n'
 
 const STORE_PALETTE = [
   '#8b5cf6', '#f59e0b', '#3b82f6', '#ec4899', '#10b981',
@@ -85,6 +86,7 @@ export default function VoucherCard({
   const [snapped, setSnapped] = useState<'edit' | 'delete' | null>(null)
   const [animating, setAnimating] = useState(false)
   const { profile } = useAuth()
+  const { t } = useT()
   const baseXRef = useRef(0)
 
   const safeLink   = isSafeUrl(voucher.link) ? voucher.link : undefined
@@ -155,20 +157,20 @@ export default function VoucherCard({
   const SwipeBgs = (
     <>
       <div className="sm:hidden absolute inset-y-0 left-0 flex items-center justify-center bg-blue-500" style={{ width: REVEAL_EDIT }}>
-        <button onClick={e => { e.stopPropagation(); closeSwipe(); onEdit() }} className="flex flex-col items-center gap-0.5 text-white" aria-label={`ערוך ${voucher.store_name}`}>
+        <button onClick={e => { e.stopPropagation(); closeSwipe(); onEdit() }} className="flex flex-col items-center gap-0.5 text-white" aria-label={`${t('card.edit.action')} ${voucher.store_name}`}>
           <Edit2 className="w-4 h-4" />
-          <span className="text-xs font-medium">עריכה</span>
+          <span className="text-xs font-medium">{t('card.edit.action')}</span>
         </button>
       </div>
       <div className="sm:hidden absolute inset-y-0 right-0 flex" style={{ width: REVEAL_DELETE }}>
         <div className="flex-1 bg-amber-500 flex items-center justify-center">
-          <button onClick={e => { e.stopPropagation(); closeSwipe(); onArchive() }} className="flex flex-col items-center gap-0.5 text-white" aria-label={`ארכיון ${voucher.store_name}`}>
-            <Archive className="w-4 h-4" /><span className="text-xs font-medium">ארכיון</span>
+          <button onClick={e => { e.stopPropagation(); closeSwipe(); onArchive() }} className="flex flex-col items-center gap-0.5 text-white" aria-label={`${t('card.archive.action')} ${voucher.store_name}`}>
+            <Archive className="w-4 h-4" /><span className="text-xs font-medium">{t('card.archive.action')}</span>
           </button>
         </div>
         <div className="flex-1 bg-red-500 flex items-center justify-center">
-          <button onClick={e => { e.stopPropagation(); closeSwipe(); onDelete() }} className="flex flex-col items-center gap-0.5 text-white" aria-label={`מחק ${voucher.store_name}`}>
-            <Trash2 className="w-4 h-4" /><span className="text-xs font-medium">מחיקה</span>
+          <button onClick={e => { e.stopPropagation(); closeSwipe(); onDelete() }} className="flex flex-col items-center gap-0.5 text-white" aria-label={`${t('card.delete.action')} ${voucher.store_name}`}>
+            <Trash2 className="w-4 h-4" /><span className="text-xs font-medium">{t('card.delete.action')}</span>
           </button>
         </div>
       </div>
@@ -178,9 +180,9 @@ export default function VoucherCard({
   // ─── Desktop hover actions ──────────────────────────────────────────────────
   const HoverActions = hovered && !isSelectMode ? (
     <div className="absolute top-2 left-2 flex gap-1 z-10 animate-fade-in" role="group" aria-label={`פעולות עבור ${voucher.store_name}`}>
-      <button onClick={e => { e.stopPropagation(); onEdit() }}    aria-label={`ערוך ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50 transition-colors"><Edit2   className="w-3.5 h-3.5" /></button>
-      <button onClick={e => { e.stopPropagation(); onArchive() }} aria-label={`ארכיון ${voucher.store_name}`} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50 transition-colors"><Archive className="w-3.5 h-3.5" /></button>
-      <button onClick={e => { e.stopPropagation(); onDelete() }}  aria-label={`מחק ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50 transition-colors">  <Trash2  className="w-3.5 h-3.5" /></button>
+      <button onClick={e => { e.stopPropagation(); onEdit() }}    aria-label={`${t('card.edit.action')} ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50 transition-colors"><Edit2   className="w-3.5 h-3.5" /></button>
+      <button onClick={e => { e.stopPropagation(); onArchive() }} aria-label={`${t('card.archive.action')} ${voucher.store_name}`} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50 transition-colors"><Archive className="w-3.5 h-3.5" /></button>
+      <button onClick={e => { e.stopPropagation(); onDelete() }}  aria-label={`${t('card.delete.action')} ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50 transition-colors">  <Trash2  className="w-3.5 h-3.5" /></button>
     </div>
   ) : null
 
@@ -193,7 +195,7 @@ export default function VoucherCard({
       {voucher.is_locked && voucher.lock_reason !== 'for_sale' && (
         <span className="text-orange-500"><Lock className="w-3.5 h-3.5" /></span>
       )}
-      {voucher.is_e2ee && <span className="text-indigo-500" title="מוצפן מקצה לקצה"><Shield className="w-3.5 h-3.5" /></span>}
+      {voucher.is_e2ee && <span className="text-indigo-500" title={t('card.encrypt.title')}><Shield className="w-3.5 h-3.5" /></span>}
       {voucher.is_gift && <span className="text-pink-500"><Gift className="w-3.5 h-3.5" /></span>}
       {safeLink && (
         <a href={safeLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-blue-500 hover:opacity-70">
@@ -265,7 +267,7 @@ export default function VoucherCard({
                   <>
                     <div className="text-base font-bold" style={{ color: 'var(--c-text)' }}>{formatCurrency(voucher.balance)}</div>
                     {valuePercent && (
-                      <div className="text-xs" style={{ color: 'var(--c-text3)' }}>ערך {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}</div>
+                      <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{t('card.value')} {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}</div>
                     )}
                   </>
                 )}
@@ -333,7 +335,7 @@ export default function VoucherCard({
                 {voucher.is_locked && voucher.lock_reason === 'for_sale' && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                     style={{ background: 'var(--c-gold-light)', color: 'var(--c-gold)' }}>
-                    למכירה
+                    {t('card.for.sale')}
                   </span>
                 )}
               </div>
@@ -368,7 +370,7 @@ export default function VoucherCard({
                   )}
                   {valuePercent && (
                     <div className="text-xs text-right mt-0.5" style={{ color: 'var(--c-text3)' }}>
-                      ערך {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}
+                      {t('card.value')} {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}
                     </div>
                   )}
                 </>

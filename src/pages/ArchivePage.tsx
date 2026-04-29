@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
+import { useT } from '../lib/i18n'
 
 type SortKey = 'added' | 'store' | 'balance' | 'expiry'
 
@@ -14,6 +15,7 @@ export default function ArchivePage() {
   const navigate = useNavigate()
   const { archivedVouchers, unarchiveVoucher, deleteVoucher } = useVouchers()
   const { isVaultUnlocked, decryptedMap } = useE2EE()
+  const { t } = useT()
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('added')
   const [showSort, setShowSort] = useState(false)
@@ -49,8 +51,8 @@ export default function ArchivePage() {
 
   function requestDelete(id: string) {
     setConfirm({
-      title: 'מחיקת שובר',
-      message: 'למחוק את השובר לצמיתות? הפעולה אינה ניתנת לביטול.',
+      title: t('archive.delete.confirm.title'),
+      message: t('archive.delete.confirm.msg'),
       onConfirm: () => { setConfirm(null); handleDelete(id) },
     })
   }
@@ -65,19 +67,19 @@ export default function ArchivePage() {
     pendingDeletesRef.current.set(id, timer)
 
     toast(
-      (t) => (
+      (toastRef) => (
         <span>
-          שובר נמחק{' '}
+          {t('archive.deleted')}{' '}
           <button
             onClick={() => {
               clearTimeout(pendingDeletesRef.current.get(id))
               pendingDeletesRef.current.delete(id)
               setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
-              toast.dismiss(t.id)
+              toast.dismiss(toastRef.id)
             }}
             className="underline font-semibold text-blue-600 mr-1"
           >
-            ביטול
+            {t('archive.undo')}
           </button>
         </span>
       ),

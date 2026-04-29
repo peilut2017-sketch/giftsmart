@@ -6,6 +6,7 @@ import type { Voucher, SuperVoucher } from '../types'
 import toast from 'react-hot-toast'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
+import { useT } from '../lib/i18n'
 
 interface Props {
   vouchers: Voucher[]
@@ -68,6 +69,7 @@ function BarcodeDisplay({ code }: { code: string }) {
 }
 
 export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavigate, onClose }: Props) {
+  const { t } = useT()
   const [search, setSearch] = useState('')
   const [payments, setPayments] = useState<Record<string, string>>({})
   const [transactionTotal, setTransactionTotal] = useState(0)
@@ -95,17 +97,18 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
 
   async function handleUpdate(v: Voucher) {
     const amt = parseFloat(payments[v.id] || '0')
-    if (!amt || amt <= 0) { toast.error('הזן סכום תקין'); return }
-    if (amt > v.balance) { toast.error('הסכום גדול מהיתרה'); return }
+    if (!amt || amt <= 0) { toast.error(t('instore.amount.invalid')); return }
+    if (amt > v.balance) { toast.error(t('instore.amount.exceeds')); return }
     setUpdating(v.id)
     try {
       const newBal = Math.max(0, v.balance - amt)
+      const storeName = v.store_name
       await onUpdate(v.id, newBal, search.trim() || null)
-      setTransactionTotal(t => t + amt)
+      setTransactionTotal(prev => prev + amt)
       setPayments(p => ({ ...p, [v.id]: '' }))
-      toast.success(`יתרת ${v.store_name} עודכנה`)
+      toast.success(t('instore.balance.updated', { store: storeName }))
     } catch {
-      toast.error('שגיאה בעדכון')
+      toast.error(t('instore.update.error'))
     } finally {
       setUpdating(null)
     }
@@ -124,8 +127,8 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-bold text-white">אני בחנות</h2>
-            <p className="text-xs text-green-200">בחר שוברים לשימוש</p>
+            <h2 className="text-lg font-bold text-white">{t('instore.title')}</h2>
+            <p className="text-xs text-green-200">{t('instore.subtitle')}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full bg-white/10">
             <X className="w-5 h-5 text-white" />
@@ -135,15 +138,15 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
         {/* Totals */}
         <div className="flex gap-2 mb-3">
           <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2">
-            <div className="text-xs text-green-200 mb-0.5">ישיר</div>
+            <div className="text-xs text-green-200 mb-0.5">{t('instore.direct')}</div>
             <div className="text-base font-bold text-white">₪{directTotal.toLocaleString('he-IL')}</div>
           </div>
           <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2">
-            <div className="text-xs text-green-200 mb-0.5">שובר-על</div>
+            <div className="text-xs text-green-200 mb-0.5">{t('instore.super')}</div>
             <div className="text-base font-bold text-white">₪{superTotal.toLocaleString('he-IL')}</div>
           </div>
           <div className="flex-1 rounded-2xl px-3 py-2" style={{ background: 'rgba(251,191,36,0.25)', border: '1px solid rgba(251,191,36,0.3)' }}>
-            <div className="text-xs text-amber-200 mb-0.5">עסקה זו</div>
+            <div className="text-xs text-amber-200 mb-0.5">{t('instore.transaction')}</div>
             <div className="text-base font-bold text-amber-100">₪{transactionTotal.toLocaleString('he-IL')}</div>
           </div>
         </div>
@@ -155,7 +158,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="חפש חנות..."
+            placeholder={t('instore.search')}
             className="flex-1 bg-transparent text-sm focus:outline-none"
             style={{ color: '#fff' }}
           />
@@ -173,13 +176,13 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
           <div className="text-center py-12 text-gray-400">
             <ShoppingCart className="w-10 h-10 mx-auto opacity-30 mb-2" />
             <p className="font-medium text-sm">
-              {search ? 'לא נמצאו שוברים לחנות זו' : 'אין שוברים'}
+              {search ? t('instore.no.store.vouchers') : t('instore.no.vouchers')}
             </p>
           </div>
         ) : (
           <>
             {directVouchers.length > 0 && superGroupVouchers.length > 0 && (
-              <p className="text-xs text-gray-400 font-medium px-1">שוברים ישירים</p>
+              <p className="text-xs text-gray-400 font-medium px-1">{t('instore.direct.vouchers')}</p>
             )}
             {directVouchers.map(v => (
               <VoucherRow
@@ -196,7 +199,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
               />
             ))}
             {superGroupVouchers.length > 0 && (
-              <p className="text-xs text-gray-400 font-medium px-1 pt-2">שוברי-על</p>
+              <p className="text-xs text-gray-400 font-medium px-1 pt-2">{t('instore.super.vouchers')}</p>
             )}
             {superGroupVouchers.map(v => (
               <VoucherRow
@@ -230,6 +233,7 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
   onNavigate: () => void
   updating: boolean
 }) {
+  const { t } = useT()
   const { decryptedMap, isVaultUnlocked } = useE2EE()
   const effectiveCode = v.is_e2ee
     ? (decryptedMap.get(v.id)?.code ?? v.code)
@@ -243,7 +247,7 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
   async function copyCode() {
     if (isLocked) return
     await navigator.clipboard.writeText(effectiveCode).catch(() => {})
-    toast.success('קוד הועתק')
+    toast.success(t('instore.code.copied'))
   }
 
   return (
@@ -278,7 +282,7 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
             disabled={isEmpty}
             className="px-2.5 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 disabled:opacity-40 font-medium"
           >
-            מלא
+            {t('instore.full')}
           </button>
           <button
             type="button"
@@ -301,7 +305,7 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
           {isLocked ? (
             <span className="flex items-center gap-1 text-xs text-indigo-400 bg-indigo-50 px-2.5 py-1 rounded-lg inline-flex">
               <Shield className="w-3 h-3" />
-              {isVaultUnlocked ? 'שגיאת פענוח' : 'פתח כספת לצפייה'}
+              {isVaultUnlocked ? t('instore.decrypt.error') : t('instore.open.vault')}
             </span>
           ) : (
             <span className="font-mono text-xs text-gray-700 tracking-wider bg-gray-50 px-2.5 py-1 rounded-lg inline-block truncate max-w-full">
@@ -317,12 +321,12 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
           className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium shrink-0 transition-colors ${barcodeOpen ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
         >
           <QrCode className="w-3 h-3" />
-          {barcodeOpen ? 'סגור' : 'ברקוד'}
+          {barcodeOpen ? t('app.close') : t('instore.barcode')}
         </button>
         <button
           onClick={onNavigate}
           className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 shrink-0"
-          title="עבור לשובר"
+          title={t('instore.go.voucher')}
         >
           <ArrowUpLeft className="w-3 h-3" />
         </button>

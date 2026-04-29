@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
+import { useT } from '../lib/i18n'
 import { Shield } from 'lucide-react'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
@@ -21,6 +22,7 @@ type SortDir = 'asc' | 'desc'
 
 export default function HomePage() {
   const navigate = useNavigate()
+  const { t } = useT()
   const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const { hasVault, hint, isVaultUnlocked, unlockVault, lockVault, decryptedMap } = useE2EE()
@@ -36,7 +38,7 @@ export default function HomePage() {
     const ok = await unlockVault(vaultPassInput)
     setVaultUnlocking(false)
     if (ok) { setShowVaultModal(false); setVaultPassInput('') }
-    else setVaultError('סיסמה שגויה')
+    else setVaultError(t('vault.wrong.password'))
   }
   const [showForm, setShowForm] = useState(false)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
@@ -164,7 +166,7 @@ export default function HomePage() {
       const usedAmount = editingVoucher.balance - vData.balance
       const { _storeUsed, ...voucherData } = vData
       await updateVoucher(editingVoucher.id, voucherData, _storeUsed ?? null)
-      toast.success('שובר עודכן')
+      toast.success(t('voucher.updated'))
 
       if (usedAmount > 0) {
         sendUsageNotification(editingVoucher.store_name, usedAmount, vData.balance)
@@ -174,21 +176,21 @@ export default function HomePage() {
         const vId = editingVoucher.id
         const vName = editingVoucher.store_name
         setConfirm({
-          title: 'השובר מומש במלואו',
+          title: t('voucher.redeemed.title'),
           message: `יתרת "${vName}" הגיעה לאפס. להעביר לארכיון?`,
           onConfirm: async () => {
             setConfirm(null)
             await archiveVoucher(vId)
-            toast.success('שובר הועבר לארכיון')
+            toast.success(t('voucher.archived'))
           },
         })
       }
     } else {
       try {
         await addVoucher(vData)
-        toast.success('שובר נוסף!')
+        toast.success(t('voucher.added'))
       } catch (err: any) {
-        toast.error(err?.message || 'שגיאה בשמירת השובר')
+        toast.error(err?.message || t('voucher.save.error'))
         throw err
       }
     }
@@ -205,19 +207,19 @@ export default function HomePage() {
     pendingDeletesRef.current.set(id, timer)
 
     toast(
-      (t) => (
+      (toastItem) => (
         <span>
-          שובר נמחק{' '}
+          {t('voucher.deleted')}{' '}
           <button
             onClick={() => {
               clearTimeout(pendingDeletesRef.current.get(id))
               pendingDeletesRef.current.delete(id)
               setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
-              toast.dismiss(t.id)
+              toast.dismiss(toastItem.id)
             }}
             className="underline font-semibold text-blue-600 mr-1"
           >
-            ביטול
+            {t('app.cancel')}
           </button>
         </span>
       ),
@@ -227,25 +229,25 @@ export default function HomePage() {
 
   function handleArchiveExpired() {
     setConfirm({
-      title: 'ארכוב שוברים פגים',
+      title: t('confirm.archive.expired.title'),
       message: `להעביר ${expiredCount} שוברים פגי תוקף לארכיון?`,
-      onConfirm: async () => { setConfirm(null); await archiveExpired(); toast.success('שוברים פגי תוקף הועברו לארכיון') },
+      onConfirm: async () => { setConfirm(null); await archiveExpired(); toast.success(t('confirm.archive.expired.success')) },
     })
   }
 
   function requestDelete(id: string) {
     setConfirm({
-      title: 'מחיקת שובר',
-      message: 'פעולה זו אינה ניתנת לביטול.',
+      title: t('confirm.delete.title'),
+      message: t('confirm.delete.message'),
       onConfirm: () => { setConfirm(null); handleDelete(id) },
     })
   }
 
   function requestArchive(id: string) {
     setConfirm({
-      title: 'העברה לארכיון',
-      message: 'להעביר את השובר לארכיון?',
-      onConfirm: async () => { setConfirm(null); await archiveVoucher(id); toast.success('הועבר לארכיון') },
+      title: t('confirm.archive.title'),
+      message: t('confirm.archive.message'),
+      onConfirm: async () => { setConfirm(null); await archiveVoucher(id); toast.success(t('confirm.archive.success')) },
     })
   }
 
@@ -270,12 +272,12 @@ export default function HomePage() {
   function bulkArchive() {
     const count = selectedIds.size
     setConfirm({
-      title: 'ארכוב מרובה',
+      title: t('confirm.bulk.archive.title'),
       message: `להעביר ${count} שוברים לארכיון?`,
       onConfirm: async () => {
         setConfirm(null)
         for (const id of selectedIds) await archiveVoucher(id)
-        toast.success(`${count} שוברים הועברו לארכיון`)
+        toast.success(`${count} ${t('confirm.bulk.archive.success')}`)
         setSelectedIds(new Set()); setIsSelectMode(false)
       },
     })
@@ -284,7 +286,7 @@ export default function HomePage() {
   function bulkDelete() {
     const count = selectedIds.size
     setConfirm({
-      title: 'מחיקה מרובה',
+      title: t('confirm.bulk.delete.title'),
       message: `למחוק ${count} שוברים? הפעולה אינה ניתנת לביטול.`,
       onConfirm: () => { setConfirm(null); executeBulkDelete() },
     })
@@ -309,9 +311,9 @@ export default function HomePage() {
     })
 
     toast(
-      (t) => (
+      (toastItem) => (
         <span>
-          {count} שוברים נמחקו{' '}
+          {count} {t('vouchers.deleted')}{' '}
           <button
             onClick={() => {
               timers.forEach((_, i) => {
@@ -320,11 +322,11 @@ export default function HomePage() {
                 pendingDeletesRef.current.delete(id)
                 setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
               })
-              toast.dismiss(t.id)
+              toast.dismiss(toastItem.id)
             }}
             className="underline font-semibold text-blue-600 mr-1"
           >
-            ביטול
+            {t('app.cancel')}
           </button>
         </span>
       ),
@@ -367,7 +369,7 @@ export default function HomePage() {
 
   function openAddForm() {
     if (vouchers.length >= limits.maxVouchers) {
-      openUpgradeSheet(`הגעת למגבלת ${limits.maxVouchers} השוברים בחינמי`)
+      openUpgradeSheet(t('upgrade.limit.reached', { max: limits.maxVouchers }))
       return
     }
     setFabOpen(false)
@@ -417,19 +419,19 @@ export default function HomePage() {
                 <Shield className="w-5 h-5 text-indigo-500" />
               </div>
               <div>
-                <p className="font-bold text-gray-900 text-sm">פתח כספת הצפנה</p>
-                <p className="text-xs text-gray-400">להצגת שוברים מוצפנים בחיפוש</p>
+                <p className="font-bold text-gray-900 text-sm">{t('vault.open.title')}</p>
+                <p className="text-xs text-gray-400">{t('vault.open.subtitle')}</p>
               </div>
             </div>
             {hint && (
-              <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
+              <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> {t('vault.hint')}: <span className="font-medium">{hint}</span></p>
             )}
             <form onSubmit={e => { e.preventDefault(); handleVaultUnlock() }}>
               <input
                 type="password"
                 value={vaultPassInput}
                 onChange={e => setVaultPassInput(e.target.value)}
-                placeholder="סיסמת כספת"
+                placeholder={t('vault.password.placeholder')}
                 className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 dir="ltr"
                 autoFocus
@@ -443,14 +445,14 @@ export default function HomePage() {
                   disabled={vaultUnlocking || !vaultPassInput}
                   className="flex-1 py-2.5 bg-indigo-600 text-white rounded-2xl text-sm font-semibold disabled:opacity-50"
                 >
-                  {vaultUnlocking ? '...' : 'פתח'}
+                  {vaultUnlocking ? '...' : t('vault.open.button')}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }}
                   className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-2xl text-sm"
                 >
-                  ביטול
+                  {t('app.cancel')}
                 </button>
               </div>
             </form>
@@ -477,7 +479,7 @@ export default function HomePage() {
             </div>
             <div>
               <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, letterSpacing: '-0.3px' }}>GiftSmart</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>{walletName || 'ארנק ראשי'}</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>{walletName || t('wallet.main')}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -488,15 +490,15 @@ export default function HomePage() {
                 style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
               >
                 <Archive size={13} color="#fbbf24" />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24' }}>פגויים ({expiredCount})</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24' }}>{t('home.expired.label')} ({expiredCount})</span>
               </button>
             )}
             {hasVault && (
               <button
                 onClick={() => isVaultUnlocked ? lockVault() : setShowVaultModal(true)}
                 style={{ background: isVaultUnlocked ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                aria-label={isVaultUnlocked ? 'נעל כספת' : 'פתח כספת'}
-                title={isVaultUnlocked ? 'כספת פתוחה — לחץ לנעילה' : 'פתח כספת הצפנה'}
+                aria-label={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')}
+                title={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')}
               >
                 <Shield size={17} color={isVaultUnlocked ? '#a5b4fc' : 'rgba(255,255,255,0.65)'} />
               </button>
@@ -504,7 +506,7 @@ export default function HomePage() {
             <button
               onClick={() => setSearchOpen(s => !s)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-              aria-label="חיפוש"
+              aria-label={t('app.search')}
             >
               <Search size={20} color={searchOpen ? '#fff' : 'rgba(255,255,255,0.75)'} />
             </button>
@@ -514,7 +516,7 @@ export default function HomePage() {
                 style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Heebo, sans-serif' }}
               >
                 <X size={14} color="#fff" />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>ביטול</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>{t('app.cancel')}</span>
               </button>
             )}
           </div>
@@ -523,13 +525,13 @@ export default function HomePage() {
         {/* Balance display */}
         <div style={{ marginBottom: 14, position: 'relative' }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginBottom: 4, fontWeight: 500 }}>
-            {isFiltered ? 'יתרה מוצגת' : 'יתרה כוללת'}
+            {isFiltered ? t('home.balance.filtered') : t('home.balance.total')}
           </div>
           <div style={{ fontSize: 40, fontWeight: 900, color: '#fff', letterSpacing: '-1px', lineHeight: 1 }}>
             {formatCurrency(isFiltered ? filteredBalance : totalBalance)}
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 5 }}>
-            {isFiltered ? `${displayVouchers.length} מתוך ${vouchers.length} שוברים` : `${vouchers.length} שוברים פעילים`}
+            {isFiltered ? `${displayVouchers.length} ${t('home.of')} ${vouchers.length} ${t('home.vouchers')}` : `${vouchers.length} ${t('home.active.vouchers')}`}
           </div>
         </div>
 
@@ -541,13 +543,13 @@ export default function HomePage() {
               style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
             >
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fbbf24', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{expiringCount} פגים בקרוב</span>
+              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{expiringCount} {t('home.tab.expiring')}</span>
             </button>
           )}
           {forSaleCount > 0 && (
             <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
               <Tag size={12} color="rgba(255,255,255,0.8)" />
-              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{forSaleCount} למכירה</span>
+              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{forSaleCount} {t('home.for.sale')}</span>
             </div>
           )}
         </div>
@@ -563,7 +565,7 @@ export default function HomePage() {
               type="search"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="חיפוש לפי חנות, קוד, קטגוריה..."
+              placeholder={t('app.search')}
               style={{ flex: 1, height: 42, border: 'none', background: 'transparent', fontSize: 15, color: 'var(--c-text)', fontFamily: 'Heebo, sans-serif', outline: 'none', direction: 'rtl' }}
             />
             {search && (
@@ -581,10 +583,10 @@ export default function HomePage() {
         {!isSelectMode && (
           <div className="flex items-center px-4 py-2 gap-2 overflow-x-auto no-scrollbar">
             {([
-              { key: 'all',           label: `הכל (${vouchers.length})`,                                                     icon: null },
-              { key: 'expiring',      label: 'פג בקרוב',                                                                     icon: AlertTriangle },
-              { key: 'shared',        label: 'משותף',                                                                        icon: Users },
-              { key: 'shared_with_me', label: `שותף איתי${sharedWithMe.length > 0 ? ` (${sharedWithMe.length})` : ''}`,    icon: Handshake },
+              { key: 'all',           label: `${t('home.tab.all')} (${vouchers.length})`,                                                        icon: null },
+              { key: 'expiring',      label: t('home.tab.expiring'),                                                                              icon: AlertTriangle },
+              { key: 'shared',        label: t('home.tab.shared'),                                                                                icon: Users },
+              { key: 'shared_with_me', label: `${t('home.shared.with.me')}${sharedWithMe.length > 0 ? ` (${sharedWithMe.length})` : ''}`,       icon: Handshake },
             ] as { key: FilterTab; label: string; icon: React.ElementType | null }[]).map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -601,7 +603,7 @@ export default function HomePage() {
             <button
               onClick={() => setViewMode(v => v === 'grid' ? 'rows' : 'grid')}
               className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-gray-200"
-              title={viewMode === 'grid' ? 'עבור לתצוגת שורות' : 'עבור לתצוגת רשת'}
+              title={viewMode === 'grid' ? t('home.view.rows') : t('home.view.grid')}
             >
               {viewMode === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
             </button>
@@ -612,7 +614,7 @@ export default function HomePage() {
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              סינון
+              {t('home.filter')}
               {filterCats.length > 0 && <span className="bg-green-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">{filterCats.length}</span>}
             </button>
           </div>
@@ -626,9 +628,9 @@ export default function HomePage() {
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium bg-gray-100 text-gray-600"
             >
               {selectedIds.size === displayVouchers.length ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-              {selectedIds.size === displayVouchers.length ? 'בטל הכל' : 'בחר הכל'}
+              {selectedIds.size === displayVouchers.length ? t('home.deselect.all') : t('home.select.all')}
             </button>
-            <span className="text-xs text-gray-500">{selectedIds.size} נבחרו</span>
+            <span className="text-xs text-gray-500">{selectedIds.size} {t('home.selected')}</span>
           </div>
         )}
 

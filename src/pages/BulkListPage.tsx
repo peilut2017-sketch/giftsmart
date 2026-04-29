@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useT } from '../lib/i18n'
 import { ArrowRight, ShoppingBag, Loader2, CheckSquare, Square, AlertCircle } from 'lucide-react'
 import type { Voucher } from '../types'
 import toast from 'react-hot-toast'
@@ -20,6 +21,7 @@ export default function BulkListPage() {
   const { profile } = useAuth()
   const { vouchers } = useVouchers()
   const { listForSale } = useMarketplace()
+  const { t } = useT()
 
   const listable = vouchers.filter(v => !v.is_archived && !v.is_locked && v.balance > 0)
 
@@ -55,11 +57,11 @@ export default function BulkListPage() {
   }
 
   async function submit() {
-    if (selected.length === 0) { toast.error('בחר לפחות שובר אחד'); return }
+    if (selected.length === 0) { toast.error(t('bulk.select.required')); return }
     const invalid = selected.filter(e => !e.price || parseFloat(e.price) <= 0)
-    if (invalid.length > 0) { toast.error('הכנס מחיר לכל שובר נבחר'); return }
+    if (invalid.length > 0) { toast.error(t('bulk.price.required')); return }
     if (!hasPaymentMethod) {
-      toast.error('יש להגדיר שיטת תשלום בהגדרות לפני פרסום')
+      toast.error(t('bulk.payment.required'))
       navigate('/settings')
       return
     }
@@ -78,7 +80,7 @@ export default function BulkListPage() {
     setDone(true)
     setSubmitting(false)
     const okCount = res.filter(r => r.ok).length
-    if (okCount > 0) toast.success(`${okCount} שוברים פורסמו בהצלחה`)
+    if (okCount > 0) toast.success(`${okCount} ${t('bulk.published.success')}`)
   }
 
   if (done) {
@@ -89,7 +91,7 @@ export default function BulkListPage() {
             <button onClick={() => navigate('/market')} className="p-2 rounded-full hover:bg-gray-100">
               <ArrowRight className="w-5 h-5" />
             </button>
-            <h1 className="font-bold text-lg flex-1">תוצאות פרסום</h1>
+            <h1 className="font-bold text-lg flex-1">{t('bulk.results.title')}</h1>
           </div>
         </div>
         <div className="p-4 space-y-3">
@@ -100,7 +102,7 @@ export default function BulkListPage() {
                 : <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />}
               <div>
                 <p className="font-medium text-gray-800">{r.store}</p>
-                <p className="text-xs text-gray-500">{r.ok ? 'פורסם בהצלחה' : r.error || 'שגיאה'}</p>
+                <p className="text-xs text-gray-500">{r.ok ? t('bulk.result.ok') : r.error || t('bulk.result.error')}</p>
               </div>
             </div>
           ))}
@@ -108,7 +110,7 @@ export default function BulkListPage() {
             onClick={() => navigate('/market/mine')}
             className="w-full py-3 mt-2 bg-green-600 text-white rounded-2xl font-semibold"
           >
-            צפה ברשימות שלי
+            {t('bulk.view.my.listings')}
           </button>
         </div>
       </div>
@@ -122,8 +124,8 @@ export default function BulkListPage() {
           <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100">
             <ArrowRight className="w-5 h-5" />
           </button>
-          <h1 className="font-bold text-lg flex-1">פרסום מרובה</h1>
-          <span className="text-sm text-gray-400">{selected.length} נבחרו</span>
+          <h1 className="font-bold text-lg flex-1">{t('bulk.title')}</h1>
+          <span className="text-sm text-gray-400">{selected.length} {t('bulk.selected')}</span>
         </div>
       </div>
 
@@ -131,10 +133,10 @@ export default function BulkListPage() {
         <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-yellow-800">חסרה שיטת תשלום</p>
-            <p className="text-xs text-yellow-700 mt-0.5">הגדר שיטת תשלום בהגדרות כדי לפרסם שוברים.</p>
+            <p className="text-sm font-medium text-yellow-800">{t('bulk.no.payment.title')}</p>
+            <p className="text-xs text-yellow-700 mt-0.5">{t('bulk.no.payment.body')}</p>
             <button onClick={() => navigate('/settings')} className="text-xs text-yellow-800 font-semibold underline mt-1">
-              עבור להגדרות
+              {t('bulk.go.settings')}
             </button>
           </div>
         </div>
@@ -144,8 +146,8 @@ export default function BulkListPage() {
         {listable.length === 0 ? (
           <div className="text-center py-12 text-gray-400 space-y-2">
             <ShoppingBag className="w-10 h-10 mx-auto opacity-30" />
-            <p className="font-medium">אין שוברים זמינים לפרסום</p>
-            <p className="text-sm">שוברים נעולים או בעלי יתרה 0 אינם ניתנים לפרסום</p>
+            <p className="font-medium">{t('bulk.no.vouchers')}</p>
+            <p className="text-sm">{t('bulk.no.vouchers.hint')}</p>
           </div>
         ) : (
           <>
@@ -157,7 +159,7 @@ export default function BulkListPage() {
               {entries.every(e => e.selected)
                 ? <CheckSquare className="w-4 h-4 text-green-600" />
                 : <Square className="w-4 h-4 text-gray-400" />}
-              {entries.every(e => e.selected) ? 'בטל בחירת הכל' : 'בחר הכל'}
+              {entries.every(e => e.selected) ? t('bulk.deselect.all') : t('bulk.select.all')}
             </button>
 
             {entries.map(entry => {
@@ -178,7 +180,7 @@ export default function BulkListPage() {
                     </button>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900 truncate">{v.store_name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">יתרה: ₪{v.balance}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{t('bulk.balance')}: ₪{v.balance}</p>
                     </div>
                   </div>
 
@@ -186,7 +188,7 @@ export default function BulkListPage() {
                   {entry.selected && (
                     <div className="space-y-2 pt-1 border-t border-gray-50">
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">מחיר מבוקש (₪) *</label>
+                        <label className="text-xs text-gray-500 block mb-1">{t('bulk.asking.price')} *</label>
                         <input
                           type="number"
                           inputMode="decimal"
@@ -194,17 +196,17 @@ export default function BulkListPage() {
                           max={v.balance}
                           value={entry.price}
                           onChange={e => setPrice(v.id, e.target.value)}
-                          placeholder={`עד ₪${v.balance}`}
+                          placeholder={`${t('bulk.price.up.to')} ₪${v.balance}`}
                           className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">תיאור (אופציונלי)</label>
+                        <label className="text-xs text-gray-500 block mb-1">{t('bulk.description')}</label>
                         <input
                           type="text"
                           value={entry.description}
                           onChange={e => setDescription(v.id, e.target.value)}
-                          placeholder="הערות על השובר..."
+                          placeholder={t('bulk.description.placeholder')}
                           className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                         />
                       </div>
@@ -226,8 +228,8 @@ export default function BulkListPage() {
             className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-base shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {submitting
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> מפרסם...</>
-              : <><ShoppingBag className="w-5 h-5" /> פרסם {selected.length} שוברים</>}
+              ? <><Loader2 className="w-5 h-5 animate-spin" /> {t('bulk.publishing')}...</>
+              : <><ShoppingBag className="w-5 h-5" /> {t('bulk.publish')} {selected.length} {t('bulk.vouchers')}</>}
           </button>
         </div>
       )}

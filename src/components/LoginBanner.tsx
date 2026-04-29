@@ -22,7 +22,7 @@ export default function LoginBanner({ imageUrl, duration, skipAllowed, onDismiss
     return () => clearTimeout(t)
   }, [timeLeft, dismiss])
 
-  const R = 13
+  const R = 11
   const circumference = 2 * Math.PI * R
   const offset = circumference * (timeLeft / duration)
 
@@ -35,47 +35,46 @@ export default function LoginBanner({ imageUrl, duration, skipAllowed, onDismiss
         draggable={false}
       />
 
-      {/* Countdown / skip button */}
+      {/* Countdown / skip — top-left corner, compact, semi-transparent */}
       {skipAllowed ? (
         <button
           onClick={dismiss}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 backdrop-blur-md text-white px-5 py-2.5 rounded-full text-sm font-semibold border border-white/25 hover:bg-black/70 transition-colors shadow-lg"
+          className="absolute top-4 left-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-semibold border border-white/20 opacity-70 hover:opacity-100 transition-opacity shadow-md"
         >
-          <span className="relative flex items-center justify-center w-8 h-8 flex-shrink-0">
-            <svg width="32" height="32" className="-rotate-90 absolute inset-0">
-              <circle cx="16" cy="16" r={R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" />
+          <span className="relative flex items-center justify-center w-6 h-6 flex-shrink-0">
+            <svg width="24" height="24" className="-rotate-90 absolute inset-0">
+              <circle cx="12" cy="12" r={R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" />
               <circle
-                cx="16" cy="16" r={R}
+                cx="12" cy="12" r={R}
                 fill="none"
                 stroke="white"
-                strokeWidth="2.5"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={circumference - offset}
                 style={{ transition: 'stroke-dashoffset 1s linear' }}
               />
             </svg>
-            <span className="relative text-white text-[11px] font-bold leading-none">{timeLeft}</span>
+            <span className="relative text-white text-[9px] font-bold leading-none">{timeLeft}</span>
           </span>
           דלג
         </button>
       ) : (
-        /* No skip — show only countdown ring */
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center justify-center w-12 h-12">
-          <svg width="48" height="48" className="-rotate-90 absolute inset-0">
-            <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="3" />
+        <div className="absolute top-4 left-4 flex items-center justify-center w-8 h-8 opacity-70">
+          <svg width="32" height="32" className="-rotate-90 absolute inset-0">
+            <circle cx="16" cy="16" r={R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" />
             <circle
-              cx="24" cy="24" r="20"
+              cx="16" cy="16" r={R}
               fill="none"
               stroke="white"
-              strokeWidth="3"
+              strokeWidth="2"
               strokeLinecap="round"
-              strokeDasharray={2 * Math.PI * 20}
-              strokeDashoffset={(2 * Math.PI * 20) * (1 - timeLeft / duration)}
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference * (1 - timeLeft / duration)}
               style={{ transition: 'stroke-dashoffset 1s linear' }}
             />
           </svg>
-          <span className="relative text-white text-sm font-bold leading-none">{timeLeft}</span>
+          <span className="relative text-white text-[9px] font-bold leading-none">{timeLeft}</span>
         </div>
       )}
     </div>
