@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
-import { TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap, PlusCircle, ShoppingBag, Clock, Gift, Info } from 'lucide-react'
+import { TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap, PlusCircle, ShoppingBag, Clock, Gift, Info, Sparkles } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
@@ -13,6 +13,7 @@ export default function StatsPage() {
   const { vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const { t } = useT()
+  const [showSavingsInfo, setShowSavingsInfo] = useState(false)
 
   const stats = useMemo(() => {
     const active = vouchers.filter(v => !v.is_archived)
@@ -106,6 +107,21 @@ export default function StatsPage() {
     const sumUsed = (list: typeof usedCandidates) =>
       list.reduce((s, v) => s + ((v.amount || 0) - v.balance), 0)
 
+    // Savings: vouchers with both amount > 0 and actual_cost set
+    const allVouchersWithCost = [...vouchers, ...archivedVouchers].filter(
+      v => v.actual_cost != null && v.actual_cost >= 0 && v.amount > 0
+    )
+    const totalSavings = allVouchersWithCost.reduce(
+      (s, v) => s + (v.amount - (v.actual_cost ?? 0)), 0
+    )
+    const savingsCount = allVouchersWithCost.length
+    const avgSavingsPct = savingsCount > 0
+      ? Math.round(
+          allVouchersWithCost.reduce((s, v) => s + (1 - (v.actual_cost ?? 0) / v.amount), 0)
+          / savingsCount * 100
+        )
+      : 0
+
     return {
       totalBalance, totalOriginal, utilized, avgBalance,
       activeCount: active.length, expiringSoon, expired, shared,
@@ -115,10 +131,60 @@ export default function StatsPage() {
       addedTodayAmount: sumAmount(addedTodayList), addedThisWeekAmount: sumAmount(addedWeekList), addedThisMonthAmount: sumAmount(addedMonthList),
       usedToday: usedTodayList.length, usedThisWeek: usedWeekList.length, usedThisMonth: usedMonthList.length,
       usedTodayAmount: sumUsed(usedTodayList), usedThisWeekAmount: sumUsed(usedWeekList), usedThisMonthAmount: sumUsed(usedMonthList),
+      totalSavings, savingsCount, avgSavingsPct,
     }
   }, [vouchers, archivedVouchers])
 
   const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#ef4444']
+
+  function exportCSV() {
+    try {
+      const date = new Date().toLocaleDateString('he-IL')
+      const rows: string[][] = []
+
+      // Summary section
+      rows.push([t('stats.export.summary'), ''])
+      rows.push([t('stats.active.vouchers'), stats.activeCount.toString()])
+      rows.push([t('stats.available.balance'), formatCurrency(stats.totalBalance)])
+      rows.push([t('stats.original'), formatCurrency(stats.totalOriginal)])
+      rows.push([t('stats.usage.title'), `${stats.utilized}%`])
+      rows.push([t('stats.avg.voucher'), formatCurrency(stats.avgBalance)])
+      rows.push([t('stats.expiring.14'), stats.expiringSoon.toString()])
+      rows.push([t('stats.archived.count'), stats.archivedCount.toString()])
+      if (stats.savingsCount > 0) {
+        rows.push([t('stats.savings.total'), formatCurrency(stats.totalSavings)])
+        rows.push([t('stats.savings.avg.pct'), `${stats.avgSavingsPct}%`])
+      }
+      rows.push(['', ''])
+
+      // Voucher list
+      rows.push([t('stats.export.vouchers'), '', '', '', ''])
+      rows.push([t('stats.export.col.store'), t('stats.export.col.code'), t('stats.export.col.balance'), t('stats.export.col.amount'), t('stats.export.col.expiry')])
+      const activeVouchers = vouchers.filter(v => !v.is_archived)
+      activeVouchers.forEach(v => {
+        rows.push([
+          v.store_name,
+          v.code,
+          v.balance.toString(),
+          (v.amount || v.balance).toString(),
+          v.expiry_date ? new Date(v.expiry_date).toLocaleDateString('he-IL') : '',
+        ])
+      })
+
+      // BOM + CSV content (BOM makes Excel open Hebrew correctly)
+      const csvContent = '﻿' + rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `giftsmart-${date.replace(/\//g, '-')}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success(t('stats.export.success'))
+    } catch {
+      toast.error(t('stats.export.error'))
+    }
+  }
 
   function exportPDF() {
     try {
@@ -126,27 +192,31 @@ export default function StatsPage() {
 
       doc.setFontSize(18)
       doc.setFont('helvetica', 'bold')
-      doc.text('Voucher Wallet - Report', 105, 20, { align: 'center' })
+      doc.text('GiftSmart - Voucher Report', 105, 20, { align: 'center' })
 
       doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')
-      doc.text(new Date().toLocaleDateString('he-IL'), 105, 28, { align: 'center' })
+      doc.text(new Date().toLocaleDateString('en-GB'), 105, 28, { align: 'center' })
 
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.text('Summary', 20, 40)
 
-      const summaryData = [
+      const summaryData: string[][] = [
         ['Active Vouchers', stats.activeCount.toString()],
-        ['Total Balance', formatCurrency(stats.totalBalance)],
-        ['Original Amount', formatCurrency(stats.totalOriginal)],
+        ['Total Balance', `ILS ${stats.totalBalance.toFixed(2)}`],
+        ['Original Amount', `ILS ${stats.totalOriginal.toFixed(2)}`],
         ['Utilized', `${stats.utilized}%`],
-        ['Avg Voucher Value', formatCurrency(stats.avgBalance)],
+        ['Avg Voucher Value', `ILS ${stats.avgBalance.toFixed(2)}`],
         ['Expiring Soon (14d)', stats.expiringSoon.toString()],
         ['Archived', stats.archivedCount.toString()],
         ['Added This Month', stats.addedThisMonth.toString()],
         ['Used This Month', stats.usedThisMonth.toString()],
       ]
+      if (stats.savingsCount > 0) {
+        summaryData.push(['Total Savings', `ILS ${stats.totalSavings.toFixed(2)}`])
+        summaryData.push(['Avg Savings %', `${stats.avgSavingsPct}%`])
+      }
 
       autoTable(doc, {
         startY: 45,
@@ -159,35 +229,15 @@ export default function StatsPage() {
 
       const afterSummary = (doc as any).lastAutoTable.finalY + 10
 
-      if (stats.categoryData.length > 0) {
-        doc.setFontSize(13)
-        doc.setFont('helvetica', 'bold')
-        doc.text('Balance by Category', 20, afterSummary)
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'italic')
-        doc.text('* Multi-category vouchers appear in each assigned category at full value', 20, afterSummary + 5)
-
-        autoTable(doc, {
-          startY: afterSummary + 10,
-          head: [['Category', 'Balance', 'Vouchers']],
-          body: stats.categoryData.map(c => [c.name, formatCurrency(c.value), c.count.toString()]),
-          theme: 'striped',
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 20, right: 20 },
-        })
-      }
-
-      const afterCats = (doc as any).lastAutoTable.finalY + 10
-
       if (stats.topStores.length > 0) {
         doc.setFontSize(13)
         doc.setFont('helvetica', 'bold')
-        doc.text('Top Stores by Balance', 20, afterCats)
+        doc.text('Top Stores by Balance', 20, afterSummary)
 
         autoTable(doc, {
-          startY: afterCats + 5,
-          head: [['Store', 'Balance', 'Vouchers']],
-          body: stats.topStores.map(s => [s.name, formatCurrency(s.balance), s.count.toString()]),
+          startY: afterSummary + 5,
+          head: [['Store', 'Balance (ILS)', 'Count']],
+          body: stats.topStores.map(s => [s.name, s.balance.toFixed(2), s.count.toString()]),
           theme: 'striped',
           headStyles: { fillColor: [245, 158, 11] },
           margin: { left: 20, right: 20 },
@@ -203,12 +253,12 @@ export default function StatsPage() {
 
         autoTable(doc, {
           startY: 25,
-          head: [['Store', 'Code', 'Balance', 'Expiry']],
+          head: [['Store', 'Code', 'Balance (ILS)', 'Expiry']],
           body: activeVouchers.map(v => [
             v.store_name,
             v.code,
-            formatCurrency(v.balance),
-            v.expiry_date ? new Date(v.expiry_date).toLocaleDateString('he-IL') : '-',
+            v.balance.toFixed(2),
+            v.expiry_date ? new Date(v.expiry_date).toLocaleDateString('en-GB') : '-',
           ]),
           theme: 'striped',
           headStyles: { fillColor: [34, 197, 94] },
@@ -217,7 +267,7 @@ export default function StatsPage() {
         })
       }
 
-      doc.save(`vouchers-${new Date().toISOString().split('T')[0]}.pdf`)
+      doc.save(`giftsmart-${new Date().toISOString().split('T')[0]}.pdf`)
       toast.success(t('stats.export.success'))
     } catch {
       toast.error(t('stats.export.error'))
@@ -276,23 +326,32 @@ export default function StatsPage() {
             <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>{t('stats.title')}</div>
             <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>{t('stats.subtitle')}</div>
           </div>
-          {limits.canExport ? (
+          <div className="flex items-center gap-2">
             <button
-              onClick={exportPDF}
+              onClick={exportCSV}
               className="flex items-center gap-1.5 text-sm bg-green-50 text-green-700 px-3 py-2 rounded-xl font-medium hover:bg-green-100 transition-colors"
             >
               <Download className="w-4 h-4" />
-              PDF
+              CSV
             </button>
-          ) : (
-            <button
-              onClick={() => openUpgradeSheet(t('stats.export.pro'))}
-              className="flex items-center gap-1.5 text-sm bg-amber-50 text-amber-600 px-3 py-2 rounded-xl font-medium hover:bg-amber-100 transition-colors"
-            >
-              <Zap className="w-4 h-4" />
-              PDF · Pro
-            </button>
-          )}
+            {limits.canExport ? (
+              <button
+                onClick={exportPDF}
+                className="flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 px-3 py-2 rounded-xl font-medium hover:bg-blue-100 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                PDF
+              </button>
+            ) : (
+              <button
+                onClick={() => openUpgradeSheet(t('stats.export.pro'))}
+                className="flex items-center gap-1.5 text-sm bg-amber-50 text-amber-600 px-3 py-2 rounded-xl font-medium hover:bg-amber-100 transition-colors"
+              >
+                <Zap className="w-4 h-4" />
+                PDF · Pro
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -325,6 +384,41 @@ export default function StatsPage() {
             <div className="flex justify-between text-xs text-gray-400 mt-1">
               <span>{t('stats.original')} {formatCurrency(stats.totalOriginal)}</span>
               <span>{t('stats.remaining')} {formatCurrency(stats.totalBalance)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Savings section */}
+        {stats.savingsCount > 0 && (
+          <div style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9333ea 60%, #a855f7 100%)', borderRadius: 20, padding: 20, color: '#fff', position: 'relative' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-200" />
+                <h3 className="font-bold text-white">{t('stats.savings.title')}</h3>
+              </div>
+              <button
+                onClick={() => setShowSavingsInfo(v => !v)}
+                className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
+              >
+                <Info className="w-4 h-4 text-white" />
+              </button>
+            </div>
+            {showSavingsInfo && (
+              <div className="bg-black/20 rounded-xl p-3 mb-3 text-sm text-white/90 leading-relaxed">
+                {t('stats.savings.info.text')}
+              </div>
+            )}
+            <p className="text-4xl font-bold text-white mb-3">{formatCurrency(stats.totalSavings)}</p>
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-purple-200 text-xs mb-0.5">{t('stats.savings.avg.pct')}</p>
+                <p className="text-white font-bold text-xl">{stats.avgSavingsPct}%</p>
+              </div>
+              <div className="w-px h-8 bg-white/20" />
+              <div>
+                <p className="text-purple-200 text-xs mb-0.5">{t('stats.savings.count')}</p>
+                <p className="text-white font-bold text-xl">{stats.savingsCount}</p>
+              </div>
             </div>
           </div>
         )}

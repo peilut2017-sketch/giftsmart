@@ -296,10 +296,10 @@ function AppRoutes() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </AnimatedRoutes>
-          {!widgetEnabled && <AccessibilityFooterLink />}
         </main>
         <PWAInstallBanner />
         <BottomNav />
+        {!widgetEnabled && <AccessibilityFooterLink />}
       </div>
       {widgetEnabled && <AccessibilityWidget />}
       <OnboardingGuide />
@@ -312,11 +312,23 @@ function AppRoutes() {
 
 function AccessibilityFooterLink() {
   return (
-    <div className="text-center py-3 pb-2" dir="rtl">
+    <div
+      className="text-center"
+      dir="rtl"
+      style={{
+        position: 'fixed',
+        bottom: 'calc(72px + env(safe-area-inset-bottom))',
+        left: 0,
+        right: 0,
+        zIndex: 40,
+        pointerEvents: 'none',
+        padding: '4px 0',
+      }}
+    >
       <a
         href="/accessibility"
         className="text-xs underline"
-        style={{ color: 'var(--c-text3)' }}
+        style={{ color: 'var(--c-text3)', pointerEvents: 'auto' }}
       >
         הצהרת נגישות
       </a>
