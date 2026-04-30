@@ -19,8 +19,13 @@ export default function StatsPage() {
     const active = vouchers.filter(v => !v.is_archived)
     const totalBalance = active.reduce((s, v) => s + v.balance, 0)
     const totalOriginal = active.reduce((s, v) => s + (v.amount || v.balance), 0)
-    const utilized = totalOriginal > 0 ? Math.round(((totalOriginal - totalBalance) / totalOriginal) * 100) : 0
     const avgBalance = active.length > 0 ? totalBalance / active.length : 0
+
+    // Utilization includes archived so depleted vouchers count toward progress
+    const allForUtil = [...active, ...archivedVouchers]
+    const allOriginal = allForUtil.reduce((s, v) => s + (v.amount || v.balance), 0)
+    const allBalance  = allForUtil.reduce((s, v) => s + v.balance, 0)
+    const utilized = allOriginal > 0 ? Math.round(((allOriginal - allBalance) / allOriginal) * 100) : 0
 
     const expiringSoon = active.filter(v => {
       const s = getExpiryStatus(v.expiry_date)
@@ -123,7 +128,7 @@ export default function StatsPage() {
       : 0
 
     return {
-      totalBalance, totalOriginal, utilized, avgBalance,
+      totalBalance, totalOriginal, allOriginal, utilized, avgBalance,
       activeCount: active.length, expiringSoon, expired, shared,
       nearZero, giftVouchers, multiCategoryCount,
       categoryData, topStores, archivedCount: archivedVouchers.length,
@@ -204,18 +209,19 @@ export default function StatsPage() {
 
       const summaryData: string[][] = [
         ['Active Vouchers', stats.activeCount.toString()],
-        ['Total Balance', `ILS ${stats.totalBalance.toFixed(2)}`],
-        ['Original Amount', `ILS ${stats.totalOriginal.toFixed(2)}`],
+        ['Total Balance (ILS)', stats.totalBalance.toFixed(2)],
+        ['All-time Original (ILS)', stats.allOriginal.toFixed(2)],
         ['Utilized', `${stats.utilized}%`],
-        ['Avg Voucher Value', `ILS ${stats.avgBalance.toFixed(2)}`],
+        ['Avg Voucher Value (ILS)', stats.avgBalance.toFixed(2)],
         ['Expiring Soon (14d)', stats.expiringSoon.toString()],
         ['Archived', stats.archivedCount.toString()],
         ['Added This Month', stats.addedThisMonth.toString()],
         ['Used This Month', stats.usedThisMonth.toString()],
       ]
       if (stats.savingsCount > 0) {
-        summaryData.push(['Total Savings', `ILS ${stats.totalSavings.toFixed(2)}`])
+        summaryData.push(['Total Savings (ILS)', stats.totalSavings.toFixed(2)])
         summaryData.push(['Avg Savings %', `${stats.avgSavingsPct}%`])
+        summaryData.push(['Vouchers with cost data', stats.savingsCount.toString()])
       }
 
       autoTable(doc, {
@@ -228,44 +234,10 @@ export default function StatsPage() {
       })
 
       const afterSummary = (doc as any).lastAutoTable.finalY + 10
-
-      if (stats.topStores.length > 0) {
-        doc.setFontSize(13)
-        doc.setFont('helvetica', 'bold')
-        doc.text('Top Stores by Balance', 20, afterSummary)
-
-        autoTable(doc, {
-          startY: afterSummary + 5,
-          head: [['Store', 'Balance (ILS)', 'Count']],
-          body: stats.topStores.map(s => [s.name, s.balance.toFixed(2), s.count.toString()]),
-          theme: 'striped',
-          headStyles: { fillColor: [245, 158, 11] },
-          margin: { left: 20, right: 20 },
-        })
-      }
-
-      const activeVouchers = vouchers.filter(v => !v.is_archived)
-      if (activeVouchers.length > 0) {
-        doc.addPage()
-        doc.setFontSize(13)
-        doc.setFont('helvetica', 'bold')
-        doc.text('Active Vouchers', 20, 20)
-
-        autoTable(doc, {
-          startY: 25,
-          head: [['Store', 'Code', 'Balance (ILS)', 'Expiry']],
-          body: activeVouchers.map(v => [
-            v.store_name,
-            v.code,
-            v.balance.toFixed(2),
-            v.expiry_date ? new Date(v.expiry_date).toLocaleDateString('en-GB') : '-',
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [34, 197, 94] },
-          margin: { left: 20, right: 20 },
-          styles: { fontSize: 9 },
-        })
-      }
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'italic')
+      doc.setTextColor(120, 120, 120)
+      doc.text('For full voucher list with store names, use the CSV export.', 20, afterSummary)
 
       doc.save(`giftsmart-${new Date().toISOString().split('T')[0]}.pdf`)
       toast.success(t('stats.export.success'))
@@ -368,8 +340,8 @@ export default function StatsPage() {
           </div>
         </div>
 
-        {/* Utilization bar */}
-        {stats.totalOriginal > 0 && (
+        {/* Utilization bar — includes archived so fully-used vouchers count */}
+        {stats.allOriginal > 0 && (
           <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: 16 }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">{t('stats.usage.title')}</span>
@@ -382,7 +354,7 @@ export default function StatsPage() {
               />
             </div>
             <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>{t('stats.original')} {formatCurrency(stats.totalOriginal)}</span>
+              <span>{t('stats.original')} {formatCurrency(stats.allOriginal)}</span>
               <span>{t('stats.remaining')} {formatCurrency(stats.totalBalance)}</span>
             </div>
           </div>
@@ -416,8 +388,7 @@ export default function StatsPage() {
               </div>
               <div className="w-px h-8 bg-white/20" />
               <div>
-                <p className="text-purple-200 text-xs mb-0.5">{t('stats.savings.count')}</p>
-                <p className="text-white font-bold text-xl">{stats.savingsCount}</p>
+                <p className="text-purple-200 text-xs mb-0.5">{t('stats.savings.count', { count: stats.savingsCount })}</p>
               </div>
             </div>
           </div>

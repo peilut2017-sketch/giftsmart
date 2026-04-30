@@ -144,13 +144,14 @@ export default function BottomNav() {
     setDraggingVisual(false)
     isDragging.current = false
 
-    if (!didDrag.current) return   // was a tap — let button onClick handle it
+    // Always navigate here: setPointerCapture redirects pointerup to this div,
+    // which prevents the browser from firing click on the child button on desktop.
+    const ci = closestTab(e.clientX)
 
-    didDrag.current    = false
+    didDrag.current = false
     justDragged.current = true
     setTimeout(() => { justDragged.current = false }, 80)
 
-    const ci = closestTab(e.clientX)
     navigate(items[ci]?.path ?? '/')
     snapTo(ci)
   }

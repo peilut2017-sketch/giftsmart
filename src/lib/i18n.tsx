@@ -588,8 +588,8 @@ const translations: Record<string, string> = {
   'stats.savings.total.en': 'Total Savings',
   'stats.savings.avg.pct': 'חיסכון ממוצע',
   'stats.savings.avg.pct.en': 'Avg. Savings',
-  'stats.savings.count': 'שוברים עם עלות',
-  'stats.savings.count.en': 'Vouchers with cost',
+  'stats.savings.count': 'מתוך {count} שוברים',
+  'stats.savings.count.en': 'from {count} vouchers',
   'stats.savings.info.text': 'נתון זה נלקח רק משוברים שהוזנה להם עלות ביחס לשווי השובר ואינו משקף שוברים שהוזנו ללא נתון זה.',
   'stats.savings.info.text.en': 'This figure is calculated only from vouchers where an actual cost was entered. Vouchers without cost data are not included.',
 
