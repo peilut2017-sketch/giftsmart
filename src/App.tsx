@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import AnimatedRoutes from './components/AnimatedRoutes'
 import toast, { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -344,6 +346,8 @@ export default function App() {
         </Routes>
         <ToasterWithLocale />
       </AuthProvider>
+      <Analytics />
+      <SpeedInsights />
     </BrowserRouter>
     </LocaleProvider>
     </ThemeProvider>

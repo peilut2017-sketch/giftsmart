@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { track } from '@vercel/analytics'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage, ListingConversation, MarketplaceMode, MarketplaceAccessStatus } from '../types'
@@ -187,6 +188,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         details: { asking_price: askingPrice },
       }).then(() => {}, () => {})
     }
+    track('listing_created', { asking_price: askingPrice })
     fetchedAt.current.myListings = 0
     await fetchMyListings()
     return data as MarketplaceListing
@@ -230,6 +232,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const confirmPaymentReceived = useCallback(async (purchaseId: string) => {
     const { error } = await supabase.rpc('seller_confirm_payment', { p_purchase_id: purchaseId })
     if (error) throw error
+    track('purchase_completed', { purchase_id: purchaseId })
     fetchedAt.current.myListings = 0
     await fetchMyListings()
   }, [fetchMyListings])
