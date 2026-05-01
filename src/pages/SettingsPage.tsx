@@ -461,6 +461,13 @@ export default function SettingsPage() {
     </button>
   )
 
+  const SL = ({ children }: { children: React.ReactNode }) => (
+    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{children}</div>
+  )
+  const Card = ({ children, noPad = false }: { children: React.ReactNode; noPad?: boolean }) => (
+    <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', ...(noPad ? {} : {}) }}>{children}</div>
+  )
+
   return (
     <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
 
@@ -532,10 +539,367 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Password */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{t('settings.security')}</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
+        {/* ── מראה ושפה ── */}
+        <SL>מראה ושפה</SL>
+        <Card>
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--c-border)' }}>
+            <div className="flex items-center gap-3">
+              {theme === 'dark' ? <Moon className="w-5 h-5" style={{ color: 'var(--c-primary)' }} /> : <Sun className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />}
+              <div>
+                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>{t('settings.dark.mode')}</div>
+                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+              style={{ background: theme === 'dark' ? 'var(--c-primary)' : 'var(--c-border)' }}
+            >
+              <span
+                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+                style={{ transform: theme === 'dark' ? 'translateX(-24px)' : 'translateX(-4px)' }}
+              />
+            </button>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Globe className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />
+              <div>
+                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>שפה / Language</div>
+                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{locale === 'he' ? 'עברית' : 'English'}</div>
+              </div>
+            </div>
+            <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--c-border)' }}>
+              {(['he', 'en'] as const).map(l => (
+                <button
+                  key={l}
+                  onClick={() => setLocale(l)}
+                  className="px-3 py-1 text-xs font-semibold transition-colors"
+                  style={{
+                    background: locale === l ? 'var(--c-primary)' : 'var(--c-surface)',
+                    color: locale === l ? '#fff' : 'var(--c-text2)',
+                  }}
+                >
+                  {l === 'he' ? 'עב' : 'EN'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Card>
 
+        {/* ── שיתוף וחברים ── */}
+        <SL>שיתוף וחברים</SL>
+        <Card>
+          <div className="p-4 space-y-3">
+            {members.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {members.map(m => (
+                  <div key={m.user_id} className="flex items-center justify-between py-2 border-b last:border-0">
+                    <div>
+                      <p className="text-sm text-gray-700">{m.email}</p>
+                      <p className="text-xs text-gray-400">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
+                    </div>
+                    {m.role !== 'owner' && (
+                      <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {pendingInviteEmail && (
+              <div className="bg-orange-50 rounded-2xl p-3 space-y-2">
+                <p className="text-sm text-orange-700">המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה. לשלוח הזמנה להצטרף?</p>
+                <div className="flex gap-2">
+                  <button onClick={handleSendNotFoundInvite} className="flex-1 bg-orange-500 text-white py-2 rounded-xl text-sm font-medium">שלח הזמנה</button>
+                  <button onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }} className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium">{t('app.cancel')}</button>
+                </div>
+              </div>
+            )}
+            {!pendingInviteEmail && (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <UserPlus className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                    placeholder="כתובת מייל לשיתוף"
+                    className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                </div>
+                <button
+                  onClick={handleInvite}
+                  disabled={inviteLoading || !inviteEmail.trim()}
+                  className="px-4 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
+                >
+                  {inviteLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'הוסף'}
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-gray-400">חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.</p>
+          </div>
+        </Card>
+
+        {/* ── התראות ואינטגרציות ── */}
+        <SL>התראות ואינטגרציות</SL>
+        <Card>
+          {/* Reminder days */}
+          <div className="p-4">
+            <p className="text-sm text-gray-700 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="range" min={1} max={90} value={reminderDays}
+                onChange={e => saveReminderDays(parseInt(e.target.value))}
+                className="flex-1 accent-green-500"
+              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number" min={1} max={90} value={reminderDays}
+                  onChange={e => saveReminderDays(parseInt(e.target.value) || 1)}
+                  className="w-14 text-center px-2 py-1.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                />
+                <span className="text-sm text-gray-500">ימים</span>
+              </div>
+            </div>
+            <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
+              <span>1 יום</span>
+              <span>90 ימים</span>
+            </div>
+          </div>
+          {/* Telegram */}
+          <div className="border-t" style={{ borderColor: 'var(--c-border)' }}>
+            {telegramLinked ? (
+              <div className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+                    <Send className="w-5 h-5 text-sky-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">מחובר לבוט טלגרם</p>
+                    <p className="text-xs text-gray-400">מקבל התראות ויכול לנהל שוברים</p>
+                  </div>
+                  <button onClick={handleDisconnectTelegram} className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl flex items-center gap-1">
+                    <Link2Off className="w-3.5 h-3.5" /> נתק
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                    <Send className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">קשר לטלגרם</p>
+                    <p className="text-xs text-gray-400">ניהול שוברים והתראות ישירות בטלגרם</p>
+                  </div>
+                  {!telegramCode && (
+                    <button
+                      onClick={handleGenerateTelegramCode}
+                      disabled={telegramLoading}
+                      className="text-xs text-sky-600 font-medium px-3 py-1.5 bg-sky-50 rounded-xl flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {telegramLoading ? <div className="w-3.5 h-3.5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /> : <Link className="w-3.5 h-3.5" />}
+                      קשר
+                    </button>
+                  )}
+                </div>
+                {telegramCode && (
+                  <div className="bg-sky-50 rounded-2xl p-4 space-y-2">
+                    <p className="text-xs text-sky-700 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
+                    <a href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`} target="_blank" rel="noopener noreferrer" className="block text-center bg-sky-500 text-white py-2.5 rounded-xl text-sm font-medium">פתח בוט טלגרם</a>
+                    <p className="text-xs text-sky-600 text-center">או שלח ידנית לבוט:</p>
+                    <div className="bg-white rounded-xl px-4 py-3 text-center">
+                      <p className="text-xs text-gray-400 mb-1">הפקודה לשליחה:</p>
+                      <p className="font-mono text-lg font-bold tracking-widest text-gray-800 select-all">/start {telegramCode}</p>
+                    </div>
+                    <p className="text-xs text-gray-400 text-center">הקוד תקף ל-10 דקות</p>
+                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-sky-600 py-1.5">צור קוד חדש</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* ── פיצ'רים ── */}
+        <SL>פיצ'רים</SL>
+        <Card>
+          <div className="flex items-center justify-between p-4">
+            <div className="flex-1 ml-3">
+              <p className="text-sm font-medium text-gray-800">הצג ערך שוק של שוברים</p>
+              <p className="text-xs text-gray-400 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
+            </div>
+            <button
+              onClick={() => updateProfile({ show_voucher_value: !profile?.show_voucher_value })}
+              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${profile?.show_voucher_value ? 'bg-green-500' : 'bg-gray-200'}`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${profile?.show_voucher_value ? 'translate-x-0.5' : 'right-0.5'}`} />
+            </button>
+          </div>
+        </Card>
+
+        {/* ── כלים ── */}
+        <SL>כלים</SL>
+        <Card>
+          <div className="divide-y divide-gray-50">
+            <MenuItem icon={CloudUpload} label="סנכרן שוברים לענן" desc={isOnline ? 'העלה שוברים מ-cache לסופאבייס' : 'אין חיבור לאינטרנט'} onClick={handleSync} right={syncing ? <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /> : undefined} />
+            <MenuItem icon={Bell} label="שלח תזכורת תוקף" desc="מייל עם רשימת שוברים שפגי תוקף בקרוב" onClick={handleSendExpiryReminder} right={sendingReminder ? <div className="w-5 h-5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /> : undefined} />
+            <MenuItem icon={Wifi} label="בדוק חיבור" desc="בדיקת תקינות חיבור לבסיס הנתונים" onClick={handleCheckConnection} right={checking ? <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : undefined} />
+          </div>
+        </Card>
+
+        {/* ── תמיכה (Pro) + הודעות מערכת + יומן פעילות ── */}
+        {isPro && (
+          <>
+          <SL>תמיכה</SL>
+          <Card>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--c-border, rgba(0,0,0,0.06))', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+              <button onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }} className="text-xs text-teal-600 flex items-center gap-1">
+                ההודעות שלי
+                {showMyMessages ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            {!supportSent ? (
+              <div className="p-4 space-y-3">
+                <div className="flex gap-2">
+                  <input value={supportSubject} onChange={e => setSupportSubject(e.target.value)} placeholder="נושא" className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                  <select value={supportCategory} onChange={e => setSupportCategory(e.target.value)} className="shrink-0 w-28 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white">
+                    <option value="general">כללי</option>
+                    <option value="billing">חיוב</option>
+                    <option value="bug">באג</option>
+                    <option value="feature">פיצ'ר</option>
+                  </select>
+                </div>
+                <textarea value={supportBody} onChange={e => setSupportBody(e.target.value)} placeholder="תאר את הבעיה או הבקשה שלך..." rows={3} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none" />
+                <button onClick={sendSupportMessage} disabled={sendingSupport} className="w-full bg-teal-500 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+                  <Send className="w-4 h-4" />
+                  {sendingSupport ? 'שולח...' : 'שלח הודעה'}
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 flex flex-col items-center gap-2 text-center">
+                <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center"><Check className="w-5 h-5 text-teal-500" /></div>
+                <p className="text-sm font-medium text-gray-800">ההודעה נשלחה!</p>
+                <p className="text-xs text-gray-500">נחזור אליך בהקדם</p>
+                <button onClick={() => setSupportSent(false)} className="text-xs text-teal-600 mt-1">שלח הודעה נוספת</button>
+              </div>
+            )}
+            {showMyMessages && (
+              <div className="border-t">
+                {myMessages.length === 0 ? (
+                  <p className="text-center text-xs text-gray-400 py-4">אין הודעות קודמות</p>
+                ) : (
+                  <div className="divide-y divide-gray-50 max-h-[28rem] overflow-y-auto">
+                    {myMessages.map(m => {
+                      const isExpanded = expandedMessageId === m.id
+                      const hasReplies = (m.replies?.length ?? 0) > 0
+                      const hasAdminReply = m.admin_reply || m.replies?.some(r => r.sender === 'admin')
+                      return (
+                        <div key={m.id} className="px-4 py-3">
+                          <button className="w-full text-right" onClick={() => { setExpandedMessageId(isExpanded ? null : m.id); if (!isExpanded) { void supabase.rpc('user_mark_message_read', { p_message_id: m.id }) } }}>
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-medium text-gray-800">{m.subject}</p>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {hasAdminReply && <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-medium">נענה</span>}
+                                {!hasAdminReply && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">בטיפול</span>}
+                                <span className="text-xs text-gray-400 flex items-center gap-0.5"><Clock className="w-3 h-3" />{formatDate(m.created_at)}</span>
+                              </div>
+                            </div>
+                            {!isExpanded && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1 text-right">{m.body}</p>}
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-2 space-y-2">
+                              <div className="flex justify-end">
+                                <div className="bg-teal-500 text-white rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
+                                  <p className="text-xs">{m.body}</p>
+                                  <p className="text-[10px] text-teal-200 mt-0.5">{formatDate(m.created_at)}</p>
+                                </div>
+                              </div>
+                              {hasReplies ? (
+                                m.replies!.map(r => (
+                                  <div key={r.id} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${r.sender === 'user' ? 'bg-teal-500 text-white rounded-tl-sm' : 'bg-gray-100 text-gray-800 rounded-tr-sm'}`}>
+                                      {r.sender === 'admin' && <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>}
+                                      <p className="text-xs">{r.body}</p>
+                                      <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-teal-200' : 'text-gray-400'}`}>{formatDate(r.created_at)}</p>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : m.admin_reply ? (
+                                <div className="flex justify-start">
+                                  <div className="bg-gray-100 text-gray-800 rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]">
+                                    <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>
+                                    <p className="text-xs">{m.admin_reply}</p>
+                                    {m.replied_at && <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(m.replied_at)}</p>}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {hasAdminReply && (
+                                <div className="flex gap-1.5 mt-1">
+                                  <input value={replyTexts[m.id] || ''} onChange={e => setReplyTexts(prev => ({ ...prev, [m.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserReply(m.id) } }} placeholder="כתוב תשובה..." className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                                  <button onClick={() => sendUserReply(m.id)} disabled={sendingUserReply === m.id || !replyTexts[m.id]?.trim()} className="px-3 py-2 bg-teal-500 text-white rounded-xl text-xs disabled:opacity-40 flex items-center gap-1"><Send className="w-3 h-3" /></button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+          </>
+        )}
+
+        {adminBroadcasts.length > 0 && (
+          <Card>
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-blue-500" />
+                הודעות מערכת
+              </h3>
+              {adminBroadcasts.some(b => !seenBroadcastIds.has(b.id)) && (
+                <span className="text-xs font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
+                  {adminBroadcasts.filter(b => !seenBroadcastIds.has(b.id)).length}
+                </span>
+              )}
+            </div>
+            <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+              {adminBroadcasts.map(b => {
+                const isNew = !seenBroadcastIds.has(b.id)
+                return (
+                  <div key={b.id} className={`px-4 py-3 ${isNew ? 'bg-blue-50/50' : ''}`}
+                    onMouseEnter={() => {
+                      if (isNew) {
+                        setSeenBroadcastIds(prev => { const next = new Set(prev); next.add(b.id); localStorage.setItem('seen_broadcast_ids', JSON.stringify([...next])); return next })
+                        void supabase.rpc('record_broadcast_view', { p_broadcast_id: b.id })
+                      }
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-sm font-medium ${isNew ? 'text-gray-900' : 'text-gray-700'}`}>{b.subject}</p>
+                      <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(b.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{b.body}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        )}
+
+        <ActivityLog />
+
+        {/* ── אבטחה ── */}
+        <SL>{t('settings.security')}</SL>
+        <Card>
           {!editPass ? (
             <MenuItem icon={Lock} label="שינוי סיסמה" desc="עדכן את סיסמת הכניסה" onClick={() => setEditPass(true)} />
           ) : (
@@ -599,11 +963,9 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* E2EE Vault */}
-        {hasVault && (
-          <div className="border-t">
+          {/* E2EE Vault */}
+          {hasVault && (
+            <div className="border-t">
             <button
               onClick={() => setShowVaultSection(s => !s)}
               className="flex items-center gap-3 w-full p-4 text-right hover:bg-gray-50"
@@ -745,43 +1107,13 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
-        )}
+          )}
+        </Card>
 
-        {/* Reminder days */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>תזכורת תוקף</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '16px' }}>
-          <p className="text-sm text-gray-700 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={1}
-              max={90}
-              value={reminderDays}
-              onChange={e => saveReminderDays(parseInt(e.target.value))}
-              className="flex-1 accent-green-500"
-            />
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min={1}
-                max={90}
-                value={reminderDays}
-                onChange={e => saveReminderDays(parseInt(e.target.value) || 1)}
-                className="w-14 text-center px-2 py-1.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-              />
-              <span className="text-sm text-gray-500">ימים</span>
-            </div>
-          </div>
-          <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
-            <span>1 יום</span>
-            <span>90 ימים</span>
-          </div>
-        </div>
-
-        {/* Accessibility widget toggle */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{t('settings.accessibility')}</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '16px' }}>
-          <div className="flex items-center justify-between gap-3">
+        {/* ── נגישות ופרטיות ── */}
+        <SL>נגישות ופרטיות</SL>
+        <Card>
+          <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--c-border)' }}>
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-800">הצג כפתור נגישות</p>
               <p className="text-xs text-gray-500 mt-0.5">כפתור צף לשינוי גודל טקסט, ניגודיות ועוד</p>
@@ -796,537 +1128,40 @@ export default function SettingsPage() {
                 window.dispatchEvent(new Event('a11y-widget-toggle'))
               }}
               aria-label="הצג כפתור נגישות"
-              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
-                a11yWidgetEnabled ? 'bg-blue-600' : 'bg-gray-200'
-              }`}
+              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${a11yWidgetEnabled ? 'bg-blue-600' : 'bg-gray-200'}`}
             >
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                a11yWidgetEnabled ? 'translate-x-0.5' : 'right-0.5'
-              }`} />
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${a11yWidgetEnabled ? 'translate-x-0.5' : 'right-0.5'}`} />
             </button>
           </div>
-          <a href="/accessibility" className="block mt-3 text-xs text-blue-600 hover:underline">
+          <a href="/accessibility" className="block px-4 py-3 text-xs text-blue-600 hover:underline border-b" style={{ borderColor: 'var(--c-border)' }}>
             הצהרת נגישות ←
           </a>
-        </div>
-
-        {/* Voucher value feature */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>תצוגת ערך שובר</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', padding: '16px' }}>
-          <div className="flex items-center justify-between">
-            <div className="flex-1 ml-3">
-              <p className="text-sm font-medium text-gray-800">הצג ערך שוק של שוברים</p>
-              <p className="text-xs text-gray-400 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
-            </div>
-            <button
-              onClick={() => updateProfile({ show_voucher_value: !profile?.show_voucher_value })}
-              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
-                profile?.show_voucher_value ? 'bg-green-500' : 'bg-gray-200'
-              }`}
-            >
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                profile?.show_voucher_value ? 'translate-x-0.5' : 'right-0.5'
-              }`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Tools */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>כלים</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y" style={{ borderColor: 'var(--c-border)' }}>
             <MenuItem
-              icon={CloudUpload}
-              label="סנכרן שוברים לענן"
-              desc={isOnline ? 'העלה שוברים מ-cache לסופאבייס' : 'אין חיבור לאינטרנט'}
-              onClick={handleSync}
-              right={syncing ? <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /> : undefined}
+              icon={BookOpen}
+              label={t('settings.onboarding')}
+              desc="הצג מחדש את מדריך הפיצ׳רים"
+              onClick={() => {
+                localStorage.removeItem('onboarding_seen_v2')
+                navigate('/')
+                setTimeout(() => window.dispatchEvent(new Event('show-onboarding')), 120)
+              }}
             />
             <MenuItem
-              icon={Bell}
-              label="שלח תזכורת תוקף"
-              desc="מייל עם רשימת שוברים שפגי תוקף בקרוב"
-              onClick={handleSendExpiryReminder}
-              right={sendingReminder ? <div className="w-5 h-5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /> : undefined}
+              icon={Shield}
+              label="מדיניות פרטיות"
+              desc="כיצד אנו מגינים על המידע שלך"
+              onClick={() => navigate('/privacy')}
             />
             <MenuItem
-              icon={Wifi}
-              label="בדוק חיבור"
-              desc="בדיקת תקינות חיבור לבסיס הנתונים"
-              onClick={handleCheckConnection}
-              right={checking ? <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : undefined}
+              icon={LogOut}
+              label={t('settings.logout')}
+              desc="יציאה מהחשבון"
+              onClick={() => { if (confirm('להתנתק?')) signOut() }}
+              danger
             />
           </div>
-        </div>
-
-        {/* Telegram */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>טלגרם</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-
-          {telegramLinked ? (
-            <div className="p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
-                  <Send className="w-5 h-5 text-sky-500" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">מחובר לבוט טלגרם</p>
-                  <p className="text-xs text-gray-400">מקבל התראות ויכול לנהל שוברים</p>
-                </div>
-                <button
-                  onClick={handleDisconnectTelegram}
-                  className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl flex items-center gap-1"
-                >
-                  <Link2Off className="w-3.5 h-3.5" /> נתק
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                  <Send className="w-5 h-5 text-gray-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">קשר לטלגרם</p>
-                  <p className="text-xs text-gray-400">ניהול שוברים והתראות ישירות בטלגרם</p>
-                </div>
-                {!telegramCode && (
-                  <button
-                    onClick={handleGenerateTelegramCode}
-                    disabled={telegramLoading}
-                    className="text-xs text-sky-600 font-medium px-3 py-1.5 bg-sky-50 rounded-xl flex items-center gap-1 disabled:opacity-50"
-                  >
-                    {telegramLoading
-                      ? <div className="w-3.5 h-3.5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                      : <Link className="w-3.5 h-3.5" />
-                    }
-                    קשר
-                  </button>
-                )}
-              </div>
-
-              {telegramCode && (
-                <div className="bg-sky-50 rounded-2xl p-4 space-y-2">
-                  <p className="text-xs text-sky-700 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
-                  <a
-                    href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-center bg-sky-500 text-white py-2.5 rounded-xl text-sm font-medium"
-                  >
-                    פתח בוט טלגרם
-                  </a>
-                  <p className="text-xs text-sky-600 text-center">או שלח ידנית לבוט:</p>
-                  <div className="bg-white rounded-xl px-4 py-3 text-center">
-                    <p className="text-xs text-gray-400 mb-1">הפקודה לשליחה:</p>
-                    <p className="font-mono text-lg font-bold tracking-widest text-gray-800 select-all">
-                      /start {telegramCode}
-                    </p>
-                  </div>
-                  <p className="text-xs text-gray-400 text-center">הקוד תקף ל-10 דקות</p>
-                  <button
-                    onClick={handleGenerateTelegramCode}
-                    className="w-full text-xs text-sky-600 py-1.5"
-                  >
-                    צור קוד חדש
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Wallet sharing */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>שיתוף הארנק שלי</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-
-          <div className="p-4 space-y-3">
-            {/* Member list */}
-            {members.length > 0 && (
-              <div className="space-y-1 mb-2">
-                {members.map(m => (
-                  <div key={m.user_id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="text-sm text-gray-700">{m.email}</p>
-                      <p className="text-xs text-gray-400">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
-                    </div>
-                    {m.role !== 'owner' && (
-                      <button
-                        onClick={() => handleRemoveMember(m.user_id, m.email)}
-                        className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* "User not found" confirm */}
-            {pendingInviteEmail && (
-              <div className="bg-orange-50 rounded-2xl p-3 space-y-2">
-                <p className="text-sm text-orange-700">
-                  המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה.
-                  לשלוח הזמנה להצטרף?
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSendNotFoundInvite}
-                    className="flex-1 bg-orange-500 text-white py-2 rounded-xl text-sm font-medium"
-                  >
-                    שלח הזמנה
-                  </button>
-                  <button
-                    onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }}
-                    className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium"
-                  >
-                    {t('app.cancel')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Invite input */}
-            {!pendingInviteEmail && (
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <UserPlus className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={e => setInviteEmail(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                    placeholder="כתובת מייל לשיתוף"
-                    className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                    dir="ltr"
-                  />
-                </div>
-                <button
-                  onClick={handleInvite}
-                  disabled={inviteLoading || !inviteEmail.trim()}
-                  className="px-4 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
-                >
-                  {inviteLoading
-                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : 'הוסף'}
-                </button>
-              </div>
-            )}
-
-            <p className="text-xs text-gray-400">
-              חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.
-            </p>
-          </div>
-        </div>
-
-        {/* Support messages — Pro only */}
-        {isPro && (
-          <>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>תמיכה</div>
-          <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--c-border, rgba(0,0,0,0.06))', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }}
-                className="text-xs text-teal-600 flex items-center gap-1"
-              >
-                ההודעות שלי
-                {showMyMessages ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-
-            {/* Send form */}
-            {!supportSent ? (
-              <div className="p-4 space-y-3">
-                <div className="flex gap-2">
-                  <input
-                    value={supportSubject}
-                    onChange={e => setSupportSubject(e.target.value)}
-                    placeholder="נושא"
-                    className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
-                  />
-                  <select
-                    value={supportCategory}
-                    onChange={e => setSupportCategory(e.target.value)}
-                    className="shrink-0 w-28 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
-                  >
-                    <option value="general">כללי</option>
-                    <option value="billing">חיוב</option>
-                    <option value="bug">באג</option>
-                    <option value="feature">פיצ'ר</option>
-                  </select>
-                </div>
-                <textarea
-                  value={supportBody}
-                  onChange={e => setSupportBody(e.target.value)}
-                  placeholder="תאר את הבעיה או הבקשה שלך..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
-                />
-                <button
-                  onClick={sendSupportMessage}
-                  disabled={sendingSupport}
-                  className="w-full bg-teal-500 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Send className="w-4 h-4" />
-                  {sendingSupport ? 'שולח...' : 'שלח הודעה'}
-                </button>
-              </div>
-            ) : (
-              <div className="p-4 flex flex-col items-center gap-2 text-center">
-                <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center">
-                  <Check className="w-5 h-5 text-teal-500" />
-                </div>
-                <p className="text-sm font-medium text-gray-800">ההודעה נשלחה!</p>
-                <p className="text-xs text-gray-500">נחזור אליך בהקדם</p>
-                <button onClick={() => setSupportSent(false)} className="text-xs text-teal-600 mt-1">שלח הודעה נוספת</button>
-              </div>
-            )}
-
-            {/* My messages history — thread view */}
-            {showMyMessages && (
-              <div className="border-t">
-                {myMessages.length === 0 ? (
-                  <p className="text-center text-xs text-gray-400 py-4">אין הודעות קודמות</p>
-                ) : (
-                  <div className="divide-y divide-gray-50 max-h-[28rem] overflow-y-auto">
-                    {myMessages.map(m => {
-                      const isExpanded = expandedMessageId === m.id
-                      const hasReplies = (m.replies?.length ?? 0) > 0
-                      const hasAdminReply = m.admin_reply || m.replies?.some(r => r.sender === 'admin')
-                      return (
-                        <div key={m.id} className="px-4 py-3">
-                          {/* Message header — click to expand/collapse thread */}
-                          <button
-                            className="w-full text-right"
-                            onClick={() => {
-                              setExpandedMessageId(isExpanded ? null : m.id)
-                              if (!isExpanded) {
-                                void supabase.rpc('user_mark_message_read', { p_message_id: m.id })
-                              }
-                            }}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-medium text-gray-800">{m.subject}</p>
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {hasAdminReply && (
-                                  <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-medium">נענה</span>
-                                )}
-                                {!hasAdminReply && (
-                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">בטיפול</span>
-                                )}
-                                <span className="text-xs text-gray-400 flex items-center gap-0.5">
-                                  <Clock className="w-3 h-3" />{formatDate(m.created_at)}
-                                </span>
-                              </div>
-                            </div>
-                            {!isExpanded && (
-                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1 text-right">{m.body}</p>
-                            )}
-                          </button>
-
-                          {/* Expanded thread */}
-                          {isExpanded && (
-                            <div className="mt-2 space-y-2">
-                              {/* Original message bubble */}
-                              <div className="flex justify-end">
-                                <div className="bg-teal-500 text-white rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
-                                  <p className="text-xs">{m.body}</p>
-                                  <p className="text-[10px] text-teal-200 mt-0.5">{formatDate(m.created_at)}</p>
-                                </div>
-                              </div>
-
-                              {/* Thread replies */}
-                              {hasReplies ? (
-                                m.replies!.map(r => (
-                                  <div key={r.id} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${
-                                      r.sender === 'user'
-                                        ? 'bg-teal-500 text-white rounded-tl-sm'
-                                        : 'bg-gray-100 text-gray-800 rounded-tr-sm'
-                                    }`}>
-                                      {r.sender === 'admin' && (
-                                        <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>
-                                      )}
-                                      <p className="text-xs">{r.body}</p>
-                                      <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-teal-200' : 'text-gray-400'}`}>
-                                        {formatDate(r.created_at)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))
-                              ) : m.admin_reply ? (
-                                /* Backward compat: show legacy admin_reply if no thread replies yet */
-                                <div className="flex justify-start">
-                                  <div className="bg-gray-100 text-gray-800 rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]">
-                                    <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>
-                                    <p className="text-xs">{m.admin_reply}</p>
-                                    {m.replied_at && <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(m.replied_at)}</p>}
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {/* User reply input (shown when admin has replied) */}
-                              {(hasAdminReply) && (
-                                <div className="flex gap-1.5 mt-1">
-                                  <input
-                                    value={replyTexts[m.id] || ''}
-                                    onChange={e => setReplyTexts(prev => ({ ...prev, [m.id]: e.target.value }))}
-                                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserReply(m.id) } }}
-                                    placeholder="כתוב תשובה..."
-                                    className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-300"
-                                  />
-                                  <button
-                                    onClick={() => sendUserReply(m.id)}
-                                    disabled={sendingUserReply === m.id || !replyTexts[m.id]?.trim()}
-                                    className="px-3 py-2 bg-teal-500 text-white rounded-xl text-xs disabled:opacity-40 flex items-center gap-1"
-                                  >
-                                    <Send className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </>
-        )}
-
-        {/* Admin broadcasts */}
-        {adminBroadcasts.length > 0 && (
-          <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <Bell className="w-4 h-4 text-blue-500" />
-                הודעות מערכת
-              </h3>
-              {adminBroadcasts.some(b => !seenBroadcastIds.has(b.id)) && (
-                <span className="text-xs font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
-                  {adminBroadcasts.filter(b => !seenBroadcastIds.has(b.id)).length}
-                </span>
-              )}
-            </div>
-            <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
-              {adminBroadcasts.map(b => {
-                const isNew = !seenBroadcastIds.has(b.id)
-                return (
-                  <div
-                    key={b.id}
-                    className={`px-4 py-3 ${isNew ? 'bg-blue-50/50' : ''}`}
-                    onMouseEnter={() => {
-                      if (isNew) {
-                        setSeenBroadcastIds(prev => {
-                          const next = new Set(prev)
-                          next.add(b.id)
-                          localStorage.setItem('seen_broadcast_ids', JSON.stringify([...next]))
-                          return next
-                        })
-                        void supabase.rpc('record_broadcast_view', { p_broadcast_id: b.id })
-                      }
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm font-medium ${isNew ? 'text-gray-900' : 'text-gray-700'}`}>{b.subject}</p>
-                      <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(b.created_at)}</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{b.body}</p>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Activity log */}
-        <ActivityLog />
-
-        {/* Appearance: Dark mode + Language */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>מראה ושפה</div>
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-          {/* Dark mode toggle */}
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--c-border)' }}>
-            <div className="flex items-center gap-3">
-              {theme === 'dark' ? <Moon className="w-5 h-5" style={{ color: 'var(--c-primary)' }} /> : <Sun className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />}
-              <div>
-                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>{t('settings.dark.mode')}</div>
-                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
-              </div>
-            </div>
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-              style={{ background: theme === 'dark' ? 'var(--c-primary)' : 'var(--c-border)' }}
-            >
-              <span
-                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
-                style={{ transform: theme === 'dark' ? 'translateX(-24px)' : 'translateX(-4px)' }}
-              />
-            </button>
-          </div>
-          {/* Language switcher */}
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Globe className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />
-              <div>
-                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>שפה / Language</div>
-                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{locale === 'he' ? 'עברית' : 'English'}</div>
-              </div>
-            </div>
-            <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--c-border)' }}>
-              {(['he', 'en'] as const).map(l => (
-                <button
-                  key={l}
-                  onClick={() => setLocale(l)}
-                  className="px-3 py-1 text-xs font-semibold transition-colors"
-                  style={{
-                    background: locale === l ? 'var(--c-primary)' : 'var(--c-surface)',
-                    color: locale === l ? '#fff' : 'var(--c-text2)',
-                  }}
-                >
-                  {l === 'he' ? 'עב' : 'EN'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Onboarding guide */}
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-          <MenuItem
-            icon={BookOpen}
-            label={t('settings.onboarding')}
-            desc="הצג מחדש את מדריך הפיצ׳רים"
-            onClick={() => {
-              localStorage.removeItem('onboarding_seen_v2')
-              navigate('/')
-              setTimeout(() => window.dispatchEvent(new Event('show-onboarding')), 120)
-            }}
-          />
-        </div>
-
-        {/* Privacy & Sign out */}
-        <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px' }}>
-          <MenuItem
-            icon={Shield}
-            label="מדיניות פרטיות"
-            desc="כיצד אנו מגינים על המידע שלך"
-            onClick={() => navigate('/privacy')}
-          />
-          <MenuItem
-            icon={LogOut}
-            label={t('settings.logout')}
-            desc="יציאה מהחשבון"
-            onClick={() => { if (confirm('להתנתק?')) signOut() }}
-            danger
-          />
-        </div>
+        </Card>
 
         <p className="text-center text-xs text-gray-400">GiftSmart v1.1.0</p>
       </div>
