@@ -40,6 +40,7 @@ import { Component, useState, useEffect, useRef } from 'react'
 import { useE2EE } from './contexts/E2EEContext'
 import type { ReactNode } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
+import { Analytics } from '@vercel/analytics/react'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
   constructor(props: { children: ReactNode }) {
@@ -348,6 +349,7 @@ export default function App() {
     </LocaleProvider>
     </ThemeProvider>
     <SpeedInsights />
+    <Analytics />
     </ErrorBoundary>
   )
 }
