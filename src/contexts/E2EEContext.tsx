@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { track } from '@vercel/analytics'
 import { deriveKey, encryptField, decryptField, isEncryptedField, generateSalt, saltToB64, saltFromB64 } from '../lib/e2ee'
 
 const SALT_KEY  = 'gs_e2ee_salt'
@@ -92,6 +93,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       if (dec !== VERIFY_PLAINTEXT) return false
       sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
       setVaultKey(key)
+      track('vault_opened')
       return true
     } catch {
       return false
