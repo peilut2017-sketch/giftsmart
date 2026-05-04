@@ -1,3 +1,11 @@
+export interface ExtractionCandidate {
+  code?: string[]
+  expiry_date?: string[]
+  store_name?: string[]
+  amount?: number[]
+  categories?: string[][]
+}
+
 export interface ExtractedVoucher {
   code?: string
   amount?: number
@@ -5,7 +13,13 @@ export interface ExtractedVoucher {
   store_name?: string
   expiry_date?: string
   cvv?: string
+  categories?: string[]
+  link?: string
+  candidates?: ExtractionCandidate
 }
+
+// Patterns that indicate an unsubscribe / opt-out link — exclude these
+const UNSUBSCRIBE_RE = /unsubscribe|optout|opt-out|remove|הסרה|הסר/i
 
 export function extractFromSMS(text: string): ExtractedVoucher {
   const result: ExtractedVoucher = {}
@@ -48,7 +62,7 @@ export function extractFromSMS(text: string): ExtractedVoucher {
   const cvvMatch = text.match(/(?:cvv|cvc|קוד אבטחה|pin)[:\s]*(\d{3,4})/i)
   if (cvvMatch) result.cvv = cvvMatch[1]
 
-  // Extract expiry date
+  // Extract expiry date — if multiple dates found, pick last (latest)
   const expiryPatterns = [
     /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[\/\.\-]\d{2,4})/i,
     /(?:תוקף|valid)[:\s]*(\d{1,2}\/\d{2,4})/i,
@@ -56,14 +70,33 @@ export function extractFromSMS(text: string): ExtractedVoucher {
     /(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})/,
     /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/,
   ]
-  for (const pattern of expiryPatterns) {
-    const match = text.match(pattern)
-    if (match) {
-      const dateStr = match[1]
-      const parsed = parseDate(dateStr)
-      if (parsed) {
-        result.expiry_date = parsed
-        break
+
+  // First try labeled expiry
+  let foundExpiry = false
+  const labeledExpiryRe = /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[\/\.\-][\d\/\.\-]{2,9})/i
+  const labeledMatch = text.match(labeledExpiryRe)
+  if (labeledMatch) {
+    const parsed = parseDate(labeledMatch[1])
+    if (parsed) { result.expiry_date = parsed; foundExpiry = true }
+  }
+
+  if (!foundExpiry) {
+    // Collect all date candidates and pick the last (latest)
+    const allDates: string[] = []
+    for (const pattern of expiryPatterns) {
+      const re = new RegExp(pattern.source, 'gi')
+      let m: RegExpExecArray | null
+      while ((m = re.exec(text)) !== null) {
+        const parsed = parseDate(m[1])
+        if (parsed) allDates.push(parsed)
+      }
+    }
+    if (allDates.length > 0) {
+      // Sort ascending, pick last
+      allDates.sort()
+      result.expiry_date = allDates[allDates.length - 1]
+      if (allDates.length > 1) {
+        result.candidates = { ...result.candidates, expiry_date: [...new Set(allDates)] }
       }
     }
   }
@@ -95,12 +128,22 @@ export function extractFromSMS(text: string): ExtractedVoucher {
     }
   }
 
+  // Extract first non-unsubscribe URL
+  const urlRe = /https?:\/\/[^\s"'>]+/gi
+  let urlMatch: RegExpExecArray | null
+  while ((urlMatch = urlRe.exec(text)) !== null) {
+    const url = urlMatch[0].replace(/[.,;)]+$/, '') // strip trailing punctuation
+    if (!UNSUBSCRIBE_RE.test(url)) {
+      result.link = url
+      break
+    }
+  }
+
   return result
 }
 
 function parseDate(str: string): string | null {
   try {
-    // Try different formats
     const parts = str.split(/[\/\.\-]/)
     if (parts.length === 2) {
       // MM/YY or MM/YYYY

@@ -4,8 +4,9 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
+import type { ExtractionCandidate } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar, HelpCircle } from 'lucide-react'
 import { useT } from '../lib/i18n'
 
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
@@ -58,6 +59,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [smsLoading, setSmsLoading] = useState(false)
   const [showImageMenu, setShowImageMenu] = useState(false)
+  const [pendingCandidates, setPendingCandidates] = useState<ExtractionCandidate | null>(null)
   const [amountUnit, setAmountUnit] = useState<AmountUnit>('₪')
   const [showUnitPicker, setShowUnitPicker] = useState(false)
   const geminiAvailable = isGeminiAvailable()
@@ -223,7 +225,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setShowScanner(false)
   }
 
-  function applyExtracted(extracted: { store_name?: string; amount?: number; balance?: number; code?: string; cvv?: string; expiry_date?: string }) {
+  function applyExtracted(extracted: { store_name?: string; amount?: number; balance?: number; code?: string; cvv?: string; expiry_date?: string; categories?: string[]; link?: string; candidates?: ExtractionCandidate }) {
     let found = 0
     if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name); found++ }
     if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()); found++ }
@@ -231,7 +233,28 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (extracted.code) { setCode(extracted.code); found++ }
     if (extracted.cvv) { setCvv(extracted.cvv); found++ }
     if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); found++ }
+    if (extracted.link) { setLink(extracted.link); found++ }
+    if (extracted.categories && extracted.categories.length > 0) {
+      // Map category IDs to Hebrew names used by the form
+      const names = extracted.categories
+        .map(id => categories.find(c => c.id === id)?.name)
+        .filter((n): n is string => !!n)
+      if (names.length > 0) { setSelectedCats(names); found++ }
+    }
+    // Surface ambiguous candidates as quick-answer questions
+    if (extracted.candidates && Object.keys(extracted.candidates).length > 0) {
+      setPendingCandidates(extracted.candidates)
+    }
     return found
+  }
+
+  function dismissCandidate(field: keyof ExtractionCandidate) {
+    setPendingCandidates(prev => {
+      if (!prev) return null
+      const next = { ...prev }
+      delete next[field]
+      return Object.keys(next).length > 0 ? next : null
+    })
   }
 
   async function handleImageOCR(file: File) {
@@ -581,6 +604,109 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 </>
               )}
             </button>
+          </div>
+        )}
+
+        {/* Quick-answer candidates panel */}
+        {pendingCandidates && (
+          <div className="p-4 bg-amber-50 border-b border-amber-100">
+            <div className="flex items-center gap-1.5 mb-3">
+              <HelpCircle className="w-4 h-4 text-amber-600" />
+              <span className="text-sm font-semibold text-amber-800">{t('extract.candidates.title')}</span>
+            </div>
+            <div className="space-y-3">
+              {pendingCandidates.code && pendingCandidates.code.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.code')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.code.map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => { setCode(c); dismissCandidate('code') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs font-mono hover:bg-amber-100 transition-colors"
+                      >{c}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('code')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.expiry_date && pendingCandidates.expiry_date.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.expiry')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.expiry_date.map(d => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => { setExpiryDate(d); dismissCandidate('expiry_date') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                      >{d}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('expiry_date')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.store_name && pendingCandidates.store_name.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.store')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.store_name.map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => { setStoreName(n); setStoreSearch(n); dismissCandidate('store_name') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                      >{n}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('store_name')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.amount && pendingCandidates.amount.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.amount')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.amount.map(a => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => { setAmount(a.toString()); dismissCandidate('amount') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                      >₪{a}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('amount')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.categories && pendingCandidates.categories.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.categories')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.categories.map((catSet, i) => {
+                      const labels = catSet
+                        .map(id => categories.find(c => c.id === id))
+                        .filter(Boolean)
+                        .map(c => `${c!.emoji} ${c!.name}`)
+                        .join(', ')
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const names = catSet.map(id => categories.find(c => c.id === id)?.name).filter((n): n is string => !!n)
+                            setSelectedCats(names)
+                            dismissCandidate('categories')
+                          }}
+                          className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                        >{labels || catSet.join(', ')}</button>
+                      )
+                    })}
+                    <button type="button" onClick={() => dismissCandidate('categories')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
