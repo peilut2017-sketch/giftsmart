@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { track } from '@vercel/analytics'
+import { phCapture } from '../lib/posthog'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { Voucher, SuperVoucher, Category, Store } from '../types'
@@ -586,6 +587,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (user) saveToCache(user.id, newActive, archivedVouchers)
     logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
     track('voucher_added', { store_name: data.store_name, amount: data.amount })
+    phCapture('voucher_added', { store_name: data.store_name, amount: data.amount })
     return data
   }
 

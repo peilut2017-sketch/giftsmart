@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types'
+import { identifyUser, resetPostHog } from '../lib/posthog'
 
 interface AuthContextType {
   user: User | null
@@ -85,10 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        identifyUser(session.user.id, session.user.email)
         const cached = readCachedProfile(session.user.id)
         if (cached) setProfile(cached)
         await fetchProfile(session.user.id)
       } else {
+        resetPostHog()
         setProfile(null)
         evictProfileCache()
       }

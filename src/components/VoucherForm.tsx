@@ -6,6 +6,7 @@ import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import type { ExtractionCandidate } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
+import { phCapture } from '../lib/posthog'
 import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar, HelpCircle } from 'lucide-react'
 import { useT } from '../lib/i18n'
 
@@ -319,6 +320,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       toast.dismiss(toastId)
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[OCR]', msg)
+      phCapture('voucher_scan_failed', { error: msg, source: 'image' })
+      phCapture('ocr_failed', { error: msg, source: 'image' })
       // Show a hint if it's an HEIC file
       if (msg.includes('decode') || msg.includes('heic') || msg.includes('heif')) {
         toast.error('פורמט HEIC לא נתמך — שמור כ-JPEG/PNG ונסה שוב')
@@ -343,8 +346,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         toast.dismiss(toastId)
         if (found > 0) toast.success(`זוהו ${found} פרטים (AI)`)
         else toast('לא זוהו פרטי שובר — נסה להדביק טקסט אחר', { icon: '🔍' })
-      } catch {
+      } catch (smsErr) {
         toast.dismiss(toastId)
+        phCapture('voucher_scan_failed', { error: String(smsErr), source: 'sms' })
+        phCapture('ocr_failed', { error: String(smsErr), source: 'sms' })
         const extracted = extractFromSMS(smsText)
         applyExtracted(extracted)
         toast.success('פרטים חולצו')
@@ -904,7 +909,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 onChange={e => setCode(e.target.value)}
                 disabled={isEncryptedField(code) && !isVaultUnlocked}
                 placeholder={isEncryptedField(code) && !isVaultUnlocked ? '🔐 מוצפן — פתח כספת' : t('form.code.placeholder')}
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
+                className="ph-no-capture flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
                 dir="ltr"
               />
               <button
@@ -949,7 +954,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 onChange={e => setCvv(e.target.value)}
                 disabled={isEncryptedField(cvv) && !isVaultUnlocked}
                 placeholder={isEncryptedField(cvv) && !isVaultUnlocked ? '🔐 מוצפן' : 'אופציונלי'}
-                className="w-full px-3 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
+                className="ph-no-capture w-full px-3 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
                 dir="ltr"
               />
             </div>
@@ -1277,7 +1282,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 onChange={e => setVaultPassInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !vaultPass2Input && handleVaultSubmit()}
                 placeholder={vaultModalMode === 'setup' ? 'סיסמת כספת (מינ. 6 תווים)' : 'סיסמת כספת'}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="ph-no-capture w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 dir="ltr"
                 autoFocus
                 autoComplete={vaultModalMode === 'setup' ? 'new-password' : 'current-password'}
@@ -1291,7 +1296,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     onChange={e => setVaultPass2Input(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleVaultSubmit()}
                     placeholder="אימות סיסמה"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    className="ph-no-capture w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     dir="ltr"
                     autoComplete="new-password"
                     name="vault-password-confirm"
