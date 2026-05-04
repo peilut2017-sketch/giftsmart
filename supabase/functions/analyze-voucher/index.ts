@@ -9,12 +9,19 @@
 //   { text: string }                               → SMS / free-text analysis
 //
 // Response:
-//   { store_name, code, cvv, amount, balance, expiry_date } | { error: string }
+//   { store_name, code, cvv, amount, balance, expiry_date, categories, link, candidates } | { error: string }
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// All available category IDs — used to constrain AI category suggestions
+const CATEGORY_IDS = [
+  'fashion', 'food', 'electronics', 'beauty', 'home',
+  'sport', 'travel', 'entertainment', 'kids', 'health',
+  'books', 'restaurant', 'supermarket', 'gift', 'other',
+]
 
 const EXTRACTION_SCHEMA = `
 Return ONLY a valid JSON object — no markdown, no explanation, no surrounding text.
@@ -25,18 +32,65 @@ Fields:
   "cvv": string | null,
   "amount": number | null,
   "balance": number | null,
-  "expiry_date": string | null
+  "expiry_date": string | null,
+  "categories": string[] | null,
+  "link": string | null,
+  "candidates": {
+    "store_name"?: string[],
+    "code"?: string[],
+    "expiry_date"?: string[],
+    "amount"?: number[],
+    "categories"?: string[][]
+  } | null
 }
 
-Rules:
-- store_name: official brand name, prefer Hebrew for Israeli brands
-- code: main voucher / gift-card code — keep hyphens, strip spaces
-- cvv: security code / PIN (3–4 digits), or null
-- amount: face value as a plain number in ILS, or null
-- balance: remaining balance if shown separately, otherwise null
-- expiry_date: always YYYY-MM-DD. "12/26" → "2026-12-31". "31/12/2026" → "2026-12-31"
-- Israeli super-vouchers: use exact name — BuyMe | תו הזהב | תו פלוס | נופשונית | Fun Online | גיפט קארד ישראל
-- Missing/unclear fields → null (never empty string)
+Extraction priority order — work through the text in this order:
+1. STORE / VOUCHER NAME (store_name): Look first for an explicit voucher or brand name.
+   - Prefer the name of the issuing brand or store (e.g. "רמי לוי", "זארה", "קפה גרג").
+   - Israeli super-vouchers: use exact name — BuyMe | תו הזהב | תו פלוס | נופשונית | Fun Online | גיפט קארד ישראל
+   - Prefer Hebrew for Israeli brands.
+   - If multiple brand names appear, pick the most prominent one (e.g. the issuer, not a partner).
+
+2. AMOUNT (amount): Face value in ILS as a plain number.
+   - Look for ₪, ש"ח, שח, שקל, NIS near a number.
+   - Ignore small fees or partial amounts if a clear total exists.
+
+3. VOUCHER CODE (code): The main redeemable code.
+   - Codes are typically: all-digit strings (8–19 chars), alphanumeric combos (4–20 chars), or mixed with hyphens/dashes.
+   - Strip surrounding spaces; keep internal hyphens.
+   - Exclude Israeli phone numbers (05x / 07x / landlines starting 02–09).
+   - Exclude amounts, dates, and CVV/PIN values already captured.
+   - If two plausible codes exist, put the longer/primary one in "code" and both in candidates.code.
+
+4. EXPIRY DATE (expiry_date): Always output as YYYY-MM-DD.
+   - "12/26" → "2026-12-31"  |  "31/12/2026" → "2026-12-31"  |  "12/2026" → "2026-12-31"
+   - If multiple dates appear in the text:
+     a. Prefer the one explicitly labeled as תוקף / תפוגה / valid until / expires / expiry.
+     b. If no label distinguishes them, take the LAST (latest) date in the text.
+   - If multiple dates are plausible expiry candidates, list them all in candidates.expiry_date (as YYYY-MM-DD strings) and pick the most likely one for expiry_date.
+
+5. CATEGORIES (categories): Array of 1–3 category IDs that best describe this voucher.
+   Available IDs: fashion, food, electronics, beauty, home, sport, travel, entertainment, kids, health, books, restaurant, supermarket, gift, other
+   - Base the choice on the store name and voucher content.
+   - Example: "זארה" → ["fashion"]  |  "רמי לוי" → ["supermarket", "food"]  |  "BuyMe" → ["gift"]
+   - Return null if completely unclear.
+
+6. LINK (link): The first URL in the text that is NOT an unsubscribe / opt-out / removal link.
+   - Unsubscribe patterns to exclude: unsubscribe, optout, opt-out, remove, הסרה, הסר
+   - If no valid link found → null.
+
+7. CVV / PIN (cvv): Security code, 3–4 digits, only if explicitly labeled. Otherwise null.
+
+8. BALANCE (balance): Remaining balance if shown separately from face value. Otherwise null.
+
+CANDIDATES — populate only when genuinely ambiguous:
+- candidates.code: list if 2+ plausible codes exist
+- candidates.expiry_date: list if 2+ plausible expiry dates exist (all as YYYY-MM-DD)
+- candidates.store_name: list if 2+ plausible store names exist
+- candidates.amount: list if 2+ plausible amounts exist
+- candidates.categories: list alternative category sets (each element is an array of IDs)
+- Omit a candidates field entirely when there is no ambiguity.
+- Missing/unclear fields → null (never empty string or empty array)
 `
 
 const IMAGE_PROMPT =
@@ -68,6 +122,16 @@ function normaliseDate(d: string | null | undefined): string | null {
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
   const ts = Date.parse(d)
   return isNaN(ts) ? null : new Date(ts).toISOString().split('T')[0]
+}
+
+function normaliseDateArray(arr: unknown): string[] {
+  if (!Array.isArray(arr)) return []
+  return arr.map(d => normaliseDate(d as string)).filter((d): d is string => d !== null)
+}
+
+function validCategories(arr: unknown): string[] {
+  if (!Array.isArray(arr)) return []
+  return (arr as unknown[]).filter(c => typeof c === 'string' && CATEGORY_IDS.includes(c)) as string[]
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -143,14 +207,48 @@ Deno.serve(async (req: Request) => {
     return fail(`Could not parse Gemini response: ${String(e)}`)
   }
 
+  // Normalise candidates block
+  const rawCandidates = extracted.candidates as Record<string, unknown> | null | undefined
+  const candidates: Record<string, unknown> = {}
+  if (rawCandidates && typeof rawCandidates === 'object') {
+    const codeCands = Array.isArray(rawCandidates.code)
+      ? (rawCandidates.code as unknown[]).filter(c => typeof c === 'string') as string[]
+      : []
+    if (codeCands.length > 1) candidates.code = codeCands
+
+    const dateCands = normaliseDateArray(rawCandidates.expiry_date)
+    if (dateCands.length > 1) candidates.expiry_date = dateCands
+
+    const nameCands = Array.isArray(rawCandidates.store_name)
+      ? (rawCandidates.store_name as unknown[]).filter(c => typeof c === 'string') as string[]
+      : []
+    if (nameCands.length > 1) candidates.store_name = nameCands
+
+    const amtCands = Array.isArray(rawCandidates.amount)
+      ? (rawCandidates.amount as unknown[]).filter(c => typeof c === 'number' && c > 0) as number[]
+      : []
+    if (amtCands.length > 1) candidates.amount = amtCands
+
+    if (Array.isArray(rawCandidates.categories)) {
+      const catSets = (rawCandidates.categories as unknown[])
+        .filter(Array.isArray)
+        .map(set => validCategories(set))
+        .filter(set => set.length > 0)
+      if (catSets.length > 1) candidates.categories = catSets
+    }
+  }
+
   // Normalise and return
   return ok({
     error: null,
-    store_name:  (extracted.store_name  as string  | null) || null,
-    code:        (extracted.code        as string  | null) || null,
-    cvv:         (extracted.cvv         as string  | null) || null,
-    amount:      typeof extracted.amount  === 'number' && extracted.amount  > 0 ? extracted.amount  : null,
-    balance:     typeof extracted.balance === 'number' && extracted.balance > 0 ? extracted.balance : null,
-    expiry_date: normaliseDate(extracted.expiry_date as string | null),
+    store_name:   (extracted.store_name  as string  | null) || null,
+    code:         (extracted.code        as string  | null) || null,
+    cvv:          (extracted.cvv         as string  | null) || null,
+    amount:       typeof extracted.amount  === 'number' && extracted.amount  > 0 ? extracted.amount  : null,
+    balance:      typeof extracted.balance === 'number' && extracted.balance > 0 ? extracted.balance : null,
+    expiry_date:  normaliseDate(extracted.expiry_date as string | null),
+    categories:   validCategories(extracted.categories).length > 0 ? validCategories(extracted.categories) : null,
+    link:         typeof extracted.link === 'string' && extracted.link.startsWith('http') ? extracted.link : null,
+    candidates:   Object.keys(candidates).length > 0 ? candidates : null,
   })
 })
