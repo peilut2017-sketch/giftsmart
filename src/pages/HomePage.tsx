@@ -7,8 +7,9 @@ import { useT } from '../lib/i18n'
 import { Shield } from 'lucide-react'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
-import type { Voucher } from '../types'
-import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store, AlertTriangle, Users, Handshake, Gift, Lightbulb } from 'lucide-react'
+import type { Voucher, DiscountDeal } from '../types'
+import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store, AlertTriangle, Users, Handshake, Gift, Lightbulb, Percent } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import InStoreMode from '../components/InStoreMode'
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDate, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
@@ -373,6 +374,30 @@ export default function HomePage() {
   const forSaleCount = vouchers.filter(v => v.is_locked && v.lock_reason === 'for_sale').length
   const [searchOpen, setSearchOpen] = useState(false)
   const [showInStoreMode, setShowInStoreMode] = useState(false)
+  const [searchedDeals, setSearchedDeals] = useState<DiscountDeal[]>([])
+
+  // Search deals from backend with debounce when search query is active
+  useEffect(() => {
+    if (!search || search.trim().length < 2) {
+      setSearchedDeals([])
+      return
+    }
+    const q = search.trim()
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await supabase.rpc('get_my_deals', {
+          p_search: q,
+          p_tags: null,
+          p_limit: 5,
+          p_offset: 0,
+        })
+        setSearchedDeals((data as DiscountDeal[]) || [])
+      } catch {
+        setSearchedDeals([])
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
   // Smart FAB state
   const [fabOpen, setFabOpen] = useState(false)
@@ -723,7 +748,7 @@ export default function HomePage() {
           </div>
         )}
         {/* Search results count breakdown */}
-        {search && (displayVouchers.length > 0 || searchedArchived.length > 0 || searchedListings.length > 0) && (
+        {search && (displayVouchers.length > 0 || searchedArchived.length > 0 || searchedListings.length > 0 || searchedDeals.length > 0) && (
           <div className="flex flex-wrap gap-2 mb-3 text-xs text-gray-500">
             {displayVouchers.length > 0 && (
               <span className="flex items-center gap-1 bg-green-50 text-green-700 px-2.5 py-1 rounded-full font-medium">
@@ -740,6 +765,11 @@ export default function HomePage() {
                 <ShoppingBag className="w-3 h-3" /> {searchedListings.length} בשוק
               </span>
             )}
+            {searchedDeals.length > 0 && (
+              <span className="flex items-center gap-1 bg-purple-50 text-purple-600 px-2.5 py-1 rounded-full font-medium">
+                <Percent className="w-3 h-3" /> {searchedDeals.length} הנחות
+              </span>
+            )}
           </div>
         )}
 
@@ -749,7 +779,7 @@ export default function HomePage() {
               <div key={i} className="h-32 gs-skeleton" style={{ borderRadius: 18 }} />
             ))}
           </div>
-        ) : displayVouchers.length === 0 && searchedArchived.length === 0 && searchedListings.length === 0 ? (
+        ) : displayVouchers.length === 0 && searchedArchived.length === 0 && searchedListings.length === 0 && searchedDeals.length === 0 ? (
           <div className="text-center py-16">
             <Gift className="w-14 h-14 mx-auto mb-4" style={{ color: 'var(--c-border)' }} />
             <p className="text-gray-500 font-medium">
@@ -838,6 +868,46 @@ export default function HomePage() {
                         <div className="text-sm font-bold text-blue-600">{formatCurrency(l.asking_price)}</div>
                         {l.balance && <div className="text-xs text-gray-400">יתרה: {formatCurrency(l.balance)}</div>}
                         {l.expiry_date && <div className="text-xs text-gray-400">{formatDate(l.expiry_date)}</div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Discount deals search results */}
+            {searchedDeals.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Percent className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-xs font-medium text-purple-500">הנחות תואמות</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {searchedDeals.map(deal => (
+                    <button
+                      key={deal.deal_id}
+                      onClick={() => navigate('/discounts')}
+                      className="flex items-center gap-3 text-right w-full"
+                      style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: '12px 14px' }}
+                    >
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                        style={{ background: '#8b5cf622', color: '#8b5cf6' }}
+                      >
+                        {(deal.business_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate" style={{ color: 'var(--c-text)' }}>{deal.business_name}</p>
+                        <p className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{deal.club_name} · {deal.title}</p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {deal.discount_type === 'percent' && deal.discount_value ? (
+                          <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-1 rounded-full">{deal.discount_value}% הנחה</span>
+                        ) : deal.discount_type === 'fixed' && deal.discount_value ? (
+                          <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-1 rounded-full">₪{deal.discount_value} הנחה</span>
+                        ) : (
+                          <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-1 rounded-full">{deal.title}</span>
+                        )}
                       </div>
                     </button>
                   ))}
