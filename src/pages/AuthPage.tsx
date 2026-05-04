@@ -28,7 +28,8 @@ function getPasswordStrength(password: string, t: (k: string) => string): Passwo
   const score = checks.filter(c => c.ok).length
   const labels = [t('auth.strength.very.weak'), t('auth.strength.weak'), t('auth.strength.medium'), t('auth.strength.strong'), t('auth.strength.very.strong')]
   const colors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-green-600']
-  return { score, label: labels[score] ?? labels[0], color: colors[score] ?? colors[0], checks }
+  const idx = Math.min(score, labels.length - 1)
+  return { score, label: labels[idx], color: colors[idx], checks }
 }
 
 export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode }) {

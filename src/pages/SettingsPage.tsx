@@ -54,7 +54,7 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, hint, isVaultUnlocked, resetVault, changePassphrase, disableVault } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, unlockVault, encrypt, resetVault, changePassphrase, disableVault } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
   const { t } = useT()
@@ -110,6 +110,12 @@ export default function SettingsPage() {
   const [vaultDisabling, setVaultDisabling] = useState(false)
   const [vaultDisableConfirm, setVaultDisableConfirm] = useState(false)
 
+  // Encrypt-all feature
+  const [e2eeDefaultNew, setE2eeDefaultNew] = useState(() => localStorage.getItem('gs_e2ee_default') === 'true')
+  const [encryptAllConfirm, setEncryptAllConfirm] = useState(false)
+  const [encryptAllPass, setEncryptAllPass] = useState('')
+  const [encryptingAll, setEncryptingAll] = useState(false)
+
   async function handleChangeVaultPassphrase() {
     if (!vaultOldPass) return toast.error('הזן סיסמה נוכחית')
     if (vaultNewPass.length < 8) return toast.error('סיסמה חדשה: לפחות 8 תווים')
@@ -147,6 +153,31 @@ export default function SettingsPage() {
       setShowVaultSection(false)
     } finally {
       setVaultDisabling(false)
+    }
+  }
+
+  async function handleEncryptAll() {
+    if (!encryptAllPass) return toast.error('הזן סיסמת כספת')
+    setEncryptingAll(true)
+    try {
+      const ok = await unlockVault(encryptAllPass)
+      if (!ok) { toast.error('סיסמת כספת שגויה'); return }
+      const unencrypted = [...vouchers, ...archivedVouchers].filter(v => !v.is_e2ee)
+      if (unencrypted.length === 0) { toast('כל השוברים כבר מוצפנים'); setEncryptAllConfirm(false); setEncryptAllPass(''); return }
+      let count = 0
+      for (const v of unencrypted) {
+        try {
+          const encCode = await encrypt(v.code)
+          const encCvv = v.cvv ? await encrypt(v.cvv) : undefined
+          await updateVoucher(v.id, { code: encCode, is_e2ee: true, ...(encCvv != null ? { cvv: encCvv } : {}) })
+          count++
+        } catch { /* skip individual failures */ }
+      }
+      toast.success(`${count} שוברים הוצפנו בהצלחה`)
+      setEncryptAllConfirm(false)
+      setEncryptAllPass('')
+    } finally {
+      setEncryptingAll(false)
     }
   }
 
@@ -1035,6 +1066,71 @@ export default function SettingsPage() {
                 </button>
 
                 <div className="border-t pt-3 space-y-3">
+                  {/* Default encryption for new vouchers */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">הצפן שוברים חדשים כברירת מחדל</p>
+                      <p className="text-xs text-gray-400 mt-0.5">כל שובר חדש שיתווסף יוצפן אוטומטית</p>
+                    </div>
+                    <button
+                      role="switch"
+                      aria-checked={e2eeDefaultNew}
+                      onClick={() => {
+                        const next = !e2eeDefaultNew
+                        setE2eeDefaultNew(next)
+                        localStorage.setItem('gs_e2ee_default', String(next))
+                      }}
+                      className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${e2eeDefaultNew ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${e2eeDefaultNew ? 'translate-x-0.5' : 'right-0.5'}`} />
+                    </button>
+                  </div>
+
+                  {/* Encrypt all unencrypted vouchers */}
+                  {!encryptAllConfirm ? (
+                    <button
+                      onClick={() => setEncryptAllConfirm(true)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                      הצפן את כל השוברים שעדיין לא מוצפנים
+                    </button>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-bold text-amber-900 flex items-center gap-1">
+                        <Shield className="w-3.5 h-3.5" /> שים לב — פעולה בלתי הפיכה
+                      </p>
+                      <p className="text-xs text-amber-800">
+                        קודי השוברים יוצפנו עם סיסמת הכספת הנוכחית.
+                        <strong> אם תשכח את הסיסמה — הנתונים יאבדו לצמיתות.</strong>
+                        <br />ודא שהסיסמה שמורה במקום בטוח לפני המשך.
+                      </p>
+                      <input
+                        type="password"
+                        placeholder="אמת סיסמת כספת"
+                        value={encryptAllPass}
+                        onChange={e => setEncryptAllPass(e.target.value)}
+                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                        dir="ltr"
+                        autoComplete="current-password"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleEncryptAll}
+                          disabled={encryptingAll || !encryptAllPass}
+                          className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                        >
+                          {encryptingAll ? 'מצפין...' : 'הצפן הכל'}
+                        </button>
+                        <button
+                          onClick={() => { setEncryptAllConfirm(false); setEncryptAllPass('') }}
+                          className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                        >
+                          ביטול
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Remove encryption (decrypt in place) */}
                   {!vaultDisableConfirm ? (
                     <button

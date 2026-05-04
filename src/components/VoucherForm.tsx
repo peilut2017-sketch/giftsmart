@@ -5,7 +5,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb } from 'lucide-react'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar } from 'lucide-react'
 import { useT } from '../lib/i18n'
 
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
@@ -62,8 +62,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showUnitPicker, setShowUnitPicker] = useState(false)
   const geminiAvailable = isGeminiAvailable()
 
-  // E2EE vault
-  const [e2eeEnabled, setE2eeEnabled] = useState(voucher?.is_e2ee || false)
+  // E2EE vault — for new vouchers, default to user's preference
+  const [e2eeEnabled, setE2eeEnabled] = useState(
+    voucher?.is_e2ee ?? (localStorage.getItem('gs_e2ee_default') === 'true')
+  )
   const [showVaultModal, setShowVaultModal] = useState(false)
   const [vaultModalMode, setVaultModalMode] = useState<'setup' | 'unlock'>('setup')
   const [vaultPassInput, setVaultPassInput] = useState('')
@@ -76,6 +78,21 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const imageFileRef = useRef<HTMLInputElement>(null)
   const imageMenuRef = useRef<HTMLDivElement>(null)
   const operatorPickerRef = useRef<HTMLDivElement>(null)
+  const hiddenDateRef = useRef<HTMLInputElement>(null)
+
+  function openDatePicker() {
+    if (hiddenDateRef.current) {
+      if (typeof hiddenDateRef.current.showPicker === 'function') {
+        hiddenDateRef.current.showPicker()
+      } else {
+        hiddenDateRef.current.click()
+      }
+    }
+  }
+
+  function handleDateTextChange(val: string) {
+    setExpiryDate(val)
+  }
   const unitPickerRef = useRef<HTMLDivElement>(null)
 
   // Operator quick-fill
@@ -813,14 +830,35 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             <div className="col-span-2">
               <label htmlFor="vf-expiry" className="text-sm font-medium text-gray-700 mb-1 block">{t('form.expiry')}</label>
               <div className="flex gap-2 items-center">
-                <input
-                  id="vf-expiry"
-                  type="date"
-                  value={expiryDate}
-                  onChange={e => setExpiryDate(e.target.value)}
-                  className="flex-1 px-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
-                  dir="ltr"
-                />
+                <div className="relative flex-1">
+                  <input
+                    id="vf-expiry"
+                    type="text"
+                    value={expiryDate}
+                    onChange={e => handleDateTextChange(e.target.value)}
+                    placeholder="yyyy-mm-dd"
+                    className="w-full pl-8 pr-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={openDatePicker}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-green-600"
+                    tabIndex={-1}
+                    aria-label="בחר תאריך"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                  </button>
+                  <input
+                    ref={hiddenDateRef}
+                    type="date"
+                    value={expiryDate}
+                    onChange={e => setExpiryDate(e.target.value)}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
+                </div>
                 <div className="flex gap-1">
                   {[{ label: '+1y', years: 1 }, { label: '+2y', years: 2 }, { label: '+5y', years: 5 }].map(({ label, years }) => (
                     <button

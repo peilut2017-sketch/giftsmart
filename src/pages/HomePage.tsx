@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
+import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useT } from '../lib/i18n'
 import { Shield } from 'lucide-react'
 import VoucherCard from '../components/VoucherCard'
@@ -10,7 +11,7 @@ import type { Voucher } from '../types'
 import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store, AlertTriangle, Users, Handshake, Gift, Lightbulb } from 'lucide-react'
 import InStoreMode from '../components/InStoreMode'
 import toast from 'react-hot-toast'
-import { formatCurrency, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
+import { formatCurrency, formatDate, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
 import { useNavigate } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -23,7 +24,8 @@ type SortDir = 'asc' | 'desc'
 export default function HomePage() {
   const navigate = useNavigate()
   const { t } = useT()
-  const { vouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
+  const { listings } = useMarketplace()
   const { limits, openUpgradeSheet } = useSubscription()
   const { hasVault, hint, isVaultUnlocked, unlockVault, lockVault, decryptedMap } = useE2EE()
   const [showVaultModal, setShowVaultModal] = useState(false)
@@ -160,6 +162,32 @@ export default function HomePage() {
     () => filtered.filter(v => !hiddenIds.has(v.id)),
     [filtered, hiddenIds]
   )
+
+  // When search is active, also search archived vouchers and marketplace listings
+  const searchedArchived = useMemo(() => {
+    if (!search) return []
+    const q = search.toLowerCase()
+    return archivedVouchers.filter(v => {
+      const decryptedCode = v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code
+      return (
+        v.store_name.toLowerCase().includes(q) ||
+        decryptedCode.toLowerCase().includes(q) ||
+        v.categories.some(c => c.toLowerCase().includes(q)) ||
+        v.tags.some(tag => tag.toLowerCase().includes(q)) ||
+        (v.notes && v.notes.toLowerCase().includes(q)) ||
+        (v.source && v.source.toLowerCase().includes(q))
+      )
+    })
+  }, [search, archivedVouchers, decryptedMap])
+
+  const searchedListings = useMemo(() => {
+    if (!search) return []
+    const q = search.toLowerCase()
+    return listings.filter(l =>
+      (l.store_name && l.store_name.toLowerCase().includes(q)) ||
+      (l.description && l.description.toLowerCase().includes(q))
+    )
+  }, [search, listings])
 
   async function handleSave(vData: any) {
     if (editingVoucher) {
@@ -694,13 +722,34 @@ export default function HomePage() {
             <p>{walletError}</p>
           </div>
         )}
+        {/* Search results count breakdown */}
+        {search && (displayVouchers.length > 0 || searchedArchived.length > 0 || searchedListings.length > 0) && (
+          <div className="flex flex-wrap gap-2 mb-3 text-xs text-gray-500">
+            {displayVouchers.length > 0 && (
+              <span className="flex items-center gap-1 bg-green-50 text-green-700 px-2.5 py-1 rounded-full font-medium">
+                <Gift className="w-3 h-3" /> {displayVouchers.length} פעילים
+              </span>
+            )}
+            {searchedArchived.length > 0 && (
+              <span className="flex items-center gap-1 bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full font-medium">
+                <Archive className="w-3 h-3" /> {searchedArchived.length} ארכיון
+              </span>
+            )}
+            {searchedListings.length > 0 && (
+              <span className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full font-medium">
+                <ShoppingBag className="w-3 h-3" /> {searchedListings.length} בשוק
+              </span>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[1,2,3,4].map(i => (
               <div key={i} className="h-32 gs-skeleton" style={{ borderRadius: 18 }} />
             ))}
           </div>
-        ) : displayVouchers.length === 0 ? (
+        ) : displayVouchers.length === 0 && searchedArchived.length === 0 && searchedListings.length === 0 ? (
           <div className="text-center py-16">
             <Gift className="w-14 h-14 mx-auto mb-4" style={{ color: 'var(--c-border)' }} />
             <p className="text-gray-500 font-medium">
@@ -711,26 +760,91 @@ export default function HomePage() {
             </p>
           </div>
         ) : (
-          <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'flex flex-col gap-2'}>
-            {displayVouchers.map(v => {
-              const sv = superVouchers.find(s => s.id === v.super_voucher_id)
-              return (
-                <VoucherCard
-                  key={v.id}
-                  voucher={v}
-                  superVoucherName={sv?.name}
-                  onClick={() => navigate(`/checkout/${v.id}`)}
-                  onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
-                  onDelete={() => requestDelete(v.id)}
-                  onArchive={() => requestArchive(v.id)}
-                  isSelectMode={isSelectMode}
-                  isSelected={selectedIds.has(v.id)}
-                  onSelect={() => toggleSelect(v.id)}
-                  rowMode={viewMode === 'rows'}
-                />
-              )
-            })}
-          </div>
+          <>
+            {/* Active vouchers */}
+            {displayVouchers.length > 0 && (
+              <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'flex flex-col gap-2'}>
+                {displayVouchers.map(v => {
+                  const sv = superVouchers.find(s => s.id === v.super_voucher_id)
+                  return (
+                    <VoucherCard
+                      key={v.id}
+                      voucher={v}
+                      superVoucherName={sv?.name}
+                      onClick={() => navigate(`/checkout/${v.id}`)}
+                      onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
+                      onDelete={() => requestDelete(v.id)}
+                      onArchive={() => requestArchive(v.id)}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.has(v.id)}
+                      onSelect={() => toggleSelect(v.id)}
+                      rowMode={viewMode === 'rows'}
+                    />
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Archived search results */}
+            {searchedArchived.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Archive className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-400">מהארכיון</span>
+                </div>
+                <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3 opacity-60 grayscale' : 'flex flex-col gap-2 opacity-60 grayscale'}>
+                  {searchedArchived.map(v => {
+                    const sv = superVouchers.find(s => s.id === v.super_voucher_id)
+                    return (
+                      <VoucherCard
+                        key={v.id}
+                        voucher={v}
+                        superVoucherName={sv?.name}
+                        onClick={() => navigate(`/checkout/${v.id}`)}
+                        onEdit={() => {}}
+                        onDelete={() => {}}
+                        onArchive={() => {}}
+                        rowMode={viewMode === 'rows'}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Marketplace search results */}
+            {searchedListings.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ShoppingBag className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-xs font-medium text-blue-500">בשוק</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {searchedListings.map(l => (
+                    <button
+                      key={l.id}
+                      onClick={() => navigate('/market')}
+                      className="flex items-center gap-3 text-right w-full"
+                      style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: '12px 14px' }}
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 text-blue-600 font-bold text-sm">
+                        {(l.store_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate" style={{ color: 'var(--c-text)' }}>{l.store_name}</p>
+                        {l.description && <p className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{l.description}</p>}
+                      </div>
+                      <div className="text-left flex-shrink-0">
+                        <div className="text-sm font-bold text-blue-600">{formatCurrency(l.asking_price)}</div>
+                        {l.balance && <div className="text-xs text-gray-400">יתרה: {formatCurrency(l.balance)}</div>}
+                        {l.expiry_date && <div className="text-xs text-gray-400">{formatDate(l.expiry_date)}</div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

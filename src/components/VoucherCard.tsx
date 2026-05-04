@@ -240,8 +240,10 @@ export default function VoucherCard({
                   {superVoucherName || voucher.store_name}
                 </span>
               </div>
-              {voucher.categories[0] && (
-                <span className="text-xs" style={{ color: 'var(--c-text3)' }}>{voucher.categories[0]}</span>
+              {(voucher.categories[0] || voucher.source) && (
+                <span className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>
+                  {[voucher.categories[0], voucher.source].filter(Boolean).join(' · ')}
+                </span>
               )}
             </div>
 
@@ -339,14 +341,14 @@ export default function VoucherCard({
                   </span>
                 )}
               </div>
-              {superVoucherName && (
-                <p className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{voucher.store_name}</p>
-              )}
-              {voucher.categories[0] && !superVoucherName && (
-                <span className="text-xs" style={{ color: 'var(--c-text3)' }}>
-                  {voucher.categories[0]}{voucher.source ? ` · ${voucher.source}` : ''}
-                </span>
-              )}
+              {(() => {
+                const parts = superVoucherName
+                  ? [voucher.source].filter(Boolean)
+                  : [voucher.categories[0], voucher.source].filter(Boolean)
+                return parts.length > 0 ? (
+                  <p className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{parts.join(' · ')}</p>
+                ) : null
+              })()}
             </div>
 
             {/* Balance / Item */}
