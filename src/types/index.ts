@@ -242,6 +242,50 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'other', name: 'אחר', emoji: '🔖' },
 ]
 
+// ============ Smart Discount Matcher Types ============
+
+export interface DiscountClub {
+  id: string
+  name: string
+  logo_url?: string
+  type: 'credit_card' | 'loyalty_club'
+  is_active: boolean
+  created_at: string
+}
+
+export interface DiscountBusiness {
+  id: string
+  name: string
+  logo_url?: string
+  website?: string
+  tags: string[]
+  store_id?: string
+  created_at: string
+}
+
+export interface DiscountDeal {
+  deal_id: string
+  club_id: string
+  club_name: string
+  club_logo?: string
+  business_id: string
+  business_name: string
+  business_logo?: string
+  business_website?: string
+  business_tags: string[]
+  title: string
+  description?: string
+  discount_type: 'percent' | 'fixed' | 'free_item' | 'other'
+  discount_value?: number
+  promo_code?: string
+  external_link?: string
+  tags: string[]
+  start_date?: string
+  expiration_date?: string
+  is_my_club: boolean
+  is_upcoming: boolean
+}
+
 export const SUPER_VOUCHER_STORES: Record<string, string[]> = {
   'BuyMe': ['מגה, מגה בעיר', 'שופרסל', 'רמי לוי', 'ויקטורי', 'AM:PM', 'מחסני השוק', 'יינות ביתן', 'פרש מרקט', 'ספייסר', 'רנואר', 'קסטרו', 'אמריקן איגל', 'H&M', 'זארה', 'Mango', 'Fox', 'Timberland', 'ACE', 'אייס', 'Home Center', 'IKEA', 'נטו', 'דומינוס', 'פיצה האט', 'מקדונלדס', 'בורגר קינג', 'שוורמה הבית', 'קפה קפה', 'ארומה', 'קפה גרג', 'שילב', 'BBB', 'פנדה', 'גוטשה', 'רולדין', 'GOLF', 'אנג\'ל', 'ליפסטיק', 'ביגוד ואביזרים'],
   'תו הזהב': ['שופרסל', 'רמי לוי', 'ויקטורי', 'AM:PM', 'מחסני השוק', 'יינות ביתן', 'פרש מרקט', 'ספייסר', 'רנואר', 'קסטרו', 'H&M', 'זארה', 'Fox', 'ACE', 'Home Center', 'IKEA'],

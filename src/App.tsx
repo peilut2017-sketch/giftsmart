@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { MarketplaceProvider } from './contexts/MarketplaceContext'
+import { DiscountsProvider } from './contexts/DiscountsContext'
 import { E2EEProvider } from './contexts/E2EEContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { LocaleProvider, useLocale } from './lib/i18n'
@@ -24,6 +25,7 @@ import SharedVoucherPage from './pages/SharedVoucherPage'
 import GiftPage from './pages/GiftPage'
 import AccessibilityPage from './pages/AccessibilityPage'
 import MarketplacePage from './pages/MarketplacePage'
+import DiscountsPage from './pages/DiscountsPage'
 import ListingDetailPage from './pages/ListingDetailPage'
 import BulkListPage from './pages/BulkListPage'
 import PrivacyPage from './pages/PrivacyPage'
@@ -276,6 +278,7 @@ function AppRoutes() {
     <E2EEProvider>
     <SubscriptionProvider>
     <VoucherProvider>
+    <DiscountsProvider>
     <MarketplaceProvider>
       <NotificationBridge />
       <E2EEBridge />
@@ -294,6 +297,7 @@ function AppRoutes() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/accessibility" element={<AccessibilityPage />} />
             <Route path="/market" element={<MarketplacePage />} />
+            <Route path="/discounts" element={<DiscountsPage />} />
             <Route path="/market/listing/:id" element={<ListingDetailPage />} />
             <Route path="/market/bulk" element={<BulkListPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
@@ -306,6 +310,7 @@ function AppRoutes() {
       {widgetEnabled && <AccessibilityWidget />}
       <OnboardingGuide />
     </MarketplaceProvider>
+    </DiscountsProvider>
     </VoucherProvider>
     </SubscriptionProvider>
     </E2EEProvider>

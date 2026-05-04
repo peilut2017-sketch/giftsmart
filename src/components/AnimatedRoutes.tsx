@@ -4,12 +4,13 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 // Tab order (RTL layout: rightmost = index 0)
 const TAB_ORDER: Record<string, number> = {
-  '/':        0,
-  '/market':  1,
-  '/archive': 2,
-  '/stats':   3,
-  '/settings':4,
-  '/admin':   5,
+  '/':           0,
+  '/market':     1,
+  '/discounts':  2,
+  '/archive':    3,
+  '/stats':      4,
+  '/settings':   5,
+  '/admin':      6,
 }
 
 function tabIndex(pathname: string): number {

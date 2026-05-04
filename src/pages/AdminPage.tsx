@@ -4,9 +4,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck, Percent, CreditCard, Tag, Building2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import type { SuperVoucher } from '../types'
+import type { SuperVoucher, DiscountClub, DiscountBusiness, DiscountDeal } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { SUPER_VOUCHER_STORES } from '../types'
 
@@ -179,6 +179,174 @@ export default function AdminPage() {
   const [accessRequests, setAccessRequests] = useState<{ user_id: string; user_email: string | null; user_name: string | null; message: string | null; status: string; updated_at: string }[]>([])
   const [accessRequestsLoaded, setAccessRequestsLoaded] = useState(false)
   const [handlingAccess, setHandlingAccess] = useState<string | null>(null)
+
+  // ── Discount Matcher admin state ─────────────────────────────────────────
+  const [showDiscounts, setShowDiscounts] = useState(false)
+  const [discountTab, setDiscountTab] = useState<'clubs' | 'businesses' | 'deals'>('deals')
+
+  // Clubs
+  const [adminClubs, setAdminClubs] = useState<DiscountClub[]>([])
+  const [clubsLoaded, setClubsLoaded] = useState(false)
+  const [showClubForm, setShowClubForm] = useState(false)
+  const [editingClub, setEditingClub] = useState<DiscountClub | null>(null)
+  const [clubForm, setClubForm] = useState({ name: '', logo_url: '', type: 'loyalty_club' as 'credit_card' | 'loyalty_club', is_active: true })
+
+  // Businesses
+  const [adminBusinesses, setAdminBusinesses] = useState<DiscountBusiness[]>([])
+  const [businessesLoaded, setBusinessesLoaded] = useState(false)
+  const [showBusinessForm, setShowBusinessForm] = useState(false)
+  const [editingBusiness, setEditingBusiness] = useState<DiscountBusiness | null>(null)
+  const [businessForm, setBusinessForm] = useState({ name: '', logo_url: '', website: '', tags: '' })
+
+  // Deals
+  const [adminDeals, setAdminDeals] = useState<DiscountDeal[]>([])
+  const [dealsLoaded, setDealsLoaded] = useState(false)
+  const [showDealForm, setShowDealForm] = useState(false)
+  const [editingDeal, setEditingDeal] = useState<DiscountDeal | null>(null)
+  const [dealForm, setDealForm] = useState({
+    club_id: '', business_id: '', title: '', description: '',
+    discount_type: 'percent' as 'percent' | 'fixed' | 'free_item' | 'other',
+    discount_value: '', promo_code: '', external_link: '', tags: '',
+    start_date: '', expiration_date: '', is_active: true,
+  })
+  const [savingDiscount, setSavingDiscount] = useState(false)
+
+  async function loadAdminClubs() {
+    const { data } = await supabase.rpc('admin_get_all_clubs')
+    if (data) setAdminClubs(data as DiscountClub[])
+    setClubsLoaded(true)
+  }
+  async function loadAdminBusinesses() {
+    const { data } = await supabase.rpc('admin_get_all_businesses')
+    if (data) setAdminBusinesses(data as DiscountBusiness[])
+    setBusinessesLoaded(true)
+  }
+  async function loadAdminDeals() {
+    const { data } = await supabase.rpc('admin_get_all_deals')
+    if (data) setAdminDeals(data as DiscountDeal[])
+    setDealsLoaded(true)
+  }
+
+  async function handleSaveClub() {
+    setSavingDiscount(true)
+    try {
+      const { error } = await supabase.rpc('admin_upsert_club', {
+        p_id: editingClub?.id ?? null,
+        p_name: clubForm.name,
+        p_logo_url: clubForm.logo_url || null,
+        p_type: clubForm.type,
+        p_is_active: clubForm.is_active,
+      })
+      if (error) throw error
+      toast.success(editingClub ? 'מועדון עודכן' : 'מועדון נוסף')
+      setShowClubForm(false); setEditingClub(null)
+      setClubForm({ name: '', logo_url: '', type: 'loyalty_club', is_active: true })
+      await loadAdminClubs()
+    } catch (e: any) { toast.error(e.message || t('admin.save.error')) }
+    finally { setSavingDiscount(false) }
+  }
+
+  async function handleDeleteClub(id: string) {
+    if (!window.confirm('למחוק מועדון זה? כל העסקאות המשויכות אליו יימחקו גם כן.')) return
+    const { error } = await supabase.rpc('admin_delete_club', { p_id: id })
+    if (error) { toast.error(error.message); return }
+    toast.success('מועדון נמחק')
+    setAdminClubs(prev => prev.filter(c => c.id !== id))
+  }
+
+  async function handleSaveBusiness() {
+    setSavingDiscount(true)
+    try {
+      const tagsArr = businessForm.tags.split(',').map(s => s.trim()).filter(Boolean)
+      const { error } = await supabase.rpc('admin_upsert_business', {
+        p_id: editingBusiness?.id ?? null,
+        p_name: businessForm.name,
+        p_logo_url: businessForm.logo_url || null,
+        p_website: businessForm.website || null,
+        p_tags: tagsArr,
+        p_store_id: null,
+      })
+      if (error) throw error
+      toast.success(editingBusiness ? 'עסק עודכן' : 'עסק נוסף')
+      setShowBusinessForm(false); setEditingBusiness(null)
+      setBusinessForm({ name: '', logo_url: '', website: '', tags: '' })
+      await loadAdminBusinesses()
+    } catch (e: any) { toast.error(e.message || t('admin.save.error')) }
+    finally { setSavingDiscount(false) }
+  }
+
+  async function handleDeleteBusiness(id: string) {
+    if (!window.confirm('למחוק עסק זה?')) return
+    const { error } = await supabase.rpc('admin_delete_business', { p_id: id })
+    if (error) { toast.error(error.message); return }
+    toast.success('עסק נמחק')
+    setAdminBusinesses(prev => prev.filter(b => b.id !== id))
+  }
+
+  async function handleSaveDeal() {
+    if (!dealForm.club_id || !dealForm.business_id || !dealForm.title) {
+      toast.error('מועדון, עסק וכותרת הם שדות חובה'); return
+    }
+    setSavingDiscount(true)
+    try {
+      const tagsArr = dealForm.tags.split(',').map(s => s.trim()).filter(Boolean)
+      const { error } = await supabase.rpc('admin_upsert_deal', {
+        p_id: editingDeal?.deal_id ?? null,
+        p_club_id: dealForm.club_id,
+        p_business_id: dealForm.business_id,
+        p_title: dealForm.title,
+        p_description: dealForm.description || null,
+        p_discount_type: dealForm.discount_type,
+        p_discount_value: dealForm.discount_value ? Number(dealForm.discount_value) : null,
+        p_promo_code: dealForm.promo_code || null,
+        p_external_link: dealForm.external_link || null,
+        p_tags: tagsArr,
+        p_start_date: dealForm.start_date || null,
+        p_expiration_date: dealForm.expiration_date || null,
+        p_is_active: dealForm.is_active,
+      })
+      if (error) throw error
+      toast.success(editingDeal ? 'עסקה עודכנה' : 'עסקה נוספה')
+      setShowDealForm(false); setEditingDeal(null)
+      setDealForm({ club_id: '', business_id: '', title: '', description: '', discount_type: 'percent', discount_value: '', promo_code: '', external_link: '', tags: '', start_date: '', expiration_date: '', is_active: true })
+      await loadAdminDeals()
+    } catch (e: any) { toast.error(e.message || t('admin.save.error')) }
+    finally { setSavingDiscount(false) }
+  }
+
+  async function handleDeleteDeal(id: string) {
+    if (!window.confirm('למחוק עסקה זו?')) return
+    const { error } = await supabase.rpc('admin_delete_deal', { p_id: id })
+    if (error) { toast.error(error.message); return }
+    toast.success('עסקה נמחקה')
+    setAdminDeals(prev => prev.filter(d => d.deal_id !== id))
+  }
+
+  function openEditClub(club: DiscountClub) {
+    setEditingClub(club)
+    setClubForm({ name: club.name, logo_url: club.logo_url || '', type: club.type, is_active: club.is_active })
+    setShowClubForm(true)
+  }
+
+  function openEditBusiness(b: DiscountBusiness) {
+    setEditingBusiness(b)
+    setBusinessForm({ name: b.name, logo_url: b.logo_url || '', website: b.website || '', tags: b.tags.join(', ') })
+    setShowBusinessForm(true)
+  }
+
+  function openEditDeal(d: DiscountDeal) {
+    setEditingDeal(d)
+    setDealForm({
+      club_id: d.club_id, business_id: d.business_id, title: d.title,
+      description: d.description || '', discount_type: d.discount_type,
+      discount_value: d.discount_value != null ? String(d.discount_value) : '',
+      promo_code: d.promo_code || '', external_link: d.external_link || '',
+      tags: d.tags.join(', '),
+      start_date: d.start_date || '', expiration_date: d.expiration_date || '',
+      is_active: true,
+    })
+    setShowDealForm(true)
+  }
 
   async function loadAccessRequests() {
     setAccessRequestsLoaded(false)
@@ -2276,6 +2444,266 @@ export default function AdminPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── הנחות חכמות ── */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-4"
+            onClick={() => {
+              const next = !showDiscounts
+              setShowDiscounts(next)
+              if (next) { loadAdminDeals(); loadAdminClubs(); loadAdminBusinesses() }
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                <Percent className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-800">{t('admin.discounts')}</p>
+                <p className="text-xs text-gray-400">מועדונים · עסקים · עסקאות הנחה</p>
+              </div>
+            </div>
+            {showDiscounts ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+
+          {showDiscounts && (
+            <div className="border-t">
+              {/* Sub-tabs */}
+              <div className="flex border-b text-sm font-medium">
+                {(['deals', 'clubs', 'businesses'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setDiscountTab(tab)}
+                    className={`flex-1 py-2.5 transition-colors ${discountTab === tab ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'}`}
+                  >
+                    {tab === 'deals' ? t('admin.discounts.deals') : tab === 'clubs' ? t('admin.discounts.clubs') : t('admin.discounts.businesses')}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── CLUBS TAB ── */}
+              {discountTab === 'clubs' && (
+                <div className="p-4 space-y-3">
+                  <button
+                    onClick={() => { setEditingClub(null); setClubForm({ name: '', logo_url: '', type: 'loyalty_club', is_active: true }); setShowClubForm(true) }}
+                    className="flex items-center gap-2 text-sm font-medium text-green-600 bg-green-50 px-3 py-2 rounded-xl"
+                  >
+                    <Plus className="w-4 h-4" /> {t('admin.discounts.add_club')}
+                  </button>
+
+                  {showClubForm && (
+                    <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-sm">{editingClub ? 'עריכת מועדון' : 'מועדון חדש'}</p>
+                        <button onClick={() => { setShowClubForm(false); setEditingClub(null) }}><X className="w-4 h-4 text-gray-400" /></button>
+                      </div>
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="שם המועדון *" value={clubForm.name} onChange={e => setClubForm(f => ({ ...f, name: e.target.value }))} />
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="URL לוגו (אופציונלי)" value={clubForm.logo_url} onChange={e => setClubForm(f => ({ ...f, logo_url: e.target.value }))} dir="ltr" />
+                      <select className="w-full border rounded-xl px-3 py-2 text-sm bg-white" value={clubForm.type} onChange={e => setClubForm(f => ({ ...f, type: e.target.value as 'credit_card' | 'loyalty_club' }))}>
+                        <option value="credit_card">{t('settings.clubs.credit_card')}</option>
+                        <option value="loyalty_club">{t('settings.clubs.loyalty_club')}</option>
+                      </select>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={clubForm.is_active} onChange={e => setClubForm(f => ({ ...f, is_active: e.target.checked }))} />
+                        פעיל
+                      </label>
+                      <button onClick={handleSaveClub} disabled={savingDiscount || !clubForm.name} className="w-full py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                        {savingDiscount ? '...' : t('app.save')}
+                      </button>
+                    </div>
+                  )}
+
+                  {!clubsLoaded ? <p className="text-sm text-gray-400 text-center py-4">{t('app.loading')}</p> : (
+                    <div className="space-y-2">
+                      {adminClubs.map(club => (
+                        <div key={club.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {club.type === 'credit_card' ? <CreditCard className="w-4 h-4 text-blue-500 shrink-0" /> : <Tag className="w-4 h-4 text-purple-500 shrink-0" />}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">{club.name}</p>
+                              <p className="text-xs text-gray-400">{club.type === 'credit_card' ? 'כרטיס אשראי' : 'מועדון לקוחות'} · {club.is_active ? 'פעיל' : 'לא פעיל'}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button onClick={() => openEditClub(club)} className="p-1.5 text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDeleteClub(club.id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── BUSINESSES TAB ── */}
+              {discountTab === 'businesses' && (
+                <div className="p-4 space-y-3">
+                  <button
+                    onClick={() => { setEditingBusiness(null); setBusinessForm({ name: '', logo_url: '', website: '', tags: '' }); setShowBusinessForm(true) }}
+                    className="flex items-center gap-2 text-sm font-medium text-green-600 bg-green-50 px-3 py-2 rounded-xl"
+                  >
+                    <Plus className="w-4 h-4" /> {t('admin.discounts.add_business')}
+                  </button>
+
+                  {showBusinessForm && (
+                    <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-sm">{editingBusiness ? 'עריכת עסק' : 'עסק חדש'}</p>
+                        <button onClick={() => { setShowBusinessForm(false); setEditingBusiness(null) }}><X className="w-4 h-4 text-gray-400" /></button>
+                      </div>
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="שם העסק *" value={businessForm.name} onChange={e => setBusinessForm(f => ({ ...f, name: e.target.value }))} />
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="URL לוגו (אופציונלי)" value={businessForm.logo_url} onChange={e => setBusinessForm(f => ({ ...f, logo_url: e.target.value }))} dir="ltr" />
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="אתר אינטרנט (אופציונלי)" value={businessForm.website} onChange={e => setBusinessForm(f => ({ ...f, website: e.target.value }))} dir="ltr" />
+                      <div>
+                        <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="תגיות (מופרדות בפסיק: קפה, מסעדה)" value={businessForm.tags} onChange={e => setBusinessForm(f => ({ ...f, tags: e.target.value }))} />
+                        <p className="text-xs text-gray-400 mt-1">לדוגמה: קפה, ארוחת בוקר, מסעדות</p>
+                      </div>
+                      <button onClick={handleSaveBusiness} disabled={savingDiscount || !businessForm.name} className="w-full py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                        {savingDiscount ? '...' : t('app.save')}
+                      </button>
+                    </div>
+                  )}
+
+                  {!businessesLoaded ? <p className="text-sm text-gray-400 text-center py-4">{t('app.loading')}</p> : (
+                    <div className="space-y-2">
+                      {adminBusinesses.map(biz => (
+                        <div key={biz.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">{biz.name}</p>
+                              <p className="text-xs text-gray-400 truncate">{biz.tags.join(', ') || 'ללא תגיות'}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button onClick={() => openEditBusiness(biz)} className="p-1.5 text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDeleteBusiness(biz.id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── DEALS TAB ── */}
+              {discountTab === 'deals' && (
+                <div className="p-4 space-y-3">
+                  <button
+                    onClick={() => { setEditingDeal(null); setDealForm({ club_id: '', business_id: '', title: '', description: '', discount_type: 'percent', discount_value: '', promo_code: '', external_link: '', tags: '', start_date: '', expiration_date: '', is_active: true }); setShowDealForm(true) }}
+                    className="flex items-center gap-2 text-sm font-medium text-green-600 bg-green-50 px-3 py-2 rounded-xl"
+                  >
+                    <Plus className="w-4 h-4" /> {t('admin.discounts.add_deal')}
+                  </button>
+
+                  {showDealForm && (
+                    <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-sm">{editingDeal ? 'עריכת עסקה' : 'עסקה חדשה'}</p>
+                        <button onClick={() => { setShowDealForm(false); setEditingDeal(null) }}><X className="w-4 h-4 text-gray-400" /></button>
+                      </div>
+
+                      {/* Club select */}
+                      <select className="w-full border rounded-xl px-3 py-2 text-sm bg-white" value={dealForm.club_id} onChange={e => setDealForm(f => ({ ...f, club_id: e.target.value }))}>
+                        <option value="">בחר מועדון / כרטיס *</option>
+                        {adminClubs.filter(c => c.is_active).map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+
+                      {/* Business select */}
+                      <select className="w-full border rounded-xl px-3 py-2 text-sm bg-white" value={dealForm.business_id} onChange={e => setDealForm(f => ({ ...f, business_id: e.target.value }))}>
+                        <option value="">בחר עסק *</option>
+                        {adminBusinesses.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="כותרת *  (לדוגמה: 20% הנחה לחברי הויזה)" value={dealForm.title} onChange={e => setDealForm(f => ({ ...f, title: e.target.value }))} />
+                      <textarea className="w-full border rounded-xl px-3 py-2 text-sm resize-none h-20" placeholder="תיאור (אופציונלי)" value={dealForm.description} onChange={e => setDealForm(f => ({ ...f, description: e.target.value }))} />
+
+                      {/* Discount type + value */}
+                      <div className="flex gap-2">
+                        <select className="flex-1 border rounded-xl px-3 py-2 text-sm bg-white" value={dealForm.discount_type} onChange={e => setDealForm(f => ({ ...f, discount_type: e.target.value as 'percent' | 'fixed' | 'free_item' | 'other' }))}>
+                          <option value="percent">אחוז (%)</option>
+                          <option value="fixed">סכום קבוע (₪)</option>
+                          <option value="free_item">פריט חינם</option>
+                          <option value="other">אחר</option>
+                        </select>
+                        {(dealForm.discount_type === 'percent' || dealForm.discount_type === 'fixed') && (
+                          <input type="number" className="w-24 border rounded-xl px-3 py-2 text-sm" placeholder="ערך" value={dealForm.discount_value} onChange={e => setDealForm(f => ({ ...f, discount_value: e.target.value }))} dir="ltr" min="0" />
+                        )}
+                      </div>
+
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm font-mono tracking-wider" placeholder="קוד פרומו (אופציונלי)" value={dealForm.promo_code} onChange={e => setDealForm(f => ({ ...f, promo_code: e.target.value }))} dir="ltr" />
+                      <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="קישור לעסקה (אופציונלי)" value={dealForm.external_link} onChange={e => setDealForm(f => ({ ...f, external_link: e.target.value }))} dir="ltr" />
+
+                      <div>
+                        <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="תגיות (מופרדות בפסיק)" value={dealForm.tags} onChange={e => setDealForm(f => ({ ...f, tags: e.target.value }))} />
+                        <p className="text-xs text-gray-400 mt-1">לדוגמה: קפה, ארוחת בוקר</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">תאריך התחלה</label>
+                          <input type="date" className="w-full border rounded-xl px-3 py-2 text-sm" value={dealForm.start_date} onChange={e => setDealForm(f => ({ ...f, start_date: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">תאריך תפוגה</label>
+                          <input type="date" className="w-full border rounded-xl px-3 py-2 text-sm" value={dealForm.expiration_date} onChange={e => setDealForm(f => ({ ...f, expiration_date: e.target.value }))} />
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={dealForm.is_active} onChange={e => setDealForm(f => ({ ...f, is_active: e.target.checked }))} />
+                        עסקה פעילה
+                      </label>
+
+                      <button onClick={handleSaveDeal} disabled={savingDiscount || !dealForm.club_id || !dealForm.business_id || !dealForm.title} className="w-full py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                        {savingDiscount ? '...' : t('app.save')}
+                      </button>
+                    </div>
+                  )}
+
+                  {!dealsLoaded ? <p className="text-sm text-gray-400 text-center py-4">{t('app.loading')}</p> : (
+                    <div className="space-y-2">
+                      {adminDeals.length === 0 && <p className="text-sm text-gray-400 text-center py-4">{t('discounts.no_deals')}</p>}
+                      {adminDeals.map(deal => (
+                        <div key={deal.deal_id} className="p-3 bg-gray-50 rounded-2xl space-y-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-800 truncate">{deal.title}</p>
+                              <p className="text-xs text-gray-500">{deal.business_name} · {deal.club_name}</p>
+                              <div className="flex gap-1.5 mt-1 flex-wrap">
+                                {deal.discount_type === 'percent' && deal.discount_value != null && (
+                                  <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{deal.discount_value}%</span>
+                                )}
+                                {deal.discount_type === 'fixed' && deal.discount_value != null && (
+                                  <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">₪{deal.discount_value}</span>
+                                )}
+                                {deal.promo_code && (
+                                  <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-mono">{deal.promo_code}</span>
+                                )}
+                                {deal.expiration_date && (
+                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">עד {deal.expiration_date}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-1 shrink-0">
+                              <button onClick={() => openEditDeal(deal)} className="p-1.5 text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleDeleteDeal(deal.deal_id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
