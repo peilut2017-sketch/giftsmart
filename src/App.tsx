@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
-import { identifyUser, resetPostHog } from './lib/posthog'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import AnimatedRoutes from './components/AnimatedRoutes'
@@ -194,12 +193,6 @@ function AppRoutes() {
   }
   const [banners, setBanners] = useState<BannerData[]>([])
   const [bannerIndex, setBannerIndex] = useState(0)
-
-  // PostHog: identify on login, reset on logout
-  useEffect(() => {
-    if (user) identifyUser(user.id, user.email)
-    else resetPostHog()
-  }, [user?.id])
 
   // After login: redirect back to gift page if user came from one
   useEffect(() => {

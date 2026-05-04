@@ -321,6 +321,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[OCR]', msg)
       phCapture('voucher_scan_failed', { error: msg, source: 'image' })
+      phCapture('ocr_failed', { error: msg, source: 'image' })
       // Show a hint if it's an HEIC file
       if (msg.includes('decode') || msg.includes('heic') || msg.includes('heif')) {
         toast.error('פורמט HEIC לא נתמך — שמור כ-JPEG/PNG ונסה שוב')
@@ -348,6 +349,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       } catch (smsErr) {
         toast.dismiss(toastId)
         phCapture('voucher_scan_failed', { error: String(smsErr), source: 'sms' })
+        phCapture('ocr_failed', { error: String(smsErr), source: 'sms' })
         const extracted = extractFromSMS(smsText)
         applyExtracted(extracted)
         toast.success('פרטים חולצו')
