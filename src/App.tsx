@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { MarketplaceProvider } from './contexts/MarketplaceContext'
+import { DiscountsProvider } from './contexts/DiscountsContext'
 import { E2EEProvider } from './contexts/E2EEContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { LocaleProvider, useLocale } from './lib/i18n'
@@ -276,6 +277,7 @@ function AppRoutes() {
     <E2EEProvider>
     <SubscriptionProvider>
     <VoucherProvider>
+    <DiscountsProvider>
     <MarketplaceProvider>
       <NotificationBridge />
       <E2EEBridge />
@@ -306,6 +308,7 @@ function AppRoutes() {
       {widgetEnabled && <AccessibilityWidget />}
       <OnboardingGuide />
     </MarketplaceProvider>
+    </DiscountsProvider>
     </VoucherProvider>
     </SubscriptionProvider>
     </E2EEProvider>
