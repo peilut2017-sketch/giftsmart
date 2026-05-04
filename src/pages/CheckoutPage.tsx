@@ -926,7 +926,7 @@ export default function CheckoutPage() {
                 <AlertTriangle className="w-4 h-4" />
               }
               <span>{expiryLabel}</span>
-              {voucher.expiry_date && <span className="text-xs text-gray-400">({formatDate(voucher.expiry_date)})</span>}
+              {voucher.expiry_date && expiryStatus !== 'ok' && <span className="text-xs text-gray-400">({formatDate(voucher.expiry_date)})</span>}
             </div>
           )}
 
