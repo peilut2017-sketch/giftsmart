@@ -1,15 +1,15 @@
 // Supabase Edge Function — analyze-voucher
-// Uses OPENAI_API_KEY from Supabase Secrets (never exposed to the browser).
+// Uses GEMINI_API_KEY from Supabase Secrets (never exposed to the browser).
 //
 // Set the secret:
-//   supabase secrets set OPENAI_API_KEY=sk-...
+//   supabase secrets set GEMINI_API_KEY=AIza...
 //
 // Request body (JSON):
 //   { image_base64: string, mime_type?: string }   → image / OCR analysis
 //   { text: string }                               → SMS / free-text analysis
 //
 // Response:
-//   { store_name, code, cvv, amount, balance, expiry_date, categories, link, candidates } | { error: string }
+//   { store_name, code, cvv, amount, currency, balance, expiry_date, categories, link, candidates } | { error: string }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -18,7 +18,6 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Predefined category IDs that constrain AI suggestions
 const CATEGORY_IDS = [
   'fashion', 'food', 'electronics', 'beauty', 'home',
   'sport', 'travel', 'entertainment', 'kids', 'health',
@@ -78,9 +77,16 @@ CANDIDATES: populate only when genuinely ambiguous (2+ plausible values for a fi
 Missing/unclear fields → null (never empty string or empty array).
 `
 
-const SYSTEM_PROMPT =
-  'You are an expert at reading Israeli gift cards, vouchers, receipts, SMS messages, and emails. ' +
-  'Extract voucher details accurately.\n' + EXTRACTION_SCHEMA
+const IMAGE_PROMPT =
+  'You are an expert at reading Israeli gift cards, vouchers, and store credit. ' +
+  'Analyze this image carefully and extract all voucher details.\n' +
+  EXTRACTION_SCHEMA
+
+const TEXT_PROMPT =
+  'You are an expert at parsing Israeli SMS messages, emails, and receipts about gift cards and vouchers. ' +
+  'Extract all voucher details from the following text.\n' +
+  EXTRACTION_SCHEMA +
+  '\n\nText:\n'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -91,7 +97,7 @@ function extractJson(raw: string): Record<string, unknown> {
   } catch {
     const m = cleaned.match(/\{[\s\S]*\}/)
     if (m) return JSON.parse(m[0])
-    throw new Error(`Non-JSON response: ${cleaned.slice(0, 200)}`)
+    throw new Error(`Non-JSON response from Gemini: ${cleaned.slice(0, 200)}`)
   }
 }
 
@@ -147,9 +153,9 @@ Deno.serve(async (req: Request) => {
   if (!user) return fail('Unauthorized — please sign in')
 
   // ── API key ───────────────────────────────────────────────────────────────
-  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
-  if (!OPENAI_API_KEY) {
-    return fail('OPENAI_API_KEY secret is not configured — set it via: supabase secrets set OPENAI_API_KEY=sk-...')
+  const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
+  if (!GEMINI_API_KEY) {
+    return fail('GEMINI_API_KEY secret is not configured in Supabase — set it via: supabase secrets set GEMINI_API_KEY=AIza...')
   }
 
   // ── Parse body ────────────────────────────────────────────────────────────
@@ -160,69 +166,52 @@ Deno.serve(async (req: Request) => {
     return fail('Invalid JSON body')
   }
 
-  // ── Build OpenAI message content ──────────────────────────────────────────
-  type ContentPart =
-    | { type: 'text'; text: string }
-    | { type: 'image_url'; image_url: { url: string; detail: 'high' } }
-
-  let userContent: ContentPart[]
-
+  // ── Build Gemini request parts ────────────────────────────────────────────
+  let parts: unknown[]
   if (body.image_base64) {
-    const mimeType = body.mime_type || 'image/jpeg'
-    const dataUrl = `data:${mimeType};base64,${body.image_base64}`
-    userContent = [
-      { type: 'text', text: 'Analyze this voucher image and extract all details.' },
-      { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
+    parts = [
+      { text: IMAGE_PROMPT },
+      { inlineData: { mimeType: body.mime_type || 'image/jpeg', data: body.image_base64 } },
     ]
   } else if (body.text) {
-    userContent = [
-      { type: 'text', text: `Extract voucher details from this text:\n\n${body.text.slice(0, 5000)}` },
-    ]
+    parts = [{ text: TEXT_PROMPT + body.text }]
   } else {
     return fail('Provide image_base64 or text')
   }
 
-  // ── Call OpenAI GPT-4o-mini ───────────────────────────────────────────────
-  let openaiRes: Response
-  let openaiData: unknown
+  // ── Call Gemini 1.5 Flash ─────────────────────────────────────────────────
+  let geminiRes: Response
+  let geminiData: unknown
   try {
-    openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] }),
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userContent },
-        ],
-        max_tokens: 800,
-        temperature: 0,
-      }),
-    })
-    openaiData = await openaiRes.json()
+    )
+    geminiData = await geminiRes.json()
   } catch (e) {
-    return fail(`Network error calling OpenAI: ${String(e)}`)
+    return fail(`Network error calling Gemini: ${String(e)}`)
   }
 
-  if (!openaiRes.ok) {
+  if (!geminiRes.ok) {
     const msg =
-      (openaiData as { error?: { message?: string } })?.error?.message ||
-      `OpenAI returned HTTP ${openaiRes.status}`
+      (geminiData as { error?: { message?: string } })?.error?.message ||
+      `Gemini returned HTTP ${geminiRes.status}`
     return fail(msg)
   }
 
   const rawText: string =
-    (openaiData as { choices?: { message?: { content?: string } }[] })
-      ?.choices?.[0]?.message?.content ?? ''
+    (geminiData as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
+      ?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 
   let extracted: Record<string, unknown>
   try {
     extracted = extractJson(rawText)
   } catch (e) {
-    return fail(`Could not parse OpenAI response: ${String(e)}`)
+    return fail(`Could not parse Gemini response: ${String(e)}`)
   }
 
   // ── Normalise candidates block ────────────────────────────────────────────
