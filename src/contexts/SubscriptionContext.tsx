@@ -72,7 +72,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           .from('subscriptions')
           .select('plan, status, current_period_end')
           .eq('user_id', user.id)
-          .single()
+          .maybeSingle()
         if (
           data?.plan === 'pro' &&
           data.status === 'active' &&
@@ -111,7 +111,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .from('subscriptions')
         .select('plan, status, current_period_end')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
       if (
         data?.plan === 'pro' &&
         data.status === 'active' &&
