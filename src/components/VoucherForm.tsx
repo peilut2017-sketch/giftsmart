@@ -322,8 +322,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       // Show a hint if it's an HEIC file
       if (msg.includes('decode') || msg.includes('heic') || msg.includes('heif')) {
         toast.error('פורמט HEIC לא נתמך — שמור כ-JPEG/PNG ונסה שוב')
-      } else if (msg.includes('GEMINI_API_KEY')) {
-        toast.error('מפתח Gemini לא מוגדר בשרת — הגדר GEMINI_API_KEY ב-Supabase Secrets')
+      } else if (msg.includes('OPENAI_API_KEY')) {
+        toast.error('מפתח OpenAI לא מוגדר בשרת — הגדר OPENAI_API_KEY ב-Supabase Secrets')
       } else {
         toast.error(`שגיאה בניתוח התמונה: ${msg}`)
       }
