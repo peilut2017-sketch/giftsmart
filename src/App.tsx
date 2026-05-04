@@ -25,6 +25,7 @@ import SharedVoucherPage from './pages/SharedVoucherPage'
 import GiftPage from './pages/GiftPage'
 import AccessibilityPage from './pages/AccessibilityPage'
 import MarketplacePage from './pages/MarketplacePage'
+import DiscountsPage from './pages/DiscountsPage'
 import ListingDetailPage from './pages/ListingDetailPage'
 import BulkListPage from './pages/BulkListPage'
 import PrivacyPage from './pages/PrivacyPage'
@@ -296,6 +297,7 @@ function AppRoutes() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/accessibility" element={<AccessibilityPage />} />
             <Route path="/market" element={<MarketplacePage />} />
+            <Route path="/discounts" element={<DiscountsPage />} />
             <Route path="/market/listing/:id" element={<ListingDetailPage />} />
             <Route path="/market/bulk" element={<BulkListPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />

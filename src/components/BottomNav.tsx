@@ -1,7 +1,7 @@
 import { useRef, useState, useLayoutEffect, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, useMotionValue, useVelocity, useTransform, animate } from 'framer-motion'
-import { Home, Archive, BarChart2, Settings, Shield, ShoppingBag } from 'lucide-react'
+import { Home, Archive, BarChart2, Settings, Shield, ShoppingBag, Percent } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useT } from '../lib/i18n'
@@ -18,11 +18,12 @@ export default function BottomNav() {
   const { t } = useT()
 
   const items = [
-    { icon: Home,        label: t('nav.home'),     path: '/'         },
+    { icon: Home,        label: t('nav.home'),       path: '/'          },
     ...(showMarket ? [{ icon: ShoppingBag, label: t('nav.market'), path: '/market' }] : []),
-    { icon: Archive,     label: t('nav.archive'),  path: '/archive'  },
-    { icon: BarChart2,   label: t('nav.stats'),    path: '/stats'    },
-    { icon: Settings,    label: t('nav.settings'), path: '/settings' },
+    { icon: Percent,     label: t('nav.discounts'),  path: '/discounts' },
+    { icon: Archive,     label: t('nav.archive'),    path: '/archive'   },
+    { icon: BarChart2,   label: t('nav.stats'),      path: '/stats'     },
+    { icon: Settings,    label: t('nav.settings'),   path: '/settings'  },
     ...(isAdmin ? [{ icon: Shield, label: t('nav.admin'), path: '/admin' }] : []),
   ]
 
