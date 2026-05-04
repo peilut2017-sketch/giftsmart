@@ -6,13 +6,14 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useLocale, useT } from '../lib/i18n'
+import { useDiscounts } from '../contexts/DiscountsContext'
 
 interface SupportMessageReply {
   id: string
@@ -58,10 +59,15 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
   const { t } = useT()
+  const { clubs, userClubIds, fetchClubs, setUserClubs } = useDiscounts()
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
   )
+
+  // Clubs selector state
+  const [localClubIds, setLocalClubIds] = useState<string[]>([])
+  const [savingClubs, setSavingClubs] = useState(false)
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
@@ -276,6 +282,27 @@ export default function SettingsPage() {
     setBiometricEnabled(false)
     toast.success('נעילה ביומטרית בוטלה')
     logAction('system_biometric_link', 'מערכת', undefined, { type: 'disabled' })
+  }
+
+  // Load clubs on mount and sync local selection when context updates
+  useEffect(() => {
+    fetchClubs()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setLocalClubIds(userClubIds)
+  }, [userClubIds])
+
+  async function handleSaveClubs() {
+    setSavingClubs(true)
+    try {
+      await setUserClubs(localClubIds)
+      toast.success(t('settings.clubs.saved'))
+    } catch {
+      toast.error(t('app.error'))
+    } finally {
+      setSavingClubs(false)
+    }
   }
 
   // Load wallet members
@@ -771,6 +798,101 @@ export default function SettingsPage() {
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${profile?.show_voucher_value ? 'translate-x-0.5' : 'right-0.5'}`} />
             </button>
+          </div>
+        </Card>
+
+        {/* ── הכרטיסים והמועדונים שלי ── */}
+        <SL>{t('settings.my_clubs')}</SL>
+        <Card>
+          <div className="p-4 space-y-4">
+            <p className="text-xs" style={{ color: 'var(--c-text3)' }}>{t('settings.my_clubs.sub')}</p>
+
+            {clubs.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: 'var(--c-text3)' }}>
+                {t('app.loading')}
+              </p>
+            ) : (
+              <>
+                {/* Credit cards */}
+                {clubs.filter(c => c.type === 'credit_card').length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
+                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                        {t('settings.clubs.credit_card')}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {clubs.filter(c => c.type === 'credit_card').map(club => {
+                        const selected = localClubIds.includes(club.id)
+                        return (
+                          <button
+                            key={club.id}
+                            onClick={() => setLocalClubIds(prev =>
+                              selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                            )}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                              selected
+                                ? 'border-green-500 bg-green-50 text-green-700'
+                                : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                            }`}
+                          >
+                            {selected && <Check className="w-3 h-3" />}
+                            {club.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Loyalty clubs */}
+                {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Tag className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
+                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                        {t('settings.clubs.loyalty_club')}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {clubs.filter(c => c.type === 'loyalty_club').map(club => {
+                        const selected = localClubIds.includes(club.id)
+                        return (
+                          <button
+                            key={club.id}
+                            onClick={() => setLocalClubIds(prev =>
+                              selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                            )}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                              selected
+                                ? 'border-green-500 bg-green-50 text-green-700'
+                                : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                            }`}
+                          >
+                            {selected && <Check className="w-3 h-3" />}
+                            {club.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleSaveClubs}
+                  disabled={savingClubs}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: 'var(--c-primary)' }}
+                >
+                  {savingClubs
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Check className="w-4 h-4" />
+                  }
+                  {t('app.save')}
+                </button>
+              </>
+            )}
           </div>
         </Card>
 
