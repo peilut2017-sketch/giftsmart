@@ -148,7 +148,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string, name?: string) {
     const { data, error } = await supabase.auth.signUp({ email, password })
-    if (!error && data.user) {
+    if (error) return { error }
+    // identities is empty when the email already exists in Supabase Auth
+    if (data.user?.identities?.length === 0) {
+      return { error: new Error('כתובת האימייל כבר רשומה במערכת') }
+    }
+    if (data.user) {
       await supabase.from('profiles').upsert({
         id: data.user.id,
         email,
