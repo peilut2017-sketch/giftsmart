@@ -111,7 +111,7 @@ function NotificationBridge() {
   const { vouchers } = useVouchers()
   const { user } = useAuth()
   const { isPro } = useSubscription()
-  useExpiryNotifications(vouchers, isPro)
+  useExpiryNotifications(vouchers, isPro, user?.id)
 
   // On mount: show any unseen push broadcasts + subscribe to future ones
   useEffect(() => {

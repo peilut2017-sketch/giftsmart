@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
@@ -25,6 +26,7 @@ type SortDir = 'asc' | 'desc'
 export default function HomePage() {
   const navigate = useNavigate()
   const { t } = useT()
+  const { user } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { listings } = useMarketplace()
   const { limits, openUpgradeSheet } = useSubscription()
@@ -203,7 +205,7 @@ export default function HomePage() {
       toast.success(t('voucher.updated'))
 
       if (usedAmount > 0) {
-        sendUsageNotification(editingVoucher.store_name, usedAmount, vData.balance)
+        sendUsageNotification(editingVoucher.store_name, usedAmount, vData.balance, undefined, user?.id)
       }
 
       if (vData.balance <= 0) {

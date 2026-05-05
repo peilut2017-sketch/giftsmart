@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { Voucher } from '../types'
+import { supabase } from '../lib/supabase'
 
 const NOTIF_KEY = 'last_expiry_notification'
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -14,17 +15,22 @@ async function showNotification(title: string, options: NotificationOptions) {
   }
 }
 
-export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
+async function sendTelegram(userId: string, message: string) {
+  try {
+    await supabase.functions.invoke('telegram-send', { body: { user_id: userId, message } })
+  } catch {
+    // Telegram is best-effort — never block the main flow
+  }
+}
+
+export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean, userId?: string) {
   useEffect(() => {
     if (!isPro) return
     if (!('Notification' in window)) return
 
     async function checkAndNotify() {
-      // Don't run while vouchers are still loading (empty array = loading state)
-      // This prevents the false "no expiring vouchers" notification on first render.
       if (vouchers.length === 0) return
 
-      // Throttle: don't re-notify within 24h
       const last = localStorage.getItem(NOTIF_KEY)
       if (last && Date.now() - parseInt(last) < CHECK_INTERVAL_MS) return
 
@@ -42,8 +48,6 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
         if (daysLeft >= 0 && daysLeft <= EXPIRY_WINDOW_DAYS) expiring.push(v)
       }
 
-      // Only throttle and notify if there are actually expiring vouchers.
-      // Silently skip (no notification) when nothing is expiring — avoid noise.
       if (expiring.length === 0) return
 
       localStorage.setItem(NOTIF_KEY, Date.now().toString())
@@ -73,10 +77,25 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean) {
         .join('\n')
 
       await showNotification(title, { ...baseOptions, body, requireInteraction: urgent.length > 0 })
+
+      if (userId) {
+        const lines = expiring
+          .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
+          .slice(0, 5)
+          .map(v => {
+            const d = Math.ceil((new Date(v.expiry_date!).getTime() - nowTime) / (1000 * 60 * 60 * 24))
+            const icon = d <= 3 ? '🔴' : '⚠️'
+            return `${icon} <b>${v.store_name}</b> — ₪${v.balance} | ${d === 0 ? 'היום!' : d === 1 ? 'מחר' : `עוד ${d} ימים`}`
+          })
+          .join('\n')
+
+        const tgTitle = urgent.length > 0 ? '🚨 <b>שוברים שפגים בקרוב!</b>' : '⏰ <b>תזכורת: שוברים שפגים בקרוב</b>'
+        await sendTelegram(userId, `${tgTitle}\n\n${lines}`)
+      }
     }
 
     checkAndNotify()
-  }, [vouchers, isPro])
+  }, [vouchers, isPro, userId])
 }
 
 // Request push permission proactively (call from Settings page or first launch)
@@ -90,13 +109,16 @@ export async function requestPushPermission(): Promise<NotificationPermission> {
 export async function forceNotificationCheck(_vouchers?: Voucher[]) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return
   localStorage.removeItem(NOTIF_KEY)
-  // Re-trigger by re-invoking — just clear the key, the hook will pick it up on next render
 }
 
 // Send an immediate push notification when a voucher is used
-export async function sendUsageNotification(storeName: string, usedAmount: number, newBalance: number, storeUsed?: string | null) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return
-
+export async function sendUsageNotification(
+  storeName: string,
+  usedAmount: number,
+  newBalance: number,
+  storeUsed?: string | null,
+  userId?: string,
+) {
   const fullyRedeemed = newBalance <= 0
   const storeLabel = storeUsed ? ` — ${storeUsed}` : ''
   const title = fullyRedeemed
@@ -106,18 +128,29 @@ export async function sendUsageNotification(storeName: string, usedAmount: numbe
     ? `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} — השובר נוצל`
     : `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} | יתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`
 
-  const options: NotificationOptions = {
-    body,
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
-    tag: 'voucher-usage',
+  // Browser push
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const options: NotificationOptions = {
+      body,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: 'voucher-usage',
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready
+      await reg.showNotification(title, options)
+    } catch {
+      new Notification(title, options)
+    }
   }
 
-  try {
-    const reg = await navigator.serviceWorker.ready
-    await reg.showNotification(title, options)
-  } catch {
-    new Notification(title, options)
+  // Telegram mirror
+  if (userId) {
+    const icon = fullyRedeemed ? '🎯' : '💳'
+    const tgBody = fullyRedeemed
+      ? `${icon} <b>${title}</b>\n\n${body}`
+      : `${icon} <b>שימוש בשובר ${storeName}${storeLabel}</b>\n\nהוצאת: ₪${usedAmount.toLocaleString('he-IL')}\nיתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`
+    await sendTelegram(userId, tgBody)
   }
 }
 
