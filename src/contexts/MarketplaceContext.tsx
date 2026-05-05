@@ -329,8 +329,11 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_sender_id: senderUserId,
     })
     if (error) console.error('[marketplace] markMessagesRead error', error)
-    // Update local per-listing count
+    // Update local per-listing count immediately
     setUnreadByListing(prev => ({ ...prev, [listingId]: 0 }))
+    // Refetch global count from DB so badge stays in sync with reality
+    const { data } = await supabase.rpc('get_unread_chat_count')
+    if (typeof data === 'number') setUnreadChatCount(data)
   }, [])
 
   const updateListingPrice = useCallback(async (listingId: string, newPrice: number) => {

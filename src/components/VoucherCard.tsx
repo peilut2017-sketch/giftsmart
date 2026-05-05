@@ -100,10 +100,9 @@ export default function VoucherCard({
 
   const catColor = getCatColor(voucher.categories)
 
-  // Detect item-mode vouchers saved with "📦 " prefix in notes
-  const itemLabel = voucher.notes?.startsWith('📦 ')
-    ? voucher.notes.split('\n')[0].slice('📦 '.length)
-    : null
+  // Detect item-mode: new item_name column takes priority; fallback to legacy "📦 " notes prefix
+  const itemLabel = voucher.item_name ||
+    (voucher.notes?.startsWith('📦 ') ? voucher.notes.split('\n')[0].slice('📦 '.length) : null)
 
   // Expiry chip colours — shown for every voucher that has a date
   const expiryChip = (() => {
@@ -262,8 +261,15 @@ export default function VoucherCard({
               )}
               <div className="text-left">
                 {itemLabel ? (
-                  <div className="text-sm font-semibold leading-tight max-w-[90px] truncate" style={{ color: 'var(--c-text)' }}>
-                    📦 {itemLabel}
+                  <div className="leading-tight max-w-[90px]">
+                    <div className="text-sm font-semibold truncate" style={{ color: 'var(--c-text)' }}>
+                      📦 {itemLabel}
+                    </div>
+                    {voucher.amount > 0 && (
+                      <div className="text-xs" style={{ color: 'var(--c-text3)' }}>
+                        ({formatCurrency(voucher.amount)})
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -359,6 +365,11 @@ export default function VoucherCard({
                   <div className="text-sm font-semibold mt-0.5 leading-tight" style={{ color: 'var(--c-text2)', wordBreak: 'break-word', maxWidth: 90 }}>
                     {itemLabel}
                   </div>
+                  {voucher.amount > 0 && (
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--c-text3)' }}>
+                      ({formatCurrency(voucher.amount)})
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
