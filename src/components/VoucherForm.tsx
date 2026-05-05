@@ -36,6 +36,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showStoreDropdown, setShowStoreDropdown] = useState(false)
   const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
   const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
+  // item_name: for item-mode vouchers; also supports legacy "📦 " prefix in notes
+  const [itemName, setItemName] = useState(() => {
+    if (voucher?.item_name) return voucher.item_name
+    if (voucher?.notes?.startsWith('📦 ')) return voucher.notes.split('\n')[0].slice('📦 '.length)
+    return ''
+  })
   const [usageAmount, setUsageAmount] = useState('')
   const [storeUsedInput, setStoreUsedInput] = useState('')
   const [actualCost, setActualCost] = useState(voucher?.actual_cost?.toString() || '')
@@ -44,7 +50,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [expiryDate, setExpiryDate] = useState(voucher?.expiry_date || defaultExpiryDate())
   const [selectedCats, setSelectedCats] = useState<string[]>(voucher?.categories || [])
   const [tags, setTags] = useState(voucher?.tags?.join(', ') || '')
-  const [notes, setNotes] = useState(voucher?.notes || '')
+  const [notes, setNotes] = useState(() => {
+    const n = voucher?.notes || ''
+    // Strip legacy "📦 " prefix so notes field shows only the actual notes
+    if (!voucher?.item_name && n.startsWith('📦 ')) return n.split('\n').slice(1).join('\n')
+    return n
+  })
   const [link, setLink] = useState(voucher?.link || '')
   const [source, setSource] = useState(voucher?.source || '')
   const [newCatName, setNewCatName] = useState('')
@@ -61,7 +72,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [smsLoading, setSmsLoading] = useState(false)
   const [showImageMenu, setShowImageMenu] = useState(false)
   const [pendingCandidates, setPendingCandidates] = useState<ExtractionCandidate | null>(null)
-  const [amountUnit, setAmountUnit] = useState<AmountUnit>('₪')
+  const [amountUnit, setAmountUnit] = useState<AmountUnit>(() => {
+    if (voucher?.item_name || voucher?.notes?.startsWith('📦 ')) return 'פריט'
+    return '₪'
+  })
   const [showUnitPicker, setShowUnitPicker] = useState(false)
   const geminiAvailable = isGeminiAvailable()
 
@@ -468,11 +482,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         ? Math.max(0, (voucher.balance ?? 0) - used)
         : (parseFloat(balance) || parsedAmount || 0)
 
-      // For item-mode: prepend the item name to notes
-      let notesValue = notes.trim()
-      if (amountUnit === 'פריט' && amount.trim()) {
-        notesValue = `📦 ${amount.trim()}${notesValue ? '\n' + notesValue : ''}`
+      // Validate item name is provided when in item mode
+      if (amountUnit === 'פריט' && !itemName.trim()) {
+        toast.error('יש להזין שם פריט')
+        return
       }
+
+      const notesValue = notes.trim()
 
       // Encrypt sensitive fields if E2EE is enabled
       let finalCode = code.trim()
@@ -484,6 +500,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
       const v = {
         store_name: storeName,
+        item_name: amountUnit === 'פריט' ? (itemName.trim() || undefined) : null,
         amount: parsedAmount,
         balance: newBalance,
         actual_cost: actualCost ? parseFloat(actualCost) : null,
@@ -773,10 +790,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
           {/* Amount + Balance / Usage */}
           <div className="grid grid-cols-2 gap-3">
+            {/* Left column: item name (item mode) or amount with unit picker */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700">
-                  {amountUnit === 'פריט' ? 'פריט / שירות' : `סכום מקורי (${amountUnit})`}
+                  {amountUnit === 'פריט' ? 'שם פריט *' : `סכום מקורי (${amountUnit})`}
                 </label>
                 <div className="relative" ref={unitPickerRef}>
                   <button
@@ -803,18 +821,51 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   )}
                 </div>
               </div>
-              <input
-                id="vf-amount"
-                type={amountUnit === 'פריט' ? 'text' : 'number'}
-                inputMode={amountUnit === 'פריט' ? undefined : 'decimal'}
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder={amountUnit === 'פריט' ? 'שם פריט...' : '0'}
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir={amountUnit === 'פריט' ? 'rtl' : 'ltr'}
-              />
+              {amountUnit === 'פריט' ? (
+                <input
+                  id="vf-amount"
+                  type="text"
+                  value={itemName}
+                  onChange={e => setItemName(e.target.value)}
+                  placeholder="שם פריט / שירות..."
+                  required
+                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="rtl"
+                />
+              ) : (
+                <input
+                  id="vf-amount"
+                  type="number"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+              )}
             </div>
-            {voucher ? (
+
+            {/* Right column: item value (item mode), usage (edit), or actual cost (add) */}
+            {amountUnit === 'פריט' ? (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  ערך שובר <span className="text-gray-400 font-normal text-xs">(אופציונלי)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 shrink-0">₪</span>
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+            ) : voucher ? (
               <div>
                 <label htmlFor="vf-usage" className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
                 <input

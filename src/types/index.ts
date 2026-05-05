@@ -23,6 +23,7 @@ export interface Voucher {
   is_locked?: boolean
   lock_reason?: string
   is_e2ee?: boolean
+  item_name?: string
   created_at: string
   updated_at: string
   // derived
