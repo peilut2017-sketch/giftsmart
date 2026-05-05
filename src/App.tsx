@@ -16,19 +16,6 @@ import { supabase } from './lib/supabase'
 import UpgradeSheet from './components/UpgradeSheet'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
-import CheckoutPage from './pages/CheckoutPage'
-import ArchivePage from './pages/ArchivePage'
-import StatsPage from './pages/StatsPage'
-import SettingsPage from './pages/SettingsPage'
-import AdminPage from './pages/AdminPage'
-import SharedVoucherPage from './pages/SharedVoucherPage'
-import GiftPage from './pages/GiftPage'
-import AccessibilityPage from './pages/AccessibilityPage'
-import MarketplacePage from './pages/MarketplacePage'
-import DiscountsPage from './pages/DiscountsPage'
-import ListingDetailPage from './pages/ListingDetailPage'
-import BulkListPage from './pages/BulkListPage'
-import PrivacyPage from './pages/PrivacyPage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
 import OfflineBanner from './components/OfflineBanner'
@@ -40,9 +27,31 @@ import { isBiometricEnabled } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
 import { AlertTriangle } from 'lucide-react'
-import { Component, useState, useEffect, useRef } from 'react'
+import { Component, useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { useE2EE } from './contexts/E2EEContext'
 import type { ReactNode } from 'react'
+
+const CheckoutPage     = lazy(() => import('./pages/CheckoutPage'))
+const ArchivePage      = lazy(() => import('./pages/ArchivePage'))
+const StatsPage        = lazy(() => import('./pages/StatsPage'))
+const SettingsPage     = lazy(() => import('./pages/SettingsPage'))
+const AdminPage        = lazy(() => import('./pages/AdminPage'))
+const AccessibilityPage = lazy(() => import('./pages/AccessibilityPage'))
+const MarketplacePage  = lazy(() => import('./pages/MarketplacePage'))
+const DiscountsPage    = lazy(() => import('./pages/DiscountsPage'))
+const ListingDetailPage = lazy(() => import('./pages/ListingDetailPage'))
+const BulkListPage     = lazy(() => import('./pages/BulkListPage'))
+const PrivacyPage      = lazy(() => import('./pages/PrivacyPage'))
+const SharedVoucherPage = lazy(() => import('./pages/SharedVoucherPage'))
+const GiftPage         = lazy(() => import('./pages/GiftPage'))
+
+function PageSpinner() {
+  return (
+    <div className="flex-1 flex items-center justify-center min-h-[200px]">
+      <div className="w-8 h-8 border-2 border-green-200 border-t-green-500 rounded-full animate-spin" />
+    </div>
+  )
+}
 
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
@@ -288,21 +297,23 @@ function AppRoutes() {
       <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto overflow-x-hidden">
         <OfflineBanner />
         <main id="main-content" className="flex-1 flex flex-col">
-          <AnimatedRoutes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/checkout/:id" element={<CheckoutPage />} />
-            <Route path="/archive" element={<ArchivePage />} />
-            <Route path="/stats" element={<StatsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/accessibility" element={<AccessibilityPage />} />
-            <Route path="/market" element={<MarketplacePage />} />
-            <Route path="/discounts" element={<DiscountsPage />} />
-            <Route path="/market/listing/:id" element={<ListingDetailPage />} />
-            <Route path="/market/bulk" element={<BulkListPage />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </AnimatedRoutes>
+          <Suspense fallback={<PageSpinner />}>
+            <AnimatedRoutes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/checkout/:id" element={<CheckoutPage />} />
+              <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/accessibility" element={<AccessibilityPage />} />
+              <Route path="/market" element={<MarketplacePage />} />
+              <Route path="/discounts" element={<DiscountsPage />} />
+              <Route path="/market/listing/:id" element={<ListingDetailPage />} />
+              <Route path="/market/bulk" element={<BulkListPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </AnimatedRoutes>
+          </Suspense>
         </main>
         <PWAInstallBanner />
         <BottomNav />
@@ -344,11 +355,13 @@ export default function App() {
     <LocaleProvider>
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/s/:token" element={<SharedVoucherPage />} />
-          <Route path="/gift/:token" element={<GiftPage />} />
-          <Route path="/*" element={<AppRoutes />} />
-        </Routes>
+        <Suspense fallback={<PageSpinner />}>
+          <Routes>
+            <Route path="/s/:token" element={<SharedVoucherPage />} />
+            <Route path="/gift/:token" element={<GiftPage />} />
+            <Route path="/*" element={<AppRoutes />} />
+          </Routes>
+        </Suspense>
         <ToasterWithLocale />
       </AuthProvider>
       <Analytics />
@@ -356,8 +369,6 @@ export default function App() {
     </BrowserRouter>
     </LocaleProvider>
     </ThemeProvider>
-    <SpeedInsights />
-    <Analytics />
     </ErrorBoundary>
   )
 }
