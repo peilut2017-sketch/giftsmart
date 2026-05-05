@@ -742,7 +742,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">מחובר לבוט טלגרם</p>
-                    <p className="text-xs text-gray-400">מקבל התראות ויכול לנהל שוברים</p>
+                    <p className="text-xs text-gray-400">מקבל את כל ההתראות גם בטלגרם</p>
                   </div>
                   <button onClick={handleDisconnectTelegram} className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl flex items-center gap-1">
                     <Link2Off className="w-3.5 h-3.5" /> נתק
@@ -757,7 +757,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">קשר לטלגרם</p>
-                    <p className="text-xs text-gray-400">ניהול שוברים והתראות ישירות בטלגרם</p>
+                    <p className="text-xs text-gray-400">קבל את כל ההתראות גם בטלגרם</p>
                   </div>
                   {!telegramCode && (
                     <button
