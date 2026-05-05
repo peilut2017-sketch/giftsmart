@@ -261,7 +261,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
           resolvedId = rpcId
         } else {
           // ── Step 2: RPC missing/failed — try direct wallet_members SELECT ──
-          console.warn('RPC get_or_create_user_wallet failed, trying direct query:', rpcErr?.message)
+          if (import.meta.env.DEV) console.warn('RPC get_or_create_user_wallet failed, trying direct query:', rpcErr?.message)
           const { data: memberRows, error: memberErr } = await (supabase
             .from('wallet_members')
             .select('wallet_id')
@@ -273,7 +273,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
             resolvedId = memberRows[0].wallet_id
           } else {
             // ── Step 3: no wallet at all — create one via direct insert ──
-            console.warn('No wallet_members row found, creating wallet directly')
+            if (import.meta.env.DEV) console.warn('No wallet_members row found, creating wallet directly')
             const { data: newWallet, error: walletCreateErr } = await (supabase
               .from('wallets')
               .insert({ name: 'ארנק השוברים שלי', owner_id: user.id })

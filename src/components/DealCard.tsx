@@ -22,6 +22,7 @@ function BusinessAvatar({ name, logoUrl }: { name: string; logoUrl?: string }) {
       <img
         src={logoUrl}
         alt={name}
+        loading="lazy"
         className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-black/5"
         onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
       />
@@ -96,7 +97,7 @@ export default function DealCard({ deal }: Props) {
           {/* Club pill */}
           <div className="flex items-center gap-1 mt-1">
             {deal.club_logo ? (
-              <img src={deal.club_logo} alt={deal.club_name} className="w-4 h-4 rounded object-cover" />
+              <img src={deal.club_logo} alt={deal.club_name} loading="lazy" className="w-4 h-4 rounded object-cover" />
             ) : (
               <Tag className="w-3 h-3 text-gray-400" />
             )}

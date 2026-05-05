@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
@@ -14,7 +14,7 @@ import InStoreMode from '../components/InStoreMode'
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDate, getExpiryStatus, getDaysUntilExpiry } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 type SortKey = 'expiry' | 'balance' | 'store' | 'added'
@@ -43,7 +43,12 @@ export default function HomePage() {
     if (ok) { setShowVaultModal(false); setVaultPassInput('') }
     else setVaultError(t('vault.wrong.password'))
   }
-  const [showForm, setShowForm] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [showForm, setShowForm] = useState(() => searchParams.get('add') === '1')
+  const openForm = useCallback(() => {
+    setShowForm(true)
+    if (searchParams.has('add')) setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [search, setSearch] = useState(() => localStorage.getItem('hpSearch') || '')
   const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('hpSortKey') as SortKey) || 'store')
@@ -427,7 +432,7 @@ export default function HomePage() {
     }
     setFabOpen(false)
     setEditingVoucher(undefined)
-    setShowForm(true)
+    openForm()
   }
 
   function handleFabPointerDown(e: React.PointerEvent) {
