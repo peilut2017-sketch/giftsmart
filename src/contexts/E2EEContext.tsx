@@ -27,7 +27,8 @@ interface E2EEContextValue {
   changePassphrase: (
     oldPass: string,
     newPass: string,
-    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
+    newHint?: string
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   disableVault: (
     passphrase: string,
@@ -156,7 +157,8 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const changePassphrase = useCallback(async (
     oldPass: string,
     newPass: string,
-    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
+    newHint?: string
   ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
     // Verify old passphrase
     const saltB64 = localStorage.getItem(SALT_KEY)
@@ -194,6 +196,13 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(SALT_KEY, saltToB64(newSalt))
     localStorage.setItem(CHECK_KEY, newCheck)
     sessionStorage.setItem(SESSION_PASS_KEY, newPass)
+    if (newHint?.trim()) {
+      localStorage.setItem(HINT_KEY, newHint.trim())
+      setHint(newHint.trim())
+    } else {
+      localStorage.removeItem(HINT_KEY)
+      setHint(null)
+    }
     setHasVault(true)
     setVaultKey(newKey)
 

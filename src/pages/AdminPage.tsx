@@ -2314,22 +2314,25 @@ export default function AdminPage() {
                         סגור
                       </button>
                     )}
-                    {r.status === 'resolved' && (
-                      <button
-                        disabled={updatingReport === r.report_id}
-                        onClick={async () => {
+                    <button
+                      disabled={updatingReport === r.report_id}
+                      onClick={() => setConfirm({
+                        title: 'מחיקת דיווח',
+                        message: 'האם למחוק דיווח זה לצמיתות?',
+                        onConfirm: async () => {
+                          setConfirm(null)
                           setUpdatingReport(r.report_id)
                           const { error } = await supabase.rpc('admin_delete_report', { p_report_id: r.report_id })
                           setUpdatingReport(null)
                           if (error) { toast.error('שגיאה במחיקה'); return }
                           setReports(prev => prev.filter(x => x.report_id !== r.report_id))
                           toast.success('דיווח נמחק')
-                        }}
-                        className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-600 rounded-xl hover:bg-red-200 disabled:opacity-50"
-                      >
-                        מחק
-                      </button>
-                    )}
+                        },
+                      })}
+                      className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-600 rounded-xl hover:bg-red-200 disabled:opacity-50"
+                    >
+                      מחק
+                    </button>
                   </div>
                 </div>
               ))}

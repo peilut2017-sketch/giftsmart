@@ -1376,6 +1376,8 @@ const translations: Record<string, string> = {
   'admin.coupon.required.en': 'Coupon code required',
   'admin.coupon.delete.title': 'מחיקת קופון',
   'admin.coupon.delete.title.en': 'Delete coupon',
+  'admin.coupon.delete.message': 'למחוק את הקופון {code} לצמיתות?',
+  'admin.coupon.delete.message.en': 'Permanently delete coupon {code}?',
   'admin.operator.added': 'מפעיל נוסף',
   'admin.operator.added.en': 'Operator added',
   'admin.operator.updated': 'מפעיל עודכן',

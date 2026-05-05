@@ -368,72 +368,76 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 </div>
               )}
 
-              <div>
-                <div className="relative">
-                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
-                  <input
-                    id="auth-password"
-                    type={showPass ? 'text' : 'password'}
-                    placeholder={mode === 'newPassword' ? t('auth.password.new.placeholder') : t('auth.password.placeholder')}
-                    aria-label={mode === 'newPassword' ? t('auth.password.new.placeholder') : t('auth.password.placeholder')}
-                    value={password}
-                    onChange={e => { setPassword(e.target.value); if (isRegisterOrNew) setShowStrength(true) }}
-                    className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                    autoComplete={mode === 'newPassword' ? 'new-password' : 'new-password'}
-                    dir="ltr"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass(!showPass)}
-                    aria-label={showPass ? t('auth.hide.password') : t('auth.show.password')}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  >
-                    {showPass ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
-                  </button>
-                </div>
+              {mode !== 'forgot' && (
+                <>
+                  <div>
+                    <div className="relative">
+                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
+                      <input
+                        id="auth-password"
+                        type={showPass ? 'text' : 'password'}
+                        placeholder={mode === 'newPassword' ? t('auth.password.new.placeholder') : t('auth.password.placeholder')}
+                        aria-label={mode === 'newPassword' ? t('auth.password.new.placeholder') : t('auth.password.placeholder')}
+                        value={password}
+                        onChange={e => { setPassword(e.target.value); if (isRegisterOrNew) setShowStrength(true) }}
+                        className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                        autoComplete="new-password"
+                        dir="ltr"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPass(!showPass)}
+                        aria-label={showPass ? t('auth.hide.password') : t('auth.show.password')}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      >
+                        {showPass ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                      </button>
+                    </div>
 
-                {/* Password strength meter */}
-                {isRegisterOrNew && showStrength && password.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    <div className="flex gap-1">
-                      {[0,1,2,3,4].map(i => (
-                        <div
-                          key={i}
-                          className={`flex-1 h-1.5 rounded-full transition-all ${i < strength.score ? strength.color : 'bg-gray-100'}`}
-                        />
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs font-medium ${strength.score >= 3 ? 'text-green-600' : 'text-orange-500'}`}>
-                        {strength.label}
-                      </span>
-                      {strength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
-                    </div>
-                    <div className="grid grid-cols-1 gap-0.5">
-                      {strength.checks.map(c => (
-                        <div key={c.label} className={`flex items-center gap-1.5 text-xs ${c.ok ? 'text-green-600' : 'text-gray-400'}`}>
-                          <span>{c.ok ? '✓' : '○'}</span>
-                          {c.label}
+                    {/* Password strength meter */}
+                    {isRegisterOrNew && showStrength && password.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex gap-1">
+                          {[0,1,2,3,4].map(i => (
+                            <div
+                              key={i}
+                              className={`flex-1 h-1.5 rounded-full transition-all ${i < strength.score ? strength.color : 'bg-gray-100'}`}
+                            />
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-medium ${strength.score >= 3 ? 'text-green-600' : 'text-orange-500'}`}>
+                            {strength.label}
+                          </span>
+                          {strength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                        </div>
+                        <div className="grid grid-cols-1 gap-0.5">
+                          {strength.checks.map(c => (
+                            <div key={c.label} className={`flex items-center gap-1.5 text-xs ${c.ok ? 'text-green-600' : 'text-gray-400'}`}>
+                              <span>{c.ok ? '✓' : '○'}</span>
+                              {c.label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {isRegisterOrNew && (
-                <div className="relative">
-                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type={showPass ? 'text' : 'password'}
-                    placeholder={t('auth.password.confirm.placeholder')}
-                    value={password2}
-                    onChange={e => setPassword2(e.target.value)}
-                    className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                    autoComplete="new-password"
-                    dir="ltr"
-                  />
-                </div>
+                  {isRegisterOrNew && (
+                    <div className="relative">
+                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type={showPass ? 'text' : 'password'}
+                        placeholder={t('auth.password.confirm.placeholder')}
+                        value={password2}
+                        onChange={e => setPassword2(e.target.value)}
+                        className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                        autoComplete="new-password"
+                        dir="ltr"
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               {mode === 'register' && (

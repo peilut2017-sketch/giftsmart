@@ -81,7 +81,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   // E2EE vault — for new vouchers, default to user's preference
   const [e2eeEnabled, setE2eeEnabled] = useState(
-    voucher?.is_e2ee ?? (localStorage.getItem('gs_e2ee_default') === 'true')
+    voucher?.is_e2ee ?? (localStorage.getItem('gs_e2ee_default') !== 'false')
   )
   const [showVaultModal, setShowVaultModal] = useState(false)
   const [vaultModalMode, setVaultModalMode] = useState<'setup' | 'unlock'>('setup')
