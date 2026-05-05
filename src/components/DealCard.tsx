@@ -71,15 +71,16 @@ function isSafeUrl(url: string | undefined): boolean {
 
 interface Props {
   deal: DiscountDeal
+  initiallyExpanded?: boolean
 }
 
-export default function DealCard({ deal }: Props) {
+export default function DealCard({ deal, initiallyExpanded = false }: Props) {
   const { copyPromoCode } = useDiscounts()
   const { t } = useT()
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(initiallyExpanded)
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex flex-col gap-3">
+    <div id={`deal-${deal.deal_id}`} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex flex-col gap-3">
 
       {/* Row 1: Business + discount */}
       <div className="flex items-start gap-3">

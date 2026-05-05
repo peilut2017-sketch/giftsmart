@@ -788,145 +788,202 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
           </div>
 
-          {/* Amount + Balance / Usage */}
+          {/* Amount/Item + Balance / Usage */}
           <div className="grid grid-cols-2 gap-3">
-            {/* Left column: item name (item mode) or amount with unit picker */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700">
-                  {amountUnit === 'פריט' ? 'שם פריט *' : `סכום מקורי (${amountUnit})`}
-                </label>
-                <div className="relative" ref={unitPickerRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowUnitPicker(v => !v)}
-                    className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-xs font-semibold"
-                  >
-                    {amountUnit}
-                    <ChevronDown className="w-2.5 h-2.5" />
-                  </button>
-                  {showUnitPicker && (
-                    <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 min-w-[70px]">
-                      {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
-                        <button
-                          key={u}
-                          type="button"
-                          onClick={() => { setAmountUnit(u); setShowUnitPicker(false) }}
-                          className={`w-full px-3 py-1.5 text-xs text-right hover:bg-gray-50 ${amountUnit === u ? 'text-green-600 font-semibold' : 'text-gray-700'}`}
-                        >
-                          {u}
-                        </button>
-                      ))}
+            {amountUnit === 'פריט' ? (
+              <>
+                {/* Item name — full row */}
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="vf-item-name" className="text-sm font-medium text-gray-700">שם פריט *</label>
+                    <div className="relative" ref={unitPickerRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowUnitPicker(v => !v)}
+                        className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-xs font-semibold"
+                      >
+                        פריט
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+                      {showUnitPicker && (
+                        <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 min-w-[70px]">
+                          {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => { setAmountUnit(u); setShowUnitPicker(false) }}
+                              className={`w-full px-3 py-1.5 text-xs text-right hover:bg-gray-50 ${amountUnit === u ? 'text-green-600 font-semibold' : 'text-gray-700'}`}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  </div>
+                  <input
+                    id="vf-item-name"
+                    type="text"
+                    value={itemName}
+                    onChange={e => setItemName(e.target.value)}
+                    placeholder="שם פריט / שירות..."
+                    required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="rtl"
+                  />
+                </div>
+
+                {/* ערך שובר (optional) */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    ערך שובר <span className="text-gray-400 font-normal text-xs">(אופציונלי)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500 shrink-0">₪</span>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={e => setAmount(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                {/* עלות שובר */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500 shrink-0">₪</span>
+                    <input
+                      type="number"
+                      value={actualCost}
+                      onChange={e => setActualCost(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
+                    />
+                  </div>
+                  {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
+                    <p className="text-xs mt-1 text-gray-400">
+                      ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
+                    </p>
                   )}
                 </div>
-              </div>
-              {amountUnit === 'פריט' ? (
-                <input
-                  id="vf-amount"
-                  type="text"
-                  value={itemName}
-                  onChange={e => setItemName(e.target.value)}
-                  placeholder="שם פריט / שירות..."
-                  required
-                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                  dir="rtl"
-                />
-              ) : (
-                <input
-                  id="vf-amount"
-                  type="number"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                  dir="ltr"
-                />
-              )}
-            </div>
-
-            {/* Right column: item value (item mode), usage (edit), or actual cost (add) */}
-            {amountUnit === 'פריט' ? (
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  ערך שובר <span className="text-gray-400 font-normal text-xs">(אופציונלי)</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 shrink-0">₪</span>
+              </>
+            ) : (
+              <>
+                {/* Left: שווי שובר with unit picker */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700">
+                      {`שווי שובר (${amountUnit})`}
+                    </label>
+                    <div className="relative" ref={unitPickerRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowUnitPicker(v => !v)}
+                        className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-xs font-semibold"
+                      >
+                        {amountUnit}
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+                      {showUnitPicker && (
+                        <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 min-w-[70px]">
+                          {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => { setAmountUnit(u); setShowUnitPicker(false) }}
+                              className={`w-full px-3 py-1.5 text-xs text-right hover:bg-gray-50 ${amountUnit === u ? 'text-green-600 font-semibold' : 'text-gray-700'}`}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <input
+                    id="vf-amount"
                     type="number"
+                    inputMode="decimal"
                     value={amount}
                     onChange={e => setAmount(e.target.value)}
                     placeholder="0"
-                    min="0"
                     className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     dir="ltr"
                   />
                 </div>
-              </div>
-            ) : voucher ? (
-              <div>
-                <label htmlFor="vf-usage" className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
-                <input
-                  id="vf-usage"
-                  type="number"
-                  value={usageAmount}
-                  onChange={e => setUsageAmount(e.target.value)}
-                  placeholder="0"
-                  min="0"
-                  max={voucher.balance}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                  dir="ltr"
-                />
-                {(() => {
-                  const used = parseFloat(usageAmount) || 0
-                  const newBal = Math.max(0, (voucher.balance ?? 0) - used)
-                  return used > 0 ? (
-                    <p className={`text-xs mt-1 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                      יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}
-                    </p>
-                  ) : (
-                    <p className="text-xs mt-1 text-gray-400">יתרה: ₪{(voucher.balance ?? 0).toLocaleString('he-IL')}</p>
-                  )
-                })()}
-                {(parseFloat(usageAmount) || 0) > 0 && (
-                  <input
-                    type="text"
-                    value={storeUsedInput}
-                    onChange={e => setStoreUsedInput(e.target.value)}
-                    placeholder="באיזה חנות? (אופציונלי)"
-                    className="w-full mt-2 px-4 py-2.5 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                    dir="rtl"
-                  />
+
+                {/* Right: usage (edit) or actual cost (add) */}
+                {voucher ? (
+                  <div>
+                    <label htmlFor="vf-usage" className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
+                    <input
+                      id="vf-usage"
+                      type="number"
+                      value={usageAmount}
+                      onChange={e => setUsageAmount(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      max={voucher.balance}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
+                    />
+                    {(() => {
+                      const used = parseFloat(usageAmount) || 0
+                      const newBal = Math.max(0, (voucher.balance ?? 0) - used)
+                      return used > 0 ? (
+                        <p className={`text-xs mt-1 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                          יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}
+                        </p>
+                      ) : (
+                        <p className="text-xs mt-1 text-gray-400">יתרה: ₪{(voucher.balance ?? 0).toLocaleString('he-IL')}</p>
+                      )
+                    })()}
+                    {(parseFloat(usageAmount) || 0) > 0 && (
+                      <input
+                        type="text"
+                        value={storeUsedInput}
+                        onChange={e => setStoreUsedInput(e.target.value)}
+                        placeholder="באיזה חנות? (אופציונלי)"
+                        className="w-full mt-2 px-4 py-2.5 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                        dir="rtl"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 shrink-0">₪</span>
+                      <input
+                        type="number"
+                        value={actualCost}
+                        onChange={e => setActualCost(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                        dir="ltr"
+                      />
+                    </div>
+                    {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
+                      <p className="text-xs mt-1 text-gray-400">
+                        ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
+                      </p>
+                    )}
+                  </div>
                 )}
-              </div>
-            ) : (
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 shrink-0">₪</span>
-                  <input
-                    type="number"
-                    value={actualCost}
-                    onChange={e => setActualCost(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                    dir="ltr"
-                  />
-                </div>
-                {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
-                  <p className="text-xs mt-1 text-gray-400">
-                    ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
-                  </p>
-                )}
-              </div>
+              </>
             )}
           </div>
 
-          {/* Actual cost — shown in edit mode (grid shows usage amount there instead) */}
-          {voucher && (
+          {/* Actual cost — shown in edit mode only when NOT in item mode (item mode includes it in the grid above) */}
+          {voucher && amountUnit !== 'פריט' && (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
               <div className="flex items-center gap-2">

@@ -822,22 +822,27 @@ export default function HomePage() {
                   <Archive className="w-3.5 h-3.5 text-gray-400" />
                   <span className="text-xs font-medium text-gray-400">מהארכיון</span>
                 </div>
-                <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3 opacity-60 grayscale' : 'flex flex-col gap-2 opacity-60 grayscale'}>
-                  {searchedArchived.map(v => {
-                    const sv = superVouchers.find(s => s.id === v.super_voucher_id)
-                    return (
-                      <VoucherCard
-                        key={v.id}
-                        voucher={v}
-                        superVoucherName={sv?.name}
-                        onClick={() => navigate(`/checkout/${v.id}`)}
-                        onEdit={() => {}}
-                        onDelete={() => {}}
-                        onArchive={() => {}}
-                        rowMode={viewMode === 'rows'}
-                      />
-                    )
-                  })}
+                <div className="flex flex-col gap-2">
+                  {searchedArchived.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => navigate(`/checkout/${v.id}`)}
+                      className="flex items-center gap-3 text-right w-full opacity-60"
+                      style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: '12px 14px' }}
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0 text-gray-500 font-bold text-sm">
+                        {(v.store_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate" style={{ color: 'var(--c-text)' }}>{v.store_name}</p>
+                        {v.categories?.[0] && <p className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{v.categories[0]}</p>}
+                      </div>
+                      <div className="text-left flex-shrink-0">
+                        <div className="text-sm font-bold" style={{ color: 'var(--c-text2)' }}>{formatCurrency(v.balance)}</div>
+                        {v.expiry_date && <div className="text-xs text-gray-400">{formatDate(v.expiry_date)}</div>}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -853,7 +858,7 @@ export default function HomePage() {
                   {searchedListings.map(l => (
                     <button
                       key={l.id}
-                      onClick={() => navigate('/market')}
+                      onClick={() => navigate(`/market/listing/${l.id}`)}
                       className="flex items-center gap-3 text-right w-full"
                       style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: '12px 14px' }}
                     >
@@ -886,7 +891,7 @@ export default function HomePage() {
                   {searchedDeals.map(deal => (
                     <button
                       key={deal.deal_id}
-                      onClick={() => navigate('/discounts')}
+                      onClick={() => navigate('/discounts', { state: { dealId: deal.deal_id } })}
                       className="flex items-center gap-3 text-right w-full"
                       style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', padding: '12px 14px' }}
                     >
