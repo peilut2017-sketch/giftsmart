@@ -225,6 +225,14 @@ export default function AdminPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [rejectNote, setRejectNote] = useState<Record<string, string>>({})
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null)
+  const [editingSubmission, setEditingSubmission] = useState<string | null>(null)
+  const [editSubForm, setEditSubForm] = useState({
+    club_name: '', business_name: '', title: '', description: '',
+    discount_type: 'percent' as 'percent' | 'fixed' | 'free_item' | 'other',
+    discount_value: '', promo_code: '', external_link: '',
+    tags: '', start_date: '', expiration_date: '',
+  })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   async function loadAdminClubs() {
     const { data } = await supabase.rpc('admin_get_all_clubs')
@@ -416,6 +424,49 @@ export default function AdminPage() {
     if (error) { toast.error(error.message); return }
     toast.success('הגשה נמחקה')
     setSubmissions(prev => prev.filter(s => s.id !== id))
+  }
+
+  function openEditSubmission(sub: DiscountSubmission) {
+    setEditingSubmission(sub.id)
+    setShowRejectInput(null)
+    setEditSubForm({
+      club_name: sub.club_name,
+      business_name: sub.business_name,
+      title: sub.title,
+      description: sub.description || '',
+      discount_type: sub.discount_type,
+      discount_value: sub.discount_value != null ? String(sub.discount_value) : '',
+      promo_code: sub.promo_code || '',
+      external_link: sub.external_link || '',
+      tags: (sub.tags || []).join(', '),
+      start_date: sub.start_date || '',
+      expiration_date: sub.expiration_date || '',
+    })
+  }
+
+  async function handleSaveEditSubmission(id: string) {
+    setSavingEdit(true)
+    try {
+      const { error } = await supabase.rpc('admin_update_submission', {
+        p_id: id,
+        p_club_name: editSubForm.club_name,
+        p_business_name: editSubForm.business_name,
+        p_title: editSubForm.title,
+        p_description: editSubForm.description || null,
+        p_discount_type: editSubForm.discount_type,
+        p_discount_value: editSubForm.discount_value ? Number(editSubForm.discount_value) : null,
+        p_promo_code: editSubForm.promo_code || null,
+        p_external_link: editSubForm.external_link || null,
+        p_tags: editSubForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        p_start_date: editSubForm.start_date || null,
+        p_expiration_date: editSubForm.expiration_date || null,
+      })
+      if (error) throw error
+      toast.success(t('admin.submissions.edit_saved'))
+      setEditingSubmission(null)
+      await loadSubmissions()
+    } catch (e: any) { toast.error(e.message) }
+    finally { setSavingEdit(false) }
   }
 
   function openEditClub(club: DiscountClub) {
@@ -2664,6 +2715,12 @@ export default function AdminPage() {
                                   {approvingId === sub.id ? '...' : t('admin.submissions.approve')}
                                 </button>
                                 <button
+                                  onClick={() => editingSubmission === sub.id ? setEditingSubmission(null) : openEditSubmission(sub)}
+                                  className="flex-1 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-xs font-semibold"
+                                >
+                                  {editingSubmission === sub.id ? t('app.cancel') : t('admin.submissions.edit')}
+                                </button>
+                                <button
                                   onClick={() => setShowRejectInput(prev => prev === sub.id ? null : sub.id)}
                                   className="flex-1 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-semibold"
                                 >
@@ -2673,6 +2730,78 @@ export default function AdminPage() {
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
+
+                              {/* Inline edit form */}
+                              {editingSubmission === sub.id && (
+                                <div className="mt-2 p-3 bg-white dark:bg-gray-800 border border-blue-200 rounded-2xl space-y-2">
+                                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">{t('admin.submissions.edit_title')}</p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">מועדון *</label>
+                                      <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        value={editSubForm.club_name} onChange={e => setEditSubForm(f => ({ ...f, club_name: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">עסק *</label>
+                                      <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        value={editSubForm.business_name} onChange={e => setEditSubForm(f => ({ ...f, business_name: e.target.value }))} />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-gray-500 block mb-0.5">כותרת *</label>
+                                    <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                      value={editSubForm.title} onChange={e => setEditSubForm(f => ({ ...f, title: e.target.value }))} />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <select className="flex-1 border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                      value={editSubForm.discount_type} onChange={e => setEditSubForm(f => ({ ...f, discount_type: e.target.value as typeof f.discount_type }))}>
+                                      <option value="percent">אחוז (%)</option>
+                                      <option value="fixed">סכום קבוע (₪)</option>
+                                      <option value="free_item">פריט חינם</option>
+                                      <option value="other">אחר</option>
+                                    </select>
+                                    {(editSubForm.discount_type === 'percent' || editSubForm.discount_type === 'fixed') && (
+                                      <input type="number" min="0" dir="ltr"
+                                        className="w-20 border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        placeholder={editSubForm.discount_type === 'percent' ? '%' : '₪'}
+                                        value={editSubForm.discount_value} onChange={e => setEditSubForm(f => ({ ...f, discount_value: e.target.value }))} />
+                                    )}
+                                  </div>
+                                  <input dir="ltr" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs font-mono bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="קוד פרומו" value={editSubForm.promo_code} onChange={e => setEditSubForm(f => ({ ...f, promo_code: e.target.value }))} />
+                                  <input dir="ltr" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="קישור חיצוני" value={editSubForm.external_link} onChange={e => setEditSubForm(f => ({ ...f, external_link: e.target.value }))} />
+                                  <textarea className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none h-14"
+                                    placeholder="תיאור" value={editSubForm.description} onChange={e => setEditSubForm(f => ({ ...f, description: e.target.value }))} />
+                                  <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="תגיות (מופרדות בפסיק)" value={editSubForm.tags} onChange={e => setEditSubForm(f => ({ ...f, tags: e.target.value }))} />
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">תאריך התחלה</label>
+                                      <input type="date" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white"
+                                        value={editSubForm.start_date} onChange={e => setEditSubForm(f => ({ ...f, start_date: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">תאריך תפוגה</label>
+                                      <input type="date" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white"
+                                        value={editSubForm.expiration_date} onChange={e => setEditSubForm(f => ({ ...f, expiration_date: e.target.value }))} />
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 pt-1">
+                                    <button
+                                      onClick={() => handleSaveEditSubmission(sub.id)}
+                                      disabled={savingEdit || !editSubForm.club_name.trim() || !editSubForm.business_name.trim() || !editSubForm.title.trim()}
+                                      className="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                                    >
+                                      {savingEdit ? '...' : t('admin.submissions.edit_save')}
+                                    </button>
+                                    <button onClick={() => setEditingSubmission(null)} className="flex-1 py-1.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-semibold">
+                                      {t('app.cancel')}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
                               {showRejectInput === sub.id && (
                                 <div className="flex gap-2">
                                   <input

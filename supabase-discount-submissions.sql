@@ -238,3 +238,45 @@ AS $$
   WHERE user_id = auth.uid()
   ORDER BY created_at DESC;
 $$;
+
+-- ============ RPC: admin — update submission before approving ============
+CREATE OR REPLACE FUNCTION admin_update_submission(
+  p_id              UUID,
+  p_club_name       TEXT,
+  p_business_name   TEXT,
+  p_title           TEXT,
+  p_description     TEXT     DEFAULT NULL,
+  p_discount_type   TEXT     DEFAULT 'percent',
+  p_discount_value  NUMERIC  DEFAULT NULL,
+  p_promo_code      TEXT     DEFAULT NULL,
+  p_external_link   TEXT     DEFAULT NULL,
+  p_tags            TEXT[]   DEFAULT '{}',
+  p_start_date      DATE     DEFAULT NULL,
+  p_expiration_date DATE     DEFAULT NULL
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE v_admin BOOLEAN;
+BEGIN
+  SELECT is_admin INTO v_admin FROM profiles WHERE id = auth.uid();
+  IF NOT COALESCE(v_admin, FALSE) THEN RAISE EXCEPTION 'not_admin'; END IF;
+  UPDATE discount_deal_submissions
+  SET
+    club_name       = p_club_name,
+    business_name   = p_business_name,
+    title           = p_title,
+    description     = p_description,
+    discount_type   = p_discount_type,
+    discount_value  = p_discount_value,
+    promo_code      = p_promo_code,
+    external_link   = p_external_link,
+    tags            = p_tags,
+    start_date      = p_start_date,
+    expiration_date = p_expiration_date,
+    updated_at      = NOW()
+  WHERE id = p_id;
+END;
+$$;
