@@ -3,14 +3,16 @@
 -- Sends Telegram messages to all linked admin accounts when key events occur.
 -- Requires the pg_net extension (enabled by default on Supabase).
 --
--- ONE-TIME SETUP (run once in Supabase SQL Editor):
---   ALTER DATABASE postgres SET app.telegram_bot_token = 'YOUR_BOT_TOKEN';
---   SELECT pg_reload_conf(); -- applies immediately without restart
+-- ONE-TIME SETUP — run this once in Supabase SQL Editor:
+--   INSERT INTO app_settings (key, value)
+--   VALUES ('telegram_bot_token', 'YOUR_BOT_TOKEN')
+--   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 --
+-- (app_settings table is created by supabase-send-email-setup.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 
--- ── Shared helper: send message to all admin Telegram accounts ────────────────
+-- ── Shared helper: send message to all linked admin Telegram accounts ─────────
 
 CREATE OR REPLACE FUNCTION notify_admin_telegram(message text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -18,7 +20,7 @@ DECLARE
   v_token  text;
   v_chat   RECORD;
 BEGIN
-  v_token := current_setting('app.telegram_bot_token', true);
+  SELECT value INTO v_token FROM app_settings WHERE key = 'telegram_bot_token';
   IF v_token IS NULL OR v_token = '' THEN RETURN; END IF;
 
   FOR v_chat IN
@@ -67,8 +69,8 @@ CREATE TRIGGER trg_admin_new_user
 CREATE OR REPLACE FUNCTION _tg_admin_new_listing()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
-  v_store   text;
-  v_email   text;
+  v_store  text;
+  v_email  text;
 BEGIN
   SELECT v.store_name, p.email
     INTO v_store, v_email
@@ -78,11 +80,11 @@ BEGIN
 
   PERFORM notify_admin_telegram(
     '🏪 <b>שובר חדש למכירה</b>' || E'\n\n' ||
-    '🎁 ' || COALESCE(v_store, '—')              || E'\n' ||
-    '💰 ₪' || NEW.asking_price::text              || E'\n' ||
-    '👤 '  || COALESCE(v_email, '—')              || E'\n' ||
+    '🎁 ' || COALESCE(v_store, '—')             || E'\n' ||
+    '💰 ₪' || NEW.asking_price::text             || E'\n' ||
+    '👤 '  || COALESCE(v_email, '—')             || E'\n' ||
     CASE WHEN NEW.description IS NOT NULL AND NEW.description <> ''
-         THEN '📝 ' || left(NEW.description, 80)  || E'\n'
+         THEN '📝 ' || left(NEW.description, 80) || E'\n'
          ELSE '' END ||
     '🕐 ' || to_char(now() AT TIME ZONE 'Asia/Jerusalem', 'DD/MM/YYYY HH24:MI')
   );
@@ -96,7 +98,7 @@ CREATE TRIGGER trg_admin_new_listing
   FOR EACH ROW EXECUTE FUNCTION _tg_admin_new_listing();
 
 
--- ── 3. New support / report message ──────────────────────────────────────────
+-- ── 3. New support message ────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION _tg_admin_new_support()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -106,7 +108,7 @@ BEGIN
   v_cat_label := CASE NEW.category
     WHEN 'billing' THEN '💳 חיוב'
     WHEN 'bug'     THEN '🐛 באג'
-    WHEN 'feature' THEN '✨ פיצ'||chr(39)||'ר'
+    WHEN 'feature' THEN '✨ פיצ' || chr(39) || 'ר'
     WHEN 'report'  THEN '🚩 דיווח'
     ELSE                '📋 כללי'
   END;
@@ -129,7 +131,38 @@ CREATE TRIGGER trg_admin_new_support
   FOR EACH ROW EXECUTE FUNCTION _tg_admin_new_support();
 
 
--- ── 4. User deal suggestions ──────────────────────────────────────────────────
+-- ── 4. User report (דיווח על משתמש) ─────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION _tg_admin_new_report()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_reporter_email  text;
+  v_reported_email  text;
+BEGIN
+  SELECT email INTO v_reporter_email FROM profiles WHERE id = NEW.reporter_id;
+  SELECT email INTO v_reported_email FROM profiles WHERE id = NEW.reported_user_id;
+
+  PERFORM notify_admin_telegram(
+    '🚩 <b>דיווח חדש על משתמש</b>' || E'\n\n' ||
+    '📣 מדווח: '  || COALESCE(v_reporter_email, '—')  || E'\n' ||
+    '🎯 מדווח על: ' || COALESCE(v_reported_email, '—') || E'\n' ||
+    '📌 סיבה: '   || COALESCE(NEW.reason, '—')         || E'\n' ||
+    CASE WHEN NEW.details IS NOT NULL AND NEW.details <> ''
+         THEN '💬 ' || left(NEW.details, 100)           || E'\n'
+         ELSE '' END ||
+    '🕐 ' || to_char(now() AT TIME ZONE 'Asia/Jerusalem', 'DD/MM/YYYY HH24:MI')
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_admin_new_report ON user_reports;
+CREATE TRIGGER trg_admin_new_report
+  AFTER INSERT ON user_reports
+  FOR EACH ROW EXECUTE FUNCTION _tg_admin_new_report();
+
+
+-- ── 5. User deal suggestions ──────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS user_deal_suggestions (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -143,15 +176,16 @@ CREATE TABLE IF NOT EXISTS user_deal_suggestions (
 
 ALTER TABLE user_deal_suggestions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can insert own suggestions" ON user_deal_suggestions;
 CREATE POLICY "Users can insert own suggestions"
   ON user_deal_suggestions FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can view own suggestions" ON user_deal_suggestions;
 CREATE POLICY "Users can view own suggestions"
   ON user_deal_suggestions FOR SELECT
   USING (user_id = auth.uid());
 
--- RPC: submit deal suggestion
 CREATE OR REPLACE FUNCTION submit_deal_suggestion(
   p_store_name  text,
   p_description text,
@@ -163,7 +197,12 @@ BEGIN
   IF length(trim(p_description)) < 5 THEN RAISE EXCEPTION 'description too short'; END IF;
 
   INSERT INTO user_deal_suggestions (user_id, store_name, description, promo_code)
-  VALUES (auth.uid(), trim(p_store_name), trim(p_description), nullif(trim(coalesce(p_promo_code,'')), ''));
+  VALUES (
+    auth.uid(),
+    trim(p_store_name),
+    trim(p_description),
+    nullif(trim(coalesce(p_promo_code, '')), '')
+  );
 END;
 $$;
 
@@ -176,12 +215,12 @@ BEGIN
 
   PERFORM notify_admin_telegram(
     '💡 <b>הצעת הטבה חדשה ממשתמש</b>' || E'\n\n' ||
-    '🏪 ' || NEW.store_name                                              || E'\n' ||
-    '📝 ' || left(NEW.description, 100)                                  || E'\n' ||
+    '🏪 ' || NEW.store_name                   || E'\n' ||
+    '📝 ' || left(NEW.description, 100)        || E'\n' ||
     CASE WHEN NEW.promo_code IS NOT NULL
          THEN '🎟 קוד: <code>' || NEW.promo_code || '</code>' || E'\n'
          ELSE '' END ||
-    '👤 ' || COALESCE(v_email, '—')                                      || E'\n' ||
+    '👤 ' || COALESCE(v_email, '—')           || E'\n' ||
     '🕐 ' || to_char(now() AT TIME ZONE 'Asia/Jerusalem', 'DD/MM/YYYY HH24:MI')
   );
   RETURN NEW;
