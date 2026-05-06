@@ -287,6 +287,26 @@ export interface DiscountDeal {
   is_upcoming: boolean
 }
 
+export interface DiscountSubmission {
+  id: string
+  user_id?: string
+  user_email?: string
+  club_name: string
+  business_name: string
+  title: string
+  description?: string
+  discount_type: 'percent' | 'fixed' | 'free_item' | 'other'
+  discount_value?: number
+  promo_code?: string
+  external_link?: string
+  tags: string[]
+  start_date?: string
+  expiration_date?: string
+  status: 'pending' | 'approved' | 'rejected'
+  admin_notes?: string
+  created_at: string
+}
+
 export const SUPER_VOUCHER_STORES: Record<string, string[]> = {
   'BuyMe': ['מגה, מגה בעיר', 'שופרסל', 'רמי לוי', 'ויקטורי', 'AM:PM', 'מחסני השוק', 'יינות ביתן', 'פרש מרקט', 'ספייסר', 'רנואר', 'קסטרו', 'אמריקן איגל', 'H&M', 'זארה', 'Mango', 'Fox', 'Timberland', 'ACE', 'אייס', 'Home Center', 'IKEA', 'נטו', 'דומינוס', 'פיצה האט', 'מקדונלדס', 'בורגר קינג', 'שוורמה הבית', 'קפה קפה', 'ארומה', 'קפה גרג', 'שילב', 'BBB', 'פנדה', 'גוטשה', 'רולדין', 'GOLF', 'אנג\'ל', 'ליפסטיק', 'ביגוד ואביזרים'],
   'תו הזהב': ['שופרסל', 'רמי לוי', 'ויקטורי', 'AM:PM', 'מחסני השוק', 'יינות ביתן', 'פרש מרקט', 'ספייסר', 'רנואר', 'קסטרו', 'H&M', 'זארה', 'Fox', 'ACE', 'Home Center', 'IKEA'],

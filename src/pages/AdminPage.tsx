@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
 import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck, Percent, CreditCard, Tag, Building2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import type { SuperVoucher, DiscountClub, DiscountBusiness, DiscountDeal } from '../types'
+import type { SuperVoucher, DiscountClub, DiscountBusiness, DiscountDeal, DiscountSubmission } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { SUPER_VOUCHER_STORES } from '../types'
 
@@ -182,7 +182,7 @@ export default function AdminPage() {
 
   // ── Discount Matcher admin state ─────────────────────────────────────────
   const [showDiscounts, setShowDiscounts] = useState(false)
-  const [discountTab, setDiscountTab] = useState<'clubs' | 'businesses' | 'deals'>('deals')
+  const [discountTab, setDiscountTab] = useState<'clubs' | 'businesses' | 'deals' | 'submissions'>('deals')
 
   // Clubs
   const [adminClubs, setAdminClubs] = useState<DiscountClub[]>([])
@@ -210,6 +210,29 @@ export default function AdminPage() {
     start_date: '', expiration_date: '', is_active: true,
   })
   const [savingDiscount, setSavingDiscount] = useState(false)
+
+  // Quick-add inline (inside deal form)
+  const [showQuickClub, setShowQuickClub] = useState(false)
+  const [quickClubForm, setQuickClubForm] = useState({ name: '', type: 'loyalty_club' as 'credit_card' | 'loyalty_club' })
+  const [showQuickBiz, setShowQuickBiz] = useState(false)
+  const [quickBizForm, setQuickBizForm] = useState({ name: '', tags: '' })
+  const [savingQuick, setSavingQuick] = useState(false)
+
+  // Submissions
+  const [submissions, setSubmissions] = useState<DiscountSubmission[]>([])
+  const [submissionsLoaded, setSubmissionsLoaded] = useState(false)
+  const [submissionFilter, setSubmissionFilter] = useState<'pending' | 'all'>('pending')
+  const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [rejectNote, setRejectNote] = useState<Record<string, string>>({})
+  const [showRejectInput, setShowRejectInput] = useState<string | null>(null)
+  const [editingSubmission, setEditingSubmission] = useState<string | null>(null)
+  const [editSubForm, setEditSubForm] = useState({
+    club_name: '', business_name: '', title: '', description: '',
+    discount_type: 'percent' as 'percent' | 'fixed' | 'free_item' | 'other',
+    discount_value: '', promo_code: '', external_link: '',
+    tags: '', start_date: '', expiration_date: '',
+  })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   async function loadAdminClubs() {
     const { data } = await supabase.rpc('admin_get_all_clubs')
@@ -320,6 +343,130 @@ export default function AdminPage() {
     if (error) { toast.error(error.message); return }
     toast.success('עסקה נמחקה')
     setAdminDeals(prev => prev.filter(d => d.deal_id !== id))
+  }
+
+  async function handleQuickAddClub() {
+    if (!quickClubForm.name.trim()) return
+    setSavingQuick(true)
+    try {
+      const { data, error } = await supabase.rpc('admin_upsert_club', {
+        p_id: null, p_name: quickClubForm.name.trim(),
+        p_logo_url: null, p_type: quickClubForm.type, p_is_active: true,
+      })
+      if (error) throw error
+      await loadAdminClubs()
+      setDealForm(f => ({ ...f, club_id: data as string }))
+      setShowQuickClub(false)
+      setQuickClubForm({ name: '', type: 'loyalty_club' })
+      toast.success('מועדון נוסף ונבחר')
+    } catch (e: any) { toast.error(e.message) }
+    finally { setSavingQuick(false) }
+  }
+
+  async function handleQuickAddBiz() {
+    if (!quickBizForm.name.trim()) return
+    setSavingQuick(true)
+    try {
+      const tagsArr = quickBizForm.tags.split(',').map(s => s.trim()).filter(Boolean)
+      const { data, error } = await supabase.rpc('admin_upsert_business', {
+        p_id: null, p_name: quickBizForm.name.trim(), p_logo_url: null,
+        p_website: null, p_tags: tagsArr, p_store_id: null,
+      })
+      if (error) throw error
+      await loadAdminBusinesses()
+      setDealForm(f => ({ ...f, business_id: data as string }))
+      setShowQuickBiz(false)
+      setQuickBizForm({ name: '', tags: '' })
+      toast.success('עסק נוסף ונבחר')
+    } catch (e: any) { toast.error(e.message) }
+    finally { setSavingQuick(false) }
+  }
+
+  async function loadSubmissions() {
+    setSubmissionsLoaded(false)
+    const { data } = await supabase.rpc('admin_get_submissions',
+      { p_status: submissionFilter === 'pending' ? 'pending' : null }
+    )
+    if (data) setSubmissions(data as DiscountSubmission[])
+    setSubmissionsLoaded(true)
+  }
+
+  async function handleApproveSubmission(sub: DiscountSubmission) {
+    setApprovingId(sub.id)
+    try {
+      const { error } = await supabase.rpc('admin_approve_submission', {
+        p_id: sub.id, p_club_id: null, p_business_id: null, p_admin_notes: null,
+      })
+      if (error) throw error
+      toast.success('עסקה אושרה ופורסמה!')
+      await loadSubmissions()
+      // Refresh deals list if open
+      if (dealsLoaded) await loadAdminDeals()
+    } catch (e: any) { toast.error(e.message) }
+    finally { setApprovingId(null) }
+  }
+
+  async function handleRejectSubmission(id: string) {
+    const note = rejectNote[id] || ''
+    const { error } = await supabase.rpc('admin_reject_submission', {
+      p_id: id, p_admin_notes: note || null,
+    })
+    if (error) { toast.error(error.message); return }
+    toast.success('הגשה נדחתה')
+    setShowRejectInput(null)
+    setRejectNote(prev => { const n = { ...prev }; delete n[id]; return n })
+    await loadSubmissions()
+  }
+
+  async function handleDeleteSubmission(id: string) {
+    if (!window.confirm('למחוק הגשה זו?')) return
+    const { error } = await supabase.rpc('admin_delete_submission', { p_id: id })
+    if (error) { toast.error(error.message); return }
+    toast.success('הגשה נמחקה')
+    setSubmissions(prev => prev.filter(s => s.id !== id))
+  }
+
+  function openEditSubmission(sub: DiscountSubmission) {
+    setEditingSubmission(sub.id)
+    setShowRejectInput(null)
+    setEditSubForm({
+      club_name: sub.club_name,
+      business_name: sub.business_name,
+      title: sub.title,
+      description: sub.description || '',
+      discount_type: sub.discount_type,
+      discount_value: sub.discount_value != null ? String(sub.discount_value) : '',
+      promo_code: sub.promo_code || '',
+      external_link: sub.external_link || '',
+      tags: (sub.tags || []).join(', '),
+      start_date: sub.start_date || '',
+      expiration_date: sub.expiration_date || '',
+    })
+  }
+
+  async function handleSaveEditSubmission(id: string) {
+    setSavingEdit(true)
+    try {
+      const { error } = await supabase.rpc('admin_update_submission', {
+        p_id: id,
+        p_club_name: editSubForm.club_name,
+        p_business_name: editSubForm.business_name,
+        p_title: editSubForm.title,
+        p_description: editSubForm.description || null,
+        p_discount_type: editSubForm.discount_type,
+        p_discount_value: editSubForm.discount_value ? Number(editSubForm.discount_value) : null,
+        p_promo_code: editSubForm.promo_code || null,
+        p_external_link: editSubForm.external_link || null,
+        p_tags: editSubForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        p_start_date: editSubForm.start_date || null,
+        p_expiration_date: editSubForm.expiration_date || null,
+      })
+      if (error) throw error
+      toast.success(t('admin.submissions.edit_saved'))
+      setEditingSubmission(null)
+      await loadSubmissions()
+    } catch (e: any) { toast.error(e.message) }
+    finally { setSavingEdit(false) }
   }
 
   function openEditClub(club: DiscountClub) {
@@ -2476,17 +2623,215 @@ export default function AdminPage() {
           {showDiscounts && (
             <div className="border-t">
               {/* Sub-tabs */}
-              <div className="flex border-b text-sm font-medium">
-                {(['deals', 'clubs', 'businesses'] as const).map(tab => (
+              <div className="flex border-b text-sm font-medium overflow-x-auto">
+                {(['deals', 'submissions', 'clubs', 'businesses'] as const).map(tab => (
                   <button
                     key={tab}
-                    onClick={() => setDiscountTab(tab)}
-                    className={`flex-1 py-2.5 transition-colors ${discountTab === tab ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'}`}
+                    onClick={() => {
+                      setDiscountTab(tab)
+                      if (tab === 'submissions' && !submissionsLoaded) loadSubmissions()
+                    }}
+                    className={`flex-1 py-2.5 whitespace-nowrap px-2 transition-colors ${discountTab === tab ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'}`}
                   >
-                    {tab === 'deals' ? t('admin.discounts.deals') : tab === 'clubs' ? t('admin.discounts.clubs') : t('admin.discounts.businesses')}
+                    {tab === 'deals' ? t('admin.discounts.deals')
+                      : tab === 'submissions' ? t('admin.discounts.submissions')
+                      : tab === 'clubs' ? t('admin.discounts.clubs')
+                      : t('admin.discounts.businesses')}
+                    {tab === 'submissions' && submissions.filter(s => s.status === 'pending').length > 0 && (
+                      <span className="mr-1 inline-flex items-center justify-center w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full">
+                        {submissions.filter(s => s.status === 'pending').length}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
+
+              {/* ── SUBMISSIONS TAB ── */}
+              {discountTab === 'submissions' && (
+                <div className="p-4 space-y-3">
+                  {/* Filter bar */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-xl overflow-hidden border border-gray-200 text-xs font-medium">
+                      {(['pending', 'all'] as const).map(f => (
+                        <button key={f} onClick={() => { setSubmissionFilter(f); setSubmissionsLoaded(false); setTimeout(() => loadSubmissions(), 0) }}
+                          className={`px-3 py-1.5 ${submissionFilter === f ? 'bg-green-600 text-white' : 'bg-white text-gray-600'}`}>
+                          {f === 'pending' ? t('admin.submissions.pending') : 'הכל'}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={loadSubmissions} className="text-xs text-gray-400 hover:text-gray-600">↺ רענן</button>
+                  </div>
+
+                  {!submissionsLoaded ? (
+                    <p className="text-sm text-gray-400 text-center py-6">{t('app.loading')}</p>
+                  ) : submissions.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-6">{t('admin.submissions.empty')}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {submissions.map(sub => (
+                        <div key={sub.id} className={`rounded-2xl border p-3 space-y-2 ${sub.status === 'pending' ? 'bg-amber-50 border-amber-200' : sub.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                          {/* Status badge + meta */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{sub.title}</p>
+                              <p className="text-xs text-gray-500">{sub.business_name} · {sub.club_name}</p>
+                              <p className="text-xs text-gray-400">{sub.user_email} · {formatDate(sub.created_at)}</p>
+                            </div>
+                            <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${sub.status === 'pending' ? 'bg-amber-200 text-amber-800' : sub.status === 'approved' ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600'}`}>
+                              {sub.status === 'pending' ? t('admin.submissions.pending') : sub.status === 'approved' ? t('admin.submissions.approved') : t('admin.submissions.rejected')}
+                            </span>
+                          </div>
+
+                          {/* Details */}
+                          <div className="flex flex-wrap gap-1.5">
+                            {sub.discount_type === 'percent' && sub.discount_value != null && (
+                              <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{sub.discount_value}%</span>
+                            )}
+                            {sub.discount_type === 'fixed' && sub.discount_value != null && (
+                              <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">₪{sub.discount_value}</span>
+                            )}
+                            {sub.promo_code && (
+                              <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-mono">{sub.promo_code}</span>
+                            )}
+                            {sub.expiration_date && (
+                              <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">עד {sub.expiration_date}</span>
+                            )}
+                          </div>
+
+                          {sub.description && (
+                            <p className="text-xs text-gray-600 line-clamp-2">{sub.description}</p>
+                          )}
+
+                          {sub.admin_notes && (
+                            <p className="text-xs text-gray-500 italic border-t pt-1.5">הערה: {sub.admin_notes}</p>
+                          )}
+
+                          {/* Actions — only for pending */}
+                          {sub.status === 'pending' && (
+                            <div className="pt-1 space-y-2">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleApproveSubmission(sub)}
+                                  disabled={approvingId === sub.id}
+                                  className="flex-1 py-1.5 bg-green-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
+                                >
+                                  {approvingId === sub.id ? '...' : t('admin.submissions.approve')}
+                                </button>
+                                <button
+                                  onClick={() => editingSubmission === sub.id ? setEditingSubmission(null) : openEditSubmission(sub)}
+                                  className="flex-1 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-xs font-semibold"
+                                >
+                                  {editingSubmission === sub.id ? t('app.cancel') : t('admin.submissions.edit')}
+                                </button>
+                                <button
+                                  onClick={() => setShowRejectInput(prev => prev === sub.id ? null : sub.id)}
+                                  className="flex-1 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-semibold"
+                                >
+                                  {t('admin.submissions.reject')}
+                                </button>
+                                <button onClick={() => handleDeleteSubmission(sub.id)} className="p-1.5 text-gray-400 hover:text-red-500">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {/* Inline edit form */}
+                              {editingSubmission === sub.id && (
+                                <div className="mt-2 p-3 bg-white dark:bg-gray-800 border border-blue-200 rounded-2xl space-y-2">
+                                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">{t('admin.submissions.edit_title')}</p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">מועדון *</label>
+                                      <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        value={editSubForm.club_name} onChange={e => setEditSubForm(f => ({ ...f, club_name: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">עסק *</label>
+                                      <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        value={editSubForm.business_name} onChange={e => setEditSubForm(f => ({ ...f, business_name: e.target.value }))} />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-gray-500 block mb-0.5">כותרת *</label>
+                                    <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                      value={editSubForm.title} onChange={e => setEditSubForm(f => ({ ...f, title: e.target.value }))} />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <select className="flex-1 border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                      value={editSubForm.discount_type} onChange={e => setEditSubForm(f => ({ ...f, discount_type: e.target.value as typeof f.discount_type }))}>
+                                      <option value="percent">אחוז (%)</option>
+                                      <option value="fixed">סכום קבוע (₪)</option>
+                                      <option value="free_item">פריט חינם</option>
+                                      <option value="other">אחר</option>
+                                    </select>
+                                    {(editSubForm.discount_type === 'percent' || editSubForm.discount_type === 'fixed') && (
+                                      <input type="number" min="0" dir="ltr"
+                                        className="w-20 border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        placeholder={editSubForm.discount_type === 'percent' ? '%' : '₪'}
+                                        value={editSubForm.discount_value} onChange={e => setEditSubForm(f => ({ ...f, discount_value: e.target.value }))} />
+                                    )}
+                                  </div>
+                                  <input dir="ltr" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs font-mono bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="קוד פרומו" value={editSubForm.promo_code} onChange={e => setEditSubForm(f => ({ ...f, promo_code: e.target.value }))} />
+                                  <input dir="ltr" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="קישור חיצוני" value={editSubForm.external_link} onChange={e => setEditSubForm(f => ({ ...f, external_link: e.target.value }))} />
+                                  <textarea className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none h-14"
+                                    placeholder="תיאור" value={editSubForm.description} onChange={e => setEditSubForm(f => ({ ...f, description: e.target.value }))} />
+                                  <input className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="תגיות (מופרדות בפסיק)" value={editSubForm.tags} onChange={e => setEditSubForm(f => ({ ...f, tags: e.target.value }))} />
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">תאריך התחלה</label>
+                                      <input type="date" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white"
+                                        value={editSubForm.start_date} onChange={e => setEditSubForm(f => ({ ...f, start_date: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 block mb-0.5">תאריך תפוגה</label>
+                                      <input type="date" className="w-full border dark:border-gray-600 rounded-xl px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:text-white"
+                                        value={editSubForm.expiration_date} onChange={e => setEditSubForm(f => ({ ...f, expiration_date: e.target.value }))} />
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 pt-1">
+                                    <button
+                                      onClick={() => handleSaveEditSubmission(sub.id)}
+                                      disabled={savingEdit || !editSubForm.club_name.trim() || !editSubForm.business_name.trim() || !editSubForm.title.trim()}
+                                      className="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                                    >
+                                      {savingEdit ? '...' : t('admin.submissions.edit_save')}
+                                    </button>
+                                    <button onClick={() => setEditingSubmission(null)} className="flex-1 py-1.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-semibold">
+                                      {t('app.cancel')}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {showRejectInput === sub.id && (
+                                <div className="flex gap-2">
+                                  <input
+                                    className="flex-1 border rounded-xl px-2.5 py-1.5 text-xs"
+                                    placeholder="הערה לדחייה (אופציונלי)"
+                                    value={rejectNote[sub.id] || ''}
+                                    onChange={e => setRejectNote(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                                    autoFocus
+                                  />
+                                  <button onClick={() => handleRejectSubmission(sub.id)} className="px-3 py-1.5 bg-red-500 text-white rounded-xl text-xs font-semibold">
+                                    אשר דחייה
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {sub.status !== 'pending' && (
+                            <button onClick={() => handleDeleteSubmission(sub.id)} className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1">
+                              <Trash2 className="w-3 h-3" /> מחק
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* ── CLUBS TAB ── */}
               {discountTab === 'clubs' && (
@@ -2610,21 +2955,64 @@ export default function AdminPage() {
                         <button onClick={() => { setShowDealForm(false); setEditingDeal(null) }}><X className="w-4 h-4 text-gray-400" /></button>
                       </div>
 
-                      {/* Club select */}
-                      <select className="w-full border rounded-xl px-3 py-2 text-sm bg-white" value={dealForm.club_id} onChange={e => setDealForm(f => ({ ...f, club_id: e.target.value }))}>
-                        <option value="">בחר מועדון / כרטיס *</option>
-                        {adminClubs.filter(c => c.is_active).map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
+                      {/* Club select + quick-add */}
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <select className="flex-1 border rounded-xl px-3 py-2 text-sm bg-white" value={dealForm.club_id} onChange={e => setDealForm(f => ({ ...f, club_id: e.target.value }))}>
+                            <option value="">בחר מועדון / כרטיס *</option>
+                            {adminClubs.filter(c => c.is_active).map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => { setShowQuickClub(v => !v); setShowQuickBiz(false) }} className="shrink-0 text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2.5 py-1.5 rounded-xl whitespace-nowrap">
+                            {t('admin.quickadd.club')}
+                          </button>
+                        </div>
+                        {showQuickClub && (
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-2">
+                            <p className="text-xs font-semibold text-green-700">מועדון / כרטיס חדש</p>
+                            <input className="w-full border rounded-lg px-2.5 py-1.5 text-sm" placeholder="שם המועדון *" value={quickClubForm.name} onChange={e => setQuickClubForm(f => ({ ...f, name: e.target.value }))} autoFocus />
+                            <select className="w-full border rounded-lg px-2.5 py-1.5 text-sm bg-white" value={quickClubForm.type} onChange={e => setQuickClubForm(f => ({ ...f, type: e.target.value as 'credit_card' | 'loyalty_club' }))}>
+                              <option value="credit_card">{t('settings.clubs.credit_card')}</option>
+                              <option value="loyalty_club">{t('settings.clubs.loyalty_club')}</option>
+                            </select>
+                            <div className="flex gap-2">
+                              <button onClick={handleQuickAddClub} disabled={savingQuick || !quickClubForm.name.trim()} className="flex-1 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold disabled:opacity-50">
+                                {savingQuick ? '...' : 'הוסף ובחר'}
+                              </button>
+                              <button onClick={() => setShowQuickClub(false)} className="px-3 py-1.5 text-xs text-gray-500 bg-white border rounded-lg">{t('app.cancel')}</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
-                      {/* Business select */}
-                      <select className="w-full border rounded-xl px-3 py-2 text-sm bg-white" value={dealForm.business_id} onChange={e => setDealForm(f => ({ ...f, business_id: e.target.value }))}>
-                        <option value="">בחר עסק *</option>
-                        {adminBusinesses.map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                      </select>
+                      {/* Business select + quick-add */}
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <select className="flex-1 border rounded-xl px-3 py-2 text-sm bg-white" value={dealForm.business_id} onChange={e => setDealForm(f => ({ ...f, business_id: e.target.value }))}>
+                            <option value="">בחר עסק *</option>
+                            {adminBusinesses.map(b => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => { setShowQuickBiz(v => !v); setShowQuickClub(false) }} className="shrink-0 text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2.5 py-1.5 rounded-xl whitespace-nowrap">
+                            {t('admin.quickadd.business')}
+                          </button>
+                        </div>
+                        {showQuickBiz && (
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-2">
+                            <p className="text-xs font-semibold text-green-700">עסק חדש</p>
+                            <input className="w-full border rounded-lg px-2.5 py-1.5 text-sm" placeholder="שם העסק *" value={quickBizForm.name} onChange={e => setQuickBizForm(f => ({ ...f, name: e.target.value }))} autoFocus />
+                            <input className="w-full border rounded-lg px-2.5 py-1.5 text-sm" placeholder="תגיות (קפה, מסעדה...)" value={quickBizForm.tags} onChange={e => setQuickBizForm(f => ({ ...f, tags: e.target.value }))} />
+                            <div className="flex gap-2">
+                              <button onClick={handleQuickAddBiz} disabled={savingQuick || !quickBizForm.name.trim()} className="flex-1 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold disabled:opacity-50">
+                                {savingQuick ? '...' : 'הוסף ובחר'}
+                              </button>
+                              <button onClick={() => setShowQuickBiz(false)} className="px-3 py-1.5 text-xs text-gray-500 bg-white border rounded-lg">{t('app.cancel')}</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       <input className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="כותרת *  (לדוגמה: 20% הנחה לחברי הויזה)" value={dealForm.title} onChange={e => setDealForm(f => ({ ...f, title: e.target.value }))} />
                       <textarea className="w-full border rounded-xl px-3 py-2 text-sm resize-none h-20" placeholder="תיאור (אופציונלי)" value={dealForm.description} onChange={e => setDealForm(f => ({ ...f, description: e.target.value }))} />
