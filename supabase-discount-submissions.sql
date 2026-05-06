@@ -102,16 +102,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT
-    sub.id, sub.user_id, sub.user_email,
-    sub.club_name, sub.business_name, sub.title, sub.description,
-    sub.discount_type, sub.discount_value, sub.promo_code, sub.external_link,
-    sub.tags, sub.start_date, sub.expiration_date,
-    sub.status, sub.admin_notes, sub.created_at
-  FROM discount_deal_submissions sub
-  WHERE (p_status IS NULL OR sub.status = p_status)
+    dds.id, dds.user_id, dds.user_email,
+    dds.club_name, dds.business_name, dds.title, dds.description,
+    dds.discount_type, dds.discount_value, dds.promo_code, dds.external_link,
+    dds.tags, dds.start_date, dds.expiration_date,
+    dds.status, dds.admin_notes, dds.created_at
+  FROM discount_deal_submissions dds
+  WHERE (p_status IS NULL OR dds.status = p_status)
   ORDER BY
-    CASE sub.status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
-    sub.created_at DESC;
+    CASE dds.status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
+    dds.created_at DESC;
 $$;
 
 -- ============ RPC: admin — approve (auto-match or create club+business then create deal) ============
