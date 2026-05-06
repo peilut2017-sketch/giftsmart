@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, X, Percent, Settings2, Loader2, Plus, ChevronDown, ChevronUp } from 'lucide-react'
 import { useDiscounts } from '../contexts/DiscountsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -234,6 +234,8 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
 export default function DiscountsPage() {
   const { t } = useT()
   const navigate = useNavigate()
+  const location = useLocation()
+  const targetDealId = (location.state as { dealId?: string } | null)?.dealId
   const { user } = useAuth()
   const {
     deals, userClubIds, loading,
@@ -250,6 +252,13 @@ export default function DiscountsPage() {
     fetchClubs()
     fetchDeals(searchQuery || undefined, activeTags.length > 0 ? activeTags : undefined, myOnly)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll to and expand a specific deal when arriving from search results
+  useEffect(() => {
+    if (!targetDealId || loading) return
+    const el = document.getElementById(`deal-${targetDealId}`)
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150)
+  }, [targetDealId, loading])
 
   function handleSearch(value: string) {
     setLocalSearch(value)
@@ -422,7 +431,7 @@ export default function DiscountsPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {visibleDeals.map(deal => (
-              <DealCard key={deal.deal_id} deal={deal} />
+              <DealCard key={deal.deal_id} deal={deal} initiallyExpanded={deal.deal_id === targetDealId} />
             ))}
           </div>
         )}
