@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types'
+import { identifyUser, resetPostHog } from '../lib/posthog'
 
 interface AuthContextType {
   user: User | null
@@ -85,10 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        identifyUser(session.user.id, session.user.email)
         const cached = readCachedProfile(session.user.id)
         if (cached) setProfile(cached)
         await fetchProfile(session.user.id)
       } else {
+        resetPostHog()
         setProfile(null)
         evictProfileCache()
       }
@@ -145,7 +148,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string, name?: string) {
     const { data, error } = await supabase.auth.signUp({ email, password })
-    if (!error && data.user) {
+    if (error) return { error }
+    // identities is empty when the email already exists in Supabase Auth
+    if (data.user?.identities?.length === 0) {
+      return { error: new Error('כתובת האימייל כבר רשומה במערכת') }
+    }
+    if (data.user) {
       await supabase.from('profiles').upsert({
         id: data.user.id,
         email,

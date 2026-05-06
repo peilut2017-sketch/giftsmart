@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -6,7 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, Lightbulb } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -43,6 +43,32 @@ interface AdminBroadcast {
 }
 
 const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+
+function MenuItem({ icon: Icon, label, desc, onClick, danger = false, right }: { icon: React.ElementType; label: string; desc?: string; onClick?: () => void; danger?: boolean; right?: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors rounded-2xl text-right ${danger ? 'text-red-600' : ''}`}
+    >
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${danger ? 'bg-red-50' : 'bg-gray-100'}`}>
+        <Icon className={`w-5 h-5 ${danger ? 'text-red-500' : 'text-gray-600'}`} />
+      </div>
+      <div className="flex-1">
+        <p className={`text-sm font-medium ${danger ? 'text-red-600' : 'text-gray-800'}`}>{label}</p>
+        {desc && <p className="text-xs text-gray-400">{desc}</p>}
+      </div>
+      {right || <ChevronRight className="w-4 h-4 text-gray-300 rotate-180" />}
+    </button>
+  )
+}
+
+function SL({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{children}</div>
+}
+
+function Card({ children, noPad = false }: { children: React.ReactNode; noPad?: boolean }) {
+  return <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', ...(noPad ? {} : {}) }}>{children}</div>
+}
 
 interface WalletMemberRow {
   user_id: string
@@ -99,6 +125,13 @@ export default function SettingsPage() {
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
   const [sendingUserReply, setSendingUserReply] = useState<string | null>(null)
 
+  // Deal suggestions
+  const [dealStore, setDealStore] = useState('')
+  const [dealDesc, setDealDesc] = useState('')
+  const [dealCode, setDealCode] = useState('')
+  const [sendingDeal, setSendingDeal] = useState(false)
+  const [dealSent, setDealSent] = useState(false)
+
   // Admin broadcasts
   const [adminBroadcasts, setAdminBroadcasts] = useState<AdminBroadcast[]>([])
   const [seenBroadcastIds, setSeenBroadcastIds] = useState<Set<string>>(
@@ -110,6 +143,7 @@ export default function SettingsPage() {
   const [vaultOldPass, setVaultOldPass] = useState('')
   const [vaultNewPass, setVaultNewPass] = useState('')
   const [vaultNewPass2, setVaultNewPass2] = useState('')
+  const [vaultNewHint, setVaultNewHint] = useState('')
   const [vaultChanging, setVaultChanging] = useState(false)
   const [vaultResetConfirm, setVaultResetConfirm] = useState(false)
   const [vaultDisablePass, setVaultDisablePass] = useState('')
@@ -117,7 +151,7 @@ export default function SettingsPage() {
   const [vaultDisableConfirm, setVaultDisableConfirm] = useState(false)
 
   // Encrypt-all feature
-  const [e2eeDefaultNew, setE2eeDefaultNew] = useState(() => localStorage.getItem('gs_e2ee_default') === 'true')
+  const [e2eeDefaultNew, setE2eeDefaultNew] = useState(() => localStorage.getItem('gs_e2ee_default') !== 'false')
   const [encryptAllConfirm, setEncryptAllConfirm] = useState(false)
   const [encryptAllPass, setEncryptAllPass] = useState('')
   const [encryptingAll, setEncryptingAll] = useState(false)
@@ -129,14 +163,14 @@ export default function SettingsPage() {
     setVaultChanging(true)
     try {
       const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
-      const { ok, entries } = await changePassphrase(vaultOldPass, vaultNewPass, e2eeVouchers)
+      const { ok, entries } = await changePassphrase(vaultOldPass, vaultNewPass, e2eeVouchers, vaultNewHint)
       if (!ok) { toast.error('סיסמה נוכחית שגויה'); return }
       // Update all re-encrypted vouchers in DB
       await Promise.all(entries.map(({ id, code, cvv }) =>
         updateVoucher(id, { code, ...(cvv != null ? { cvv } : {}) })
       ))
       toast.success(`סיסמת כספת שונתה — ${entries.length} שוברים הוצפנו מחדש`)
-      setVaultOldPass(''); setVaultNewPass(''); setVaultNewPass2('')
+      setVaultOldPass(''); setVaultNewPass(''); setVaultNewPass2(''); setVaultNewHint('')
       setShowVaultSection(false)
     } finally {
       setVaultChanging(false)
@@ -376,6 +410,21 @@ export default function SettingsPage() {
     setShowMyMessages(true)
   }
 
+  async function submitDealSuggestion() {
+    if (!dealStore.trim() || !dealDesc.trim()) return toast.error('חנות ותיאור הם שדות חובה')
+    setSendingDeal(true)
+    const { error } = await supabase.rpc('submit_deal_suggestion', {
+      p_store_name:  dealStore.trim(),
+      p_description: dealDesc.trim(),
+      p_promo_code:  dealCode.trim() || null,
+    })
+    setSendingDeal(false)
+    if (error) return toast.error('שגיאה בשליחה')
+    setDealStore(''); setDealDesc(''); setDealCode('')
+    setDealSent(true)
+    toast.success('ההטבה נשלחה — תודה!')
+  }
+
   async function loadMyMessages() {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
     if (!data) return
@@ -502,29 +551,6 @@ export default function SettingsPage() {
       setChecking(false)
     }
   }
-
-  const MenuItem = ({ icon: Icon, label, desc, onClick, danger = false, right }: any) => (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors rounded-2xl text-right ${danger ? 'text-red-600' : ''}`}
-    >
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${danger ? 'bg-red-50' : 'bg-gray-100'}`}>
-        <Icon className={`w-5 h-5 ${danger ? 'text-red-500' : 'text-gray-600'}`} />
-      </div>
-      <div className="flex-1">
-        <p className={`text-sm font-medium ${danger ? 'text-red-600' : 'text-gray-800'}`}>{label}</p>
-        {desc && <p className="text-xs text-gray-400">{desc}</p>}
-      </div>
-      {right || <ChevronRight className="w-4 h-4 text-gray-300 rotate-180" />}
-    </button>
-  )
-
-  const SL = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{children}</div>
-  )
-  const Card = ({ children, noPad = false }: { children: React.ReactNode; noPad?: boolean }) => (
-    <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', ...(noPad ? {} : {}) }}>{children}</div>
-  )
 
   return (
     <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
@@ -738,7 +764,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">מחובר לבוט טלגרם</p>
-                    <p className="text-xs text-gray-400">מקבל התראות ויכול לנהל שוברים</p>
+                    <p className="text-xs text-gray-400">מקבל את כל ההתראות גם בטלגרם</p>
                   </div>
                   <button onClick={handleDisconnectTelegram} className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl flex items-center gap-1">
                     <Link2Off className="w-3.5 h-3.5" /> נתק
@@ -753,7 +779,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">קשר לטלגרם</p>
-                    <p className="text-xs text-gray-400">ניהול שוברים והתראות ישירות בטלגרם</p>
+                    <p className="text-xs text-gray-400">קבל את כל ההתראות גם בטלגרם</p>
                   </div>
                   {!telegramCode && (
                     <button
@@ -1050,6 +1076,57 @@ export default function SettingsPage() {
 
         <ActivityLog />
 
+        {/* ── הצע הטבה ── */}
+        <SL>הצע הטבה לקהילה</SL>
+        <Card>
+          {!dealSent ? (
+            <div className="p-4 space-y-3">
+              <div className="flex items-start gap-3 mb-1">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                  <Lightbulb className="w-4.5 h-4.5 text-amber-500" />
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">יודע על הנחה, קוד פרומו, או הטבה מיוחדת? שתף אותנו ונפרסם לכל המשתמשים.</p>
+              </div>
+              <input
+                value={dealStore}
+                onChange={e => setDealStore(e.target.value)}
+                placeholder="שם החנות / הרשת"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+              />
+              <textarea
+                value={dealDesc}
+                onChange={e => setDealDesc(e.target.value)}
+                placeholder="תיאור ההטבה (למשל: 20% הנחה על כל רכישה מעל ₪200)"
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+              />
+              <input
+                value={dealCode}
+                onChange={e => setDealCode(e.target.value)}
+                placeholder="קוד פרומו (אם יש)"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono"
+              />
+              <button
+                onClick={submitDealSuggestion}
+                disabled={sendingDeal}
+                className="w-full bg-amber-500 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Lightbulb className="w-4 h-4" />
+                {sendingDeal ? 'שולח...' : 'שלח הטבה'}
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 flex flex-col items-center gap-2 text-center">
+              <div className="w-10 h-10 bg-amber-50 rounded-2xl flex items-center justify-center">
+                <Check className="w-5 h-5 text-amber-500" />
+              </div>
+              <p className="text-sm font-medium text-gray-800">תודה על ההטבה!</p>
+              <p className="text-xs text-gray-500">נבדוק ונפרסם בהקדם</p>
+              <button onClick={() => setDealSent(false)} className="text-xs text-amber-600 mt-1">הצע הטבה נוספת</button>
+            </div>
+          )}
+        </Card>
+
         {/* ── אבטחה ── */}
         <SL>{t('settings.security')}</SL>
         <Card>
@@ -1178,6 +1255,15 @@ export default function SettingsPage() {
                   dir="ltr"
                   autoComplete="new-password"
                   name="vault-new-password-confirm"
+                />
+                <input
+                  type="text"
+                  value={vaultNewHint}
+                  onChange={e => setVaultNewHint(e.target.value)}
+                  placeholder="רמז לסיסמה החדשה (אופציונלי)"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  autoComplete="off"
+                  name="vault-new-hint"
                 />
                 <button
                   onClick={handleChangeVaultPassphrase}

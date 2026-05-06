@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { track } from '@vercel/analytics'
+import { phCapture } from '../lib/posthog'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage, ListingConversation, MarketplaceMode, MarketplaceAccessStatus } from '../types'
@@ -225,6 +226,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         details: { store_name: listing.store_name, asking_price: listing.asking_price },
       }).then(() => {}, () => {})
     }
+    phCapture('marketplace_purchase', { listing_id: listingId, store_name: listing?.store_name, asking_price: listing?.asking_price })
     fetchedAt.current.listings = 0; fetchedAt.current.myPurchases = 0
     await Promise.all([fetchListings(), fetchMyPurchases()])
   }, [fetchListings, fetchMyPurchases, listings, user])
@@ -327,8 +329,11 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_sender_id: senderUserId,
     })
     if (error) console.error('[marketplace] markMessagesRead error', error)
-    // Update local per-listing count
+    // Update local per-listing count immediately
     setUnreadByListing(prev => ({ ...prev, [listingId]: 0 }))
+    // Refetch global count from DB so badge stays in sync with reality
+    const { data } = await supabase.rpc('get_unread_chat_count')
+    if (typeof data === 'number') setUnreadChatCount(data)
   }, [])
 
   const updateListingPrice = useCallback(async (listingId: string, newPrice: number) => {

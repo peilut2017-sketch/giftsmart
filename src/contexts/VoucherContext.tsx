@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { track } from '@vercel/analytics'
+import { phCapture } from '../lib/posthog'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { Voucher, SuperVoucher, Category, Store } from '../types'
@@ -260,7 +261,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
           resolvedId = rpcId
         } else {
           // ── Step 2: RPC missing/failed — try direct wallet_members SELECT ──
-          console.warn('RPC get_or_create_user_wallet failed, trying direct query:', rpcErr?.message)
+          if (import.meta.env.DEV) console.warn('RPC get_or_create_user_wallet failed, trying direct query:', rpcErr?.message)
           const { data: memberRows, error: memberErr } = await (supabase
             .from('wallet_members')
             .select('wallet_id')
@@ -272,7 +273,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
             resolvedId = memberRows[0].wallet_id
           } else {
             // ── Step 3: no wallet at all — create one via direct insert ──
-            console.warn('No wallet_members row found, creating wallet directly')
+            if (import.meta.env.DEV) console.warn('No wallet_members row found, creating wallet directly')
             const { data: newWallet, error: walletCreateErr } = await (supabase
               .from('wallets')
               .insert({ name: 'ארנק השוברים שלי', owner_id: user.id })
@@ -586,6 +587,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (user) saveToCache(user.id, newActive, archivedVouchers)
     logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
     track('voucher_added', { store_name: data.store_name, amount: data.amount })
+    phCapture('voucher_added', { store_name: data.store_name, amount: data.amount })
     return data
   }
 

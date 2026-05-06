@@ -203,7 +203,7 @@ export default function CheckoutPage() {
         toast.success(t('checkout.balance.updated.offline'))
         if (clamped <= 0) setConfirmArchive(true)
         const used = usedAmount ?? (voucher.balance - clamped)
-        if (used > 0) sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null)
+        if (used > 0) sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null, user?.id)
         return
       }
     }
@@ -215,7 +215,7 @@ export default function CheckoutPage() {
     }
     const used = usedAmount ?? (voucher.balance - clamped)
     if (used > 0) {
-      sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null)
+      sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null, user?.id)
     }
   }
 

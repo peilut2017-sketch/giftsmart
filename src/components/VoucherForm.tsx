@@ -4,8 +4,10 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS } from '../utils/smsExtractor'
+import type { ExtractionCandidate } from '../utils/smsExtractor'
 import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar } from 'lucide-react'
+import { phCapture } from '../lib/posthog'
+import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar, HelpCircle } from 'lucide-react'
 import { useT } from '../lib/i18n'
 
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
@@ -34,6 +36,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showStoreDropdown, setShowStoreDropdown] = useState(false)
   const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
   const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
+  // item_name: for item-mode vouchers; also supports legacy "📦 " prefix in notes
+  const [itemName, setItemName] = useState(() => {
+    if (voucher?.item_name) return voucher.item_name
+    if (voucher?.notes?.startsWith('📦 ')) return voucher.notes.split('\n')[0].slice('📦 '.length)
+    return ''
+  })
   const [usageAmount, setUsageAmount] = useState('')
   const [storeUsedInput, setStoreUsedInput] = useState('')
   const [actualCost, setActualCost] = useState(voucher?.actual_cost?.toString() || '')
@@ -42,7 +50,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [expiryDate, setExpiryDate] = useState(voucher?.expiry_date || defaultExpiryDate())
   const [selectedCats, setSelectedCats] = useState<string[]>(voucher?.categories || [])
   const [tags, setTags] = useState(voucher?.tags?.join(', ') || '')
-  const [notes, setNotes] = useState(voucher?.notes || '')
+  const [notes, setNotes] = useState(() => {
+    const n = voucher?.notes || ''
+    // Strip legacy "📦 " prefix so notes field shows only the actual notes
+    if (!voucher?.item_name && n.startsWith('📦 ')) return n.split('\n').slice(1).join('\n')
+    return n
+  })
   const [link, setLink] = useState(voucher?.link || '')
   const [source, setSource] = useState(voucher?.source || '')
   const [newCatName, setNewCatName] = useState('')
@@ -58,13 +71,17 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [smsLoading, setSmsLoading] = useState(false)
   const [showImageMenu, setShowImageMenu] = useState(false)
-  const [amountUnit, setAmountUnit] = useState<AmountUnit>('₪')
+  const [pendingCandidates, setPendingCandidates] = useState<ExtractionCandidate | null>(null)
+  const [amountUnit, setAmountUnit] = useState<AmountUnit>(() => {
+    if (voucher?.item_name || voucher?.notes?.startsWith('📦 ')) return 'פריט'
+    return '₪'
+  })
   const [showUnitPicker, setShowUnitPicker] = useState(false)
   const geminiAvailable = isGeminiAvailable()
 
   // E2EE vault — for new vouchers, default to user's preference
   const [e2eeEnabled, setE2eeEnabled] = useState(
-    voucher?.is_e2ee ?? (localStorage.getItem('gs_e2ee_default') === 'true')
+    voucher?.is_e2ee ?? (localStorage.getItem('gs_e2ee_default') !== 'false')
   )
   const [showVaultModal, setShowVaultModal] = useState(false)
   const [vaultModalMode, setVaultModalMode] = useState<'setup' | 'unlock'>('setup')
@@ -223,7 +240,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setShowScanner(false)
   }
 
-  function applyExtracted(extracted: { store_name?: string; amount?: number; balance?: number; code?: string; cvv?: string; expiry_date?: string }) {
+  function applyExtracted(extracted: { store_name?: string; amount?: number; balance?: number; code?: string; cvv?: string; expiry_date?: string; categories?: string[]; link?: string; candidates?: ExtractionCandidate }) {
     let found = 0
     if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name); found++ }
     if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()); found++ }
@@ -231,7 +248,28 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (extracted.code) { setCode(extracted.code); found++ }
     if (extracted.cvv) { setCvv(extracted.cvv); found++ }
     if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); found++ }
+    if (extracted.link) { setLink(extracted.link); found++ }
+    if (extracted.categories && extracted.categories.length > 0) {
+      // Map category IDs to Hebrew names used by the form
+      const names = extracted.categories
+        .map(id => categories.find(c => c.id === id)?.name)
+        .filter((n): n is string => !!n)
+      if (names.length > 0) { setSelectedCats(names); found++ }
+    }
+    // Surface ambiguous candidates as quick-answer questions
+    if (extracted.candidates && Object.keys(extracted.candidates).length > 0) {
+      setPendingCandidates(extracted.candidates)
+    }
     return found
+  }
+
+  function dismissCandidate(field: keyof ExtractionCandidate) {
+    setPendingCandidates(prev => {
+      if (!prev) return null
+      const next = { ...prev }
+      delete next[field]
+      return Object.keys(next).length > 0 ? next : null
+    })
   }
 
   async function handleImageOCR(file: File) {
@@ -296,6 +334,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       toast.dismiss(toastId)
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[OCR]', msg)
+      phCapture('voucher_scan_failed', { error: msg, source: 'image' })
+      phCapture('ocr_failed', { error: msg, source: 'image' })
       // Show a hint if it's an HEIC file
       if (msg.includes('decode') || msg.includes('heic') || msg.includes('heif')) {
         toast.error('פורמט HEIC לא נתמך — שמור כ-JPEG/PNG ונסה שוב')
@@ -320,8 +360,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         toast.dismiss(toastId)
         if (found > 0) toast.success(`זוהו ${found} פרטים (AI)`)
         else toast('לא זוהו פרטי שובר — נסה להדביק טקסט אחר', { icon: '🔍' })
-      } catch {
+      } catch (smsErr) {
         toast.dismiss(toastId)
+        phCapture('voucher_scan_failed', { error: String(smsErr), source: 'sms' })
+        phCapture('ocr_failed', { error: String(smsErr), source: 'sms' })
         const extracted = extractFromSMS(smsText)
         applyExtracted(extracted)
         toast.success('פרטים חולצו')
@@ -440,11 +482,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         ? Math.max(0, (voucher.balance ?? 0) - used)
         : (parseFloat(balance) || parsedAmount || 0)
 
-      // For item-mode: prepend the item name to notes
-      let notesValue = notes.trim()
-      if (amountUnit === 'פריט' && amount.trim()) {
-        notesValue = `📦 ${amount.trim()}${notesValue ? '\n' + notesValue : ''}`
+      // Validate item name is provided when in item mode
+      if (amountUnit === 'פריט' && !itemName.trim()) {
+        toast.error('יש להזין שם פריט')
+        return
       }
+
+      const notesValue = notes.trim()
 
       // Encrypt sensitive fields if E2EE is enabled
       let finalCode = code.trim()
@@ -456,6 +500,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
       const v = {
         store_name: storeName,
+        item_name: amountUnit === 'פריט' ? (itemName.trim() || undefined) : null,
         amount: parsedAmount,
         balance: newBalance,
         actual_cost: actualCost ? parseFloat(actualCost) : null,
@@ -584,6 +629,109 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           </div>
         )}
 
+        {/* Quick-answer candidates panel */}
+        {pendingCandidates && (
+          <div className="p-4 bg-amber-50 border-b border-amber-100">
+            <div className="flex items-center gap-1.5 mb-3">
+              <HelpCircle className="w-4 h-4 text-amber-600" />
+              <span className="text-sm font-semibold text-amber-800">{t('extract.candidates.title')}</span>
+            </div>
+            <div className="space-y-3">
+              {pendingCandidates.code && pendingCandidates.code.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.code')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.code.map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => { setCode(c); dismissCandidate('code') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs font-mono hover:bg-amber-100 transition-colors"
+                      >{c}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('code')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.expiry_date && pendingCandidates.expiry_date.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.expiry')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.expiry_date.map(d => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => { setExpiryDate(d); dismissCandidate('expiry_date') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                      >{d}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('expiry_date')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.store_name && pendingCandidates.store_name.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.store')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.store_name.map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => { setStoreName(n); setStoreSearch(n); dismissCandidate('store_name') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                      >{n}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('store_name')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.amount && pendingCandidates.amount.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.amount')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.amount.map(a => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => { setAmount(a.toString()); dismissCandidate('amount') }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                      >₪{a}</button>
+                    ))}
+                    <button type="button" onClick={() => dismissCandidate('amount')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+              {pendingCandidates.categories && pendingCandidates.categories.length > 1 && (
+                <div>
+                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.categories')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCandidates.categories.map((catSet, i) => {
+                      const labels = catSet
+                        .map(id => categories.find(c => c.id === id))
+                        .filter(Boolean)
+                        .map(c => `${c!.emoji} ${c!.name}`)
+                        .join(', ')
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const names = catSet.map(id => categories.find(c => c.id === id)?.name).filter((n): n is string => !!n)
+                            setSelectedCats(names)
+                            dismissCandidate('categories')
+                          }}
+                          className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
+                        >{labels || catSet.join(', ')}</button>
+                      )
+                    })}
+                    <button type="button" onClick={() => dismissCandidate('categories')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Camera Scanner */}
         {showScanner && (
           <div className="p-4 bg-gray-900 border-b relative">
@@ -640,111 +788,202 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             </div>
           </div>
 
-          {/* Amount + Balance / Usage */}
+          {/* Amount/Item + Balance / Usage */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700">
-                  {amountUnit === 'פריט' ? 'פריט / שירות' : `סכום מקורי (${amountUnit})`}
-                </label>
-                <div className="relative" ref={unitPickerRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowUnitPicker(v => !v)}
-                    className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-xs font-semibold"
-                  >
-                    {amountUnit}
-                    <ChevronDown className="w-2.5 h-2.5" />
-                  </button>
-                  {showUnitPicker && (
-                    <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 min-w-[70px]">
-                      {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
-                        <button
-                          key={u}
-                          type="button"
-                          onClick={() => { setAmountUnit(u); setShowUnitPicker(false) }}
-                          className={`w-full px-3 py-1.5 text-xs text-right hover:bg-gray-50 ${amountUnit === u ? 'text-green-600 font-semibold' : 'text-gray-700'}`}
-                        >
-                          {u}
-                        </button>
-                      ))}
+            {amountUnit === 'פריט' ? (
+              <>
+                {/* Item name — full row */}
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="vf-item-name" className="text-sm font-medium text-gray-700">שם פריט *</label>
+                    <div className="relative" ref={unitPickerRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowUnitPicker(v => !v)}
+                        className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-xs font-semibold"
+                      >
+                        פריט
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+                      {showUnitPicker && (
+                        <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 min-w-[70px]">
+                          {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => { setAmountUnit(u); setShowUnitPicker(false) }}
+                              className={`w-full px-3 py-1.5 text-xs text-right hover:bg-gray-50 ${amountUnit === u ? 'text-green-600 font-semibold' : 'text-gray-700'}`}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-              <input
-                id="vf-amount"
-                type={amountUnit === 'פריט' ? 'text' : 'number'}
-                inputMode={amountUnit === 'פריט' ? undefined : 'decimal'}
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder={amountUnit === 'פריט' ? 'שם פריט...' : '0'}
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir={amountUnit === 'פריט' ? 'rtl' : 'ltr'}
-              />
-            </div>
-            {voucher ? (
-              <div>
-                <label htmlFor="vf-usage" className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
-                <input
-                  id="vf-usage"
-                  type="number"
-                  value={usageAmount}
-                  onChange={e => setUsageAmount(e.target.value)}
-                  placeholder="0"
-                  min="0"
-                  max={voucher.balance}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                  dir="ltr"
-                />
-                {(() => {
-                  const used = parseFloat(usageAmount) || 0
-                  const newBal = Math.max(0, (voucher.balance ?? 0) - used)
-                  return used > 0 ? (
-                    <p className={`text-xs mt-1 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                      יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}
-                    </p>
-                  ) : (
-                    <p className="text-xs mt-1 text-gray-400">יתרה: ₪{(voucher.balance ?? 0).toLocaleString('he-IL')}</p>
-                  )
-                })()}
-                {(parseFloat(usageAmount) || 0) > 0 && (
+                  </div>
                   <input
+                    id="vf-item-name"
                     type="text"
-                    value={storeUsedInput}
-                    onChange={e => setStoreUsedInput(e.target.value)}
-                    placeholder="באיזה חנות? (אופציונלי)"
-                    className="w-full mt-2 px-4 py-2.5 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                    value={itemName}
+                    onChange={e => setItemName(e.target.value)}
+                    placeholder="שם פריט / שירות..."
+                    required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     dir="rtl"
                   />
-                )}
-              </div>
+                </div>
+
+                {/* ערך שובר (optional) */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    ערך שובר <span className="text-gray-400 font-normal text-xs">(אופציונלי)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500 shrink-0">₪</span>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={e => setAmount(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                {/* עלות שובר */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500 shrink-0">₪</span>
+                    <input
+                      type="number"
+                      value={actualCost}
+                      onChange={e => setActualCost(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
+                    />
+                  </div>
+                  {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
+                    <p className="text-xs mt-1 text-gray-400">
+                      ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
+                    </p>
+                  )}
+                </div>
+              </>
             ) : (
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 shrink-0">₪</span>
+              <>
+                {/* Left: שווי שובר with unit picker */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="vf-amount" className="text-sm font-medium text-gray-700">
+                      {`שווי שובר (${amountUnit})`}
+                    </label>
+                    <div className="relative" ref={unitPickerRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowUnitPicker(v => !v)}
+                        className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-xs font-semibold"
+                      >
+                        {amountUnit}
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+                      {showUnitPicker && (
+                        <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 min-w-[70px]">
+                          {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => { setAmountUnit(u); setShowUnitPicker(false) }}
+                              className={`w-full px-3 py-1.5 text-xs text-right hover:bg-gray-50 ${amountUnit === u ? 'text-green-600 font-semibold' : 'text-gray-700'}`}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <input
+                    id="vf-amount"
                     type="number"
-                    value={actualCost}
-                    onChange={e => setActualCost(e.target.value)}
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
                     placeholder="0"
-                    min="0"
                     className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     dir="ltr"
                   />
                 </div>
-                {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
-                  <p className="text-xs mt-1 text-gray-400">
-                    ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
-                  </p>
+
+                {/* Right: usage (edit) or actual cost (add) */}
+                {voucher ? (
+                  <div>
+                    <label htmlFor="vf-usage" className="text-sm font-medium text-gray-700 mb-1 block">סכום שימוש (₪)</label>
+                    <input
+                      id="vf-usage"
+                      type="number"
+                      value={usageAmount}
+                      onChange={e => setUsageAmount(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      max={voucher.balance}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                      dir="ltr"
+                    />
+                    {(() => {
+                      const used = parseFloat(usageAmount) || 0
+                      const newBal = Math.max(0, (voucher.balance ?? 0) - used)
+                      return used > 0 ? (
+                        <p className={`text-xs mt-1 font-medium ${newBal <= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                          יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}
+                        </p>
+                      ) : (
+                        <p className="text-xs mt-1 text-gray-400">יתרה: ₪{(voucher.balance ?? 0).toLocaleString('he-IL')}</p>
+                      )
+                    })()}
+                    {(parseFloat(usageAmount) || 0) > 0 && (
+                      <input
+                        type="text"
+                        value={storeUsedInput}
+                        onChange={e => setStoreUsedInput(e.target.value)}
+                        placeholder="באיזה חנות? (אופציונלי)"
+                        className="w-full mt-2 px-4 py-2.5 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                        dir="rtl"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 shrink-0">₪</span>
+                      <input
+                        type="number"
+                        value={actualCost}
+                        onChange={e => setActualCost(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                        dir="ltr"
+                      />
+                    </div>
+                    {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
+                      <p className="text-xs mt-1 text-gray-400">
+                        ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪
+                      </p>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </div>
 
-          {/* Actual cost — shown in edit mode (grid shows usage amount there instead) */}
-          {voucher && (
+          {/* Actual cost — shown in edit mode only when NOT in item mode (item mode includes it in the grid above) */}
+          {voucher && amountUnit !== 'פריט' && (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
               <div className="flex items-center gap-2">
@@ -778,7 +1017,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 onChange={e => setCode(e.target.value)}
                 disabled={isEncryptedField(code) && !isVaultUnlocked}
                 placeholder={isEncryptedField(code) && !isVaultUnlocked ? '🔐 מוצפן — פתח כספת' : t('form.code.placeholder')}
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
+                className="ph-no-capture flex-1 px-4 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
                 dir="ltr"
               />
               <button
@@ -823,7 +1062,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 onChange={e => setCvv(e.target.value)}
                 disabled={isEncryptedField(cvv) && !isVaultUnlocked}
                 placeholder={isEncryptedField(cvv) && !isVaultUnlocked ? '🔐 מוצפן' : 'אופציונלי'}
-                className="w-full px-3 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
+                className="ph-no-capture w-full px-3 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed"
                 dir="ltr"
               />
             </div>
@@ -1151,7 +1390,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 onChange={e => setVaultPassInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !vaultPass2Input && handleVaultSubmit()}
                 placeholder={vaultModalMode === 'setup' ? 'סיסמת כספת (מינ. 6 תווים)' : 'סיסמת כספת'}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="ph-no-capture w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 dir="ltr"
                 autoFocus
                 autoComplete={vaultModalMode === 'setup' ? 'new-password' : 'current-password'}
@@ -1165,7 +1404,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     onChange={e => setVaultPass2Input(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleVaultSubmit()}
                     placeholder="אימות סיסמה"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    className="ph-no-capture w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     dir="ltr"
                     autoComplete="new-password"
                     name="vault-password-confirm"

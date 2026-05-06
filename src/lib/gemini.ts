@@ -68,9 +68,60 @@ async function invoke(body: Record<string, unknown>): Promise<Record<string, unk
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const VALID_CATEGORY_IDS = new Set([
+  'fashion', 'food', 'electronics', 'beauty', 'home',
+  'sport', 'travel', 'entertainment', 'kids', 'health',
+  'books', 'restaurant', 'supermarket', 'gift', 'other',
+])
+
 function normalise(raw: Record<string, unknown>): ExtractedVoucher {
   function str(v: unknown) { return typeof v === 'string' && v ? v : undefined }
   function num(v: unknown) { return typeof v === 'number' && v > 0 ? v : undefined }
+
+  function strArr(v: unknown): string[] | undefined {
+    if (!Array.isArray(v)) return undefined
+    const filtered = (v as unknown[]).filter((c): c is string => typeof c === 'string' && c.length > 0)
+    return filtered.length > 0 ? filtered : undefined
+  }
+
+  function catArr(v: unknown): string[] | undefined {
+    if (!Array.isArray(v)) return undefined
+    const filtered = (v as unknown[]).filter((c): c is string => typeof c === 'string' && VALID_CATEGORY_IDS.has(c))
+    return filtered.length > 0 ? filtered : undefined
+  }
+
+  function numArr(v: unknown): number[] | undefined {
+    if (!Array.isArray(v)) return undefined
+    const filtered = (v as unknown[]).filter((c): c is number => typeof c === 'number' && c > 0)
+    return filtered.length > 0 ? filtered : undefined
+  }
+
+  const rawCandidates = raw.candidates as Record<string, unknown> | null | undefined
+  let candidates: ExtractedVoucher['candidates'] = undefined
+  if (rawCandidates && typeof rawCandidates === 'object') {
+    const code = strArr(rawCandidates.code)
+    const expiry_date = strArr(rawCandidates.expiry_date)
+    const store_name = strArr(rawCandidates.store_name)
+    const amount = numArr(rawCandidates.amount)
+    const categories = Array.isArray(rawCandidates.categories)
+      ? (rawCandidates.categories as unknown[])
+          .filter(Array.isArray)
+          .map(set => catArr(set))
+          .filter((s): s is string[] => s !== undefined)
+      : undefined
+    if (code || expiry_date || store_name || amount || categories?.length) {
+      candidates = {
+        ...(code            ? { code }            : {}),
+        ...(expiry_date     ? { expiry_date }     : {}),
+        ...(store_name      ? { store_name }      : {}),
+        ...(amount          ? { amount }          : {}),
+        ...(categories?.length ? { categories }   : {}),
+      }
+    }
+  }
+
+  const link = str(raw.link)
+
   return {
     store_name:  str(raw.store_name),
     code:        str(raw.code),
@@ -78,6 +129,9 @@ function normalise(raw: Record<string, unknown>): ExtractedVoucher {
     amount:      num(raw.amount),
     balance:     num(raw.balance),
     expiry_date: str(raw.expiry_date),
+    categories:  catArr(raw.categories),
+    link:        link?.startsWith('http') ? link : undefined,
+    candidates,
   }
 }
 

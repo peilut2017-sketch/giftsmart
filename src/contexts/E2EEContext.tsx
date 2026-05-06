@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { track } from '@vercel/analytics'
+import { phCapture } from '../lib/posthog'
 import { deriveKey, encryptField, decryptField, isEncryptedField, generateSalt, saltToB64, saltFromB64 } from '../lib/e2ee'
 
 const SALT_KEY  = 'gs_e2ee_salt'
@@ -26,7 +27,8 @@ interface E2EEContextValue {
   changePassphrase: (
     oldPass: string,
     newPass: string,
-    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
+    newHint?: string
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   disableVault: (
     passphrase: string,
@@ -94,6 +96,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
       setVaultKey(key)
       track('vault_opened')
+      phCapture('vault_opened')
       return true
     } catch {
       return false
@@ -154,7 +157,8 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const changePassphrase = useCallback(async (
     oldPass: string,
     newPass: string,
-    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
+    newHint?: string
   ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
     // Verify old passphrase
     const saltB64 = localStorage.getItem(SALT_KEY)
@@ -192,6 +196,13 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(SALT_KEY, saltToB64(newSalt))
     localStorage.setItem(CHECK_KEY, newCheck)
     sessionStorage.setItem(SESSION_PASS_KEY, newPass)
+    if (newHint?.trim()) {
+      localStorage.setItem(HINT_KEY, newHint.trim())
+      setHint(newHint.trim())
+    } else {
+      localStorage.removeItem(HINT_KEY)
+      setHint(null)
+    }
     setHasVault(true)
     setVaultKey(newKey)
 
