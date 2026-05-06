@@ -6,7 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, Lightbulb } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, Lightbulb, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -1450,6 +1450,12 @@ export default function SettingsPage() {
                 navigate('/')
                 setTimeout(() => window.dispatchEvent(new Event('show-onboarding')), 120)
               }}
+            />
+            <MenuItem
+              icon={FileText}
+              label="תנאי שימוש"
+              desc="הסכם השימוש בשירות GiftSmart"
+              onClick={() => navigate('/terms')}
             />
             <MenuItem
               icon={Shield}

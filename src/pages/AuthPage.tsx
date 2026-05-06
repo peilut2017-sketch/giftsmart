@@ -131,7 +131,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       }
 
       // register
-      if (!privacyAccepted) return toast.error('יש לאשר את מדיניות הפרטיות')
+      if (!privacyAccepted) return toast.error('יש לאשר את תנאי השימוש ומדיניות הפרטיות')
       if (!email || !password) return toast.error('יש למלא אימייל וסיסמה')
       if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
       if (!validatePasswordStrong()) return
@@ -440,7 +440,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 </>
               )}
 
-              {mode === 'register' && (
+                      {mode === 'register' && (
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -450,6 +450,16 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   />
                   <span className="text-xs text-gray-500 leading-relaxed">
                     {t('auth.privacy.agree')}
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-green-600 underline font-medium mx-0.5"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {t('auth.privacy.terms')}
+                    </a>
+                    {t('auth.privacy.and')}
                     <a
                       href="/privacy"
                       target="_blank"
@@ -487,7 +497,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 disabled={googleLoading || (mode === 'register' && !privacyAccepted)}
                 onClick={async () => {
                   if (mode === 'register' && !privacyAccepted) {
-                    toast.error('יש לאשר את מדיניות הפרטיות')
+                    toast.error('יש לאשר את תנאי השימוש ומדיניות הפרטיות')
                     return
                   }
                   setGoogleLoading(true)

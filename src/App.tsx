@@ -42,6 +42,7 @@ const DiscountsPage    = lazy(() => import('./pages/DiscountsPage'))
 const ListingDetailPage = lazy(() => import('./pages/ListingDetailPage'))
 const BulkListPage     = lazy(() => import('./pages/BulkListPage'))
 const PrivacyPage      = lazy(() => import('./pages/PrivacyPage'))
+const TermsPage        = lazy(() => import('./pages/TermsPage'))
 const SharedVoucherPage = lazy(() => import('./pages/SharedVoucherPage'))
 const GiftPage         = lazy(() => import('./pages/GiftPage'))
 
@@ -259,6 +260,7 @@ function AppRoutes() {
   if (passwordRecovery) return <AuthPage initialMode="newPassword" />
   if (!user) {
     if (window.location.pathname === '/privacy') return <PrivacyPage />
+    if (window.location.pathname === '/terms') return <TermsPage />
     return <AuthPage />
   }
 
@@ -311,6 +313,7 @@ function AppRoutes() {
               <Route path="/market/listing/:id" element={<ListingDetailPage />} />
               <Route path="/market/bulk" element={<BulkListPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </AnimatedRoutes>
           </Suspense>
