@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
+import { useE2EE } from '../contexts/E2EEContext'
+import { isEncryptedField } from '../lib/e2ee'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
 import { TrendingUp, AlertTriangle, Archive, Users, Download, Wallet, Zap, PlusCircle, ShoppingBag, Clock, Gift, Info, Sparkles } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -12,6 +14,7 @@ import { useT } from '../lib/i18n'
 export default function StatsPage() {
   const { vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
+  const { isVaultUnlocked, decryptedMap } = useE2EE()
   const { t } = useT()
   const [showSavingsInfo, setShowSavingsInfo] = useState(false)
 
@@ -146,6 +149,12 @@ export default function StatsPage() {
     try {
       const date = new Date().toLocaleDateString('he-IL')
       const rows: string[][] = []
+      const activeVouchers = vouchers.filter(v => !v.is_archived)
+      const encryptedCount = activeVouchers.filter(v => v.is_e2ee && isEncryptedField(v.code)).length
+
+      if (encryptedCount > 0 && !isVaultUnlocked) {
+        toast(t('stats.export.encrypted.warning'), { icon: '🔒', duration: 4000 })
+      }
 
       // Summary section
       rows.push([t('stats.export.summary'), ''])
@@ -165,11 +174,14 @@ export default function StatsPage() {
       // Voucher list
       rows.push([t('stats.export.vouchers'), '', '', '', ''])
       rows.push([t('stats.export.col.store'), t('stats.export.col.code'), t('stats.export.col.balance'), t('stats.export.col.amount'), t('stats.export.col.expiry')])
-      const activeVouchers = vouchers.filter(v => !v.is_archived)
       activeVouchers.forEach(v => {
+        const isEncrypted = v.is_e2ee && isEncryptedField(v.code)
+        if (isEncrypted && !isVaultUnlocked) return
+        const decrypted = isEncrypted ? decryptedMap.get(v.id) : null
+        const code = decrypted ? decrypted.code : v.code
         rows.push([
           v.store_name,
-          v.code,
+          code,
           v.balance.toString(),
           (v.amount || v.balance).toString(),
           v.expiry_date ? new Date(v.expiry_date).toLocaleDateString('he-IL') : '',

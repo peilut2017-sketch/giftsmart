@@ -66,6 +66,7 @@ export default function CheckoutPage() {
   const [copied, setCopied] = useState(false)
   const wakeLockRef = useRef<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [archiveReason, setArchiveReason] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
@@ -201,7 +202,7 @@ export default function CheckoutPage() {
       await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
       if (!isOnline) {
         toast.success(t('checkout.balance.updated.offline'))
-        if (clamped <= 0) setConfirmArchive(true)
+        if (clamped <= 0) openArchiveConfirm(true)
         const used = usedAmount ?? (voucher.balance - clamped)
         if (used > 0) sendUsageNotification(voucher.store_name, used, clamped, storeUsed ?? null, user?.id)
         return
@@ -209,7 +210,7 @@ export default function CheckoutPage() {
     }
     if (clamped <= 0) {
       toast.success(t('checkout.balance.zeroed'))
-      setConfirmArchive(true)
+      openArchiveConfirm(true)
     } else {
       toast.success(t('checkout.balance.updated'))
     }
@@ -405,6 +406,12 @@ export default function CheckoutPage() {
     await deleteShareToken(token)
     setShareTokens(prev => prev.filter(t => t.token !== token))
     toast.success(t('checkout.share.link.deleted'))
+  }
+
+  function openArchiveConfirm(isFullRedemption?: boolean) {
+    const isZero = isFullRedemption ?? (voucher ? voucher.balance <= 0 : false)
+    setArchiveReason(isZero ? t('archive.reason.full') : '')
+    setConfirmArchive(true)
   }
 
 
@@ -621,13 +628,21 @@ export default function CheckoutPage() {
       {confirmArchive && (
         <ConfirmDialog
           title={t('checkout.archive.confirm.title')}
-          message={t('checkout.archive.confirm.msg')}
           onConfirm={() => {
             setConfirmArchive(false)
-            archiveVoucher(voucher.id).then(() => { toast.success(t('checkout.archived')); navigate(-1) })
+            archiveVoucher(voucher.id, archiveReason || undefined).then(() => { toast.success(t('checkout.archived')); navigate(-1) })
           }}
-          onCancel={() => setConfirmArchive(false)}
-        />
+          onCancel={() => { setConfirmArchive(false); setArchiveReason('') }}
+        >
+          <input
+            type="text"
+            value={archiveReason}
+            onChange={e => setArchiveReason(e.target.value)}
+            placeholder={t('archive.reason.placeholder')}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 mt-1"
+            dir="rtl"
+          />
+        </ConfirmDialog>
       )}
       {confirmDelete && (
         <ConfirmDialog
@@ -681,7 +696,7 @@ export default function CheckoutPage() {
               </button>
             )}
             {!isArchived && (
-              <button onClick={() => setConfirmArchive(true)} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button onClick={() => openArchiveConfirm()} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Archive className="w-4 h-4" style={{ color: '#fff' }} />
               </button>
             )}

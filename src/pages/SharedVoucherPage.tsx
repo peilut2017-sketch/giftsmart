@@ -2,11 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
-import { Copy, AlertTriangle, Wallet, ChevronDown, Check } from 'lucide-react'
+import { Copy, AlertTriangle, Wallet, ChevronDown, Check, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { useT } from '../lib/i18n'
+
+function isSafeUrl(url: string | undefined | null): boolean {
+  if (!url) return false
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch { return false }
+}
 
 interface SharedVoucher {
   store_name: string
@@ -17,6 +25,8 @@ interface SharedVoucher {
   notes?: string | null
   is_expired?: boolean
   code_override?: string | null
+  link?: string | null
+  balance_check_url?: string | null
 }
 
 export default function SharedVoucherPage() {
@@ -282,6 +292,34 @@ export default function SharedVoucherPage() {
               )}
               {voucher.notes && (
                 <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3 mt-3">{voucher.notes}</p>
+              )}
+
+              {/* External links */}
+              {(isSafeUrl(voucher.link) || isSafeUrl(voucher.balance_check_url)) && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {isSafeUrl(voucher.link) && (
+                    <a
+                      href={voucher.link!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {t('shared.open.link')}
+                    </a>
+                  )}
+                  {isSafeUrl(voucher.balance_check_url) && (
+                    <a
+                      href={voucher.balance_check_url!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-3 py-2 rounded-xl hover:bg-green-100 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {t('shared.check.balance')}
+                    </a>
+                  )}
+                </div>
               )}
             </div>
 

@@ -3,11 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
-import { Copy, AlertTriangle, Gift, ChevronDown, Check, LogIn } from 'lucide-react'
+import { Copy, AlertTriangle, Gift, ChevronDown, Check, LogIn, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { useT } from '../lib/i18n'
+
+function isSafeUrl(url: string | undefined | null): boolean {
+  if (!url) return false
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch { return false }
+}
 
 interface GiftData {
   gift_id: string
@@ -21,6 +29,8 @@ interface GiftData {
   code: string
   expiry_date?: string | null
   notes?: string | null
+  link?: string | null
+  balance_check_url?: string | null
 }
 
 export default function GiftPage() {
@@ -297,6 +307,34 @@ export default function GiftPage() {
               )}
               {gift.notes && (
                 <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3 mt-3">{gift.notes}</p>
+              )}
+
+              {/* External links */}
+              {(isSafeUrl(gift.link) || isSafeUrl(gift.balance_check_url)) && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {isSafeUrl(gift.link) && (
+                    <a
+                      href={gift.link!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {t('shared.open.link')}
+                    </a>
+                  )}
+                  {isSafeUrl(gift.balance_check_url) && (
+                    <a
+                      href={gift.balance_check_url!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-3 py-2 rounded-xl hover:bg-green-100 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {t('shared.check.balance')}
+                    </a>
+                  )}
+                </div>
               )}
             </div>
 

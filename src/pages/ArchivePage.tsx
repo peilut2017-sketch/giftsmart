@@ -190,6 +190,11 @@ export default function ArchivePage() {
                       const displayCode = isE2EE && decrypted ? decrypted.code : v.code
                       return <div style={{ fontSize: 11, color: 'var(--c-text3)', fontFamily: 'monospace', marginTop: 2 }}>{displayCode}</div>
                     })()}
+                    {v.archive_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--c-text3)', marginTop: 2 }}>
+                        <span style={{ fontWeight: 500 }}>{t('archive.reason.label')}</span> {v.archive_reason}
+                      </div>
+                    )}
                     {v.expiry_date && (
                       <div style={{ fontSize: 11, color: 'var(--c-text3)', marginTop: 2 }}>תוקף: {formatDate(v.expiry_date)}</div>
                     )}

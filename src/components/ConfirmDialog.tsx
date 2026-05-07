@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 
 interface Props {
   title: string
@@ -8,6 +9,7 @@ interface Props {
   danger?: boolean
   onConfirm: () => void
   onCancel: () => void
+  children?: ReactNode
 }
 
 export default function ConfirmDialog({
@@ -18,6 +20,7 @@ export default function ConfirmDialog({
   danger = false,
   onConfirm,
   onCancel,
+  children,
 }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -71,8 +74,9 @@ export default function ConfirmDialog({
         onClick={e => e.stopPropagation()}
       >
         <h2 id="confirm-title" className="text-lg font-bold text-gray-900 mb-1">{title}</h2>
-        {message && <p id="confirm-desc" className="text-sm text-gray-500 mb-6">{message}</p>}
-        {!message && <div className="mb-4" />}
+        {message && <p id="confirm-desc" className="text-sm text-gray-500 mb-3">{message}</p>}
+        {children && <div className="mb-4">{children}</div>}
+        {!message && !children && <div className="mb-4" />}
         <div className="flex gap-3">
           <button
             ref={cancelRef}
