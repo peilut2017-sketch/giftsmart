@@ -73,6 +73,10 @@ export default function HomePage() {
   type Confirm = { title: string; message?: string; onConfirm: () => void }
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
+  // Dedicated archive-with-reason state (single voucher)
+  const [archiveTarget, setArchiveTarget] = useState<string | null>(null)
+  const [archiveReason, setArchiveReason] = useState('')
+
   // Clear all pending undo-delete timers when unmounting to avoid stale async ops
   useEffect(() => () => { pendingDeletesRef.current.forEach(clearTimeout) }, [])
 
@@ -280,11 +284,9 @@ export default function HomePage() {
   }
 
   function requestArchive(id: string) {
-    setConfirm({
-      title: t('confirm.archive.title'),
-      message: t('confirm.archive.message'),
-      onConfirm: async () => { setConfirm(null); await archiveVoucher(id); toast.success(t('confirm.archive.success')) },
-    })
+    const v = vouchers.find(vch => vch.id === id) ?? sharedWithMe.find(vch => vch.id === id)
+    setArchiveReason(v && v.balance <= 0 ? t('archive.reason.full') : '')
+    setArchiveTarget(id)
   }
 
   // Bulk actions
@@ -468,6 +470,28 @@ export default function HomePage() {
           onConfirm={confirm.onConfirm}
           onCancel={() => setConfirm(null)}
         />
+      )}
+
+      {archiveTarget && (
+        <ConfirmDialog
+          title={t('confirm.archive.title')}
+          onConfirm={async () => {
+            const id = archiveTarget
+            setArchiveTarget(null)
+            await archiveVoucher(id, archiveReason || undefined)
+            toast.success(t('confirm.archive.success'))
+          }}
+          onCancel={() => { setArchiveTarget(null); setArchiveReason('') }}
+        >
+          <input
+            type="text"
+            value={archiveReason}
+            onChange={e => setArchiveReason(e.target.value)}
+            placeholder={t('archive.reason.placeholder')}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 mt-1"
+            dir="rtl"
+          />
+        </ConfirmDialog>
       )}
 
       {/* ── Vault unlock modal ── */}
