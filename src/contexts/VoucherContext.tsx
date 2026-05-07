@@ -30,7 +30,7 @@ interface VoucherContextType {
   addVoucher: (v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>) => Promise<Voucher | null>
   updateVoucher: (id: string, data: Partial<Voucher>, storeUsed?: string | null) => Promise<void>
   deleteVoucher: (id: string) => Promise<void>
-  archiveVoucher: (id: string) => Promise<void>
+  archiveVoucher: (id: string, reason?: string) => Promise<void>
   unarchiveVoucher: (id: string) => Promise<void>
   archiveExpired: () => Promise<void>
   syncToCloud: () => Promise<void>
@@ -648,10 +648,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (target) logAction('delete', target.store_name, id, { balance: target.balance })
   }
 
-  async function archiveVoucher(id: string) {
+  async function archiveVoucher(id: string, reason?: string) {
     const voucher = vouchers.find(v => v.id === id)
     if (!voucher) return
-    const archived = { ...voucher, is_archived: true, updated_at: new Date().toISOString() }
+    const archiveReason = reason?.trim() || null
+    const archived = { ...voucher, is_archived: true, archive_reason: archiveReason, updated_at: new Date().toISOString() }
     const newActive = vouchers.filter(v => v.id !== id)
     const newArchived = [...archivedVouchers, archived]
     setVouchers(newActive)
@@ -661,11 +662,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         if (!user) return
         enqueuePendingOp({ type: 'archive', id, voucherName: voucher.store_name, balance: voucher.balance }, user.id)
       } else {
-        await supabase.from('vouchers').update({ is_archived: true }).eq('id', id)
+        await supabase.from('vouchers').update({ is_archived: true, archive_reason: archiveReason }).eq('id', id)
       }
     }
     if (user) saveToCache(user.id, newActive, newArchived)
-    logAction('archive', voucher.store_name, id, { balance: voucher.balance })
+    logAction('archive', voucher.store_name, id, { balance: voucher.balance, reason: archiveReason })
   }
 
   async function unarchiveVoucher(id: string) {

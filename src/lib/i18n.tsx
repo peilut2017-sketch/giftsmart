@@ -528,6 +528,12 @@ const translations: Record<string, string> = {
   'archive.not.found.en': 'No vouchers found',
   'archive.validity': 'תוקף:',
   'archive.validity.en': 'Valid:',
+  'archive.reason.placeholder': 'סיבת העברה לארכיון (אופציונלי)',
+  'archive.reason.placeholder.en': 'Archive reason (optional)',
+  'archive.reason.full': 'מימוש מלא',
+  'archive.reason.full.en': 'Full Redemption',
+  'archive.reason.label': 'סיבה:',
+  'archive.reason.label.en': 'Reason:',
 
   // ── Stats Page ────────────────────────────────────────────────
   'stats.subtitle': 'סיכום הארנק שלך',
@@ -586,6 +592,8 @@ const translations: Record<string, string> = {
   'stats.export.success.en': 'File exported successfully!',
   'stats.export.error': 'שגיאה בייצוא',
   'stats.export.error.en': 'Export error',
+  'stats.export.encrypted.warning': 'שוברים מוצפנים לא יכללו בייצוא — הכספת סגורה',
+  'stats.export.encrypted.warning.en': 'Encrypted vouchers excluded from export — vault is locked',
   'stats.export.summary': 'סיכום',
   'stats.export.summary.en': 'Summary',
   'stats.export.vouchers': 'רשימת שוברים',
@@ -1256,6 +1264,10 @@ const translations: Record<string, string> = {
   'shared.toast.balance_updated.en': 'Balance updated: {from} → {to}',
   'shared.toast.exceeds_balance': 'הסכום עולה על היתרה הנוכחית',
   'shared.toast.exceeds_balance.en': 'Amount exceeds current balance',
+  'shared.open.link': 'פתח קישור שובר',
+  'shared.open.link.en': 'Open Voucher Link',
+  'shared.check.balance': 'בדיקת יתרה',
+  'shared.check.balance.en': 'Check Balance',
 
   // ── Chat Modal ───────────────────────────────────────────────────────────
   'chat.send': 'שלח',
@@ -2026,6 +2038,8 @@ const translations: Record<string, string> = {
   'discounts.free_item.en': 'Free item',
   'discounts.open_deal': 'לעסקה',
   'discounts.open_deal.en': 'View Deal',
+  'discounts.views': 'צפיות',
+  'discounts.views.en': 'Views',
   'discounts.expires': 'עד {date}',
   'discounts.expires.en': 'Until {date}',
   'settings.my_clubs': 'הכרטיסים והמועדונים שלי',

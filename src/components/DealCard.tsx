@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ExternalLink, Copy, ChevronDown, ChevronUp, Tag } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, Copy, ChevronDown, ChevronUp, Tag, Eye } from 'lucide-react'
 import { useDiscounts } from '../contexts/DiscountsContext'
 import { useT } from '../lib/i18n'
 import type { DiscountDeal } from '../types'
@@ -76,9 +76,17 @@ interface Props {
 }
 
 export default function DealCard({ deal, initiallyExpanded = false }: Props) {
-  const { copyPromoCode } = useDiscounts()
+  const { copyPromoCode, incrementDealViewCount } = useDiscounts()
   const { t } = useT()
   const [expanded, setExpanded] = useState(initiallyExpanded)
+  const trackedRef = useRef(false)
+
+  useEffect(() => {
+    if (!trackedRef.current) {
+      trackedRef.current = true
+      incrementDealViewCount(deal.deal_id)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div id={`deal-${deal.deal_id}`} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex flex-col gap-3">
@@ -121,6 +129,12 @@ export default function DealCard({ deal, initiallyExpanded = false }: Props) {
           {deal.expiration_date && !deal.is_upcoming && (
             <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-[10px] px-2 py-0.5 rounded-full leading-tight whitespace-nowrap">
               {t('discounts.expires', { date: formatShortDate(deal.expiration_date) })}
+            </span>
+          )}
+          {(deal.view_count ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5 text-gray-400 text-[10px]">
+              <Eye className="w-3 h-3" />
+              {deal.view_count}
             </span>
           )}
         </div>

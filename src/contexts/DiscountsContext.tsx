@@ -27,6 +27,7 @@ interface DiscountsContextValue {
   setActiveTags: (tags: string[]) => void
   setMyOnly: (v: boolean) => void
   copyPromoCode: (code: string) => void
+  incrementDealViewCount: (dealId: string) => void
 }
 
 const DiscountsContext = createContext<DiscountsContextValue | null>(null)
@@ -128,6 +129,11 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const incrementDealViewCount = useCallback((dealId: string) => {
+    supabase.rpc('increment_deal_view_count', { p_deal_id: dealId }).then(() => {})
+    setDeals(prev => prev.map(d => d.deal_id === dealId ? { ...d, view_count: (d.view_count ?? 0) + 1 } : d))
+  }, [])
+
   return (
     <DiscountsContext.Provider value={{
       deals,
@@ -144,6 +150,7 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
       setActiveTags,
       setMyOnly,
       copyPromoCode,
+      incrementDealViewCount,
     }}>
       {children}
     </DiscountsContext.Provider>

@@ -24,6 +24,7 @@ export interface Voucher {
   lock_reason?: string
   is_e2ee?: boolean
   item_name?: string
+  archive_reason?: string | null
   created_at: string
   updated_at: string
   // derived
@@ -285,6 +286,7 @@ export interface DiscountDeal {
   expiration_date?: string
   is_my_club: boolean
   is_upcoming: boolean
+  view_count?: number
 }
 
 export interface DiscountSubmission {
