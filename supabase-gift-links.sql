@@ -1,5 +1,7 @@
 -- Update get_gift_by_token to return link and balance_check_url
 -- so recipients can access the store website and balance-check page
+-- DROP first because PostgreSQL disallows changing the return type via CREATE OR REPLACE
+DROP FUNCTION IF EXISTS get_gift_by_token(text);
 
 CREATE OR REPLACE FUNCTION get_gift_by_token(p_token text)
 RETURNS TABLE (
