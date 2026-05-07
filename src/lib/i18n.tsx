@@ -1436,7 +1436,7 @@ const translations: Record<string, string> = {
   'checkout.activity.title.en': 'Voucher log',
   'checkout.activity.empty': 'אין פעילות עדיין',
   'checkout.activity.empty.en': 'No activity yet',
-  'checkout.archive.confirm.title': 'הצב לארכיון',
+  'checkout.archive.confirm.title': 'העברה לארכיון',
   'checkout.archive.confirm.title.en': 'Move to archive',
   'checkout.archive.confirm.msg': 'האם להעביר שובר זה לארכיון?',
   'checkout.archive.confirm.msg.en': 'Move this voucher to the archive?',
@@ -1650,8 +1650,8 @@ const translations: Record<string, string> = {
   'checkout.voucher.updated.en': 'Voucher updated',
 
   // ── Confirm Dialog ───────────────────────────────────────────────────────
-  'confirm.archive.title': 'הצב לארכיון',
-  'confirm.archive.title.en': 'Archive',
+  'confirm.archive.title': 'העברה לארכיון',
+  'confirm.archive.title.en': 'Move to archive',
   'confirm.archive.message': 'האם להעביר שובר זה לארכיון?',
   'confirm.archive.message.en': 'Move this voucher to archive?',
   'confirm.archive.success': 'שובר הועבר לארכיון',
