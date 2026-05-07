@@ -97,7 +97,22 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
         p_offset: 0,
       })
       if (error) throw error
-      const all = (data as DiscountDeal[]) || []
+      let all = (data as DiscountDeal[]) || []
+
+      // Merge real view_count from DB (get_my_deals may not include it)
+      if (all.length > 0) {
+        const { data: vcData } = await supabase
+          .from('discount_deals')
+          .select('id, view_count')
+          .in('id', all.map(d => d.deal_id))
+        if (vcData) {
+          const vcMap = new Map<string, number>(
+            vcData.map((r: { id: string; view_count: number }) => [r.id, r.view_count ?? 0])
+          )
+          all = all.map(d => ({ ...d, view_count: vcMap.get(d.deal_id) ?? d.view_count ?? 0 }))
+        }
+      }
+
       setDeals(onlyMine ? all.filter(d => d.is_my_club) : all)
       if (isDefault) fetchedAt.current.deals = Date.now()
     } catch (err) {
