@@ -1,7 +1,7 @@
--- Fix get_gift_by_token: remove the send_at <= now() filter that was introduced
--- in supabase-gift-links.sql. That filter caused immediate gifts to be inaccessible
--- when the client clock was slightly ahead of the server clock.
--- Scheduled gifts are handled by not sharing the link before the intended time.
+-- Fix get_gift_by_token:
+-- 1. Cast expiry_date::text to match the declared TEXT return type (vouchers.expiry_date is DATE)
+-- 2. Remove the send_at <= now() filter that caused immediate gifts to be inaccessible
+--    when the client clock was slightly ahead of the server clock.
 
 DROP FUNCTION IF EXISTS get_gift_by_token(text);
 
@@ -28,7 +28,7 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    g.id                  AS gift_id,
+    g.id                      AS gift_id,
     g.sender_name,
     g.message,
     g.send_at,
@@ -37,7 +37,7 @@ BEGIN
     v.balance,
     v.amount,
     v.code,
-    v.expiry_date,
+    v.expiry_date::text       AS expiry_date,
     v.notes,
     v.link,
     sv.balance_check_url
