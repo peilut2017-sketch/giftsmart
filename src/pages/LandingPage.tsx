@@ -935,9 +935,9 @@ export default function LandingPage() {
         <div className="lp-cta-box">
           <div className="lp-rv" style={{display:'flex',justifyContent:'center',gap:'clamp(1.5rem,4vw,3.5rem)',marginBottom:52,flexWrap:'wrap'}}>
             {[
-              {n:'₪890K+',l:'יתרה מנוהלת'},
-              {n:'2,400+',l:'שוברים פעילים'},
-              {n:'98%',l:'שוברים שנצלו בזמן'},
+              {n:'25',l:'שוברים בחשבון חינמי'},
+              {n:'AES-256',l:'הצפנת קודי שוברים'},
+              {n:'0 ₪',l:'ללא כרטיס אשראי'},
             ].map((s, i) => (
               <>
                 {i > 0 && <div key={`sep-${i}`} style={{width:1,background:'rgba(255,255,255,0.1)',alignSelf:'stretch'}} />}

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 
-const LAST_UPDATED = '6 במאי 2026'
+const LAST_UPDATED = '10 במאי 2026'
 
 export default function PrivacyPage() {
   const navigate = useNavigate()
@@ -43,8 +43,8 @@ export default function PrivacyPage() {
           </SubSection>
           <SubSection title="ב. נתוני שוברים">
             <ul>
-              <li>שם חנות, יתרה, קוד שובר, CVV/PIN, תאריך פקיעה, קישור, הערות וקטגוריות.</li>
-              <li>קודי שובר ו-CVV ניתנים להצפנה מקצה לקצה (E2EE) — במצב זה השרת שומר גרסה מוצפנת בלבד, שרק המשתמש המחזיק בסיסמת הכספת יכול לפענח.</li>
+              <li>שם חנות, יתרה, קוד שובר, CVV/PIN, תאריך פקיעה, קישור, הערות וקטגוריות — כל השדות נשמרים בשרת.</li>
+              <li><strong>הצפנת E2EE חלה על קודי השוברים בלבד</strong> (קוד + CVV/PIN). שאר השדות (שם חנות, יתרה, תאריכים, הערות) <strong>אינם</strong> מוצפנים E2EE ומאוחסנים בטקסט פתוח בשרת. גישה אליהם מוגנת באמצעות Row Level Security (RLS) בלבד.</li>
             </ul>
           </SubSection>
           <SubSection title="ג. יומן פעילות">
@@ -73,7 +73,7 @@ export default function PrivacyPage() {
             <li>שליחת תזכורות דוא"ל לפני תפוגת שוברים (לפי הגדרת המשתמש).</li>
             <li>שליחת הודעות שיתוף, הזמנה לארנק ומתנה.</li>
             <li>תמיכה טכנית — בעת פנייה לתמיכה, הודעתך נשמרת עם פרטי הפנייה.</li>
-            <li>שיפור השירות — ניתוח אנונימי של שימוש.</li>
+            <li>ניתוח שימוש ובצועים — באמצעות <strong>Vercel Analytics</strong> ו-<strong>Vercel Speed Insights</strong> אנו אוספים נתוני ניווט אנונימיים (דפים שביקרת, משך ביקור, מדדי ביצועים) ללא שיוך לזהותך האישית.</li>
             <li><strong>אנו לא משתמשים במידע לפרסום ממוקד ולא מוכרים אותו לצד שלישי כלשהו.</strong></li>
           </ul>
         </Section>
@@ -105,6 +105,16 @@ export default function PrivacyPage() {
                 <td>קוד חיבור חד-פעמי (6 ספרות, תוקף 10 דקות)</td>
               </tr>
               <tr>
+                <td><strong>Vercel Analytics</strong></td>
+                <td>ניתוח ניווט ושימוש</td>
+                <td>כתובת URL, סוג מכשיר, מדינה (ללא זיהוי אישי)</td>
+              </tr>
+              <tr>
+                <td><strong>Vercel Speed Insights</strong></td>
+                <td>מדידת ביצועי דף</td>
+                <td>מדדי ביצוע טכניים אנונימיים</td>
+              </tr>
+              <tr>
                 <td><strong>Web Crypto API</strong></td>
                 <td>הצפנת E2EE (מקומי)</td>
                 <td>פועל על המכשיר בלבד — אין העברה</td>
@@ -120,9 +130,10 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="4. הצפנה מקצה לקצה (E2EE)">
+          <p className="font-semibold" style={{color:'var(--c-text)'}}>חשוב: ההצפנה E2EE חלה על קודי השוברים בלבד.</p>
           <ul>
-            <li>המשתמש רשאי להצפין קודי שובר ו-CVV על המכשיר לפני שמירה בשרת.</li>
-            <li>ההצפנה מתבצעת באמצעות AES-GCM-256 עם מפתח גזור מסיסמת המשתמש (PBKDF2).</li>
+            <li>המשתמש רשאי להצפין <strong>קוד שובר ו-CVV/PIN</strong> על המכשיר לפני שמירה בשרת. שאר נתוני השובר (שם חנות, יתרה, תאריכי פקיעה, הערות) אינם מוצפנים E2EE.</li>
+            <li>ההצפנה מתבצעת באמצעות AES-GCM-256 עם מפתח גזור מסיסמת המשתמש (PBKDF2, 100,000 איטרציות).</li>
             <li>הסיסמה <strong>אינה</strong> נשמרת בשרת. אם תשכח את הסיסמה, לא ניתן לשחזר את הנתונים המוצפנים.</li>
             <li>בעת שיתוף שובר מוצפן, הקוד המפוענח נשמר זמנית בשרת לאותה רשומת שיתוף בלבד, ונמחק עם סיום השיתוף.</li>
           </ul>
