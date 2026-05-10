@@ -123,7 +123,7 @@ function InteractiveDemo() {
   )
 
   return (
-    <div className="lp-demo-wrap lp-rv">
+    <div className="lp-demo-wrap">
       <div className="lp-demo-label">
         <span className="lp-demo-dot" />
         נסה בעצמך — הנתונים נשמרים רק לסשן זה
@@ -448,15 +448,15 @@ export default function LandingPage() {
         <div className="lp-hero-orb lp-ho2" />
         <div className="lp-hero-orb lp-ho3" />
 
-        <div className="lp-hero-eyebrow lp-rv">✨&nbsp; בקרוב שוק שוברים מובנה</div>
+        <div className="lp-hero-eyebrow">✨&nbsp; בקרוב שוק שוברים מובנה</div>
 
-        <h1 className="lp-ht lp-rv">{'ארנק דיגיטלי חכם\nלכל שוברי המתנה שלך'}</h1>
+        <h1 className="lp-ht">{'ארנק דיגיטלי חכם\nלכל שוברי המתנה שלך'}</h1>
 
-        <p className="lp-hero-body lp-rv">
+        <p className="lp-hero-body">
           מעקב יתרה, התראות תוקף, שיתוף משפחתי ושוק קנייה ומכירה - הכל במקום אחד, תמיד עדכני, תמיד בטוח.
         </p>
 
-        <div className="lp-hero-actions lp-rv">
+        <div className="lp-hero-actions">
           <button className="lp-btn-hero-p" onClick={goToLogin}>התחל עכשיו</button>
           <a className="lp-btn-hero-g" href="#lp-feat">
             גלה את הפיצ'רים

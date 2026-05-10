@@ -54,7 +54,6 @@
   will-change: opacity, transform;
 }
 #lp-root .lp-rv.lp-in { opacity: 1; transform: none; }
-#lp-root #lp-hero .lp-rv { opacity: 1 !important; transform: none !important; transition: none !important; }
 
 /* ── NAVBAR ─────────────────────────────────────────── */
 #lp-nav {
