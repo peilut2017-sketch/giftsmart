@@ -914,6 +914,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     if (!user) return null
     const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
       .map(b => b.toString(16).padStart(2, '0')).join('')
+    // Only pass send_at for scheduled (future) gifts; immediate gifts use the DB's DEFAULT NOW()
+    // to avoid client/server clock skew causing the gift link to be inaccessible.
+    const isScheduled = sendAt.getTime() > Date.now() + 30_000
     const { error } = await supabase.from('voucher_gifts').insert({
       voucher_id: voucherId,
       sender_user_id: user.id,
@@ -922,7 +925,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       recipient_email: recipientEmail || '',
       message: message || null,
       token,
-      send_at: sendAt.toISOString(),
+      ...(isScheduled ? { send_at: sendAt.toISOString() } : {}),
     })
     if (error) { console.error('createGift error:', error); return null }
 
