@@ -4,6 +4,8 @@
    to avoid collisions with the main app CSS.
 ═══════════════════════════════════════════════════════ */
 
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+
 #lp-root {
   font-family: 'Heebo', sans-serif;
   direction: rtl;

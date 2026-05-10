@@ -949,14 +949,13 @@ export default function LandingPage() {
             ))}
           </div>
           <h2 className="lp-cta-title lp-rv">לא עוד שובר<br />שנזרק לפח</h2>
-          <p className="lp-cta-sub lp-rv">הצטרף לאלפי משתמשים שכבר חוסכים עם GiftSmart.<br />חינמי לגמרי. ללא כרטיס אשראי. מתחילים תוך דקה.</p>
+          <p className="lp-cta-sub lp-rv">הצטרף לאלפי משתמשים שכבר חוסכים עם GiftSmart.<br />חינם. ללא כרטיס אשראי. מתחילים תוך דקה.</p>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14}} className="lp-rv">
             <button className="lp-btn-cta" onClick={goToLogin}>התחל עכשיו</button>
             <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',justifyContent:'center'}}>
               {[
                 {icon:'shield-check',text:'מוצפן ומאובטח'},
                 {icon:'device-mobile',text:'iOS ו-Android'},
-                {icon:'star',text:'4.8 ★ מ-200+ ביקורות'},
               ].map((item, i) => (
                 <>
                   {i > 0 && <div key={`dot-${i}`} style={{width:3,height:3,borderRadius:'50%',background:'rgba(255,255,255,0.2)'}} />}
@@ -981,6 +980,7 @@ export default function LandingPage() {
         <div className="lp-flinks">
           <a href="/privacy">פרטיות</a>
           <a href="/terms">תנאי שימוש</a>
+          <a href="/accessibility">הצהרת נגישות</a>
         </div>
       </footer>
     </div>
