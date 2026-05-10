@@ -47,6 +47,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const [showStrength, setShowStrength] = useState(false)
   const [biometricLoading, setBiometricLoading] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null)
 
   const strength = useMemo(() => getPasswordStrength(password, t), [password, t])
   const isRegisterOrNew = mode === 'register' || mode === 'newPassword'
@@ -54,7 +55,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   // When "Continue" is clicked on the email step
   function handleEmailContinue(e: React.FormEvent) {
     e.preventDefault()
-    if (!email) return toast.error('יש להזין כתובת אימייל')
+    if (!email) return toast.error(t('auth.email.required'))
     const biometricEmail = getBiometricEmail()
     if (
       isBiometricEnabled() &&
@@ -72,13 +73,13 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
     try {
       const ok = await verifyBiometric()
       if (!ok) {
-        toast.error('אימות ביומטרי נכשל')
+        toast.error(t('auth.biometric.failed'))
         return
       }
       const { error } = await signInWithBiometric()
       if (error) {
         // Session expired — fall back to password
-        toast('הסשן פג תוקף — יש להזין סיסמה פעם אחת')
+        toast(t('auth.session.expired'))
         setLoginStep('password')
       }
     } finally {
@@ -88,7 +89,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
 
   function validatePasswordStrong(): boolean {
     if (strength.score < 3) {
-      toast.error('הסיסמה חלשה מדי — צריך לפחות ציון "חזקה"')
+      toast.error(t('auth.password.too.weak'))
       setShowStrength(true)
       return false
     }
@@ -100,11 +101,11 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
     setLoading(true)
     try {
       if (mode === 'forgot') {
-        if (!email) return toast.error('יש להזין כתובת אימייל')
+        if (!email) return toast.error(t('auth.email.required'))
         const { error } = await resetPassword(email)
-        if (error) toast.error('שגיאה בשליחת המייל')
+        if (error) toast.error(t('auth.reset.email.error'))
         else {
-          toast.success('נשלח מייל לאיפוס סיסמה — בדוק את תיבת הדואר')
+          toast.success(t('auth.reset.email.sent'))
           setMode('login')
           setLoginStep('email')
           setEmail('')
@@ -113,31 +114,52 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       }
 
       if (mode === 'newPassword') {
-        if (!password) return toast.error('יש להזין סיסמה חדשה')
-        if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
+        if (!password) return toast.error(t('auth.new.password.required'))
+        if (password !== password2) return toast.error(t('auth.passwords.mismatch'))
         if (!validatePasswordStrong()) return
         const { error } = await updatePassword(password)
-        if (error) toast.error('שגיאה בעדכון הסיסמה')
-        else toast.success('הסיסמה עודכנה בהצלחה!')
+        if (error) toast.error(t('auth.update.password.error'))
+        else toast.success(t('auth.password.updated'))
         return
       }
 
       // login – password step
       if (mode === 'login') {
-        if (!password) return toast.error('יש להזין סיסמה')
+        if (!password) return toast.error(t('auth.password.required'))
         const { error } = await signIn(email, password)
-        if (error) toast.error('אימייל או סיסמה שגויים')
+        if (error) {
+          const msg = error.message ?? ''
+          if (msg.toLowerCase().includes('not confirmed') || msg.toLowerCase().includes('email_not_confirmed')) {
+            setPendingConfirmEmail(email)
+            setLoginStep('email')
+            setPassword('')
+            toast.error(t('auth.email.not.confirmed'))
+          } else {
+            toast.error(t('auth.invalid.credentials'))
+          }
+        }
         return
       }
 
       // register
-      if (!privacyAccepted) return toast.error('יש לאשר את תנאי השימוש ומדיניות הפרטיות')
-      if (!email || !password) return toast.error('יש למלא אימייל וסיסמה')
-      if (password !== password2) return toast.error('הסיסמאות אינן תואמות')
+      if (!privacyAccepted) return toast.error(t('auth.privacy.required'))
+      if (!email || !password) return toast.error(t('auth.email.password.required'))
+      if (password !== password2) return toast.error(t('auth.passwords.mismatch'))
       if (!validatePasswordStrong()) return
       const { error } = await signUp(email, password, name)
-      if (error) toast.error('שגיאה בהרשמה: ' + error.message)
-      else toast.success('נרשמת בהצלחה!')
+      if (error) toast.error(t('auth.register.error') + ': ' + error.message)
+      else {
+        // Switch to login tab and show email confirmation notice
+        const registeredEmail = email
+        setEmail(registeredEmail)
+        setPassword('')
+        setPassword2('')
+        setName('')
+        setPrivacyAccepted(false)
+        setMode('login')
+        setLoginStep('email')
+        setPendingConfirmEmail(registeredEmail)
+      }
     } finally {
       setLoading(false)
     }
@@ -239,13 +261,20 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 {t('auth.login.tab')}
               </button>
               <button
-                onClick={() => setMode('register')}
+                onClick={() => { setMode('register'); setPendingConfirmEmail(null) }}
                 className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all ${
                   mode === 'register' ? 'bg-white shadow text-green-600' : 'text-gray-500'
                 }`}
               >
                 {t('auth.register.tab')}
               </button>
+            </div>
+          )}
+
+          {/* Email confirmation notice */}
+          {mode === 'login' && pendingConfirmEmail && (
+            <div className="mb-4 p-3 rounded-2xl bg-blue-50 border border-blue-200 text-sm text-blue-800 leading-relaxed">
+              {t('auth.register.confirm.email')}
             </div>
           )}
 
@@ -497,12 +526,12 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 disabled={googleLoading || (mode === 'register' && !privacyAccepted)}
                 onClick={async () => {
                   if (mode === 'register' && !privacyAccepted) {
-                    toast.error('יש לאשר את תנאי השימוש ומדיניות הפרטיות')
+                    toast.error(t('auth.privacy.required'))
                     return
                   }
                   setGoogleLoading(true)
                   const { error } = await signInWithGoogle()
-                  if (error) { toast.error('שגיאה בהתחברות עם Google'); setGoogleLoading(false) }
+                  if (error) { toast.error(t('auth.google.error')); setGoogleLoading(false) }
                 }}
                 className="w-full flex items-center justify-center gap-3 py-3 border border-gray-200 rounded-2xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60"
               >
