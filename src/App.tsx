@@ -15,6 +15,7 @@ import { useExpiryNotifications } from './hooks/useNotifications'
 import { supabase } from './lib/supabase'
 import UpgradeSheet from './components/UpgradeSheet'
 import AuthPage from './pages/AuthPage'
+import LandingPage from './pages/LandingPage'
 import HomePage from './pages/HomePage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
@@ -259,9 +260,15 @@ function AppRoutes() {
 
   if (passwordRecovery) return <AuthPage initialMode="newPassword" />
   if (!user) {
-    if (window.location.pathname === '/privacy') return <PrivacyPage />
-    if (window.location.pathname === '/terms') return <TermsPage />
-    return <AuthPage />
+    const path = window.location.pathname
+    if (path === '/privacy') return <PrivacyPage />
+    if (path === '/terms') return <TermsPage />
+    // Skip landing page if running as installed PWA or navigating directly to /login
+    const isPWA =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    if (isPWA || path === '/login') return <AuthPage />
+    return <LandingPage />
   }
 
   if (biometricLocked) {
