@@ -444,31 +444,35 @@ export default function LandingPage() {
 
       {/* ── HERO ── */}
       <section id="lp-hero" className="lp-grain">
-        <div className="lp-hero-orb lp-ho1" />
-        <div className="lp-hero-orb lp-ho2" />
-        <div className="lp-hero-orb lp-ho3" />
+        {/* Orbs must be position:absolute inline — CSS alone can be overridden by cascade */}
+        <div className="lp-hero-orb lp-ho1" style={{position:'absolute'}} />
+        <div className="lp-hero-orb lp-ho2" style={{position:'absolute'}} />
+        <div className="lp-hero-orb lp-ho3" style={{position:'absolute'}} />
 
-        <div className="lp-hero-eyebrow">✨&nbsp; בקרוב שוק שוברים מובנה</div>
+        {/* Content wrapper — always above orbs and grain overlay */}
+        <div style={{position:'relative', zIndex:2, width:'100%', display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center'}}>
+          <div className="lp-hero-eyebrow">✨&nbsp; בקרוב שוק שוברים מובנה</div>
 
-        <h1 className="lp-ht">{'ארנק דיגיטלי חכם\nלכל שוברי המתנה שלך'}</h1>
+          <h1 className="lp-ht">{'ארנק דיגיטלי חכם\nלכל שוברי המתנה שלך'}</h1>
 
-        <p className="lp-hero-body">
-          מעקב יתרה, התראות תוקף, שיתוף משפחתי ושוק קנייה ומכירה - הכל במקום אחד, תמיד עדכני, תמיד בטוח.
-        </p>
+          <p className="lp-hero-body">
+            מעקב יתרה, התראות תוקף, שיתוף משפחתי ושוק קנייה ומכירה - הכל במקום אחד, תמיד עדכני, תמיד בטוח.
+          </p>
 
-        <div className="lp-hero-actions">
-          <button className="lp-btn-hero-p" onClick={goToLogin}>התחל עכשיו</button>
-          <a className="lp-btn-hero-g" href="#lp-feat">
-            גלה את הפיצ'רים
+          <div className="lp-hero-actions">
+            <button className="lp-btn-hero-p" onClick={goToLogin}>התחל עכשיו</button>
+            <a className="lp-btn-hero-g" href="#lp-feat">
+              גלה את הפיצ'רים
+              <ph-icon name="caret-down" weight="bold" size="16"></ph-icon>
+            </a>
+          </div>
+
+          <InteractiveDemo />
+
+          <div className="lp-scroll-cue">
+            <span>גלול</span>
             <ph-icon name="caret-down" weight="bold" size="16"></ph-icon>
-          </a>
-        </div>
-
-        <InteractiveDemo />
-
-        <div className="lp-scroll-cue">
-          <span>גלול</span>
-          <ph-icon name="caret-down" weight="bold" size="16"></ph-icon>
+          </div>
         </div>
       </section>
 
