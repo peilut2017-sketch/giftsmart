@@ -19,6 +19,37 @@ import { isEncryptedField } from '../lib/e2ee'
 
 const OCR_STORAGE_KEY = () => `ocr_scans_${new Date().toISOString().slice(0, 7)}` // YYYY-MM
 
+// ── Date display helpers (Israeli format DD.MM.YYYY) ──────────────────────────
+function isoToDisplay(iso: string): string {
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-')
+    return `${d}.${m}.${y}`
+  }
+  return iso
+}
+
+function parseDisplayToISO(val: string): string | null {
+  const digitsOnly = val.replace(/\D/g, '')
+  // DDMMYY → 2026-MM-DD
+  if (/^\d{6}$/.test(digitsOnly)) {
+    const d = digitsOnly.slice(0, 2), m = digitsOnly.slice(2, 4), y = '20' + digitsOnly.slice(4, 6)
+    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+  }
+  // DDMMYYYY → YYYY-MM-DD
+  if (/^\d{8}$/.test(digitsOnly)) {
+    const d = digitsOnly.slice(0, 2), m = digitsOnly.slice(2, 4), y = digitsOnly.slice(4, 8)
+    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+  }
+  // DD.MM.YYYY / DD-MM-YYYY / DD/MM/YYYY (including 2-digit year)
+  const match = val.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/)
+  if (match) {
+    const d = match[1].padStart(2, '0'), m = match[2].padStart(2, '0')
+    let y = match[3]; if (y.length === 2) y = '20' + y
+    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+  }
+  return null
+}
+
 interface Props {
   voucher?: Voucher
   onClose: () => void
@@ -48,6 +79,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [code, setCode] = useState(voucher?.code || '')
   const [cvv, setCvv] = useState(voucher?.cvv || '')
   const [expiryDate, setExpiryDate] = useState(voucher?.expiry_date || defaultExpiryDate())
+  const [displayDate, setDisplayDate] = useState(() => isoToDisplay(voucher?.expiry_date || defaultExpiryDate()))
   const [selectedCats, setSelectedCats] = useState<string[]>(voucher?.categories || [])
   const [tags, setTags] = useState(voucher?.tags?.join(', ') || '')
   const [notes, setNotes] = useState(() => {
@@ -108,7 +140,19 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   }
 
   function handleDateTextChange(val: string) {
-    setExpiryDate(val)
+    // Strip chars that can't be part of a date
+    let cleaned = val.replace(/[^\d.\-\/]/g, '')
+    // Auto-insert dots when user types pure digits (DD MM YYYY pattern)
+    if (/^\d+$/.test(cleaned)) {
+      if (cleaned.length > 4) {
+        cleaned = cleaned.slice(0, 2) + '.' + cleaned.slice(2, 4) + '.' + cleaned.slice(4, 8)
+      } else if (cleaned.length > 2) {
+        cleaned = cleaned.slice(0, 2) + '.' + cleaned.slice(2)
+      }
+    }
+    setDisplayDate(cleaned)
+    const iso = parseDisplayToISO(cleaned)
+    if (iso) setExpiryDate(iso)
   }
   const unitPickerRef = useRef<HTMLDivElement>(null)
 
@@ -247,7 +291,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (extracted.balance && !extracted.amount) { setBalance(extracted.balance.toString()); found++ }
     if (extracted.code) { setCode(extracted.code); found++ }
     if (extracted.cvv) { setCvv(extracted.cvv); found++ }
-    if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); found++ }
+    if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); setDisplayDate(isoToDisplay(extracted.expiry_date)); found++ }
     if (extracted.link) { setLink(extracted.link); found++ }
     if (extracted.categories && extracted.categories.length > 0) {
       // Map category IDs to Hebrew names used by the form
@@ -661,7 +705,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                       <button
                         key={d}
                         type="button"
-                        onClick={() => { setExpiryDate(d); dismissCandidate('expiry_date') }}
+                        onClick={() => { setExpiryDate(d); setDisplayDate(isoToDisplay(d)); dismissCandidate('expiry_date') }}
                         className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
                       >{d}</button>
                     ))}
@@ -1073,9 +1117,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   <input
                     id="vf-expiry"
                     type="text"
-                    value={expiryDate}
+                    value={displayDate}
                     onChange={e => handleDateTextChange(e.target.value)}
-                    placeholder="yyyy-mm-dd"
+                    placeholder="DD.MM.YYYY"
                     className="w-full pl-8 pr-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
                     dir="ltr"
                   />
@@ -1092,7 +1136,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     ref={hiddenDateRef}
                     type="date"
                     value={expiryDate}
-                    onChange={e => setExpiryDate(e.target.value)}
+                    onChange={e => { setExpiryDate(e.target.value); setDisplayDate(isoToDisplay(e.target.value)) }}
                     className="sr-only"
                     tabIndex={-1}
                     aria-hidden="true"
@@ -1106,7 +1150,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                       onClick={() => {
                         const d = new Date()
                         d.setFullYear(d.getFullYear() + years)
-                        setExpiryDate(d.toISOString().split('T')[0])
+                        const iso = d.toISOString().split('T')[0]
+                        setExpiryDate(iso)
+                        setDisplayDate(isoToDisplay(iso))
                       }}
                       className="px-2 py-2 text-xs font-medium bg-gray-100 text-gray-600 rounded-xl hover:bg-green-100 hover:text-green-700 transition-colors"
                     >

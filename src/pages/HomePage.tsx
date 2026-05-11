@@ -212,7 +212,7 @@ export default function HomePage() {
         sendUsageNotification(editingVoucher.store_name, usedAmount, vData.balance, undefined, user?.id)
       }
 
-      if (vData.balance <= 0) {
+      if (vData.balance <= 0 && !vData.item_name) {
         const vId = editingVoucher.id
         const vName = editingVoucher.store_name
         setConfirm({
