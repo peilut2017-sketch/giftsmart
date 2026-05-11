@@ -6,7 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, Lightbulb, FileText } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -126,11 +126,6 @@ export default function SettingsPage() {
   const [sendingUserReply, setSendingUserReply] = useState<string | null>(null)
 
   // Deal suggestions
-  const [dealStore, setDealStore] = useState('')
-  const [dealDesc, setDealDesc] = useState('')
-  const [dealCode, setDealCode] = useState('')
-  const [sendingDeal, setSendingDeal] = useState(false)
-  const [dealSent, setDealSent] = useState(false)
 
   // Admin broadcasts
   const [adminBroadcasts, setAdminBroadcasts] = useState<AdminBroadcast[]>([])
@@ -408,21 +403,6 @@ export default function SettingsPage() {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
     if (data) setMyMessages(data)
     setShowMyMessages(true)
-  }
-
-  async function submitDealSuggestion() {
-    if (!dealStore.trim() || !dealDesc.trim()) return toast.error('חנות ותיאור הם שדות חובה')
-    setSendingDeal(true)
-    const { error } = await supabase.rpc('submit_deal_suggestion', {
-      p_store_name:  dealStore.trim(),
-      p_description: dealDesc.trim(),
-      p_promo_code:  dealCode.trim() || null,
-    })
-    setSendingDeal(false)
-    if (error) return toast.error('שגיאה בשליחה')
-    setDealStore(''); setDealDesc(''); setDealCode('')
-    setDealSent(true)
-    toast.success('ההטבה נשלחה — תודה!')
   }
 
   async function loadMyMessages() {
@@ -1075,57 +1055,6 @@ export default function SettingsPage() {
         )}
 
         <ActivityLog />
-
-        {/* ── הצע הטבה ── */}
-        <SL>הצע הטבה לקהילה</SL>
-        <Card>
-          {!dealSent ? (
-            <div className="p-4 space-y-3">
-              <div className="flex items-start gap-3 mb-1">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                  <Lightbulb className="w-4.5 h-4.5 text-amber-500" />
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">יודע על הנחה, קוד פרומו, או הטבה מיוחדת? שתף אותנו ונפרסם לכל המשתמשים.</p>
-              </div>
-              <input
-                value={dealStore}
-                onChange={e => setDealStore(e.target.value)}
-                placeholder="שם החנות / הרשת"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
-              />
-              <textarea
-                value={dealDesc}
-                onChange={e => setDealDesc(e.target.value)}
-                placeholder="תיאור ההטבה (למשל: 20% הנחה על כל רכישה מעל ₪200)"
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
-              />
-              <input
-                value={dealCode}
-                onChange={e => setDealCode(e.target.value)}
-                placeholder="קוד פרומו (אם יש)"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono"
-              />
-              <button
-                onClick={submitDealSuggestion}
-                disabled={sendingDeal}
-                className="w-full bg-amber-500 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <Lightbulb className="w-4 h-4" />
-                {sendingDeal ? 'שולח...' : 'שלח הטבה'}
-              </button>
-            </div>
-          ) : (
-            <div className="p-4 flex flex-col items-center gap-2 text-center">
-              <div className="w-10 h-10 bg-amber-50 rounded-2xl flex items-center justify-center">
-                <Check className="w-5 h-5 text-amber-500" />
-              </div>
-              <p className="text-sm font-medium text-gray-800">תודה על ההטבה!</p>
-              <p className="text-xs text-gray-500">נבדוק ונפרסם בהקדם</p>
-              <button onClick={() => setDealSent(false)} className="text-xs text-amber-600 mt-1">הצע הטבה נוספת</button>
-            </div>
-          )}
-        </Card>
 
         {/* ── אבטחה ── */}
         <SL>{t('settings.security')}</SL>
