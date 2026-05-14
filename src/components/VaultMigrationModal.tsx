@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { ShieldCheck, Lock, Eye, EyeOff } from 'lucide-react'
+import { ShieldCheck, Lock, Eye, EyeOff, LogOut, Info } from 'lucide-react'
 import { useE2EE } from '../contexts/E2EEContext'
+import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -10,9 +11,14 @@ interface Props {
 
 export default function VaultMigrationModal({ onDone, onSkip }: Props) {
   const { migrateVault } = useE2EE()
+  const { signOut } = useAuth()
   const [passphrase, setPassphrase] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Migration requires the login password to be in sessionStorage.
+  // It's present only when the user logged in with password in this tab session.
+  const loginPwAvailable = !!sessionStorage.getItem('gs_vault_migrate_pw')
 
   async function handleMigrate() {
     if (!passphrase) return toast.error('הזן את סיסמת הכספת הנוכחית')
@@ -20,7 +26,7 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
     const ok = await migrateVault(passphrase)
     setLoading(false)
     if (ok) {
-      toast.success('הכספת שודרגה בהצלחה!')
+      toast.success('הכספת שודרגה! מעתה סיסמת הכניסה פותחת את הכספת.')
       onDone()
     } else {
       toast.error('סיסמת הכספת שגויה — נסה שוב')
@@ -35,39 +41,69 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
           <ShieldCheck className="w-8 h-8 text-white" />
         </div>
 
-        <h2 className="text-lg font-bold text-gray-800 mb-2">שדרג אבטחת הכספת</h2>
-        <p className="text-sm text-gray-500 mb-5 leading-relaxed">
-          הכספת שלך עדיין משתמשת בסיסמה נפרדת. כדי לאחד לסיסמה אחת, הזן את סיסמת הכספת הנוכחית.
-        </p>
+        <h2 className="text-lg font-bold text-gray-800 mb-2">אחד לסיסמה אחת</h2>
 
-        <div className="relative mb-4">
-          <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type={showPass ? 'text' : 'password'}
-            placeholder="סיסמת כספת נוכחית"
-            value={passphrase}
-            onChange={e => setPassphrase(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleMigrate()}
-            className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
-            dir="ltr"
-            autoFocus
-          />
-          <button
-            type="button"
-            onClick={() => setShowPass(!showPass)}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          >
-            {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
+        {loginPwAvailable ? (
+          <>
+            <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+              הכספת שלך עדיין משתמשת בסיסמה נפרדת.
+              <br />
+              הזן אותה פעם אחרונה — לאחר מכן <strong>סיסמת ה-login שלך</strong> תפתח את הכספת אוטומטית.
+            </p>
 
-        <button
-          onClick={handleMigrate}
-          disabled={loading || !passphrase}
-          className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md mb-3 disabled:opacity-50"
-        >
-          {loading ? 'משדרג...' : 'שדרג ואחד'}
-        </button>
+            <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-4 text-right">
+              <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 leading-relaxed">
+                המפתח החדש של הכספת יוגזר מסיסמת הכניסה שלך. סיסמת הכספת הנוכחית לא תישמר בשום מקום.
+              </p>
+            </div>
+
+            <div className="relative mb-4">
+              <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type={showPass ? 'text' : 'password'}
+                placeholder="סיסמת כספת נוכחית"
+                value={passphrase}
+                onChange={e => setPassphrase(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleMigrate()}
+                className="w-full pr-10 pl-10 py-3 border border-gray-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
+                dir="ltr"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              >
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <button
+              onClick={handleMigrate}
+              disabled={loading || !passphrase}
+              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md mb-3 disabled:opacity-50"
+            >
+              {loading ? 'משדרג...' : 'אחד ושדרג'}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+              כדי לאחד, המערכת צריכה לדעת את סיסמת הכניסה שלך.
+              <br />
+              התנתק והתחבר מחדש עם הסיסמה, ואז תוכל לבצע את האיחוד.
+            </p>
+
+            <button
+              onClick={() => signOut()}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md mb-3"
+            >
+              <LogOut className="w-4 h-4" />
+              התנתק והתחבר מחדש
+            </button>
+          </>
+        )}
 
         <button
           onClick={onSkip}

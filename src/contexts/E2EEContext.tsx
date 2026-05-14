@@ -29,7 +29,8 @@ const SESSION_PASS_KEY   = 'gs_e2ee_session'      // legacy: plain passphrase
 const SESSION_KEY_V2     = 'gs_e2ee_key_v2'       // v2: exported vault key bytes (base64)
 const VAULT_V2_FLAG      = 'gs_e2ee_v2'           // marks unified-password vault
 const RECOVERY_WRAPPED   = 'gs_e2ee_recovery_wrapped' // vault key wrapped with recovery key
-const VAULT_PW_PENDING   = 'gs_vault_pw_pending'   // transient: login password for auto-unlock
+const VAULT_PW_PENDING   = 'gs_vault_pw_pending'        // transient: login password for auto-unlock
+const VAULT_MIGRATE_PW   = 'gs_vault_migrate_pw'        // login password kept available for migration
 const VERIFY_PLAINTEXT   = 'GiftSmart-E2EE-OK'
 
 export interface DecryptedEntry { code: string; cvv: string | null }
@@ -143,12 +144,20 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // Existing vault but old format → prompt migration
+      // Existing vault but old format → save login password for migration, then prompt
+      sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
       setNeedsMigration(true)
       return
     }
 
-    // Path 3: legacy passphrase in sessionStorage (old-format vault)
+    // Path 3: migration password from a previous session (e.g. page refresh mid-migration)
+    const migratePw = sessionStorage.getItem(VAULT_MIGRATE_PW)
+    if (migratePw && hasVault && !isV2Vault()) {
+      setNeedsMigration(true)
+      return
+    }
+
+    // Path 4: legacy passphrase in sessionStorage (old-format vault)
     const legacyPass = sessionStorage.getItem(SESSION_PASS_KEY)
     if (legacyPass) {
       const saltB64 = localStorage.getItem(SALT_KEY)
@@ -170,6 +179,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       setDecryptedMap(new Map())
       sessionStorage.removeItem(SESSION_KEY_V2)
       sessionStorage.removeItem(SESSION_PASS_KEY)
+      sessionStorage.removeItem(VAULT_MIGRATE_PW)
     }
   }, [user])
 
@@ -308,13 +318,17 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── Migrate old-format vault to v2 ──────────────────────────────────────
+  // oldPassphrase: the current separate vault passphrase (for decryption verification)
+  // The new vault key is derived from the LOGIN password (stored in sessionStorage),
+  // so after migration the vault opens with the login password — no separate passphrase needed.
   const migrateVault = useCallback(async (oldPassphrase: string): Promise<boolean> => {
-    const saltB64 = localStorage.getItem(SALT_KEY)
-    const check   = localStorage.getItem(CHECK_KEY)
-    const userId  = user?.id
-    if (!saltB64 || !check || !userId) return false
+    const saltB64  = localStorage.getItem(SALT_KEY)
+    const check    = localStorage.getItem(CHECK_KEY)
+    const userId   = user?.id
+    const loginPw  = sessionStorage.getItem(VAULT_MIGRATE_PW)
+    if (!saltB64 || !check || !userId || !loginPw) return false
 
-    // Verify old passphrase
+    // Step 1: verify the old vault passphrase
     let oldKey: CryptoKey
     try {
       oldKey = await deriveKey(oldPassphrase, saltFromB64(saltB64))
@@ -324,15 +338,12 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       return false
     }
 
-    // Re-derive with new scheme (login password = old passphrase for migration purposes)
-    // We store the same key under the v2 salt so unlock-from-password works going forward.
-    // The login password MUST match oldPassphrase for migration to succeed.
-    const newSalt = generateSalt()
-    const pendingPw = oldPassphrase // user just confirmed it matches their vault
-    const newKey = await deriveVaultKey(pendingPw, userId, newSalt)
+    // Step 2: derive new vault key from the LOGIN password (not the old vault passphrase)
+    const newSalt  = generateSalt()
+    const newKey   = await deriveVaultKey(loginPw, userId, newSalt)
     const newCheck = await encryptField(newKey, VERIFY_PLAINTEXT)
 
-    // Recovery key for the new format
+    // Step 3: generate recovery key for the new vault
     const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
     const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
     const wrappedForRecovery = await wrapVaultKey(newKey, wrapKeyBytes)
@@ -342,6 +353,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(VAULT_V2_FLAG, 'true')
     localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
     sessionStorage.removeItem(SESSION_PASS_KEY)
+    sessionStorage.removeItem(VAULT_MIGRATE_PW)
 
     setVaultKey(newKey)
     setNeedsMigration(false)
