@@ -40,6 +40,7 @@ interface E2EEContextValue {
   isVaultUnlocked: boolean
   hint: string | null
   needsMigration: boolean              // true = existing vault uses old separate passphrase
+  needsOAuthVaultSetup: boolean        // true = Google/OAuth user with no vault and no pending password
   pendingRecoveryPhrase: string | null // set after first setup; shown once, then cleared
 
   setupVault: (passphrase: string, hint?: string) => Promise<void>
@@ -98,6 +99,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const [hint, setHint] = useState<string | null>(() => localStorage.getItem(HINT_KEY))
   const [decryptedMap, setDecryptedMap] = useState<Map<string, DecryptedEntry>>(new Map())
   const [needsMigration, setNeedsMigration] = useState(false)
+  const [needsOAuthVaultSetup, setNeedsOAuthVaultSetup] = useState(false)
   const [pendingRecoveryPhrase, setPendingRecoveryPhrase] = useState<string | null>(null)
   const autoUnlockAttempted = useRef(false)
 
@@ -169,6 +171,15 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
           if (dec === VERIFY_PLAINTEXT) setVaultKey(key)
         })
         .catch(() => sessionStorage.removeItem(SESSION_PASS_KEY))
+      return
+    }
+
+    // Path 5: OAuth user (Google etc.) with no vault and no password — prompt manual setup
+    // Detect by checking if the Supabase user authenticated via OAuth provider (not email/password)
+    const provider = user?.app_metadata?.provider
+    const isOAuth = provider && provider !== 'email'
+    if (isOAuth && !localStorage.getItem(CHECK_KEY)) {
+      setNeedsOAuthVaultSetup(true)
     }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -374,6 +385,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
 
   const dismissRecoveryPhrase = useCallback(() => {
     setPendingRecoveryPhrase(null)
+    setNeedsOAuthVaultSetup(false)
   }, [])
 
   const lockVault = useCallback(() => {
@@ -556,6 +568,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       isVaultUnlocked: vaultKey !== null,
       hint,
       needsMigration,
+      needsOAuthVaultSetup,
       pendingRecoveryPhrase,
       setupVault,
       setupVaultFromPassword,

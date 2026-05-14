@@ -26,6 +26,7 @@ import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import RecoveryKeyModal from './components/RecoveryKeyModal'
 import VaultMigrationModal from './components/VaultMigrationModal'
+import OAuthVaultSetupPrompt from './components/OAuthVaultSetupPrompt'
 import { isBiometricEnabled } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
@@ -93,15 +94,17 @@ const A11Y_WIDGET_KEY = 'a11y_widget_enabled'
 
 const SEEN_PUSH_KEY = 'seen_push_broadcast_ids'
 
-// Shows recovery key modal and migration modal when needed
+// Shows vault-related modals in priority order
 function VaultModals() {
-  const { pendingRecoveryPhrase, dismissRecoveryPhrase, needsMigration } = useE2EE()
+  const { pendingRecoveryPhrase, dismissRecoveryPhrase, needsMigration, needsOAuthVaultSetup } = useE2EE()
   const [migrationDismissed, setMigrationDismissed] = useState(false)
 
+  // Recovery key must be acknowledged before anything else
   if (pendingRecoveryPhrase) {
     return <RecoveryKeyModal phrase={pendingRecoveryPhrase} onDone={dismissRecoveryPhrase} />
   }
 
+  // Migration prompt for users who had a separate vault passphrase
   if (needsMigration && !migrationDismissed) {
     return (
       <VaultMigrationModal
@@ -109,6 +112,11 @@ function VaultModals() {
         onSkip={() => setMigrationDismissed(true)}
       />
     )
+  }
+
+  // OAuth users (Google etc.) who have no vault yet
+  if (needsOAuthVaultSetup) {
+    return <OAuthVaultSetupPrompt />
   }
 
   return null
