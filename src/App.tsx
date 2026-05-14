@@ -24,6 +24,8 @@ import LoginBanner from './components/LoginBanner'
 import PWAInstallBanner from './components/PWAInstallBanner'
 import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
+import RecoveryKeyModal from './components/RecoveryKeyModal'
+import VaultMigrationModal from './components/VaultMigrationModal'
 import { isBiometricEnabled } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
@@ -90,6 +92,27 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 const A11Y_WIDGET_KEY = 'a11y_widget_enabled'
 
 const SEEN_PUSH_KEY = 'seen_push_broadcast_ids'
+
+// Shows recovery key modal and migration modal when needed
+function VaultModals() {
+  const { pendingRecoveryPhrase, dismissRecoveryPhrase, needsMigration } = useE2EE()
+  const [migrationDismissed, setMigrationDismissed] = useState(false)
+
+  if (pendingRecoveryPhrase) {
+    return <RecoveryKeyModal phrase={pendingRecoveryPhrase} onDone={dismissRecoveryPhrase} />
+  }
+
+  if (needsMigration && !migrationDismissed) {
+    return (
+      <VaultMigrationModal
+        onDone={dismissRecoveryPhrase}
+        onSkip={() => setMigrationDismissed(true)}
+      />
+    )
+  }
+
+  return null
+}
 
 // Builds the in-memory decrypted map whenever the vault opens or vouchers change
 function E2EEBridge() {
@@ -300,6 +323,7 @@ function AppRoutes() {
     <MarketplaceProvider>
       <NotificationBridge />
       <E2EEBridge />
+      <VaultModals />
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}
       <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
