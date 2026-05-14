@@ -127,6 +127,11 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       if (mode === 'login') {
         if (!password) return toast.error(t('auth.password.required'))
         const { error } = await signIn(email, password)
+        if (!error) {
+          // Store password transiently so E2EEProvider can derive/unlock the vault
+          // without requiring a separate vault passphrase entry.
+          sessionStorage.setItem('gs_vault_pw_pending', password)
+        }
         if (error) {
           const msg = error.message ?? ''
           if (msg.toLowerCase().includes('not confirmed') || msg.toLowerCase().includes('email_not_confirmed')) {

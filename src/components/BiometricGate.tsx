@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Fingerprint, ShieldCheck, X } from 'lucide-react'
-import { verifyBiometric } from '../lib/passkey'
+import { verifyBiometricForVaultUnlock } from '../lib/passkey'
+import { exportVaultKey } from '../lib/e2ee'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -23,9 +24,16 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     if (isMountedRef.current) setLoading(true)
     if (isMountedRef.current) setFailed(false)
     try {
-      const ok = await verifyBiometric()
+      const { authenticated, vaultKey } = await verifyBiometricForVaultUnlock()
       if (!isMountedRef.current) return
-      if (ok) {
+      if (authenticated) {
+        // If PRF yielded a vault key, stash its bytes so E2EEProvider auto-unlocks
+        if (vaultKey) {
+          try {
+            const exported = await exportVaultKey(vaultKey)
+            sessionStorage.setItem('gs_e2ee_key_v2', exported)
+          } catch {}
+        }
         onUnlock()
       } else {
         setFailed(true)

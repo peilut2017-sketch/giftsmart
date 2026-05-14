@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Fingerprint, X } from 'lucide-react'
-import { registerBiometric, isBiometricSupported } from '../lib/passkey'
+import { isBiometricSupported } from '../lib/passkey'
+import { useE2EE } from '../contexts/E2EEContext'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -12,12 +13,14 @@ interface Props {
 
 export default function BiometricSetupPrompt({ userId, userName, userEmail, onDone }: Props) {
   const [loading, setLoading] = useState(false)
+  const { enableBiometricVaultUnlock } = useE2EE()
 
   if (!isBiometricSupported()) return null
 
   async function handleEnable() {
     setLoading(true)
-    const ok = await registerBiometric(userId, userName, userEmail)
+    // registerBiometricWithVault wraps the vault key via PRF if supported
+    const ok = await enableBiometricVaultUnlock(userId, userName, userEmail)
     setLoading(false)
     if (ok) {
       toast.success('נעילה ביומטרית הופעלה!')
@@ -37,6 +40,8 @@ export default function BiometricSetupPrompt({ userId, userName, userEmail, onDo
         <h2 className="text-lg font-bold text-gray-800 mb-2">הפעל נעילה ביומטרית?</h2>
         <p className="text-sm text-gray-500 mb-5">
           הגן על השוברים שלך עם זיהוי פנים, טביעת אצבע, או מפתח אבטחה — כל פתיחה של האפליקציה תדרוש אימות.
+          <br />
+          <span className="text-xs text-green-600 font-medium">הכספת המוצפנת תיפתח אוטומטית עם האימות הביומטרי.</span>
         </p>
 
         <button
