@@ -57,6 +57,12 @@ interface E2EEContextValue {
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   enableBiometricVaultUnlock: (userId: string, userName: string, email?: string) => Promise<boolean>
+  // Re-keys the vault using the current in-memory vault key (no old passphrase needed).
+  // Call this when the login password changes so the vault stays in sync.
+  reDeriveVaultKeyFromPassword: (
+    newPassword: string,
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
+  ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   regenerateRecoveryKey: () => Promise<string>
   dismissRecoveryPhrase: () => void
 
@@ -404,6 +410,50 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     return { ok: true, entries }
   }, [user?.id])
 
+  // ── Re-key vault from new password (vault must be unlocked) ─────────────
+  // Re-encrypts all vouchers with a new key derived from `newPassword`.
+  // Does NOT require the old passphrase — the in-memory vault key is used directly.
+  const reDeriveVaultKeyFromPassword = useCallback(async (
+    newPassword: string,
+    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
+  ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
+    if (!vaultKey || !user?.id) return { ok: false, entries: [] }
+
+    const newSalt  = generateSalt()
+    const newKey   = await deriveVaultKey(newPassword, user.id, newSalt)
+    const newCheck = await encryptField(newKey, VERIFY_PLAINTEXT)
+
+    const entries: Array<{id: string; code: string; cvv: string|null}> = []
+    for (const v of e2eeVouchers) {
+      try {
+        const plainCode = v.code && isEncryptedField(v.code) ? await decryptField(vaultKey, v.code) : (v.code ?? '')
+        const plainCvv  = v.cvv  && isEncryptedField(v.cvv)  ? await decryptField(vaultKey, v.cvv)  : (v.cvv  ?? null)
+        entries.push({
+          id: v.id,
+          code: await encryptField(newKey, plainCode),
+          cvv: plainCvv ? await encryptField(newKey, plainCvv) : null,
+        })
+      } catch {}
+    }
+
+    const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
+    const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
+    const wrappedForRecovery = await wrapVaultKey(newKey, wrapKeyBytes)
+
+    localStorage.setItem(SALT_KEY, saltToB64(newSalt))
+    localStorage.setItem(CHECK_KEY, newCheck)
+    localStorage.setItem(VAULT_V2_FLAG, 'true')
+    localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
+    localStorage.removeItem('gs_e2ee_biometric_wrapped_v2')
+    sessionStorage.removeItem(SESSION_PASS_KEY)
+
+    setVaultKey(newKey)
+    setNeedsMigration(false)
+    await persistVaultKey(newKey)
+    setPendingRecoveryPhrase(phrase)
+    return { ok: true, entries }
+  }, [vaultKey, user?.id])
+
   // ── Regenerate recovery key (vault must be unlocked) ────────────────────
   const regenerateRecoveryKey = useCallback(async (): Promise<string> => {
     if (!vaultKey) throw new Error('vault is locked')
@@ -622,6 +672,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       resetVault,
       migrateVault,
       enableBiometricVaultUnlock,
+      reDeriveVaultKeyFromPassword,
       regenerateRecoveryKey,
       dismissRecoveryPhrase,
       encrypt,
