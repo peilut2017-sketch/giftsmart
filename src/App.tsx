@@ -276,7 +276,13 @@ function AppRoutes() {
 
   useEffect(() => {
     if (user && isBiometricEnabled()) {
-      setBiometricLocked(true)
+      // Only lock if the last successful biometric was more than 5 minutes ago.
+      // sessionStorage survives page reload in the same tab (not browser restart),
+      // so brief app-switches on mobile won't trigger a re-prompt.
+      const lastTs = parseInt(sessionStorage.getItem('gs_biometric_unlock_ts') || '0')
+      if (Date.now() - lastTs > 5 * 60 * 1000) {
+        setBiometricLocked(true)
+      }
     }
   }, [user])
 
@@ -305,7 +311,10 @@ function AppRoutes() {
   if (biometricLocked) {
     return (
       <BiometricGate
-        onUnlock={() => setBiometricLocked(false)}
+        onUnlock={() => {
+          sessionStorage.setItem('gs_biometric_unlock_ts', String(Date.now()))
+          setBiometricLocked(false)
+        }}
         onSignOut={() => { signOut(); setBiometricLocked(false) }}
       />
     )

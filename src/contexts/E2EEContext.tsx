@@ -57,6 +57,7 @@ interface E2EEContextValue {
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   enableBiometricVaultUnlock: (userId: string, userName: string, email?: string) => Promise<boolean>
+  regenerateRecoveryKey: () => Promise<string>
   dismissRecoveryPhrase: () => void
 
   encrypt: (plaintext: string) => Promise<string>
@@ -132,8 +133,11 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       const check   = localStorage.getItem(CHECK_KEY)
 
       if (!saltB64 || !check) {
-        // No vault yet — set one up automatically
-        autoSetupV2(pendingPw, userId)
+        // No local vault metadata — could be a new user OR an existing user who
+        // cleared localStorage / switched devices (with encrypted vouchers in Supabase).
+        // Save login password for manual vault setup from Settings — never auto-create
+        // because overwriting could make existing encrypted vouchers permanently unreadable.
+        sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
         return
       }
 
@@ -198,14 +202,6 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem(VAULT_MIGRATE_PW)
     }
   }, [user])
-
-  // ── Auto-setup v2 vault from login password ──────────────────────────────
-  async function autoSetupV2(password: string, userId: string) {
-    try {
-      const phrase = await setupVaultFromPassword(password, userId)
-      setPendingRecoveryPhrase(phrase)
-    } catch {}
-  }
 
   // ── Setup: v2 unified-password vault ────────────────────────────────────
   const setupVaultFromPassword = useCallback(async (
@@ -314,16 +310,27 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // ── Legacy unlock (separate passphrase) ──────────────────────────────────
+  // ── Unlock: accepts the passphrase regardless of vault format ────────────
+  // For v2 (unified) vaults, derives using deriveVaultKey (password+userId+salt).
+  // For legacy vaults, falls back to the old deriveKey path.
   const unlockVault = useCallback(async (passphrase: string): Promise<boolean> => {
     const saltB64 = localStorage.getItem(SALT_KEY)
     const check   = localStorage.getItem(CHECK_KEY)
     if (!saltB64 || !check) return false
     try {
-      const key = await deriveKey(passphrase, saltFromB64(saltB64))
+      let key: CryptoKey
+      if (isV2Vault() && user?.id) {
+        key = await deriveVaultKey(passphrase, user.id, saltFromB64(saltB64))
+      } else {
+        key = await deriveKey(passphrase, saltFromB64(saltB64))
+      }
       const dec = await decryptField(key, check)
       if (dec !== VERIFY_PLAINTEXT) return false
-      sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
+      if (isV2Vault()) {
+        await persistVaultKey(key)
+      } else {
+        sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
+      }
       setVaultKey(key)
       track('vault_opened')
       phCapture('vault_opened')
@@ -331,7 +338,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     } catch {
       return false
     }
-  }, [])
+  }, [user?.id])
 
   // ── Migrate old-format vault to v2 ──────────────────────────────────────
   // oldPassphrase: the current separate vault passphrase (for decryption verification)
@@ -396,6 +403,17 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     setPendingRecoveryPhrase(phrase)
     return { ok: true, entries }
   }, [user?.id])
+
+  // ── Regenerate recovery key (vault must be unlocked) ────────────────────
+  const regenerateRecoveryKey = useCallback(async (): Promise<string> => {
+    if (!vaultKey) throw new Error('vault is locked')
+    const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
+    const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
+    const wrappedForRecovery = await wrapVaultKey(vaultKey, wrapKeyBytes)
+    localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
+    setPendingRecoveryPhrase(phrase)
+    return phrase
+  }, [vaultKey])
 
   // ── Enable biometric vault unlock (registers PRF credential) ─────────────
   const enableBiometricVaultUnlock = useCallback(async (
@@ -604,6 +622,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       resetVault,
       migrateVault,
       enableBiometricVaultUnlock,
+      regenerateRecoveryKey,
       dismissRecoveryPhrase,
       encrypt,
       decrypt,

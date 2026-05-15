@@ -141,43 +141,57 @@ export async function verifyBiometricForVaultUnlock(): Promise<{
     if (!credId) return { authenticated: false, vaultKey: null }
 
     const challenge = crypto.getRandomValues(new Uint8Array(32))
-    const credential = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        rpId: window.location.hostname,
-        allowCredentials: [
-          {
-            id: base64urlToUint8Array(credId).buffer as ArrayBuffer,
-            type: 'public-key',
-            transports: ['internal'],
-          },
-        ],
-        userVerification: 'required',
-        timeout: 60000,
-        extensions: {
-          prf: { eval: { first: PRF_EVAL_INPUT.buffer as ArrayBuffer } },
+    const baseOptions: PublicKeyCredentialRequestOptions = {
+      challenge,
+      rpId: window.location.hostname,
+      allowCredentials: [
+        {
+          id: base64urlToUint8Array(credId).buffer as ArrayBuffer,
+          type: 'public-key',
+          transports: ['internal'],
         },
-      },
-    }) as PublicKeyCredential | null
+      ],
+      userVerification: 'required',
+      timeout: 60000,
+    }
+
+    // Try assertion with PRF extension first.
+    // If the browser throws (unsupported extension), fall back to a plain assertion.
+    let credential: PublicKeyCredential | null = null
+    let prfOutput: ArrayBuffer | undefined
+
+    try {
+      credential = await navigator.credentials.get({
+        publicKey: {
+          ...baseOptions,
+          extensions: {
+            prf: { eval: { first: PRF_EVAL_INPUT.buffer as ArrayBuffer } },
+          },
+        },
+      }) as PublicKeyCredential | null
+
+      if (credential) {
+        const ext = credential.getClientExtensionResults() as Record<string, unknown>
+        const prfFirst = (ext?.prf as Record<string, unknown> | undefined)
+          ?.results as Record<string, unknown> | undefined
+        prfOutput = prfFirst?.first as ArrayBuffer | undefined
+      }
+    } catch {
+      // PRF extension caused an error — retry without it so auth still works
+      credential = await navigator.credentials.get({
+        publicKey: baseOptions,
+      }) as PublicKeyCredential | null
+    }
 
     if (!credential) return { authenticated: false, vaultKey: null }
 
-    // Try to unwrap vault key via PRF output
+    // Try to unwrap vault key via PRF output (only if PRF was supported)
     let vaultKey: CryptoKey | null = null
     const wrappedKey = localStorage.getItem(BIOMETRIC_WRAPPED_VAULT_KEY)
-    if (wrappedKey) {
-      const ext = credential.getClientExtensionResults() as Record<string, unknown>
-      const prfFirst = (ext?.prf as Record<string, unknown> | undefined)
-        ?.results as Record<string, unknown> | undefined
-      const prfOutput = prfFirst?.first as ArrayBuffer | undefined
-
-      if (prfOutput && prfOutput.byteLength >= 32) {
-        try {
-          vaultKey = await unwrapVaultKey(wrappedKey, new Uint8Array(prfOutput))
-        } catch {
-          // PRF output didn't match — vault key stays null
-        }
-      }
+    if (wrappedKey && prfOutput && prfOutput.byteLength >= 32) {
+      try {
+        vaultKey = await unwrapVaultKey(wrappedKey, new Uint8Array(prfOutput))
+      } catch {}
     }
 
     return { authenticated: true, vaultKey }

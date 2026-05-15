@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { isBiometricEnabled, getBiometricEmail, verifyBiometric } from '../lib/passkey'
+import { isBiometricEnabled, getBiometricEmail, verifyBiometricForVaultUnlock } from '../lib/passkey'
+import { exportVaultKey } from '../lib/e2ee'
 import { useT } from '../lib/i18n'
 
 const APP_VERSION = '1.0.0'
@@ -71,10 +72,17 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   async function handleBiometricLogin() {
     setBiometricLoading(true)
     try {
-      const ok = await verifyBiometric()
-      if (!ok) {
+      const { authenticated, vaultKey } = await verifyBiometricForVaultUnlock()
+      if (!authenticated) {
         toast.error(t('auth.biometric.failed'))
         return
+      }
+      // If PRF yielded a vault key, stash it so E2EEProvider auto-unlocks after login
+      if (vaultKey) {
+        try {
+          const exported = await exportVaultKey(vaultKey)
+          sessionStorage.setItem('gs_e2ee_key_v2', exported)
+        } catch {}
       }
       const { error } = await signInWithBiometric()
       if (error) {
@@ -364,6 +372,18 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               >
                 {t('auth.forgot.password')}
               </button>
+
+              {/* Switch to biometric if available for this email */}
+              {isBiometricEnabled() && getBiometricEmail()?.toLowerCase() === email.toLowerCase() && (
+                <button
+                  type="button"
+                  onClick={() => setLoginStep('biometric')}
+                  className="w-full flex items-center justify-center gap-2 text-sm text-green-600 hover:text-green-800 transition-colors pt-1"
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  {t('auth.biometric.verify')}
+                </button>
+              )}
             </form>
           )}
 
