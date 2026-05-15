@@ -310,16 +310,27 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // ── Legacy unlock (separate passphrase) ──────────────────────────────────
+  // ── Unlock: accepts the passphrase regardless of vault format ────────────
+  // For v2 (unified) vaults, derives using deriveVaultKey (password+userId+salt).
+  // For legacy vaults, falls back to the old deriveKey path.
   const unlockVault = useCallback(async (passphrase: string): Promise<boolean> => {
     const saltB64 = localStorage.getItem(SALT_KEY)
     const check   = localStorage.getItem(CHECK_KEY)
     if (!saltB64 || !check) return false
     try {
-      const key = await deriveKey(passphrase, saltFromB64(saltB64))
+      let key: CryptoKey
+      if (isV2Vault() && user?.id) {
+        key = await deriveVaultKey(passphrase, user.id, saltFromB64(saltB64))
+      } else {
+        key = await deriveKey(passphrase, saltFromB64(saltB64))
+      }
       const dec = await decryptField(key, check)
       if (dec !== VERIFY_PLAINTEXT) return false
-      sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
+      if (isV2Vault()) {
+        await persistVaultKey(key)
+      } else {
+        sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
+      }
       setVaultKey(key)
       track('vault_opened')
       phCapture('vault_opened')
@@ -327,7 +338,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     } catch {
       return false
     }
-  }, [])
+  }, [user?.id])
 
   // ── Migrate old-format vault to v2 ──────────────────────────────────────
   // oldPassphrase: the current separate vault passphrase (for decryption verification)

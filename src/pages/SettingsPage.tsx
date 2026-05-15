@@ -81,7 +81,7 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey, enableBiometricVaultUnlock } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
   const { t } = useT()
@@ -322,7 +322,11 @@ export default function SettingsPage() {
 
   async function handleEnableBiometric() {
     setBiometricLoading(true)
-    const ok = await registerBiometric(user?.id || '', profile?.name || user?.email || '', user?.email)
+    // When the vault is unlocked, register with vault key wrapping (PRF) so
+    // subsequent biometric unlocks can also open the vault automatically.
+    const ok = isVaultUnlocked
+      ? await enableBiometricVaultUnlock(user?.id || '', profile?.name || user?.email || '', user?.email)
+      : await registerBiometric(user?.id || '', profile?.name || user?.email || '', user?.email)
     setBiometricLoading(false)
     if (ok) {
       setBiometricEnabled(true)
