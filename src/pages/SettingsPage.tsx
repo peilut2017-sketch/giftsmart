@@ -96,7 +96,7 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey, enableBiometricVaultUnlock } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey, enableBiometricVaultUnlock, reDeriveVaultKeyFromPassword } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
   const { t } = useT()
@@ -117,6 +117,7 @@ export default function SettingsPage() {
   const [currentPass, setCurrentPass] = useState('')
   const [showCurrentPass, setShowCurrentPass] = useState(false)
   const [showNewPass, setShowNewPass] = useState(false)
+  const [showNewPass2, setShowNewPass2] = useState(false)
   const [showPassStrength, setShowPassStrength] = useState(false)
   const [passwordChanging, setPasswordChanging] = useState(false)
   const [newPass, setNewPass] = useState('')
@@ -298,9 +299,10 @@ export default function SettingsPage() {
       // Doing this before updateUser means a Supabase failure won't leave the vault
       // keyed to a password Supabase no longer knows.
       if (isUnifiedVault) {
+        if (!isVaultUnlocked) return toast.error('יש לפתוח את הכספת לפני שינוי הסיסמה')
         const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
-        const { ok, entries } = await changePassphrase(currentPass, newPass, e2eeVouchers)
-        if (!ok) return toast.error('שגיאה בעדכון הכספת — וודא שהסיסמה הנוכחית נכונה')
+        const { ok, entries } = await reDeriveVaultKeyFromPassword(newPass, e2eeVouchers)
+        if (!ok) return toast.error('שגיאה בעדכון הכספת')
         vaultEntries = entries
       }
 
@@ -318,7 +320,7 @@ export default function SettingsPage() {
       toast.success(isUnifiedVault ? `סיסמה שונתה — ${vaultEntries.length} שוברים הוצפנו מחדש` : 'סיסמה שונתה!')
       setEditPass(false)
       setCurrentPass(''); setNewPass(''); setNewPass2('')
-      setShowCurrentPass(false); setShowNewPass(false); setShowPassStrength(false)
+      setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
       logAction('system_password_change', 'מערכת')
     } finally {
       setPasswordChanging(false)
@@ -1197,19 +1199,33 @@ export default function SettingsPage() {
                       <span className={`text-xs font-medium ${pwStrength.score >= 3 ? 'text-green-600' : 'text-orange-500'}`}>{pwStrength.label}</span>
                       {pwStrength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
                     </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                      {pwStrength.checks.map(c => (
+                        <div key={c.label} className={`flex items-center gap-1 text-xs ${c.ok ? 'text-green-600' : 'text-gray-400'}`}>
+                          <Check className={`w-3 h-3 flex-shrink-0 ${c.ok ? 'text-green-500' : 'text-gray-300'}`} />
+                          {c.label}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Confirm */}
-              <input
-                type="password"
-                value={newPass2}
-                onChange={e => setNewPass2(e.target.value)}
-                placeholder="אימות סיסמה חדשה"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
-              />
+              <div className="relative">
+                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type={showNewPass2 ? 'text' : 'password'}
+                  value={newPass2}
+                  onChange={e => setNewPass2(e.target.value)}
+                  placeholder="אימות סיסמה חדשה"
+                  className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+                <button type="button" onClick={() => setShowNewPass2(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  {showNewPass2 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
 
               <div className="flex gap-2">
                 <button
@@ -1223,7 +1239,7 @@ export default function SettingsPage() {
                   onClick={() => {
                     setEditPass(false)
                     setCurrentPass(''); setNewPass(''); setNewPass2('')
-                    setShowCurrentPass(false); setShowNewPass(false); setShowPassStrength(false)
+                    setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
                   }}
                   className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium"
                 >
