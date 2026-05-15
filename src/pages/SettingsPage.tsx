@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -6,7 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, FileText, Key } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -43,6 +43,21 @@ interface AdminBroadcast {
 }
 
 const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+
+interface PasswordStrength { score: number; label: string; color: string; checks: { label: string; ok: boolean }[] }
+function getPasswordStrength(password: string, t: (k: string) => string): PasswordStrength {
+  const checks = [
+    { label: t('auth.check.length'),  ok: password.length >= 8 },
+    { label: t('auth.check.upper'),   ok: /[A-Z]/.test(password) },
+    { label: t('auth.check.lower'),   ok: /[a-z]/.test(password) },
+    { label: t('auth.check.digit'),   ok: /\d/.test(password) },
+    { label: t('auth.check.special'), ok: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) },
+  ]
+  const score = checks.filter(c => c.ok).length
+  const labels = [t('auth.strength.very.weak'), t('auth.strength.weak'), t('auth.strength.medium'), t('auth.strength.strong'), t('auth.strength.very.strong')]
+  const colors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-green-600']
+  return { score, label: labels[Math.min(score, 4)], color: colors[Math.min(score, 4)], checks }
+}
 
 function MenuItem({ icon: Icon, label, desc, onClick, danger = false, right }: { icon: React.ElementType; label: string; desc?: string; onClick?: () => void; danger?: boolean; right?: React.ReactNode }) {
   return (
@@ -81,7 +96,7 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey, enableBiometricVaultUnlock } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey, enableBiometricVaultUnlock, reDeriveVaultKeyFromPassword } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
   const { t } = useT()
@@ -99,6 +114,12 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState(profile?.phone || '')
 
   const [editPass, setEditPass] = useState(false)
+  const [currentPass, setCurrentPass] = useState('')
+  const [showCurrentPass, setShowCurrentPass] = useState(false)
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [showNewPass2, setShowNewPass2] = useState(false)
+  const [showPassStrength, setShowPassStrength] = useState(false)
+  const [passwordChanging, setPasswordChanging] = useState(false)
   const [newPass, setNewPass] = useState('')
   const [newPass2, setNewPass2] = useState('')
   const [syncing, setSyncing] = useState(false)
@@ -263,14 +284,46 @@ export default function SettingsPage() {
   }
 
   async function changePassword() {
+    if (!currentPass) return toast.error('הזן את הסיסמה הנוכחית')
     if (newPass !== newPass2) return toast.error('הסיסמאות אינן תואמות')
-    if (newPass.length < 6) return toast.error('סיסמה קצרה מדי')
-    const { error } = await supabase.auth.updateUser({ password: newPass })
-    if (error) toast.error('שגיאה בשינוי סיסמה')
-    else {
-      toast.success('סיסמה שונתה!')
-      setEditPass(false); setNewPass(''); setNewPass2('')
+    if (newPass.length < 8) return toast.error('סיסמה חדשה: לפחות 8 תווים')
+    setPasswordChanging(true)
+    try {
+      // Verify current password before touching anything
+      const { error: authErr } = await supabase.auth.signInWithPassword({ email: user!.email!, password: currentPass })
+      if (authErr) return toast.error('סיסמה נוכחית שגויה')
+
+      let vaultEntries: Array<{id: string; code: string; cvv: string|null}> = []
+
+      // For unified vaults, re-derive and re-encrypt under the new password first.
+      // Doing this before updateUser means a Supabase failure won't leave the vault
+      // keyed to a password Supabase no longer knows.
+      if (isUnifiedVault) {
+        if (!isVaultUnlocked) return toast.error('יש לפתוח את הכספת לפני שינוי הסיסמה')
+        const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
+        const { ok, entries } = await reDeriveVaultKeyFromPassword(newPass, e2eeVouchers)
+        if (!ok) return toast.error('שגיאה בעדכון הכספת')
+        vaultEntries = entries
+      }
+
+      // Change the Supabase login password
+      const { error } = await supabase.auth.updateUser({ password: newPass })
+      if (error) { toast.error('שגיאה בשינוי סיסמה: ' + error.message); return }
+
+      // Save re-encrypted vouchers
+      if (vaultEntries.length > 0) {
+        await Promise.all(vaultEntries.map(({ id, code, cvv }) =>
+          updateVoucher(id, { code, ...(cvv != null ? { cvv } : {}) })
+        ))
+      }
+
+      toast.success(isUnifiedVault ? `סיסמה שונתה — ${vaultEntries.length} שוברים הוצפנו מחדש` : 'סיסמה שונתה!')
+      setEditPass(false)
+      setCurrentPass(''); setNewPass(''); setNewPass2('')
+      setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
       logAction('system_password_change', 'מערכת')
+    } finally {
+      setPasswordChanging(false)
     }
   }
 
@@ -560,6 +613,8 @@ export default function SettingsPage() {
       setChecking(false)
     }
   }
+
+  const pwStrength = useMemo(() => getPasswordStrength(newPass, t), [newPass]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
@@ -1092,27 +1147,102 @@ export default function SettingsPage() {
             <MenuItem icon={Lock} label="שינוי סיסמה" desc="עדכן את סיסמת הכניסה" onClick={() => setEditPass(true)} />
           ) : (
             <div className="p-4 space-y-3">
-              <input
-                type="password"
-                value={newPass}
-                onChange={e => setNewPass(e.target.value)}
-                placeholder="סיסמה חדשה"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
-              />
-              <input
-                type="password"
-                value={newPass2}
-                onChange={e => setNewPass2(e.target.value)}
-                placeholder="אימות סיסמה"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
-              />
-              <div className="flex gap-2">
-                <button onClick={changePassword} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium">
-                  שנה סיסמה
+              {/* Unified-vault notice */}
+              {isUnifiedVault && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800 flex items-start gap-2">
+                  <Shield className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <p>הכספת מוגנת בסיסמת הכניסה — <strong>הסיסמה החדשה תהיה גם מפתח הכספת</strong> ותצפין מחדש את כל השוברים.</p>
+                </div>
+              )}
+
+              {/* Current password */}
+              <div className="relative">
+                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type={showCurrentPass ? 'text' : 'password'}
+                  value={currentPass}
+                  onChange={e => setCurrentPass(e.target.value)}
+                  placeholder="סיסמה נוכחית"
+                  className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                  autoFocus
+                />
+                <button type="button" onClick={() => setShowCurrentPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-                <button onClick={() => setEditPass(false)} className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium">
+              </div>
+
+              {/* New password + strength meter */}
+              <div>
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={newPass}
+                    onChange={e => { setNewPass(e.target.value); setShowPassStrength(true) }}
+                    placeholder="סיסמה חדשה (לפחות 8 תווים)"
+                    className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                  <button type="button" onClick={() => setShowNewPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {showPassStrength && newPass.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex gap-1">
+                      {[0,1,2,3,4].map(i => (
+                        <div key={i} className={`flex-1 h-1.5 rounded-full ${i < pwStrength.score ? pwStrength.color : 'bg-gray-100'}`} />
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-medium ${pwStrength.score >= 3 ? 'text-green-600' : 'text-orange-500'}`}>{pwStrength.label}</span>
+                      {pwStrength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                      {pwStrength.checks.map(c => (
+                        <div key={c.label} className={`flex items-center gap-1 text-xs ${c.ok ? 'text-green-600' : 'text-gray-400'}`}>
+                          <Check className={`w-3 h-3 flex-shrink-0 ${c.ok ? 'text-green-500' : 'text-gray-300'}`} />
+                          {c.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm */}
+              <div className="relative">
+                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type={showNewPass2 ? 'text' : 'password'}
+                  value={newPass2}
+                  onChange={e => setNewPass2(e.target.value)}
+                  placeholder="אימות סיסמה חדשה"
+                  className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                />
+                <button type="button" onClick={() => setShowNewPass2(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  {showNewPass2 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={changePassword}
+                  disabled={passwordChanging || !currentPass || !newPass || !newPass2}
+                  className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+                >
+                  {passwordChanging ? 'משנה...' : isUnifiedVault ? 'שנה סיסמה ועדכן כספת' : 'שנה סיסמה'}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditPass(false)
+                    setCurrentPass(''); setNewPass(''); setNewPass2('')
+                    setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
+                  }}
+                  className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium"
+                >
                   {t('app.cancel')}
                 </button>
               </div>
@@ -1171,6 +1301,48 @@ export default function SettingsPage() {
             {showVaultSection && (
               <div className="px-4 pb-4 space-y-3">
 
+                {/* Single consolidated "must-read" notice */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-bold text-amber-800 flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 flex-shrink-0" /> חובה לקרוא — כדי לא לאבד את הנתונים שלך
+                  </p>
+                  {isUnifiedVault ? (
+                    <>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        הכספת מוצפנת עם <strong>סיסמת הכניסה שלך</strong> — הסיסמה אינה נשמרת בשרתנו.
+                      </p>
+                      <ul className="text-xs text-amber-700 space-y-1 list-disc pr-4">
+                        <li><strong>שחזור סיסמה בדוא"ל לא ישחזר נתונים מוצפנים</strong> — שמור את מפתח השחזור במקום בטוח.</li>
+                        <li>לשינוי סיסמה: השתמש בקטע "שינוי סיסמה" למעלה — הכספת תוצפן מחדש אוטומטית.</li>
+                        <li>שיתוף שובר מוצפן חושף את הקוד בשרת לצורך השיתוף בלבד.</li>
+                      </ul>
+                      {isVaultUnlocked && (
+                        <button
+                          onClick={() => regenerateRecoveryKey().catch(() => {})}
+                          className="text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1"
+                        >
+                          <Key className="w-3 h-3" /> הצג / חדש מפתח שחזור
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        <strong>הסיסמה אינה ניתנת לשחזור</strong> — שמור אותה במקום בטוח. איבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים לצמיתות.
+                      </p>
+                      <p className="text-xs text-amber-700">שיתוף שובר מוצפן חושף את הקוד בשרת לצורך השיתוף בלבד.</p>
+                      <p className="text-xs text-amber-700">שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.</p>
+                    </>
+                  )}
+                </div>
+
+                {/* Hint display */}
+                {hint && (
+                  <div className="bg-indigo-50 rounded-xl px-3 py-2 text-xs text-indigo-700">
+                    רמז נוכחי: <span className="font-medium">{hint}</span>
+                  </div>
+                )}
+
                 {/* Migration banner — shown only for old-format vaults */}
                 {!isUnifiedVault && (
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
@@ -1228,96 +1400,57 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                {isUnifiedVault && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-bold text-amber-800 flex items-center gap-1">
-                      <Shield className="w-3.5 h-3.5" /> סיסמת הכניסה היא מפתח הכספת
-                    </p>
-                    <p className="text-xs text-amber-700 leading-relaxed">
-                      הכספת נפתחת אוטומטית עם סיסמת הכניסה שלך.
-                      <br />
-                      <strong>שחזור סיסמה בדוא"ל לא ישחזר נתונים מוצפנים</strong> — שמור את מפתח השחזור במקום בטוח.
-                    </p>
-                    {isVaultUnlocked && (
-                      <button
-                        onClick={() => regenerateRecoveryKey().catch(() => {})}
-                        className="text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1"
-                      >
-                        <Key className="w-3 h-3" /> הצג / חדש מפתח שחזור
-                      </button>
-                    )}
-                  </div>
+                {/* Vault passphrase change — only for non-unified vaults */}
+                {!isUnifiedVault && (
+                  <>
+                    <input
+                      type="password"
+                      value={vaultOldPass}
+                      onChange={e => setVaultOldPass(e.target.value)}
+                      placeholder="סיסמה נוכחית"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      dir="ltr"
+                      autoComplete="current-password"
+                      name="vault-current-password"
+                    />
+                    <input
+                      type="password"
+                      value={vaultNewPass}
+                      onChange={e => setVaultNewPass(e.target.value)}
+                      placeholder="סיסמה חדשה (לפחות 8 תווים)"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      dir="ltr"
+                      autoComplete="new-password"
+                      name="vault-new-password"
+                    />
+                    <input
+                      type="password"
+                      value={vaultNewPass2}
+                      onChange={e => setVaultNewPass2(e.target.value)}
+                      placeholder="אימות סיסמה חדשה"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      dir="ltr"
+                      autoComplete="new-password"
+                      name="vault-new-password-confirm"
+                    />
+                    <input
+                      type="text"
+                      value={vaultNewHint}
+                      onChange={e => setVaultNewHint(e.target.value)}
+                      placeholder="רמז לסיסמה החדשה (אופציונלי)"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      autoComplete="off"
+                      name="vault-new-hint"
+                    />
+                    <button
+                      onClick={handleChangeVaultPassphrase}
+                      disabled={vaultChanging || !vaultOldPass || !vaultNewPass || !vaultNewPass2}
+                      className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                    >
+                      {vaultChanging ? 'מצפין מחדש...' : t('e2ee.change')}
+                    </button>
+                  </>
                 )}
-
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
-                  <p className="font-bold flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> חשוב:</p>
-                  <p>• עליך לזכור את הסיסמה. שמור אותה במקום בטוח. <strong>הסיסמה אינה ניתנת לשחזור</strong> ואיבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים</p>
-                  <p>• שיתוף שובר מוצפן חושף את הקוד בשרת לצורך שיתוף</p>
-                </div>
-                {hint && (
-                  <div className="bg-indigo-50 rounded-xl px-3 py-2 text-xs text-indigo-700">
-                    רמז נוכחי: <span className="font-medium">{hint}</span>
-                  </div>
-                )}
-                <p className="text-xs text-indigo-600 bg-indigo-50 rounded-xl p-3">
-                  שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.
-                </p>
-
-                {isUnifiedVault && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
-                    <p className="font-bold flex items-center gap-1 mb-1">
-                      <Shield className="w-3.5 h-3.5" /> שים לב — ניתוק האיחוד
-                    </p>
-                    <p>שינוי סיסמת הכספת ינתק את האיחוד — מעתה הכספת תדרוש סיסמה נפרדת ולא תיפתח אוטומטית בכניסה.</p>
-                  </div>
-                )}
-
-                <input
-                  type="password"
-                  value={vaultOldPass}
-                  onChange={e => setVaultOldPass(e.target.value)}
-                  placeholder="סיסמה נוכחית"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  dir="ltr"
-                  autoComplete="current-password"
-                  name="vault-current-password"
-                />
-                <input
-                  type="password"
-                  value={vaultNewPass}
-                  onChange={e => setVaultNewPass(e.target.value)}
-                  placeholder="סיסמה חדשה (לפחות 8 תווים)"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  name="vault-new-password"
-                />
-                <input
-                  type="password"
-                  value={vaultNewPass2}
-                  onChange={e => setVaultNewPass2(e.target.value)}
-                  placeholder="אימות סיסמה חדשה"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  name="vault-new-password-confirm"
-                />
-                <input
-                  type="text"
-                  value={vaultNewHint}
-                  onChange={e => setVaultNewHint(e.target.value)}
-                  placeholder="רמז לסיסמה החדשה (אופציונלי)"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  autoComplete="off"
-                  name="vault-new-hint"
-                />
-                <button
-                  onClick={handleChangeVaultPassphrase}
-                  disabled={vaultChanging || !vaultOldPass || !vaultNewPass || !vaultNewPass2}
-                  className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
-                >
-                  {vaultChanging ? 'מצפין מחדש...' : t('e2ee.change')}
-                </button>
 
                 <div className="border-t pt-3 space-y-3">
                   {/* Default encryption for new vouchers */}

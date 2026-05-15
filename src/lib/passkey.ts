@@ -131,14 +131,19 @@ export async function verifyBiometric(): Promise<boolean> {
 }
 
 // Biometric check that also tries to unwrap the vault key via PRF.
-// Returns { authenticated, vaultKey } — vaultKey is null if PRF not supported.
+// Returns { authenticated, vaultKey, prfBytes }
+// - vaultKey: unwrapped key if a stored wrapped key was found; null otherwise
+// - prfBytes: raw PRF output bytes when available (even if no stored wrapped key exists);
+//   callers can store these in sessionStorage so the vault key can be wrapped after the
+//   next manual unlock, enabling future automatic PRF-based unlocks.
 export async function verifyBiometricForVaultUnlock(): Promise<{
   authenticated: boolean
   vaultKey: CryptoKey | null
+  prfBytes: Uint8Array | null
 }> {
   try {
     const credId = localStorage.getItem(CREDENTIAL_KEY)
-    if (!credId) return { authenticated: false, vaultKey: null }
+    if (!credId) return { authenticated: false, vaultKey: null, prfBytes: null }
 
     const challenge = crypto.getRandomValues(new Uint8Array(32))
     const baseOptions: PublicKeyCredentialRequestOptions = {
@@ -183,7 +188,7 @@ export async function verifyBiometricForVaultUnlock(): Promise<{
       }) as PublicKeyCredential | null
     }
 
-    if (!credential) return { authenticated: false, vaultKey: null }
+    if (!credential) return { authenticated: false, vaultKey: null, prfBytes: null }
 
     // Try to unwrap vault key via PRF output (only if PRF was supported)
     let vaultKey: CryptoKey | null = null
@@ -194,9 +199,10 @@ export async function verifyBiometricForVaultUnlock(): Promise<{
       } catch {}
     }
 
-    return { authenticated: true, vaultKey }
+    const prfBytes = prfOutput && prfOutput.byteLength >= 32 ? new Uint8Array(prfOutput) : null
+    return { authenticated: true, vaultKey, prfBytes }
   } catch (err) {
     console.error('Biometric verify error:', err)
-    return { authenticated: false, vaultKey: null }
+    return { authenticated: false, vaultKey: null, prfBytes: null }
   }
 }
