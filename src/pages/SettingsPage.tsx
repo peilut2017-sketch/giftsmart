@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -6,7 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, FileText, Key } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -43,6 +43,21 @@ interface AdminBroadcast {
 }
 
 const APP_URL = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+
+interface PasswordStrength { score: number; label: string; color: string; checks: { label: string; ok: boolean }[] }
+function getPasswordStrength(password: string, t: (k: string) => string): PasswordStrength {
+  const checks = [
+    { label: t('auth.check.length'),  ok: password.length >= 8 },
+    { label: t('auth.check.upper'),   ok: /[A-Z]/.test(password) },
+    { label: t('auth.check.lower'),   ok: /[a-z]/.test(password) },
+    { label: t('auth.check.digit'),   ok: /\d/.test(password) },
+    { label: t('auth.check.special'), ok: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) },
+  ]
+  const score = checks.filter(c => c.ok).length
+  const labels = [t('auth.strength.very.weak'), t('auth.strength.weak'), t('auth.strength.medium'), t('auth.strength.strong'), t('auth.strength.very.strong')]
+  const colors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-green-600']
+  return { score, label: labels[Math.min(score, 4)], color: colors[Math.min(score, 4)], checks }
+}
 
 function MenuItem({ icon: Icon, label, desc, onClick, danger = false, right }: { icon: React.ElementType; label: string; desc?: string; onClick?: () => void; danger?: boolean; right?: React.ReactNode }) {
   return (
@@ -99,6 +114,11 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState(profile?.phone || '')
 
   const [editPass, setEditPass] = useState(false)
+  const [currentPass, setCurrentPass] = useState('')
+  const [showCurrentPass, setShowCurrentPass] = useState(false)
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [showPassStrength, setShowPassStrength] = useState(false)
+  const [passwordChanging, setPasswordChanging] = useState(false)
   const [newPass, setNewPass] = useState('')
   const [newPass2, setNewPass2] = useState('')
   const [syncing, setSyncing] = useState(false)
@@ -263,14 +283,45 @@ export default function SettingsPage() {
   }
 
   async function changePassword() {
+    if (!currentPass) return toast.error('הזן את הסיסמה הנוכחית')
     if (newPass !== newPass2) return toast.error('הסיסמאות אינן תואמות')
-    if (newPass.length < 6) return toast.error('סיסמה קצרה מדי')
-    const { error } = await supabase.auth.updateUser({ password: newPass })
-    if (error) toast.error('שגיאה בשינוי סיסמה')
-    else {
-      toast.success('סיסמה שונתה!')
-      setEditPass(false); setNewPass(''); setNewPass2('')
+    if (newPass.length < 8) return toast.error('סיסמה חדשה: לפחות 8 תווים')
+    setPasswordChanging(true)
+    try {
+      // Verify current password before touching anything
+      const { error: authErr } = await supabase.auth.signInWithPassword({ email: user!.email!, password: currentPass })
+      if (authErr) return toast.error('סיסמה נוכחית שגויה')
+
+      let vaultEntries: Array<{id: string; code: string; cvv: string|null}> = []
+
+      // For unified vaults, re-derive and re-encrypt under the new password first.
+      // Doing this before updateUser means a Supabase failure won't leave the vault
+      // keyed to a password Supabase no longer knows.
+      if (isUnifiedVault) {
+        const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
+        const { ok, entries } = await changePassphrase(currentPass, newPass, e2eeVouchers)
+        if (!ok) return toast.error('שגיאה בעדכון הכספת — וודא שהסיסמה הנוכחית נכונה')
+        vaultEntries = entries
+      }
+
+      // Change the Supabase login password
+      const { error } = await supabase.auth.updateUser({ password: newPass })
+      if (error) { toast.error('שגיאה בשינוי סיסמה: ' + error.message); return }
+
+      // Save re-encrypted vouchers
+      if (vaultEntries.length > 0) {
+        await Promise.all(vaultEntries.map(({ id, code, cvv }) =>
+          updateVoucher(id, { code, ...(cvv != null ? { cvv } : {}) })
+        ))
+      }
+
+      toast.success(isUnifiedVault ? `סיסמה שונתה — ${vaultEntries.length} שוברים הוצפנו מחדש` : 'סיסמה שונתה!')
+      setEditPass(false)
+      setCurrentPass(''); setNewPass(''); setNewPass2('')
+      setShowCurrentPass(false); setShowNewPass(false); setShowPassStrength(false)
       logAction('system_password_change', 'מערכת')
+    } finally {
+      setPasswordChanging(false)
     }
   }
 
@@ -560,6 +611,8 @@ export default function SettingsPage() {
       setChecking(false)
     }
   }
+
+  const pwStrength = useMemo(() => getPasswordStrength(newPass, t), [newPass]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
@@ -1092,27 +1145,88 @@ export default function SettingsPage() {
             <MenuItem icon={Lock} label="שינוי סיסמה" desc="עדכן את סיסמת הכניסה" onClick={() => setEditPass(true)} />
           ) : (
             <div className="p-4 space-y-3">
-              <input
-                type="password"
-                value={newPass}
-                onChange={e => setNewPass(e.target.value)}
-                placeholder="סיסמה חדשה"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
-                dir="ltr"
-              />
+              {/* Unified-vault notice */}
+              {isUnifiedVault && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800 flex items-start gap-2">
+                  <Shield className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <p>הכספת מוגנת בסיסמת הכניסה — <strong>הסיסמה החדשה תהיה גם מפתח הכספת</strong> ותצפין מחדש את כל השוברים.</p>
+                </div>
+              )}
+
+              {/* Current password */}
+              <div className="relative">
+                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type={showCurrentPass ? 'text' : 'password'}
+                  value={currentPass}
+                  onChange={e => setCurrentPass(e.target.value)}
+                  placeholder="סיסמה נוכחית"
+                  className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  dir="ltr"
+                  autoFocus
+                />
+                <button type="button" onClick={() => setShowCurrentPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* New password + strength meter */}
+              <div>
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={newPass}
+                    onChange={e => { setNewPass(e.target.value); setShowPassStrength(true) }}
+                    placeholder="סיסמה חדשה (לפחות 8 תווים)"
+                    className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    dir="ltr"
+                  />
+                  <button type="button" onClick={() => setShowNewPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {showPassStrength && newPass.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex gap-1">
+                      {[0,1,2,3,4].map(i => (
+                        <div key={i} className={`flex-1 h-1.5 rounded-full ${i < pwStrength.score ? pwStrength.color : 'bg-gray-100'}`} />
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-medium ${pwStrength.score >= 3 ? 'text-green-600' : 'text-orange-500'}`}>{pwStrength.label}</span>
+                      {pwStrength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm */}
               <input
                 type="password"
                 value={newPass2}
                 onChange={e => setNewPass2(e.target.value)}
-                placeholder="אימות סיסמה"
+                placeholder="אימות סיסמה חדשה"
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                 dir="ltr"
               />
+
               <div className="flex gap-2">
-                <button onClick={changePassword} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium">
-                  שנה סיסמה
+                <button
+                  onClick={changePassword}
+                  disabled={passwordChanging || !currentPass || !newPass || !newPass2}
+                  className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+                >
+                  {passwordChanging ? 'משנה...' : isUnifiedVault ? 'שנה סיסמה ועדכן כספת' : 'שנה סיסמה'}
                 </button>
-                <button onClick={() => setEditPass(false)} className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium">
+                <button
+                  onClick={() => {
+                    setEditPass(false)
+                    setCurrentPass(''); setNewPass(''); setNewPass2('')
+                    setShowCurrentPass(false); setShowNewPass(false); setShowPassStrength(false)
+                  }}
+                  className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium"
+                >
                   {t('app.cancel')}
                 </button>
               </div>
