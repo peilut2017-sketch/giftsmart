@@ -38,6 +38,7 @@ export interface DecryptedEntry { code: string; cvv: string | null }
 interface E2EEContextValue {
   hasVault: boolean
   isVaultUnlocked: boolean
+  isUnifiedVault: boolean              // true = vault key derived from login password (v2)
   hint: string | null
   needsMigration: boolean              // true = existing vault uses old separate passphrase
   needsOAuthVaultSetup: boolean        // true = Google/OAuth user with no vault and no pending password
@@ -50,7 +51,7 @@ interface E2EEContextValue {
   unlockVaultFromRecovery: (phrase: string) => Promise<boolean>
   lockVault: () => void
   resetVault: () => void
-  migrateVault: (oldPassphrase: string) => Promise<boolean>
+  migrateVault: (oldPassphrase: string, loginPassword?: string) => Promise<boolean>
   enableBiometricVaultUnlock: (userId: string, userName: string, email?: string) => Promise<boolean>
   dismissRecoveryPhrase: () => void
 
@@ -330,13 +331,16 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
 
   // ── Migrate old-format vault to v2 ──────────────────────────────────────
   // oldPassphrase: the current separate vault passphrase (for decryption verification)
-  // The new vault key is derived from the LOGIN password (stored in sessionStorage),
-  // so after migration the vault opens with the login password — no separate passphrase needed.
-  const migrateVault = useCallback(async (oldPassphrase: string): Promise<boolean> => {
+  // loginPassword: the Supabase login password — the new vault key is derived from it.
+  //   If omitted, falls back to gs_vault_migrate_pw in sessionStorage (set at login time).
+  const migrateVault = useCallback(async (
+    oldPassphrase: string,
+    loginPassword?: string,
+  ): Promise<boolean> => {
     const saltB64  = localStorage.getItem(SALT_KEY)
     const check    = localStorage.getItem(CHECK_KEY)
     const userId   = user?.id
-    const loginPw  = sessionStorage.getItem(VAULT_MIGRATE_PW)
+    const loginPw  = loginPassword ?? sessionStorage.getItem(VAULT_MIGRATE_PW)
     if (!saltB64 || !check || !userId || !loginPw) return false
 
     // Step 1: verify the old vault passphrase
@@ -566,6 +570,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     <E2EEContext.Provider value={{
       hasVault,
       isVaultUnlocked: vaultKey !== null,
+      isUnifiedVault: isV2Vault(),
       hint,
       needsMigration,
       needsOAuthVaultSetup,

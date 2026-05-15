@@ -81,7 +81,7 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, hint, isVaultUnlocked, unlockVault, encrypt, resetVault, changePassphrase, disableVault } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
   const { t } = useT()
@@ -135,6 +135,10 @@ export default function SettingsPage() {
 
   // Vault (E2EE passphrase management)
   const [showVaultSection, setShowVaultSection] = useState(false)
+  const [showMigrateSection, setShowMigrateSection] = useState(false)
+  const [migrateVaultPass, setMigrateVaultPass] = useState('')
+  const [migrateLoginPass, setMigrateLoginPass] = useState('')
+  const [migrating, setMigrating] = useState(false)
   const [vaultOldPass, setVaultOldPass] = useState('')
   const [vaultNewPass, setVaultNewPass] = useState('')
   const [vaultNewPass2, setVaultNewPass2] = useState('')
@@ -150,6 +154,22 @@ export default function SettingsPage() {
   const [encryptAllConfirm, setEncryptAllConfirm] = useState(false)
   const [encryptAllPass, setEncryptAllPass] = useState('')
   const [encryptingAll, setEncryptingAll] = useState(false)
+
+  async function handleMigrateVault() {
+    if (!migrateVaultPass) return toast.error('הזן את סיסמת הכספת הנוכחית')
+    if (!migrateLoginPass) return toast.error('הזן את סיסמת הכניסה שלך')
+    setMigrating(true)
+    try {
+      const ok = await migrateVault(migrateVaultPass, migrateLoginPass)
+      if (!ok) { toast.error('אחת הסיסמאות שגויה — נסה שוב'); return }
+      toast.success('הכספת אוחדה! מעתה סיסמת הכניסה פותחת את הכספת')
+      setMigrateVaultPass('')
+      setMigrateLoginPass('')
+      setShowMigrateSection(false)
+    } finally {
+      setMigrating(false)
+    }
+  }
 
   async function handleChangeVaultPassphrase() {
     if (!vaultOldPass) return toast.error('הזן סיסמה נוכחית')
@@ -1141,6 +1161,64 @@ export default function SettingsPage() {
 
             {showVaultSection && (
               <div className="px-4 pb-4 space-y-3">
+
+                {/* Migration banner — shown only for old-format vaults */}
+                {!isUnifiedVault && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-bold text-blue-800 flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" /> שדרג לסיסמה אחת
+                    </p>
+                    <p className="text-xs text-blue-700 leading-relaxed">
+                      הכספת שלך עדיין דורשת סיסמה נפרדת מסיסמת הכניסה.
+                      לאחד — הכספת תיפתח אוטומטית בכל כניסה.
+                    </p>
+                    {!showMigrateSection ? (
+                      <button
+                        onClick={() => setShowMigrateSection(true)}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        אחד עכשיו ←
+                      </button>
+                    ) : (
+                      <div className="space-y-2 pt-1">
+                        <input
+                          type="password"
+                          placeholder="סיסמת כספת נוכחית"
+                          value={migrateVaultPass}
+                          onChange={e => setMigrateVaultPass(e.target.value)}
+                          className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          dir="ltr"
+                          autoComplete="current-password"
+                        />
+                        <input
+                          type="password"
+                          placeholder="סיסמת כניסה לאתר"
+                          value={migrateLoginPass}
+                          onChange={e => setMigrateLoginPass(e.target.value)}
+                          className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          dir="ltr"
+                          autoComplete="current-password"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleMigrateVault}
+                            disabled={migrating || !migrateVaultPass || !migrateLoginPass}
+                            className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                          >
+                            {migrating ? 'מאחד...' : 'אחד סיסמאות'}
+                          </button>
+                          <button
+                            onClick={() => { setShowMigrateSection(false); setMigrateVaultPass(''); setMigrateLoginPass('') }}
+                            className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                          >
+                            ביטול
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
                   <p className="font-bold flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> חשוב:</p>
                   <p>• עליך לזכור את הסיסמה. שמור אותה במקום בטוח. <strong>הסיסמה אינה ניתנת לשחזור</strong> ואיבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים</p>
