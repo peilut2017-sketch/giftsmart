@@ -27,7 +27,7 @@ import AccessibilityWidget from './components/AccessibilityWidget'
 import RecoveryKeyModal from './components/RecoveryKeyModal'
 import VaultMigrationModal from './components/VaultMigrationModal'
 import OAuthVaultSetupPrompt from './components/OAuthVaultSetupPrompt'
-import { isBiometricEnabled } from './lib/passkey'
+import { isBiometricEnabled, getBiometricEmail } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
 import { AlertTriangle } from 'lucide-react'
@@ -276,6 +276,9 @@ function AppRoutes() {
 
   useEffect(() => {
     if (user && isBiometricEnabled()) {
+      // Only lock if biometric was registered for THIS user's email
+      const biometricEmail = getBiometricEmail()
+      if (biometricEmail && biometricEmail.toLowerCase() !== (user.email ?? '').toLowerCase()) return
       // Only lock if the last successful biometric was more than 5 minutes ago.
       // sessionStorage survives page reload in the same tab (not browser restart),
       // so brief app-switches on mobile won't trigger a re-prompt.
