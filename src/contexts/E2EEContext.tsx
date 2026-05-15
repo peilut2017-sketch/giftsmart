@@ -132,8 +132,11 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       const check   = localStorage.getItem(CHECK_KEY)
 
       if (!saltB64 || !check) {
-        // No vault yet — set one up automatically
-        autoSetupV2(pendingPw, userId)
+        // No local vault metadata — could be a new user OR an existing user who
+        // cleared localStorage / switched devices (with encrypted vouchers in Supabase).
+        // Save login password for manual vault setup from Settings — never auto-create
+        // because overwriting could make existing encrypted vouchers permanently unreadable.
+        sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
         return
       }
 
@@ -198,14 +201,6 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem(VAULT_MIGRATE_PW)
     }
   }, [user])
-
-  // ── Auto-setup v2 vault from login password ──────────────────────────────
-  async function autoSetupV2(password: string, userId: string) {
-    try {
-      const phrase = await setupVaultFromPassword(password, userId)
-      setPendingRecoveryPhrase(phrase)
-    } catch {}
-  }
 
   // ── Setup: v2 unified-password vault ────────────────────────────────────
   const setupVaultFromPassword = useCallback(async (
