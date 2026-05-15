@@ -72,16 +72,23 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   async function handleBiometricLogin() {
     setBiometricLoading(true)
     try {
-      const { authenticated, vaultKey } = await verifyBiometricForVaultUnlock()
+      const { authenticated, vaultKey, prfBytes } = await verifyBiometricForVaultUnlock()
       if (!authenticated) {
         toast.error(t('auth.biometric.failed'))
         return
       }
-      // If PRF yielded a vault key, stash it so E2EEProvider auto-unlocks after login
       if (vaultKey) {
+        // PRF unwrapped the vault key — stash it so E2EEProvider auto-unlocks after login
         try {
           const exported = await exportVaultKey(vaultKey)
           sessionStorage.setItem('gs_e2ee_key_v2', exported)
+        } catch {}
+      } else if (prfBytes) {
+        // PRF bytes available but no stored wrapped key yet — stash them so the next
+        // manual vault unlock triggers the self-healing wrap+store in E2EEContext.
+        try {
+          const str = Array.from(prfBytes).map(b => String.fromCharCode(b)).join('')
+          sessionStorage.setItem('gs_biometric_prf_pending', btoa(str))
         } catch {}
       }
       const { error } = await signInWithBiometric()

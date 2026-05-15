@@ -31,7 +31,7 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     if (loading) return
     if (isMountedRef.current) { setLoading(true); setFailed(false) }
     try {
-      const { authenticated, vaultKey } = await verifyBiometricForVaultUnlock()
+      const { authenticated, vaultKey, prfBytes } = await verifyBiometricForVaultUnlock()
       if (!isMountedRef.current) return
       if (!authenticated) { setFailed(true); toast.error('אימות ביומטרי נכשל'); return }
 
@@ -43,6 +43,16 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         } catch {}
         onUnlock()
         return
+      }
+
+      // PRF bytes available but no stored wrapped key yet — stash them so that after
+      // the user enters their vault password, E2EEContext wraps + stores the key for
+      // automatic PRF unlocks on future app launches (self-healing biometric setup).
+      if (prfBytes) {
+        try {
+          const str = Array.from(prfBytes).map(b => String.fromCharCode(b)).join('')
+          sessionStorage.setItem('gs_biometric_prf_pending', btoa(str))
+        } catch {}
       }
 
       // Biometric authenticated but no vault key from PRF.

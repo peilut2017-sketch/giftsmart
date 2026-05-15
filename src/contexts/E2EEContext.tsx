@@ -31,6 +31,7 @@ const VAULT_V2_FLAG      = 'gs_e2ee_v2'           // marks unified-password vaul
 const RECOVERY_WRAPPED   = 'gs_e2ee_recovery_wrapped' // vault key wrapped with recovery key
 const VAULT_PW_PENDING   = 'gs_vault_pw_pending'        // transient: login password for auto-unlock
 const VAULT_MIGRATE_PW   = 'gs_vault_migrate_pw'        // login password kept available for migration
+const PRF_PENDING_KEY    = 'gs_biometric_prf_pending'   // transient: raw PRF bytes from biometric assertion
 const VERIFY_PLAINTEXT   = 'GiftSmart-E2EE-OK'
 
 export interface DecryptedEntry { code: string; cvv: string | null }
@@ -104,6 +105,23 @@ async function persistVaultKey(key: CryptoKey) {
   } catch {}
 }
 
+// If PRF bytes from a biometric assertion are pending in sessionStorage, wrap the
+// vault key with them and store the result so future biometric logins can auto-open
+// the vault. Called after every successful vault unlock.
+async function tryStoreBiometricKey(key: CryptoKey) {
+  try {
+    const pendingB64 = sessionStorage.getItem(PRF_PENDING_KEY)
+    if (!pendingB64) return
+    sessionStorage.removeItem(PRF_PENDING_KEY)
+    const binary = atob(pendingB64)
+    const prfBytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) prfBytes[i] = binary.charCodeAt(i)
+    if (prfBytes.length < 32) return
+    const wrapped = await wrapVaultKey(key, prfBytes)
+    localStorage.setItem('gs_e2ee_biometric_wrapped_v2', wrapped)
+  } catch {}
+}
+
 export function E2EEProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [vaultKey, setVaultKey] = useState<CryptoKey | null>(null)
@@ -155,6 +173,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
             if (dec === VERIFY_PLAINTEXT) {
               setVaultKey(key)
               await persistVaultKey(key)
+              await tryStoreBiometricKey(key)
             }
           })
           .catch(() => {})
@@ -281,6 +300,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       if (dec !== VERIFY_PLAINTEXT) return false
       setVaultKey(key)
       await persistVaultKey(key)
+      await tryStoreBiometricKey(key)
       track('vault_opened')
       phCapture('vault_opened')
       return true
@@ -338,6 +358,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
         sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
       }
       setVaultKey(key)
+      await tryStoreBiometricKey(key)
       track('vault_opened')
       phCapture('vault_opened')
       return true

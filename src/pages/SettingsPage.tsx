@@ -1301,6 +1301,48 @@ export default function SettingsPage() {
             {showVaultSection && (
               <div className="px-4 pb-4 space-y-3">
 
+                {/* Single consolidated "must-read" notice */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-bold text-amber-800 flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 flex-shrink-0" /> חובה לקרוא — כדי לא לאבד את הנתונים שלך
+                  </p>
+                  {isUnifiedVault ? (
+                    <>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        הכספת מוצפנת עם <strong>סיסמת הכניסה שלך</strong> — הסיסמה אינה נשמרת בשרתנו.
+                      </p>
+                      <ul className="text-xs text-amber-700 space-y-1 list-disc pr-4">
+                        <li><strong>שחזור סיסמה בדוא"ל לא ישחזר נתונים מוצפנים</strong> — שמור את מפתח השחזור במקום בטוח.</li>
+                        <li>לשינוי סיסמה: השתמש בקטע "שינוי סיסמה" למעלה — הכספת תוצפן מחדש אוטומטית.</li>
+                        <li>שיתוף שובר מוצפן חושף את הקוד בשרת לצורך השיתוף בלבד.</li>
+                      </ul>
+                      {isVaultUnlocked && (
+                        <button
+                          onClick={() => regenerateRecoveryKey().catch(() => {})}
+                          className="text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1"
+                        >
+                          <Key className="w-3 h-3" /> הצג / חדש מפתח שחזור
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        <strong>הסיסמה אינה ניתנת לשחזור</strong> — שמור אותה במקום בטוח. איבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים לצמיתות.
+                      </p>
+                      <p className="text-xs text-amber-700">שיתוף שובר מוצפן חושף את הקוד בשרת לצורך השיתוף בלבד.</p>
+                      <p className="text-xs text-amber-700">שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.</p>
+                    </>
+                  )}
+                </div>
+
+                {/* Hint display */}
+                {hint && (
+                  <div className="bg-indigo-50 rounded-xl px-3 py-2 text-xs text-indigo-700">
+                    רמז נוכחי: <span className="font-medium">{hint}</span>
+                  </div>
+                )}
+
                 {/* Migration banner — shown only for old-format vaults */}
                 {!isUnifiedVault && (
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
@@ -1358,96 +1400,57 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                {isUnifiedVault && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-bold text-amber-800 flex items-center gap-1">
-                      <Shield className="w-3.5 h-3.5" /> סיסמת הכניסה היא מפתח הכספת
-                    </p>
-                    <p className="text-xs text-amber-700 leading-relaxed">
-                      הכספת נפתחת אוטומטית עם סיסמת הכניסה שלך.
-                      <br />
-                      <strong>שחזור סיסמה בדוא"ל לא ישחזר נתונים מוצפנים</strong> — שמור את מפתח השחזור במקום בטוח.
-                    </p>
-                    {isVaultUnlocked && (
-                      <button
-                        onClick={() => regenerateRecoveryKey().catch(() => {})}
-                        className="text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1"
-                      >
-                        <Key className="w-3 h-3" /> הצג / חדש מפתח שחזור
-                      </button>
-                    )}
-                  </div>
+                {/* Vault passphrase change — only for non-unified vaults */}
+                {!isUnifiedVault && (
+                  <>
+                    <input
+                      type="password"
+                      value={vaultOldPass}
+                      onChange={e => setVaultOldPass(e.target.value)}
+                      placeholder="סיסמה נוכחית"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      dir="ltr"
+                      autoComplete="current-password"
+                      name="vault-current-password"
+                    />
+                    <input
+                      type="password"
+                      value={vaultNewPass}
+                      onChange={e => setVaultNewPass(e.target.value)}
+                      placeholder="סיסמה חדשה (לפחות 8 תווים)"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      dir="ltr"
+                      autoComplete="new-password"
+                      name="vault-new-password"
+                    />
+                    <input
+                      type="password"
+                      value={vaultNewPass2}
+                      onChange={e => setVaultNewPass2(e.target.value)}
+                      placeholder="אימות סיסמה חדשה"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      dir="ltr"
+                      autoComplete="new-password"
+                      name="vault-new-password-confirm"
+                    />
+                    <input
+                      type="text"
+                      value={vaultNewHint}
+                      onChange={e => setVaultNewHint(e.target.value)}
+                      placeholder="רמז לסיסמה החדשה (אופציונלי)"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      autoComplete="off"
+                      name="vault-new-hint"
+                    />
+                    <button
+                      onClick={handleChangeVaultPassphrase}
+                      disabled={vaultChanging || !vaultOldPass || !vaultNewPass || !vaultNewPass2}
+                      className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                    >
+                      {vaultChanging ? 'מצפין מחדש...' : t('e2ee.change')}
+                    </button>
+                  </>
                 )}
-
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
-                  <p className="font-bold flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> חשוב:</p>
-                  <p>• עליך לזכור את הסיסמה. שמור אותה במקום בטוח. <strong>הסיסמה אינה ניתנת לשחזור</strong> ואיבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים</p>
-                  <p>• שיתוף שובר מוצפן חושף את הקוד בשרת לצורך שיתוף</p>
-                </div>
-                {hint && (
-                  <div className="bg-indigo-50 rounded-xl px-3 py-2 text-xs text-indigo-700">
-                    רמז נוכחי: <span className="font-medium">{hint}</span>
-                  </div>
-                )}
-                <p className="text-xs text-indigo-600 bg-indigo-50 rounded-xl p-3">
-                  שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.
-                </p>
-
-                {isUnifiedVault && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
-                    <p className="font-bold flex items-center gap-1 mb-1">
-                      <Shield className="w-3.5 h-3.5" /> שים לב — ניתוק האיחוד
-                    </p>
-                    <p>שינוי סיסמת הכספת ינתק את האיחוד — מעתה הכספת תדרוש סיסמה נפרדת ולא תיפתח אוטומטית בכניסה.</p>
-                  </div>
-                )}
-
-                <input
-                  type="password"
-                  value={vaultOldPass}
-                  onChange={e => setVaultOldPass(e.target.value)}
-                  placeholder="סיסמה נוכחית"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  dir="ltr"
-                  autoComplete="current-password"
-                  name="vault-current-password"
-                />
-                <input
-                  type="password"
-                  value={vaultNewPass}
-                  onChange={e => setVaultNewPass(e.target.value)}
-                  placeholder="סיסמה חדשה (לפחות 8 תווים)"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  name="vault-new-password"
-                />
-                <input
-                  type="password"
-                  value={vaultNewPass2}
-                  onChange={e => setVaultNewPass2(e.target.value)}
-                  placeholder="אימות סיסמה חדשה"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  name="vault-new-password-confirm"
-                />
-                <input
-                  type="text"
-                  value={vaultNewHint}
-                  onChange={e => setVaultNewHint(e.target.value)}
-                  placeholder="רמז לסיסמה החדשה (אופציונלי)"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  autoComplete="off"
-                  name="vault-new-hint"
-                />
-                <button
-                  onClick={handleChangeVaultPassphrase}
-                  disabled={vaultChanging || !vaultOldPass || !vaultNewPass || !vaultNewPass2}
-                  className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
-                >
-                  {vaultChanging ? 'מצפין מחדש...' : t('e2ee.change')}
-                </button>
 
                 <div className="border-t pt-3 space-y-3">
                   {/* Default encryption for new vouchers */}
