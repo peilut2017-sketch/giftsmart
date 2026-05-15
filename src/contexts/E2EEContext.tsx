@@ -57,6 +57,7 @@ interface E2EEContextValue {
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   enableBiometricVaultUnlock: (userId: string, userName: string, email?: string) => Promise<boolean>
+  regenerateRecoveryKey: () => Promise<string>
   dismissRecoveryPhrase: () => void
 
   encrypt: (plaintext: string) => Promise<string>
@@ -392,6 +393,17 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     return { ok: true, entries }
   }, [user?.id])
 
+  // ── Regenerate recovery key (vault must be unlocked) ────────────────────
+  const regenerateRecoveryKey = useCallback(async (): Promise<string> => {
+    if (!vaultKey) throw new Error('vault is locked')
+    const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
+    const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
+    const wrappedForRecovery = await wrapVaultKey(vaultKey, wrapKeyBytes)
+    localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
+    setPendingRecoveryPhrase(phrase)
+    return phrase
+  }, [vaultKey])
+
   // ── Enable biometric vault unlock (registers PRF credential) ─────────────
   const enableBiometricVaultUnlock = useCallback(async (
     userId: string,
@@ -599,6 +611,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       resetVault,
       migrateVault,
       enableBiometricVaultUnlock,
+      regenerateRecoveryKey,
       dismissRecoveryPhrase,
       encrypt,
       decrypt,

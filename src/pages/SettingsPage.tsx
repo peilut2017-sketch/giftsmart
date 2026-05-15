@@ -6,7 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, FileText } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, Moon, Sun, Globe, CreditCard, Tag, FileText, Key } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -81,7 +81,7 @@ export default function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
-  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault } = useE2EE()
+  const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey } = useE2EE()
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useLocale()
   const { t } = useT()
@@ -1224,6 +1224,27 @@ export default function SettingsPage() {
                   </div>
                 )}
 
+                {isUnifiedVault && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-bold text-amber-800 flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" /> סיסמת הכניסה היא מפתח הכספת
+                    </p>
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      הכספת נפתחת אוטומטית עם סיסמת הכניסה שלך.
+                      <br />
+                      <strong>שחזור סיסמה בדוא"ל לא ישחזר נתונים מוצפנים</strong> — שמור את מפתח השחזור במקום בטוח.
+                    </p>
+                    {isVaultUnlocked && (
+                      <button
+                        onClick={() => regenerateRecoveryKey().catch(() => {})}
+                        className="text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1"
+                      >
+                        <Key className="w-3 h-3" /> הצג / חדש מפתח שחזור
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
                   <p className="font-bold flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> חשוב:</p>
                   <p>• עליך לזכור את הסיסמה. שמור אותה במקום בטוח. <strong>הסיסמה אינה ניתנת לשחזור</strong> ואיבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים</p>
@@ -1237,6 +1258,15 @@ export default function SettingsPage() {
                 <p className="text-xs text-indigo-600 bg-indigo-50 rounded-xl p-3">
                   שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.
                 </p>
+
+                {isUnifiedVault && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
+                    <p className="font-bold flex items-center gap-1 mb-1">
+                      <Shield className="w-3.5 h-3.5" /> שים לב — ניתוק האיחוד
+                    </p>
+                    <p>שינוי סיסמת הכספת ינתק את האיחוד — מעתה הכספת תדרוש סיסמה נפרדת ולא תיפתח אוטומטית בכניסה.</p>
+                  </div>
+                )}
 
                 <input
                   type="password"
