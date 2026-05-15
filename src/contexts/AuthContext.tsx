@@ -147,18 +147,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signUp(email: string, password: string, name?: string) {
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const siteUrl = import.meta.env.VITE_APP_URL || window.location.origin
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name: name || email.split('@')[0] },
+        emailRedirectTo: siteUrl,
+      },
+    })
     if (error) return { error }
     // identities is empty when the email already exists in Supabase Auth
     if (data.user?.identities?.length === 0) {
       return { error: new Error('כתובת האימייל כבר רשומה במערכת') }
-    }
-    if (data.user) {
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        email,
-        name: name || email.split('@')[0],
-      })
     }
     return { error }
   }
