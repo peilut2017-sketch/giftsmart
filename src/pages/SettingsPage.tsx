@@ -160,9 +160,14 @@ export default function SettingsPage() {
     if (!migrateLoginPass) return toast.error('הזן את סיסמת הכניסה שלך')
     setMigrating(true)
     try {
-      const ok = await migrateVault(migrateVaultPass, migrateLoginPass)
+      const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
+      const { ok, entries } = await migrateVault(migrateVaultPass, migrateLoginPass, e2eeVouchers)
       if (!ok) { toast.error('אחת הסיסמאות שגויה — נסה שוב'); return }
-      toast.success('הכספת אוחדה! מעתה סיסמת הכניסה פותחת את הכספת')
+      // Save re-encrypted voucher codes to DB
+      await Promise.all(entries.map(({ id, code, cvv }) =>
+        updateVoucher(id, { code, ...(cvv != null ? { cvv } : {}) })
+      ))
+      toast.success(`הכספת אוחדה! ${entries.length} שוברים הוצפנו מחדש`)
       setMigrateVaultPass('')
       setMigrateLoginPass('')
       setShowMigrateSection(false)

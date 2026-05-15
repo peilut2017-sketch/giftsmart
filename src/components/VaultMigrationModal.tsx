@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ShieldCheck, Lock, Eye, EyeOff, LogOut, Info } from 'lucide-react'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useVouchers } from '../contexts/VoucherContext'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -12,24 +13,27 @@ interface Props {
 export default function VaultMigrationModal({ onDone, onSkip }: Props) {
   const { migrateVault } = useE2EE()
   const { signOut } = useAuth()
+  const { vouchers, archivedVouchers, updateVoucher } = useVouchers()
   const [passphrase, setPassphrase] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Migration requires the login password to be in sessionStorage.
-  // It's present only when the user logged in with password in this tab session.
   const loginPwAvailable = !!sessionStorage.getItem('gs_vault_migrate_pw')
 
   async function handleMigrate() {
     if (!passphrase) return toast.error('הזן את סיסמת הכספת הנוכחית')
     setLoading(true)
-    const ok = await migrateVault(passphrase)
-    setLoading(false)
-    if (ok) {
-      toast.success('הכספת שודרגה! מעתה סיסמת הכניסה פותחת את הכספת.')
+    try {
+      const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
+      const { ok, entries } = await migrateVault(passphrase, undefined, e2eeVouchers)
+      if (!ok) { toast.error('סיסמת הכספת שגויה — נסה שוב'); return }
+      await Promise.all(entries.map(({ id, code, cvv }) =>
+        updateVoucher(id, { code, ...(cvv != null ? { cvv } : {}) })
+      ))
+      toast.success(`הכספת שודרגה! ${entries.length} שוברים הוצפנו מחדש`)
       onDone()
-    } else {
-      toast.error('סיסמת הכספת שגויה — נסה שוב')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -54,7 +58,7 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
             <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-4 text-right">
               <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-blue-700 leading-relaxed">
-                המפתח החדש של הכספת יוגזר מסיסמת הכניסה שלך. סיסמת הכספת הנוכחית לא תישמר בשום מקום.
+                כל השוברים המוצפנים יוצפנו מחדש תחת המפתח החדש. הסיסמה הנוכחית לא תישמר בשום מקום.
               </p>
             </div>
 
@@ -84,7 +88,7 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
               disabled={loading || !passphrase}
               className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md mb-3 disabled:opacity-50"
             >
-              {loading ? 'משדרג...' : 'אחד ושדרג'}
+              {loading ? 'מצפין מחדש...' : 'אחד ושדרג'}
             </button>
           </>
         ) : (
