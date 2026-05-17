@@ -287,6 +287,7 @@ export interface DiscountDeal {
   is_my_club: boolean
   is_upcoming: boolean
   view_count?: number
+  is_liked?: boolean
 }
 
 export interface DiscountSubmission {

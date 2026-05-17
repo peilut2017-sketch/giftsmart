@@ -6,7 +6,8 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff, Mail } from 'lucide-react'
+import { getNotifChannels, saveNotifChannels, type NotifChannels } from '../hooks/useNotifications'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -288,10 +289,18 @@ export default function SettingsPage() {
   const [reminderDays, setReminderDays] = useState(() =>
     parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
   )
+  const [notifChannels, setNotifChannels] = useState<NotifChannels>(() => getNotifChannels(user?.id))
+
   function saveReminderDays(days: number) {
     const val = Math.max(1, Math.min(90, days))
     setReminderDays(val)
     localStorage.setItem(reminderKey, String(val))
+  }
+
+  function updateNotifChannel(key: keyof NotifChannels, value: boolean) {
+    const next = { ...notifChannels, [key]: value }
+    setNotifChannels(next)
+    if (user?.id) saveNotifChannels(user.id, next)
   }
 
   async function saveProfile() {
@@ -833,6 +842,62 @@ export default function SettingsPage() {
             <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
               <span>1 יום</span>
               <span>90 ימים</span>
+            </div>
+            {/* Notification channels */}
+            <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--c-border)' }}>
+              <p className="text-xs font-semibold text-gray-500 mb-2">{t('settings.notif.channels')}</p>
+              <p className="text-xs text-gray-400 mb-3">{t('settings.notif.channels.note')}</p>
+              <div className="space-y-2">
+                {/* Push */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-orange-500" />
+                    <span className="text-sm text-gray-700">{t('settings.notif.push')}</span>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.push}
+                    onClick={() => updateNotifChannel('push', !notifChannels.push)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.push ? 'bg-green-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.push ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+                {/* Email */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-blue-500" />
+                    <span className="text-sm text-gray-700">{t('settings.notif.email')}</span>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.email}
+                    onClick={() => updateNotifChannel('email', !notifChannels.email)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.email ? 'bg-green-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.email ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+                {/* Telegram */}
+                <label className={`flex items-center justify-between ${!telegramLinked ? 'opacity-50' : 'cursor-pointer'}`}>
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4 text-sky-500" />
+                    <div>
+                      <span className="text-sm text-gray-700">{t('settings.notif.telegram')}</span>
+                      {!telegramLinked && <p className="text-[10px] text-gray-400">יש לקשר טלגרם תחילה</p>}
+                    </div>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.telegram}
+                    onClick={() => telegramLinked && updateNotifChannel('telegram', !notifChannels.telegram)}
+                    disabled={!telegramLinked}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.telegram && telegramLinked ? 'bg-green-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.telegram && telegramLinked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+              </div>
             </div>
           </div>
           {/* Telegram */}

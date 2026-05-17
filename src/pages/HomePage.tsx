@@ -77,6 +77,27 @@ export default function HomePage() {
   const [archiveTarget, setArchiveTarget] = useState<string | null>(null)
   const [archiveReason, setArchiveReason] = useState('')
 
+  // Google Calendar prompt state
+  const [calendarVoucher, setCalendarVoucher] = useState<{ storeName: string; expiryDate: string } | null>(null)
+  const reminderDays = parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
+
+  function openGoogleCalendar(storeName: string, expiryDate: string) {
+    const expiry = new Date(expiryDate)
+    const eventDay = new Date(expiry)
+    eventDay.setDate(expiry.getDate() - reminderDays)
+    const fmt = (d: Date) => d.toISOString().replace(/-/g, '').split('T')[0]
+    const start = fmt(eventDay)
+    const end = fmt(new Date(eventDay.getTime() + 86_400_000))
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: `תזכורת: שובר ${storeName} פג בקרוב`,
+      dates: `${start}/${end}`,
+      details: `שובר ${storeName} פג תוקפו ב-${expiry.toLocaleDateString('he-IL')} — עוד ${reminderDays} ימים!`,
+    })
+    window.open(`https://calendar.google.com/calendar/render?${params}`, '_blank', 'noopener,noreferrer')
+    setCalendarVoucher(null)
+  }
+
   // Clear all pending undo-delete timers when unmounting to avoid stale async ops
   useEffect(() => () => { pendingDeletesRef.current.forEach(clearTimeout) }, [])
 
@@ -229,6 +250,10 @@ export default function HomePage() {
       try {
         await addVoucher(vData)
         toast.success(t('voucher.added'))
+        // Offer Google Calendar event if voucher has expiry date
+        if (vData.expiry_date) {
+          setCalendarVoucher({ storeName: vData.store_name, expiryDate: vData.expiry_date })
+        }
       } catch (err: any) {
         toast.error(err?.message || t('voucher.save.error'))
         throw err
@@ -492,6 +517,43 @@ export default function HomePage() {
             dir="rtl"
           />
         </ConfirmDialog>
+      )}
+
+      {/* ── Google Calendar prompt ── */}
+      {calendarVoucher && (
+        <div className="fixed inset-0 bg-black/50 z-[90] flex items-end justify-center" onClick={() => setCalendarVoucher(null)}>
+          <div className="bg-white dark:bg-gray-900 rounded-t-3xl w-full max-w-2xl p-5 pb-8" onClick={e => e.stopPropagation()} dir="rtl">
+            <div className="flex justify-center mb-3">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-xl">📅</div>
+              <div>
+                <p className="font-bold text-gray-900 dark:text-white text-sm">{t('voucher.calendar.title')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t('voucher.calendar.body', { days: reminderDays })}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+              שובר: <strong>{calendarVoucher.storeName}</strong> — תזכורת {reminderDays} ימים לפני תוקף
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => openGoogleCalendar(calendarVoucher.storeName, calendarVoucher.expiryDate)}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
+              >
+                📅 {t('voucher.calendar.cta')}
+              </button>
+              <button
+                onClick={() => setCalendarVoucher(null)}
+                className="px-5 py-3 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-2xl font-medium text-sm"
+              >
+                {t('voucher.calendar.skip')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Vault unlock modal ── */}

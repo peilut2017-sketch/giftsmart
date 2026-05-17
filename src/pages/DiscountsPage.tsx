@@ -238,7 +238,7 @@ export default function DiscountsPage() {
   const targetDealId = (location.state as { dealId?: string } | null)?.dealId
   const { user } = useAuth()
   const {
-    deals, userClubIds, loading,
+    deals, userClubIds, likedDealIds, loading,
     searchQuery, activeTags, myOnly,
     fetchDeals, fetchClubs,
     setSearchQuery, setActiveTags, setMyOnly,
@@ -291,9 +291,18 @@ export default function DiscountsPage() {
   const hasNoClubs = userClubIds.length === 0
 
   const visibleDeals = useMemo(() => {
-    if (myOnly) return deals.filter(d => d.is_my_club)
-    return deals
-  }, [deals, myOnly])
+    let list = myOnly
+      ? deals.filter(d => d.is_my_club || likedDealIds.has(d.deal_id))
+      : deals
+    // Liked deals appear first
+    if (likedDealIds.size > 0) {
+      list = [
+        ...list.filter(d => likedDealIds.has(d.deal_id)),
+        ...list.filter(d => !likedDealIds.has(d.deal_id)),
+      ]
+    }
+    return list
+  }, [deals, myOnly, likedDealIds])
 
   return (
     <div className="flex flex-col min-h-0 flex-1" dir="rtl">

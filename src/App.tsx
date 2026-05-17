@@ -142,9 +142,42 @@ function E2EEBridge() {
 
 function NotificationBridge() {
   const { vouchers } = useVouchers()
-  const { user } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { isPro } = useSubscription()
-  useExpiryNotifications(vouchers, isPro, user?.id)
+  useExpiryNotifications(vouchers, isPro, user?.id, user?.email ?? undefined, profile?.name ?? undefined)
+
+  // Admin: receive push notification for new support messages from any page
+  useEffect(() => {
+    if (!isAdmin) return
+    const channel = supabase
+      .channel('admin-support-global')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'support_messages',
+      }, (payload) => {
+        const msg = payload.new as { subject: string; user_email?: string; user_name?: string }
+        if (Notification.permission === 'granted') {
+          new Notification('📩 הודעת תמיכה חדשה', {
+            body: `${msg.user_email || msg.user_name || 'משתמש'}: ${msg.subject}`,
+            icon: '/logo.png',
+            tag: 'admin-support',
+          })
+        }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'support_message_replies',
+      }, (payload) => {
+        const reply = payload.new as { sender: string; message_id: string }
+        if (reply.sender === 'user' && Notification.permission === 'granted') {
+          new Notification('💬 תשובה חדשה מהמשתמש', {
+            body: 'משתמש השיב להודעת תמיכה',
+            icon: '/logo.png',
+            tag: 'admin-support-reply',
+          })
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [isAdmin])
 
   // On mount: show any unseen push broadcasts + subscribe to future ones
   useEffect(() => {
