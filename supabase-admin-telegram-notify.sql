@@ -20,25 +20,32 @@ DECLARE
   v_token  text;
   v_chat   RECORD;
 BEGIN
-  SELECT value INTO v_token FROM app_settings WHERE key = 'telegram_bot_token';
-  IF v_token IS NULL OR v_token = '' THEN RETURN; END IF;
+  -- Wrapped in EXCEPTION so a missing app_settings/telegram_users table,
+  -- an unconfigured pg_net extension, or any HTTP error never propagates
+  -- to the caller — Telegram notifications are always best-effort.
+  BEGIN
+    SELECT value INTO v_token FROM app_settings WHERE key = 'telegram_bot_token';
+    IF v_token IS NULL OR v_token = '' THEN RETURN; END IF;
 
-  FOR v_chat IN
-    SELECT tu.chat_id
-    FROM   telegram_users tu
-    JOIN   profiles p ON p.id = tu.user_id
-    WHERE  p.is_admin = true
-  LOOP
-    PERFORM net.http_post(
-      url     := 'https://api.telegram.org/bot' || v_token || '/sendMessage',
-      headers := '{"Content-Type": "application/json"}'::jsonb,
-      body    := jsonb_build_object(
-                   'chat_id',    v_chat.chat_id,
-                   'text',       message,
-                   'parse_mode', 'HTML'
-                 )::text
-    );
-  END LOOP;
+    FOR v_chat IN
+      SELECT tu.chat_id
+      FROM   telegram_users tu
+      JOIN   profiles p ON p.id = tu.user_id
+      WHERE  p.is_admin = true
+    LOOP
+      PERFORM net.http_post(
+        url     := 'https://api.telegram.org/bot' || v_token || '/sendMessage',
+        headers := '{"Content-Type": "application/json"}'::jsonb,
+        body    := jsonb_build_object(
+                     'chat_id',    v_chat.chat_id,
+                     'text',       message,
+                     'parse_mode', 'HTML'
+                   )::text
+      );
+    END LOOP;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
 END;
 $$;
 
