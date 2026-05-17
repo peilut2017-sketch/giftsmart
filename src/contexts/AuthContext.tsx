@@ -106,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfile(userId: string) {
     try {
       const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 5000))
-      const query = Promise.resolve(supabase.from('profiles').select('*').eq('id', userId).single())
-        .then(r => r.data)
+      const query = Promise.resolve(supabase.from('profiles').select('*').eq('id', userId).limit(1))
+        .then(r => r.data?.[0] ?? null)
         .catch(() => null)
       const data = await Promise.race([query, timeout])
       if (data) {
