@@ -60,7 +60,7 @@ interface Props {
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { hasVault, isUnifiedVault, hint, isVaultUnlocked, setupVaultFromPassword, unlockVault, encrypt, decrypt, decryptedMap } = useE2EE()
+  const { hasVault, isUnifiedVault, hint, isVaultUnlocked, setupVaultFromPassword, unlockVault, unlockVaultFromRecovery, encrypt, decrypt, decryptedMap } = useE2EE()
   const { user } = useAuth()
   const { t } = useT()
 
@@ -438,11 +438,22 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     decryptInitial()
   }, [isVaultUnlocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // If any existing voucher is encrypted, creating a new vault would orphan them
+  const hasEncryptedVouchers = [...vouchers, ...archivedVouchers].some(v => v.is_e2ee)
+
+  function vaultMode(): 'unlock' | 'setup' {
+    // Already have local vault metadata → unlock
+    if (hasVault || isUnifiedVault) return 'unlock'
+    // No local metadata but encrypted vouchers exist → try to recover, never overwrite
+    if (hasEncryptedVouchers) return 'unlock'
+    // Fresh user, no encrypted vouchers → safe to create new vault
+    return 'setup'
+  }
+
   function handleToggleE2EE() {
     if (!e2eeEnabled) {
       if (!isVaultUnlocked) {
-        // V2 unified vault: always unlock (never re-setup), even if localStorage was cleared
-        setVaultModalMode(hasVault || isUnifiedVault ? 'unlock' : 'setup')
+        setVaultModalMode(vaultMode())
         setShowVaultModal(true)
       } else {
         setE2eeEnabled(true)
@@ -461,9 +472,17 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         // Always create V2 (unified with login password), never legacy V1
         await setupVaultFromPassword(vaultPassInput, user!.id, vaultHintInput || undefined)
       } else {
-        // unlockVault handles both V2 (login password) and V1 (separate passphrase)
-        const ok = await unlockVault(vaultPassInput)
-        if (!ok) { setVaultError(isUnifiedVault ? 'ססמה שגויה — הזן את סיסמת הכניסה לאפליקציה' : 'ססמה שגויה'); return }
+        // Try passphrase / login-password first, then recovery key as fallback
+        let ok = await unlockVault(vaultPassInput)
+        if (!ok) ok = await unlockVaultFromRecovery(vaultPassInput)
+        if (!ok) {
+          if (!hasVault && hasEncryptedVouchers) {
+            setVaultError('לא ניתן לפתוח. נסה: סיסמת הכניסה המקורית, הסיסמה הישנה של הכספת, או קוד השחזור (XXXX-XXXX-...)')
+          } else {
+            setVaultError(isUnifiedVault ? 'ססמה שגויה — הזן את סיסמת הכניסה לאפליקציה' : 'ססמה שגויה')
+          }
+          return
+        }
       }
       setE2eeEnabled(true)
       setShowVaultModal(false)
@@ -518,7 +537,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
     // E2EE: ensure vault is unlocked before encrypting
     if (e2eeEnabled && !isVaultUnlocked) {
-      setVaultModalMode(hasVault || isUnifiedVault ? 'unlock' : 'setup')
+      setVaultModalMode(vaultMode())
       setShowVaultModal(true)
       return
     }
@@ -1427,13 +1446,19 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 <p>• הכספת תוגן <strong>בסיסמת הכניסה לאפליקציה</strong> — לא נדרשת סיסמה נפרדת</p>
                 <p>• שיתוף קישור לשובר זה יחשוף את הקוד לשרת</p>
               </div>
-            ) : (
-              isUnifiedVault ? (
-                <p className="text-xs text-indigo-500 mb-3 text-center">הכנס את <strong>סיסמת הכניסה לאפליקציה</strong>{hint ? <> · רמז: <span className="font-medium">{hint}</span></> : null}</p>
-              ) : hint ? (
-                <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
-              ) : null
-            )}
+            ) : !hasVault && hasEncryptedVouchers ? (
+              <div className="w-full max-w-xs mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800 space-y-1 leading-relaxed">
+                <p className="font-bold flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> נתוני הכספת חסרים במכשיר זה</p>
+                <p>נסה לפי הסדר:</p>
+                <p>1. <strong>סיסמת הכניסה לאפליקציה</strong> (אם הייתה כספת מאוחדת)</p>
+                <p>2. <strong>הסיסמה הישנה של הכספת</strong> (אם הייתה נפרדת)</p>
+                <p>3. <strong>קוד שחזור</strong> (XXXX-XXXX-XXXX-...)</p>
+              </div>
+            ) : isUnifiedVault ? (
+              <p className="text-xs text-indigo-500 mb-3 text-center">הכנס את <strong>סיסמת הכניסה לאפליקציה</strong>{hint ? <> · רמז: <span className="font-medium">{hint}</span></> : null}</p>
+            ) : hint ? (
+              <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
+            ) : null}
 
             <div className="w-full max-w-xs space-y-2.5">
               <input
@@ -1441,7 +1466,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 value={vaultPassInput}
                 onChange={e => setVaultPassInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !vaultPass2Input && handleVaultSubmit()}
-                placeholder={vaultModalMode === 'setup' ? 'סיסמת כניסה לאפליקציה (מינ. 6 תווים)' : isUnifiedVault ? 'סיסמת כניסה לאפליקציה' : 'סיסמת כספת'}
+                placeholder={
+                  vaultModalMode === 'setup' ? 'סיסמת כניסה לאפליקציה (מינ. 6 תווים)' :
+                  (!hasVault && hasEncryptedVouchers) ? 'סיסמה / קוד שחזור' :
+                  isUnifiedVault ? 'סיסמת כניסה לאפליקציה' : 'סיסמת כספת'
+                }
                 className="ph-no-capture w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 dir="ltr"
                 autoFocus
