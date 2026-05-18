@@ -76,6 +76,7 @@ export default function AdminPage() {
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [proCount, setProCount] = useState<number | null>(null)
   const [allUsers, setAllUsers] = useState<UserRow[]>([])
+  const [usersRefreshing, setUsersRefreshing] = useState(false)
   const [showUsers, setShowUsers] = useState(false)
   const [editingWalletName, setEditingWalletName] = useState(false)
   const [newWalletName, setNewWalletName] = useState(walletName)
@@ -617,21 +618,44 @@ export default function AdminPage() {
     }
   }
 
-  useEffect(() => {
-    if (!isAdmin) return
-    supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
-    Promise.all([
-      supabase.rpc('get_all_users'),
-      supabase.from('subscriptions').select('user_id, current_period_end').eq('plan', 'pro').eq('status', 'active'),
-    ]).then(([{ data }, { data: subs }]) => {
+  async function loadUsers(showSpinner = false) {
+    if (showSpinner) setUsersRefreshing(true)
+    try {
+      const [{ data }, { data: subs }] = await Promise.all([
+        supabase.rpc('get_all_users'),
+        supabase.from('subscriptions').select('user_id, current_period_end').eq('plan', 'pro').eq('status', 'active'),
+      ])
       if (!data) return
       const subMap = new Map((subs ?? []).map((s: { user_id: string; current_period_end: string | null }) => [s.user_id, s.current_period_end]))
       setAllUsers(data.map((u: UserRow) => ({ ...u, pro_expires_at: subMap.has(u.id) ? subMap.get(u.id) ?? null : undefined })))
-    })
+    } finally {
+      if (showSpinner) setUsersRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
+    loadUsers()
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
     supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(data !== false) })
     supabase.rpc('get_marketplace_mode').then(({ data }) => { if (data) setMarketplaceMode(data as 'enabled' | 'disabled' | 'selective') })
-  }, [isAdmin])
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Realtime: add new users to the list as they register
+  useEffect(() => {
+    if (!isAdmin) return
+    const channel = supabase
+      .channel('admin-profiles-insert')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'profiles',
+      }, () => {
+        // Re-fetch full list so pro status + all fields are accurate
+        loadUsers()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleTogglePremium() {
     if (premiumEnabled === null) return
@@ -1359,6 +1383,16 @@ export default function AdminPage() {
               רשימת משתמשים ({allUsers.length || usersCount || '...'})
             </span>
             <div className="flex items-center gap-2">
+              <button
+                onClick={e => { e.stopPropagation(); loadUsers(true) }}
+                className="text-xs text-blue-500 bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1"
+                title="רענן רשימת משתמשים"
+              >
+                {usersRefreshing
+                  ? <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  : '↺'}
+                רענן
+              </button>
               {allUsers.length > 0 && (
                 <button
                   onClick={e => { e.stopPropagation(); exportUsersCSV() }}
