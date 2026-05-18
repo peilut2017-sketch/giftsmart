@@ -642,19 +642,17 @@ export default function AdminPage() {
     supabase.rpc('get_marketplace_mode').then(({ data }) => { if (data) setMarketplaceMode(data as 'enabled' | 'disabled' | 'selective') })
   }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Realtime: add new users to the list as they register
+  // Realtime on profiles is blocked by RLS (users see only their own row).
+  // Instead: re-fetch when the admin returns to the tab, and poll every 60s.
   useEffect(() => {
     if (!isAdmin) return
-    const channel = supabase
-      .channel('admin-profiles-insert')
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'profiles',
-      }, () => {
-        // Re-fetch full list so pro status + all fields are accurate
-        loadUsers()
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const onVisible = () => { if (document.visibilityState === 'visible') loadUsers() }
+    document.addEventListener('visibilitychange', onVisible)
+    const interval = setInterval(() => loadUsers(), 60_000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(interval)
+    }
   }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleTogglePremium() {
