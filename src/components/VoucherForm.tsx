@@ -16,6 +16,7 @@ import { Html5Qrcode } from 'html5-qrcode'
 import { supabase } from '../lib/supabase'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
+import { useAuth } from '../contexts/AuthContext'
 
 const OCR_STORAGE_KEY = () => `ocr_scans_${new Date().toISOString().slice(0, 7)}` // YYYY-MM
 
@@ -59,7 +60,8 @@ interface Props {
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { hasVault, hint, isVaultUnlocked, setupVault, unlockVault, encrypt, decrypt, decryptedMap } = useE2EE()
+  const { hasVault, isUnifiedVault, hint, isVaultUnlocked, setupVaultFromPassword, unlockVault, encrypt, decrypt, decryptedMap } = useE2EE()
+  const { user } = useAuth()
   const { t } = useT()
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
@@ -439,7 +441,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   function handleToggleE2EE() {
     if (!e2eeEnabled) {
       if (!isVaultUnlocked) {
-        setVaultModalMode(hasVault ? 'unlock' : 'setup')
+        // V2 unified vault: always unlock (never re-setup), even if localStorage was cleared
+        setVaultModalMode(hasVault || isUnifiedVault ? 'unlock' : 'setup')
         setShowVaultModal(true)
       } else {
         setE2eeEnabled(true)
@@ -455,10 +458,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       if (vaultModalMode === 'setup') {
         if (vaultPassInput.length < 6) { setVaultError('ססמה קצרה מדי (מינ. 6 תווים)'); return }
         if (vaultPassInput !== vaultPass2Input) { setVaultError('הססמאות אינן תואמות'); return }
-        await setupVault(vaultPassInput, vaultHintInput)
+        // Always create V2 (unified with login password), never legacy V1
+        await setupVaultFromPassword(vaultPassInput, user!.id, vaultHintInput || undefined)
       } else {
+        // unlockVault handles both V2 (login password) and V1 (separate passphrase)
         const ok = await unlockVault(vaultPassInput)
-        if (!ok) { setVaultError('ססמה שגויה'); return }
+        if (!ok) { setVaultError(isUnifiedVault ? 'ססמה שגויה — הזן את סיסמת הכניסה לאפליקציה' : 'ססמה שגויה'); return }
       }
       setE2eeEnabled(true)
       setShowVaultModal(false)
@@ -513,7 +518,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
     // E2EE: ensure vault is unlocked before encrypting
     if (e2eeEnabled && !isVaultUnlocked) {
-      setVaultModalMode(hasVault ? 'unlock' : 'setup')
+      setVaultModalMode(hasVault || isUnifiedVault ? 'unlock' : 'setup')
       setShowVaultModal(true)
       return
     }
@@ -1419,14 +1424,15 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <div className="w-full max-w-xs mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1 leading-relaxed">
                 <p className="font-bold flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> קרא לפני שממשיך:</p>
                 <p>• קוד השובר יוצפן — רק מי שמחזיק בסיסמה יכול לקרוא אותו</p>
-                <p>• <strong>שכחת הסיסמה = אובדן גישה קבוע לקוד.</strong> אין שחזור.</p>
+                <p>• הכספת תוגן <strong>בסיסמת הכניסה לאפליקציה</strong> — לא נדרשת סיסמה נפרדת</p>
                 <p>• שיתוף קישור לשובר זה יחשוף את הקוד לשרת</p>
-                <p>• מומלץ לרשום רמז שיזכיר לך את הסיסמה</p>
               </div>
             ) : (
-              hint && (
+              isUnifiedVault ? (
+                <p className="text-xs text-indigo-500 mb-3 text-center">הכנס את <strong>סיסמת הכניסה לאפליקציה</strong>{hint ? <> · רמז: <span className="font-medium">{hint}</span></> : null}</p>
+              ) : hint ? (
                 <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
-              )
+              ) : null
             )}
 
             <div className="w-full max-w-xs space-y-2.5">
@@ -1435,7 +1441,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 value={vaultPassInput}
                 onChange={e => setVaultPassInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !vaultPass2Input && handleVaultSubmit()}
-                placeholder={vaultModalMode === 'setup' ? 'סיסמת כספת (מינ. 6 תווים)' : 'סיסמת כספת'}
+                placeholder={vaultModalMode === 'setup' ? 'סיסמת כניסה לאפליקציה (מינ. 6 תווים)' : isUnifiedVault ? 'סיסמת כניסה לאפליקציה' : 'סיסמת כספת'}
                 className="ph-no-capture w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 dir="ltr"
                 autoFocus
