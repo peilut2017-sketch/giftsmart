@@ -621,10 +621,15 @@ export default function AdminPage() {
   async function loadUsers(showSpinner = false) {
     if (showSpinner) setUsersRefreshing(true)
     try {
-      const [{ data }, { data: subs }] = await Promise.all([
+      const [{ data, error }, { data: subs }] = await Promise.all([
         supabase.rpc('get_all_users'),
         supabase.from('subscriptions').select('user_id, current_period_end').eq('plan', 'pro').eq('status', 'active'),
       ])
+      if (error) {
+        console.error('[admin] get_all_users error:', error)
+        if (showSpinner) toast.error('שגיאה בטעינת משתמשים: ' + error.message)
+        return
+      }
       if (!data) return
       const subMap = new Map((subs ?? []).map((s: { user_id: string; current_period_end: string | null }) => [s.user_id, s.current_period_end]))
       setAllUsers(data.map((u: UserRow) => ({ ...u, pro_expires_at: subMap.has(u.id) ? subMap.get(u.id) ?? null : undefined })))
@@ -1374,7 +1379,7 @@ export default function AdminPage() {
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between p-4"
-            onClick={() => setShowUsers(v => !v)}
+            onClick={() => setShowUsers(v => { if (!v) loadUsers(true); return !v })}
           >
             <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-500" />
