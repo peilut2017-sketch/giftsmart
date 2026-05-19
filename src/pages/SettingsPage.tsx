@@ -612,7 +612,7 @@ export default function SettingsPage() {
   }
 
   // Check telegram link status on mount
-  useState(() => {
+  useEffect(() => {
     if (!user) return
     supabase
       .from('telegram_users')
@@ -620,7 +620,7 @@ export default function SettingsPage() {
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data }) => setTelegramLinked(!!data))
-  })
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load admin broadcasts on mount
   useEffect(() => {

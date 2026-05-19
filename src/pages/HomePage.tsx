@@ -78,11 +78,11 @@ export default function HomePage() {
   const [archiveReason, setArchiveReason] = useState('')
 
   // Google Calendar prompt state
-  const [calendarVoucher, setCalendarVoucher] = useState<{ storeName: string; expiryDate: string } | null>(null)
+  const [calendarVoucher, setCalendarVoucher] = useState<{ id: string; storeName: string; expiryDate: string } | null>(null)
   const reminderDays = parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
   const [calendarModalDays, setCalendarModalDays] = useState(reminderDays)
 
-  function openGoogleCalendar(storeName: string, expiryDate: string, days: number) {
+  function openGoogleCalendar(id: string, storeName: string, expiryDate: string, days: number) {
     const expiry = new Date(expiryDate)
     const eventDay = new Date(expiry)
     eventDay.setDate(expiry.getDate() - days)
@@ -94,7 +94,7 @@ export default function HomePage() {
       action: 'TEMPLATE',
       text: `תזכורת: שובר ${storeName} פג בקרוב`,
       dates: `${start}/${end}`,
-      details: `שובר ${storeName} פג תוקפו ב-${expiry.toLocaleDateString('he-IL')} — עוד ${days} ימים!\n\nפתח את ארנק השוברים: ${appUrl}`,
+      details: `שובר ${storeName} פג תוקפו ב-${expiry.toLocaleDateString('he-IL')} — עוד ${days} ימים!\n\nפתח את השובר: ${appUrl}/voucher/${id}`,
     })
     window.open(`https://calendar.google.com/calendar/render?${params}`, '_blank', 'noopener,noreferrer')
     setCalendarVoucher(null)
@@ -250,13 +250,13 @@ export default function HomePage() {
       }
     } else {
       try {
-        await addVoucher(vData)
+        const newVoucher = await addVoucher(vData)
         toast.success(t('voucher.added'))
         // Offer Google Calendar event if feature enabled and voucher has expiry date
         const calendarEnabled = localStorage.getItem(`calendar_reminder_enabled_${user?.id}`) !== 'false'
-        if (calendarEnabled && vData.expiry_date) {
+        if (calendarEnabled && vData.expiry_date && newVoucher) {
           setCalendarModalDays(reminderDays)
-          setCalendarVoucher({ storeName: vData.store_name, expiryDate: vData.expiry_date })
+          setCalendarVoucher({ id: newVoucher.id, storeName: vData.store_name, expiryDate: vData.expiry_date })
         }
       } catch (err: any) {
         toast.error(err?.message || t('voucher.save.error'))
@@ -564,7 +564,7 @@ export default function HomePage() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => openGoogleCalendar(calendarVoucher.storeName, calendarVoucher.expiryDate, calendarModalDays)}
+                onClick={() => openGoogleCalendar(calendarVoucher.id, calendarVoucher.storeName, calendarVoucher.expiryDate, calendarModalDays)}
                 className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
               >
                 📅 {t('voucher.calendar.cta')}
