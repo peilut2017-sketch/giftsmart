@@ -1135,35 +1135,37 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               />
             </div>
             <div className="col-span-2">
-              <label htmlFor="vf-expiry" className="text-sm font-medium text-gray-700 mb-1 block">{t('form.expiry')}</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label htmlFor="vf-expiry" className="text-sm font-medium text-gray-700">{t('form.expiry')}</label>
+                <button
+                  type="button"
+                  onClick={openDatePicker}
+                  className="text-gray-400 hover:text-green-600"
+                  tabIndex={-1}
+                  aria-label="בחר תאריך"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                </button>
+                <input
+                  ref={hiddenDateRef}
+                  type="date"
+                  value={expiryDate}
+                  onChange={e => { setExpiryDate(e.target.value); setDisplayDate(isoToDisplay(e.target.value)) }}
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+              </div>
               <div className="flex gap-2 items-center">
-                <div className="relative flex-1">
+                <div className="flex-1">
                   <input
                     id="vf-expiry"
                     type="text"
                     value={displayDate}
                     onChange={e => handleDateTextChange(e.target.value)}
                     placeholder="DD.MM.YYYY"
-                    className="w-full pl-8 pr-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
+                    className="w-full px-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
                     dir="ltr"
-                  />
-                  <button
-                    type="button"
-                    onClick={openDatePicker}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-green-600"
-                    tabIndex={-1}
-                    aria-label="בחר תאריך"
-                  >
-                    <Calendar className="w-3.5 h-3.5" />
-                  </button>
-                  <input
-                    ref={hiddenDateRef}
-                    type="date"
-                    value={expiryDate}
-                    onChange={e => { setExpiryDate(e.target.value); setDisplayDate(isoToDisplay(e.target.value)) }}
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden="true"
                   />
                 </div>
                 <div className="flex gap-1">
