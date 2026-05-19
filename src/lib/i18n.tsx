@@ -2172,6 +2172,10 @@ const translations: Record<string, string> = {
   'voucher.calendar.cta.en': 'Open in Google Calendar',
   'voucher.calendar.skip': 'דלג',
   'voucher.calendar.skip.en': 'Skip',
+  'voucher.calendar.days.label': 'ימים לפני פקיעה',
+  'voucher.calendar.days.label.en': 'Days before expiry',
+  'settings.calendar.enabled': 'הצע תזכורת ביומן גוגל בעת הוספת שובר',
+  'settings.calendar.enabled.en': 'Suggest Google Calendar reminder when adding a voucher',
   'admin.notif.new_support': 'הודעת תמיכה חדשה',
   'admin.notif.new_support.en': 'New support message',
 }

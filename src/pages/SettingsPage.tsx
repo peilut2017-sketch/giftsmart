@@ -6,7 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff, Mail } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff, Mail, CalendarDays } from 'lucide-react'
 import { getNotifChannels, saveNotifChannels, type NotifChannels } from '../hooks/useNotifications'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
@@ -289,12 +289,20 @@ export default function SettingsPage() {
   const [reminderDays, setReminderDays] = useState(() =>
     parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
   )
+  const [calendarReminderEnabled, setCalendarReminderEnabled] = useState(
+    () => localStorage.getItem(`calendar_reminder_enabled_${user?.id}`) !== 'false'
+  )
   const [notifChannels, setNotifChannels] = useState<NotifChannels>(() => getNotifChannels(user?.id))
 
   function saveReminderDays(days: number) {
     const val = Math.max(1, Math.min(90, days))
     setReminderDays(val)
     localStorage.setItem(reminderKey, String(val))
+  }
+
+  function saveCalendarEnabled(val: boolean) {
+    setCalendarReminderEnabled(val)
+    localStorage.setItem(`calendar_reminder_enabled_${user?.id}`, String(val))
   }
 
   function updateNotifChannel(key: keyof NotifChannels, value: boolean) {
@@ -823,6 +831,21 @@ export default function SettingsPage() {
         <Card>
           {/* Reminder days */}
           <div className="p-4">
+            {/* Google Calendar toggle */}
+            <label className="flex items-center justify-between cursor-pointer mb-4">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-blue-500" />
+                <span className="text-sm text-gray-700">{t('settings.calendar.enabled')}</span>
+              </div>
+              <button
+                role="switch"
+                aria-checked={calendarReminderEnabled}
+                onClick={() => saveCalendarEnabled(!calendarReminderEnabled)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${calendarReminderEnabled ? 'bg-green-500' : 'bg-gray-200'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${calendarReminderEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </label>
             <p className="text-sm text-gray-700 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
             <div className="flex items-center gap-3">
               <input

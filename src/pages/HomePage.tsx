@@ -80,19 +80,21 @@ export default function HomePage() {
   // Google Calendar prompt state
   const [calendarVoucher, setCalendarVoucher] = useState<{ storeName: string; expiryDate: string } | null>(null)
   const reminderDays = parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
+  const [calendarModalDays, setCalendarModalDays] = useState(reminderDays)
 
-  function openGoogleCalendar(storeName: string, expiryDate: string) {
+  function openGoogleCalendar(storeName: string, expiryDate: string, days: number) {
     const expiry = new Date(expiryDate)
     const eventDay = new Date(expiry)
-    eventDay.setDate(expiry.getDate() - reminderDays)
+    eventDay.setDate(expiry.getDate() - days)
     const fmt = (d: Date) => d.toISOString().replace(/-/g, '').split('T')[0]
     const start = fmt(eventDay)
     const end = fmt(new Date(eventDay.getTime() + 86_400_000))
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
     const params = new URLSearchParams({
       action: 'TEMPLATE',
       text: `תזכורת: שובר ${storeName} פג בקרוב`,
       dates: `${start}/${end}`,
-      details: `שובר ${storeName} פג תוקפו ב-${expiry.toLocaleDateString('he-IL')} — עוד ${reminderDays} ימים!`,
+      details: `שובר ${storeName} פג תוקפו ב-${expiry.toLocaleDateString('he-IL')} — עוד ${days} ימים!\n\nפתח את ארנק השוברים: ${appUrl}`,
     })
     window.open(`https://calendar.google.com/calendar/render?${params}`, '_blank', 'noopener,noreferrer')
     setCalendarVoucher(null)
@@ -250,8 +252,10 @@ export default function HomePage() {
       try {
         await addVoucher(vData)
         toast.success(t('voucher.added'))
-        // Offer Google Calendar event if voucher has expiry date
-        if (vData.expiry_date) {
+        // Offer Google Calendar event if feature enabled and voucher has expiry date
+        const calendarEnabled = localStorage.getItem(`calendar_reminder_enabled_${user?.id}`) !== 'false'
+        if (calendarEnabled && vData.expiry_date) {
+          setCalendarModalDays(reminderDays)
           setCalendarVoucher({ storeName: vData.store_name, expiryDate: vData.expiry_date })
         }
       } catch (err: any) {
@@ -526,21 +530,41 @@ export default function HomePage() {
             <div className="flex justify-center mb-3">
               <div className="w-10 h-1 bg-gray-200 rounded-full" />
             </div>
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-xl">📅</div>
               <div>
                 <p className="font-bold text-gray-900 dark:text-white text-sm">{t('voucher.calendar.title')}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {t('voucher.calendar.body', { days: reminderDays })}
+                  שובר: <strong>{calendarVoucher.storeName}</strong>
                 </p>
               </div>
             </div>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-              שובר: <strong>{calendarVoucher.storeName}</strong> — תזכורת {reminderDays} ימים לפני תוקף
-            </p>
+            <div className="flex items-center gap-3 mb-4 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3">
+              <span className="text-sm text-gray-600 dark:text-gray-400 flex-1">{t('voucher.calendar.days.label')}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCalendarModalDays(d => Math.max(1, d - 1))}
+                  className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-white font-bold text-sm flex items-center justify-center"
+                >−</button>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={calendarModalDays}
+                  onChange={e => setCalendarModalDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 1)))}
+                  className="w-14 text-center text-sm font-semibold border border-gray-200 rounded-xl py-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCalendarModalDays(d => Math.min(365, d + 1))}
+                  className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-white font-bold text-sm flex items-center justify-center"
+                >+</button>
+              </div>
+            </div>
             <div className="flex gap-2">
               <button
-                onClick={() => openGoogleCalendar(calendarVoucher.storeName, calendarVoucher.expiryDate)}
+                onClick={() => openGoogleCalendar(calendarVoucher.storeName, calendarVoucher.expiryDate, calendarModalDays)}
                 className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
               >
                 📅 {t('voucher.calendar.cta')}
