@@ -5,7 +5,6 @@ import { sendExpiryReminderEmail } from '../lib/emailService'
 
 const NOTIF_KEY = 'last_expiry_notification'
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
-const EXPIRY_WINDOW_DAYS = 30
 
 export interface NotifChannels {
   push: boolean
@@ -62,12 +61,13 @@ export function useExpiryNotifications(
       const last = localStorage.getItem(NOTIF_KEY)
       if (last && Date.now() - parseInt(last) < CHECK_INTERVAL_MS) return
 
+      const expiryWindowDays = parseInt(localStorage.getItem(`reminder_days_${userId}`) || '14')
       const nowTime = Date.now()
       const expiring: Voucher[] = []
       for (const v of vouchers) {
         if (!v.expiry_date) continue
         const daysLeft = Math.ceil((new Date(v.expiry_date).getTime() - nowTime) / (1000 * 60 * 60 * 24))
-        if (daysLeft >= 0 && daysLeft <= EXPIRY_WINDOW_DAYS) expiring.push(v)
+        if (daysLeft >= 0 && daysLeft <= expiryWindowDays) expiring.push(v)
       }
 
       if (expiring.length === 0) return
@@ -82,7 +82,7 @@ export function useExpiryNotifications(
 
       const title = urgent.length > 0
         ? `${urgent.length} שובר${urgent.length > 1 ? 'ים' : ''} פגים בקרוב!`
-        : `${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${EXPIRY_WINDOW_DAYS} יום`
+        : `${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${expiryWindowDays} יום`
 
       const body = expiring
         .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())

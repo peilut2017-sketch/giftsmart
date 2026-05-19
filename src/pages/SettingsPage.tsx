@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -294,21 +294,72 @@ export default function SettingsPage() {
   )
   const [notifChannels, setNotifChannels] = useState<NotifChannels>(() => getNotifChannels(user?.id))
 
+  // Refs hold latest values so the debounced save always uses current state
+  const reminderDaysRef = useRef(reminderDays)
+  const calendarEnabledRef = useRef(calendarReminderEnabled)
+  const notifChannelsRef = useRef(notifChannels)
+  useEffect(() => { reminderDaysRef.current = reminderDays }, [reminderDays])
+  useEffect(() => { calendarEnabledRef.current = calendarReminderEnabled }, [calendarReminderEnabled])
+  useEffect(() => { notifChannelsRef.current = notifChannels }, [notifChannels])
+
+  const supabaseSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function scheduleSupabaseSave() {
+    if (supabaseSaveTimer.current) clearTimeout(supabaseSaveTimer.current)
+    supabaseSaveTimer.current = setTimeout(async () => {
+      try {
+        await supabase.rpc('upsert_user_settings', {
+          p_reminder_days: reminderDaysRef.current,
+          p_notif_channels: notifChannelsRef.current,
+          p_calendar_reminder_enabled: calendarEnabledRef.current,
+        })
+      } catch {}
+    }, 800)
+  }
+
+  // Load settings from Supabase on mount (cross-device sync)
+  useEffect(() => {
+    if (!user?.id) return
+    ;(async () => {
+      try {
+        const { data } = await supabase.rpc('get_user_settings')
+        const row = Array.isArray(data) ? data[0] : data
+        if (!row) return
+        if (row.reminder_days != null) {
+          const d = Math.max(1, Math.min(90, row.reminder_days))
+          setReminderDays(d)
+          localStorage.setItem(reminderKey, String(d))
+        }
+        if (row.notif_channels) {
+          const ch: NotifChannels = { push: true, email: false, telegram: true, ...row.notif_channels }
+          setNotifChannels(ch)
+          saveNotifChannels(user.id, ch)
+        }
+        if (row.calendar_reminder_enabled != null) {
+          setCalendarReminderEnabled(row.calendar_reminder_enabled)
+          localStorage.setItem(`calendar_reminder_enabled_${user.id}`, String(row.calendar_reminder_enabled))
+        }
+      } catch {}
+    })()
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function saveReminderDays(days: number) {
     const val = Math.max(1, Math.min(90, days))
     setReminderDays(val)
     localStorage.setItem(reminderKey, String(val))
+    scheduleSupabaseSave()
   }
 
   function saveCalendarEnabled(val: boolean) {
     setCalendarReminderEnabled(val)
     localStorage.setItem(`calendar_reminder_enabled_${user?.id}`, String(val))
+    scheduleSupabaseSave()
   }
 
   function updateNotifChannel(key: keyof NotifChannels, value: boolean) {
     const next = { ...notifChannels, [key]: value }
     setNotifChannels(next)
     if (user?.id) saveNotifChannels(user.id, next)
+    scheduleSupabaseSave()
   }
 
   async function saveProfile() {

@@ -142,18 +142,19 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   }
 
   function handleDateTextChange(val: string) {
-    // Strip chars that can't be part of a date
-    let cleaned = val.replace(/[^\d.\-\/]/g, '')
-    // Auto-insert dots when user types pure digits (DD MM YYYY pattern)
-    if (/^\d+$/.test(cleaned)) {
-      if (cleaned.length > 4) {
-        cleaned = cleaned.slice(0, 2) + '.' + cleaned.slice(2, 4) + '.' + cleaned.slice(4, 8)
-      } else if (cleaned.length > 2) {
-        cleaned = cleaned.slice(0, 2) + '.' + cleaned.slice(2)
-      }
+    // Always extract only digits and reformat — handles digit-by-digit typing,
+    // paste, and backspace correctly regardless of separators in the input.
+    const digits = val.replace(/\D/g, '').slice(0, 8)
+    let display: string
+    if (digits.length > 4) {
+      display = digits.slice(0, 2) + '.' + digits.slice(2, 4) + '.' + digits.slice(4)
+    } else if (digits.length > 2) {
+      display = digits.slice(0, 2) + '.' + digits.slice(2)
+    } else {
+      display = digits
     }
-    setDisplayDate(cleaned)
-    const iso = parseDisplayToISO(cleaned)
+    setDisplayDate(display)
+    const iso = parseDisplayToISO(display)
     if (iso) setExpiryDate(iso)
   }
   const unitPickerRef = useRef<HTMLDivElement>(null)
