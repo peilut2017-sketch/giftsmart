@@ -380,8 +380,8 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 {t('auth.forgot.password')}
               </button>
 
-              {/* Switch to biometric if available for this email */}
-              {isBiometricEnabled() && getBiometricEmail()?.toLowerCase() === email.toLowerCase() && (
+              {/* Switch to biometric if set up on this device */}
+              {isBiometricEnabled() && (
                 <button
                   type="button"
                   onClick={() => setLoginStep('biometric')}

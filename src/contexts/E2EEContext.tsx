@@ -163,6 +163,21 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const [pendingRecoveryPhrase, setPendingRecoveryPhrase] = useState<string | null>(null)
   const autoUnlockAttempted = useRef(false)
 
+  // Restore vault metadata from Supabase when localStorage is empty (new/cleared device).
+  // Runs before VoucherForm renders so it never shows "setup vault" when one already exists.
+  useEffect(() => {
+    if (!user?.id) return
+    if (localStorage.getItem(CHECK_KEY)) return
+    fetchVaultMeta().then(meta => {
+      if (meta) {
+        localStorage.setItem(SALT_KEY, meta.vault_salt)
+        localStorage.setItem(CHECK_KEY, meta.vault_check)
+        localStorage.setItem(VAULT_V2_FLAG, 'true')
+        setHasVault(true)
+      }
+    })
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-unlock on mount (runs once after user is available)
   useEffect(() => {
     if (autoUnlockAttempted.current) return
@@ -273,6 +288,30 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     userId: string,
     hintText?: string,
   ): Promise<string> => {
+    // Check Supabase for an existing vault first — if the password matches, adopt it
+    // rather than overwriting it with a new salt (which would break other devices).
+    const remoteMeta = await fetchVaultMeta()
+    if (remoteMeta) {
+      try {
+        const existingKey = await deriveVaultKey(password, userId, saltFromB64(remoteMeta.vault_salt))
+        const dec = await decryptField(existingKey, remoteMeta.vault_check)
+        if (dec === VERIFY_PLAINTEXT) {
+          localStorage.setItem(SALT_KEY, remoteMeta.vault_salt)
+          localStorage.setItem(CHECK_KEY, remoteMeta.vault_check)
+          localStorage.setItem(VAULT_V2_FLAG, 'true')
+          setHasVault(true)
+          setNeedsMigration(false)
+          setVaultKey(existingKey)
+          await persistVaultKey(existingKey)
+          await tryStoreBiometricKey(existingKey)
+          track('vault_opened')
+          phCapture('vault_opened')
+          return ''
+        }
+      } catch {}
+      // Password doesn't match remote vault — fall through and create a fresh vault
+    }
+
     const salt  = generateSalt()
     const key   = await deriveVaultKey(password, userId, salt)
     const check = await encryptField(key, VERIFY_PLAINTEXT)
