@@ -39,6 +39,18 @@ async function fetchVaultMeta(): Promise<{ vault_salt: string; vault_check: stri
   return null
 }
 
+// Push localStorage salt+check to Supabase if not already there (self-healing for existing users)
+async function syncVaultMetaIfNeeded() {
+  if (!isV2Vault()) return
+  const saltB64 = localStorage.getItem(SALT_KEY)
+  const check   = localStorage.getItem(CHECK_KEY)
+  if (!saltB64 || !check) return
+  try {
+    const meta = await fetchVaultMeta()
+    if (!meta) await saveVaultMeta(saltB64, check)
+  } catch {}
+}
+
 // ── Storage keys ────────────────────────────────────────────────────────────
 const SALT_KEY           = 'gs_e2ee_salt'
 const CHECK_KEY          = 'gs_e2ee_chk'
@@ -162,7 +174,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     const savedKeyB64 = sessionStorage.getItem(SESSION_KEY_V2)
     if (savedKeyB64) {
       importVaultKey(savedKeyB64)
-        .then(key => setVaultKey(key))
+        .then(key => { setVaultKey(key); syncVaultMetaIfNeeded() })
         .catch(() => sessionStorage.removeItem(SESSION_KEY_V2))
       return
     }
@@ -200,6 +212,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
               setVaultKey(key)
               await persistVaultKey(key)
               await tryStoreBiometricKey(key)
+              syncVaultMetaIfNeeded()
             }
           } catch {}
           return
