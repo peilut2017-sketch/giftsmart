@@ -27,7 +27,7 @@ import AccessibilityWidget from './components/AccessibilityWidget'
 import RecoveryKeyModal from './components/RecoveryKeyModal'
 import VaultMigrationModal from './components/VaultMigrationModal'
 import OAuthVaultSetupPrompt from './components/OAuthVaultSetupPrompt'
-import { isBiometricEnabled, getBiometricEmail } from './lib/passkey'
+import { isBiometricEnabled, getBiometricEmail, syncBiometricFromSupabase } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
 import { AlertTriangle } from 'lucide-react'
@@ -260,6 +260,7 @@ function AppRoutes() {
   const { user, loading, passwordRecovery, signOut } = useAuth()
   const navigate = useNavigate()
   const [biometricLocked, setBiometricLocked] = useState(false)
+  const [biometricSyncChecking, setBiometricSyncChecking] = useState(false)
 
   interface BannerData {
     id: string
@@ -309,21 +310,33 @@ function AppRoutes() {
   }, [])
 
   useEffect(() => {
-    if (user && isBiometricEnabled()) {
-      // Only lock if biometric was registered for THIS user's email
-      const biometricEmail = getBiometricEmail()
-      if (biometricEmail && biometricEmail.toLowerCase() !== (user.email ?? '').toLowerCase()) return
-      // Only lock if the last successful biometric was more than 5 minutes ago.
-      // sessionStorage survives page reload in the same tab (not browser restart),
-      // so brief app-switches on mobile won't trigger a re-prompt.
-      const lastTs = parseInt(sessionStorage.getItem('gs_biometric_unlock_ts') || '0')
-      if (Date.now() - lastTs > 5 * 60 * 1000) {
-        setBiometricLocked(true)
-      }
-    }
-  }, [user])
+    if (!user) return
 
-  if (loading) {
+    function applyBiometricLock() {
+      const biometricEmail = getBiometricEmail()
+      if (biometricEmail && biometricEmail.toLowerCase() !== (user!.email ?? '').toLowerCase()) return
+      const lastTs = parseInt(sessionStorage.getItem('gs_biometric_unlock_ts') || '0')
+      if (Date.now() - lastTs > 5 * 60 * 1000) setBiometricLocked(true)
+    }
+
+    if (isBiometricEnabled()) {
+      // Already in localStorage — lock synchronously, no Supabase round-trip needed
+      applyBiometricLock()
+    } else {
+      // Not in localStorage — check Supabase (synced passkey from another device)
+      setBiometricSyncChecking(true)
+      ;(async () => {
+        try {
+          const restored = await syncBiometricFromSupabase()
+          if (restored) applyBiometricLock()
+        } finally {
+          setBiometricSyncChecking(false)
+        }
+      })()
+    }
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading || biometricSyncChecking) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-gray-50">
         <GiftSmartSplash />
