@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Fingerprint, ShieldCheck, X, Lock, Eye, EyeOff, KeyRound } from 'lucide-react'
-import { verifyBiometricForVaultUnlock, disableBiometric, getBiometricEmail } from '../lib/passkey'
+import { verifyBiometricForVaultUnlock, disableBiometric, getBiometricEmail, syncBiometricFromSupabase } from '../lib/passkey'
 import { exportVaultKey } from '../lib/e2ee'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
@@ -40,6 +40,10 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     if (loading) return
     if (isMountedRef.current) { setLoading(true); setFailed(false) }
     try {
+      // If no local credential, try to restore from Supabase (synced passkey on new device)
+      if (!localStorage.getItem('biometric_credential_id')) {
+        await syncBiometricFromSupabase()
+      }
       const { authenticated, vaultKey, prfBytes } = await verifyBiometricForVaultUnlock()
       if (!isMountedRef.current) return
       if (!authenticated) { setFailed(true); toast.error('אימות ביומטרי נכשל'); return }

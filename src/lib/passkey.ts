@@ -6,6 +6,7 @@
 // so biometric auth can also open the vault without a separate passphrase.
 
 import { wrapVaultKey, unwrapVaultKey } from './e2ee'
+import { supabase } from './supabase'
 
 const CREDENTIAL_KEY = 'biometric_credential_id'
 const BIOMETRIC_ENABLED_KEY = 'biometric_enabled'
@@ -40,6 +41,26 @@ export function disableBiometric() {
   localStorage.removeItem(CREDENTIAL_KEY)
   localStorage.removeItem(BIOMETRIC_EMAIL_KEY)
   localStorage.removeItem(BIOMETRIC_WRAPPED_VAULT_KEY)
+  // Clear from Supabase so other synced devices also lose the credential reference
+  ;(async () => { try { await supabase.rpc('clear_biometric_meta') } catch {} })()
+}
+
+// Restore biometric metadata from Supabase onto this device (called before first auth attempt).
+// Returns true if metadata was found and restored.
+export async function syncBiometricFromSupabase(): Promise<boolean> {
+  try {
+    const { data } = await supabase.rpc('get_biometric_meta')
+    const row = Array.isArray(data) ? data[0] : data
+    if (!row?.biometric_credential_id) return false
+    localStorage.setItem(CREDENTIAL_KEY, row.biometric_credential_id)
+    localStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true')
+    if (row.biometric_wrapped_vault_key) {
+      localStorage.setItem(BIOMETRIC_WRAPPED_VAULT_KEY, row.biometric_wrapped_vault_key)
+    }
+    return true
+  } catch {
+    return false
+  }
 }
 
 function base64url(buffer: ArrayBuffer): string {
@@ -100,6 +121,7 @@ export async function registerBiometricWithVault(
     if (!credential) return false
 
     const credId = base64url(credential.rawId)
+    let wrappedKey: string | null = null
 
     // If PRF output is available and vault key provided, wrap the vault key
     if (vaultKey) {
@@ -109,14 +131,25 @@ export async function registerBiometricWithVault(
       const prfOutput = prfFirst?.first as ArrayBuffer | undefined
 
       if (prfOutput && prfOutput.byteLength >= 32) {
-        const wrapped = await wrapVaultKey(vaultKey, new Uint8Array(prfOutput))
-        localStorage.setItem(BIOMETRIC_WRAPPED_VAULT_KEY, wrapped)
+        wrappedKey = await wrapVaultKey(vaultKey, new Uint8Array(prfOutput))
+        localStorage.setItem(BIOMETRIC_WRAPPED_VAULT_KEY, wrappedKey)
       }
     }
 
     localStorage.setItem(CREDENTIAL_KEY, credId)
     localStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true')
     if (email) localStorage.setItem(BIOMETRIC_EMAIL_KEY, email)
+
+    // Sync to Supabase so other devices with the same synced passkey can restore metadata
+    ;(async () => {
+      try {
+        await supabase.rpc('upsert_biometric_meta', {
+          p_credential_id: credId,
+          p_wrapped_vault_key: wrappedKey,
+        })
+      } catch {}
+    })()
+
     return true
   } catch (err) {
     console.error('Biometric register error:', err)
