@@ -1,7 +1,7 @@
 {
-  "name": "GiftSmart",
+  "name": "GiftSmart – ניהול שוברי מתנה וגיפט קארד",
   "short_name": "GiftSmart",
-  "description": "ניהול שוברים וכרטיסי מתנה בצורה חכמה",
+  "description": "אפליקציה לניהול שוברי מתנה, גיפט קארד וכרטיסי מתנה. שמור, עקוב אחר יתרות ושתף שוברי קניה.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
