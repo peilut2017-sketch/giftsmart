@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Fingerprint, ShieldCheck, X, Lock, Eye, EyeOff, KeyRound } from 'lucide-react'
-import { verifyBiometricForVaultUnlock, disableBiometric, getBiometricEmail } from '../lib/passkey'
+import { verifyBiometricForVaultUnlock, disableBiometric, disableBiometricLocally, isBiometricNative, getBiometricEmail } from '../lib/passkey'
 import { exportVaultKey } from '../lib/e2ee'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
@@ -29,6 +29,7 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
   const [showFallbackPass, setShowFallbackPass] = useState(false)
   const [fallbackError, setFallbackError] = useState('')
   const [fallbackLoading, setFallbackLoading] = useState(false)
+  const biometricNative = isBiometricNative()
   const isMountedRef = useRef(true)
 
   useEffect(() => {
@@ -100,8 +101,15 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
       }
       // Store password so E2EEProvider can derive/unlock the vault
       sessionStorage.setItem(VAULT_PW_PENDING, fallbackPassword)
-      // Remove the broken biometric credential so the app no longer tries it
-      disableBiometric()
+      // If the credential was registered natively on this device but is now broken →
+      // disable globally (Supabase included). If it was only synced here from Supabase
+      // (no private key on this device), clear only local storage so the credential
+      // keeps working on the device where it was originally set up.
+      if (isBiometricNative()) {
+        disableBiometric()
+      } else {
+        disableBiometricLocally()
+      }
       onUnlock()
     } catch {
       setFallbackError('שגיאה בהתחברות — נסה שוב')
@@ -177,7 +185,9 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
           </div>
           <h2 className="text-xl font-bold text-gray-800 mb-1">כניסה עם סיסמה</h2>
           <p className="text-sm text-gray-500 mb-6">
-            הזן את פרטי הכניסה שלך — הזיהוי הביומטרי יאופס אוטומטית
+            {biometricNative
+              ? 'הזן את פרטי הכניסה שלך — הזיהוי הביומטרי יאופס במכשיר זה'
+              : 'הזן את פרטי הכניסה שלך כדי להיכנס ללא ביומטרי'}
           </p>
 
           <div className="space-y-3 mb-4">

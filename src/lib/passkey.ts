@@ -12,6 +12,7 @@ const CREDENTIAL_KEY = 'biometric_credential_id'
 const BIOMETRIC_ENABLED_KEY = 'biometric_enabled'
 const BIOMETRIC_EMAIL_KEY = 'biometric_email'
 const BIOMETRIC_WRAPPED_VAULT_KEY = 'gs_e2ee_biometric_wrapped_v2'
+const BIOMETRIC_NATIVE_KEY = 'gs_biometric_native' // true only when registered on THIS device
 
 // Fixed PRF input — same string used for both registration and assertion
 const PRF_EVAL_INPUT = new TextEncoder().encode('GiftSmart-VaultKey-v2')
@@ -36,13 +37,32 @@ export function hasBiometricWrappedVaultKey(): boolean {
   return !!localStorage.getItem(BIOMETRIC_WRAPPED_VAULT_KEY)
 }
 
+// Returns true if biometric was registered natively on THIS device (not just synced from Supabase)
+export function isBiometricNative(): boolean {
+  return localStorage.getItem(BIOMETRIC_NATIVE_KEY) === 'true'
+}
+
+// Clears biometric everywhere: this device + Supabase (all other synced devices lose it too).
+// Use only when the credential is genuinely broken on the device that owns it.
 export function disableBiometric() {
   localStorage.removeItem(BIOMETRIC_ENABLED_KEY)
   localStorage.removeItem(CREDENTIAL_KEY)
   localStorage.removeItem(BIOMETRIC_EMAIL_KEY)
   localStorage.removeItem(BIOMETRIC_WRAPPED_VAULT_KEY)
+  localStorage.removeItem(BIOMETRIC_NATIVE_KEY)
   // Clear from Supabase so other synced devices also lose the credential reference
   ;(async () => { try { await supabase.rpc('clear_biometric_meta') } catch {} })()
+}
+
+// Clears biometric from this device's localStorage ONLY — leaves Supabase intact so
+// the credential keeps working on the device where it was originally registered.
+// Use when fallback-to-password on a device that never had the private key locally.
+export function disableBiometricLocally() {
+  localStorage.removeItem(BIOMETRIC_ENABLED_KEY)
+  localStorage.removeItem(CREDENTIAL_KEY)
+  localStorage.removeItem(BIOMETRIC_EMAIL_KEY)
+  localStorage.removeItem(BIOMETRIC_WRAPPED_VAULT_KEY)
+  localStorage.removeItem(BIOMETRIC_NATIVE_KEY)
 }
 
 // Restore biometric metadata from Supabase onto this device (called before first auth attempt).
@@ -138,6 +158,7 @@ export async function registerBiometricWithVault(
 
     localStorage.setItem(CREDENTIAL_KEY, credId)
     localStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true')
+    localStorage.setItem(BIOMETRIC_NATIVE_KEY, 'true')  // private key lives on THIS device
     if (email) localStorage.setItem(BIOMETRIC_EMAIL_KEY, email)
 
     // Sync to Supabase so other devices with the same synced passkey can restore metadata
