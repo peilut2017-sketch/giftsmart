@@ -209,7 +209,7 @@ export default function VoucherCard({
     return (
       <div
         className={`relative voucher-card overflow-hidden ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''}`}
-        style={{ borderRadius: 'var(--r-card)', background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}
+        style={{ borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)' }}
       >
         {SwipeBgs}
         <div
@@ -219,8 +219,8 @@ export default function VoucherCard({
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          {/* Color strip */}
-          <div style={{ width: 4, alignSelf: 'stretch', background: catColor, flexShrink: 0 }} />
+          {/* Color strip (RTL start = right) */}
+          <div style={{ width: 5, background: catColor, flexShrink: 0 }} />
 
           <div className="flex items-center gap-3 flex-1 min-w-0 px-3 py-3">
             {isSelectMode && (
@@ -230,54 +230,63 @@ export default function VoucherCard({
             )}
 
             {/* Store avatar */}
-            <StoreAvatar name={superVoucherName || voucher.store_name} size={38} />
+            <StoreAvatar name={superVoucherName || voucher.store_name} size={36} />
 
-            {/* Store info (right side in RTL) */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 {superVoucherName && <Star className="w-3 h-3 text-amber-400 fill-amber-400 flex-shrink-0" />}
-                <span className="font-bold text-sm truncate" style={{ color: 'var(--c-text)' }}>
+                <span className="font-semibold text-sm truncate" style={{ color: 'var(--c-text)' }}>
                   {superVoucherName || voucher.store_name}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                {voucher.categories[0] && (
-                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md"
-                    style={{ background: catColor + '18', color: catColor }}>
-                    {voucher.categories[0]}
-                  </span>
-                )}
-                {expiryChip && expiryLabel && (
-                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-md"
-                    style={{ color: expiryChip.color, background: expiryChip.bg }}>
-                    {expiryLabel}
-                  </span>
+              {(voucher.categories[0] || voucher.source) && (
+                <span className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>
+                  {[voucher.categories[0], voucher.source].filter(Boolean).join(' · ')}
+                </span>
+              )}
+            </div>
+
+            {voucher.amount > 0 && (
+              <div className="w-14 h-1.5 rounded-full overflow-hidden flex-shrink-0" style={{ background: 'var(--c-bg)' }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: catColor }} />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {StatusIcons}
+              {expiryChip && expiryLabel && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: expiryChip.color, background: expiryChip.bg }}>
+                  {expiryLabel}
+                </span>
+              )}
+              <div className="text-left">
+                {itemLabel ? (
+                  <div className="leading-tight max-w-[90px]">
+                    <div className="text-sm font-semibold truncate" style={{ color: 'var(--c-text)' }}>
+                      📦 {itemLabel}
+                    </div>
+                    {voucher.amount > 0 && (
+                      <div className="text-xs" style={{ color: 'var(--c-text3)' }}>
+                        ({formatCurrency(voucher.amount)})
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-base font-bold" style={{ color: 'var(--c-text)' }}>{formatCurrency(voucher.balance)}</div>
+                    {valuePercent && (
+                      <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{t('card.value')} {valuePercent}%{actualCost != null ? ` | ${actualCost.toLocaleString('he-IL')}` : ''}</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Right: balance + mini progress */}
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              {itemLabel ? (
-                <div className="text-sm font-bold text-right" style={{ color: 'var(--c-text)' }}>📦 {itemLabel}</div>
-              ) : (
-                <div className="font-black" style={{ fontSize: 18, letterSpacing: '-0.5px', color: 'var(--c-text)', lineHeight: 1 }}>
-                  {formatCurrency(voucher.balance)}
-                </div>
-              )}
-              {voucher.amount > 0 && voucher.amount !== voucher.balance && (
-                <div className="w-16 h-1 rounded-full overflow-hidden" style={{ background: 'var(--c-bg)' }}>
-                  <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: catColor, borderRadius: 9999 }} />
-                </div>
-              )}
-              <div className="flex items-center gap-1">{StatusIcons}</div>
-            </div>
-
             {hovered && !isSelectMode && (
-              <div className="flex gap-1">
+              <div className="flex gap-1" role="group">
                 <button onClick={e => { e.stopPropagation(); onEdit() }}    className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50"><Edit2   className="w-3.5 h-3.5" /></button>
                 <button onClick={e => { e.stopPropagation(); onArchive() }} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50"><Archive className="w-3.5 h-3.5" /></button>
-                <button onClick={e => { e.stopPropagation(); onDelete() }}  className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50"><Trash2  className="w-3.5 h-3.5" /></button>
+                <button onClick={e => { e.stopPropagation(); onDelete() }}  className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50">  <Trash2  className="w-3.5 h-3.5" /></button>
               </div>
             )}
           </div>
@@ -297,13 +306,13 @@ export default function VoucherCard({
 
       <div
         {...swipeHandlers}
-        style={{ ...slideStyle, display: 'flex', flexDirection: 'column', background: 'var(--c-surface)' }}
+        style={{ ...slideStyle, display: 'flex', background: 'var(--c-surface)' }}
         onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Top accent strip */}
-        <div style={{ height: 4, background: catColor, flexShrink: 0 }} />
+        {/* Category color strip (RTL → appears on the right, which is the start) */}
+        <div style={{ width: 5, background: catColor, flexShrink: 0 }} />
 
         {/* Card body */}
         <div className="flex-1 min-w-0" style={{ padding: '14px 14px 12px 14px' }}>
@@ -339,19 +348,11 @@ export default function VoucherCard({
                 )}
               </div>
               {(() => {
-                const cat = superVoucherName ? null : voucher.categories[0]
-                const src = voucher.source
-                return (cat || src) ? (
-                  <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                    {cat && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: catColor + '18', color: catColor }}>
-                        {cat}
-                      </span>
-                    )}
-                    {src && (
-                      <span className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{src}</span>
-                    )}
-                  </div>
+                const parts = superVoucherName
+                  ? [voucher.source].filter(Boolean)
+                  : [voucher.categories[0], voucher.source].filter(Boolean)
+                return parts.length > 0 ? (
+                  <p className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{parts.join(' · ')}</p>
                 ) : null
               })()}
             </div>
@@ -372,7 +373,7 @@ export default function VoucherCard({
                 </div>
               ) : (
                 <>
-                  <div className="font-extrabold" style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.5px', lineHeight: 1, color: 'var(--c-text)' }}>
+                  <div className="font-extrabold" style={{ fontSize: 22, letterSpacing: '-0.5px', lineHeight: 1, color: 'var(--c-text)' }}>
                     {formatCurrency(voucher.balance)}
                   </div>
                   {voucher.amount !== voucher.balance && (
