@@ -306,13 +306,13 @@ export default function VoucherCard({
 
       <div
         {...swipeHandlers}
-        style={{ ...slideStyle, display: 'flex', background: 'var(--c-surface)' }}
+        style={{ ...slideStyle, display: 'flex', flexDirection: 'column', background: 'var(--c-surface)' }}
         onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Category color strip (RTL → appears on the right, which is the start) */}
-        <div style={{ width: 5, background: catColor, flexShrink: 0 }} />
+        {/* Top accent strip */}
+        <div style={{ height: 4, background: catColor, flexShrink: 0 }} />
 
         {/* Card body */}
         <div className="flex-1 min-w-0" style={{ padding: '14px 14px 12px 14px' }}>
@@ -348,11 +348,19 @@ export default function VoucherCard({
                 )}
               </div>
               {(() => {
-                const parts = superVoucherName
-                  ? [voucher.source].filter(Boolean)
-                  : [voucher.categories[0], voucher.source].filter(Boolean)
-                return parts.length > 0 ? (
-                  <p className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{parts.join(' · ')}</p>
+                const cat = superVoucherName ? null : voucher.categories[0]
+                const src = voucher.source
+                return (cat || src) ? (
+                  <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                    {cat && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: catColor + '18', color: catColor }}>
+                        {cat}
+                      </span>
+                    )}
+                    {src && (
+                      <span className="text-xs truncate" style={{ color: 'var(--c-text3)' }}>{src}</span>
+                    )}
+                  </div>
                 ) : null
               })()}
             </div>
@@ -373,7 +381,7 @@ export default function VoucherCard({
                 </div>
               ) : (
                 <>
-                  <div className="font-extrabold" style={{ fontSize: 22, letterSpacing: '-0.5px', lineHeight: 1, color: 'var(--c-text)' }}>
+                  <div className="font-extrabold" style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.5px', lineHeight: 1, color: 'var(--c-text)' }}>
                     {formatCurrency(voucher.balance)}
                   </div>
                   {voucher.amount !== voucher.balance && (
