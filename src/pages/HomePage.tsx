@@ -9,7 +9,7 @@ import { Shield } from 'lucide-react'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import type { Voucher, DiscountDeal } from '../types'
-import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store, AlertTriangle, Users, Handshake, Gift, Lightbulb, Percent } from 'lucide-react'
+import { Search, SlidersHorizontal, Archive, X, WifiOff, CheckSquare, Trash2, Square, LayoutGrid, List, ArrowUpDown, Tag, ShoppingBag, Store, Gift, Lightbulb, Percent } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import InStoreMode from '../components/InStoreMode'
 import toast from 'react-hot-toast'
@@ -22,6 +22,20 @@ type SortKey = 'expiry' | 'balance' | 'store' | 'added'
 type FilterTab = 'all' | 'expiring' | 'shared' | 'shared_with_me'
 type ViewMode = 'grid' | 'rows'
 type SortDir = 'asc' | 'desc'
+
+const CAT_EMOJIS_MAP: Record<string, string> = {
+  'אופנה': '👗', 'מזון': '🍔', 'אלקטרוניקה': '📱', 'יופי': '💄',
+  'בית': '🏠', 'ספורט': '⚽', 'נסיעות': '✈️', 'בידור': '🎬',
+  'ילדים': '🧸', 'בריאות': '💊', 'ספרים': '📚', 'מסעדות': '🍽️',
+  'סופר': '🛒', 'מתנה': '🎁', 'אחר': '🏷️',
+}
+const CAT_COLORS_HOME: Record<string, string> = {
+  'אופנה': '#8b5cf6', 'מזון': '#f59e0b', 'אלקטרוניקה': '#3b82f6',
+  'יופי': '#ec4899', 'בית': '#10b981', 'ספורט': '#0ea5e9',
+  'נסיעות': '#6366f1', 'בידור': '#f43f5e', 'ילדים': '#a855f7',
+  'בריאות': '#22c55e', 'ספרים': '#78716c', 'מסעדות': '#ef4444',
+  'סופר': '#84cc16', 'מתנה': '#f97316', 'אחר': '#6b7280',
+}
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -630,98 +644,154 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Gradient Hero Header ── */}
-      <div style={{
-        background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 60%, #1a9e90 100%)',
-        padding: '20px 20px 24px',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
-        {/* Decorative circles */}
-        <div style={{ position: 'absolute', top: -40, left: -40, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: -20, right: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', pointerEvents: 'none' }} />
-
-        {/* Top row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <img src="/logo.png" alt="GiftSmart" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+      {/* ── Hero Header ── */}
+      <div>
+        {/* Compact green top bar */}
+        <div style={{
+          background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 60%, #1a9e90 100%)',
+          padding: '16px 20px 16px',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', top: -40, left: -40, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <img src="/logo.png" alt="GiftSmart" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, letterSpacing: '-0.3px' }}>GiftSmart</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>{walletName || t('wallet.main')}</div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, letterSpacing: '-0.3px' }}>GiftSmart</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>{walletName || t('wallet.main')}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {!isOnline && <WifiOff size={18} color="rgba(255,255,255,0.7)" />}
+              {expiredCount > 0 && !isSelectMode && (
+                <button onClick={handleArchiveExpired}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>
+                  <Archive size={13} color="#fbbf24" />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24' }}>{t('home.expired.label')} ({expiredCount})</span>
+                </button>
+              )}
+              {hasVault && (
+                <button onClick={() => isVaultUnlocked ? lockVault() : setShowVaultModal(true)}
+                  style={{ background: isVaultUnlocked ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                  aria-label={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')} title={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')}>
+                  <Shield size={17} color={isVaultUnlocked ? '#a5b4fc' : 'rgba(255,255,255,0.65)'} />
+                </button>
+              )}
+              <button onClick={() => setSearchOpen(s => !s)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+                aria-label={t('app.search')}>
+                <Search size={20} color={searchOpen ? '#fff' : 'rgba(255,255,255,0.75)'} />
+              </button>
+              {isSelectMode && (
+                <button onClick={exitSelectMode}
+                  style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Heebo, sans-serif' }}>
+                  <X size={14} color="#fff" />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>{t('app.cancel')}</span>
+                </button>
+              )}
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {!isOnline && <WifiOff size={18} color="rgba(255,255,255,0.7)" />}
-            {expiredCount > 0 && !isSelectMode && (
-              <button
-                onClick={handleArchiveExpired}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
-              >
-                <Archive size={13} color="#fbbf24" />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24' }}>{t('home.expired.label')} ({expiredCount})</span>
-              </button>
-            )}
-            {hasVault && (
-              <button
-                onClick={() => isVaultUnlocked ? lockVault() : setShowVaultModal(true)}
-                style={{ background: isVaultUnlocked ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                aria-label={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')}
-                title={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')}
-              >
-                <Shield size={17} color={isVaultUnlocked ? '#a5b4fc' : 'rgba(255,255,255,0.65)'} />
-              </button>
-            )}
-            <button
-              onClick={() => setSearchOpen(s => !s)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-              aria-label={t('app.search')}
-            >
-              <Search size={20} color={searchOpen ? '#fff' : 'rgba(255,255,255,0.75)'} />
-            </button>
-            {isSelectMode && (
-              <button
-                onClick={exitSelectMode}
-                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Heebo, sans-serif' }}
-              >
-                <X size={14} color="#fff" />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>{t('app.cancel')}</span>
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Balance display */}
-        <div style={{ marginBottom: 14, position: 'relative' }}>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginBottom: 4, fontWeight: 500 }}>
-            {isFiltered ? t('home.balance.filtered') : t('home.balance.total')}
-          </div>
-          <div style={{ fontSize: 40, fontWeight: 900, color: '#fff', letterSpacing: '-1px', lineHeight: 1 }}>
-            {formatCurrency(isFiltered ? filteredBalance : totalBalance)}
-          </div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 5 }}>
-            {isFiltered ? `${displayVouchers.length} ${t('home.of')} ${vouchers.length} ${t('home.vouchers')}` : `${vouchers.length} ${t('home.active.vouchers')}`}
-          </div>
-        </div>
+        {/* White balance + category tiles panel */}
+        <div style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
 
-        {/* Quick stats */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
-          {expiringCount > 0 && filterTab !== 'expiring' && (
-            <button
-              onClick={() => setFilterTab('expiring')}
-              style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}
-            >
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fbbf24', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{expiringCount} {t('home.tab.expiring')}</span>
-            </button>
-          )}
-          {forSaleCount > 0 && (
-            <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Tag size={12} color="rgba(255,255,255,0.8)" />
-              <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{forSaleCount} {t('home.for.sale')}</span>
+          {/* HUGE centered balance */}
+          <div style={{ padding: '18px 20px 12px', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+              {isFiltered ? t('home.balance.filtered') : t('home.balance.total')}
             </div>
-          )}
+            <div style={{ fontSize: 52, fontWeight: 900, color: 'var(--c-text)', letterSpacing: '-3px', lineHeight: 1 }}>
+              {formatCurrency(isFiltered ? filteredBalance : totalBalance)}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 6, fontWeight: 500 }}>
+              {isFiltered
+                ? `${displayVouchers.length} ${t('home.of')} ${vouchers.length} ${t('home.vouchers')}`
+                : `${vouchers.length} ${t('home.active.vouchers')}`}
+            </div>
+
+            {/* Quick stat chips */}
+            {(expiringCount > 0 || forSaleCount > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                {expiringCount > 0 && filterTab !== 'expiring' && (
+                  <button onClick={() => setFilterTab('expiring')}
+                    style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 20, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: '#d97706', fontWeight: 700 }}>{expiringCount} {t('home.tab.expiring')}</span>
+                  </button>
+                )}
+                {forSaleCount > 0 && (
+                  <div style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 20, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Tag size={11} color="#16a34a" />
+                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700 }}>{forSaleCount} {t('home.for.sale')}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Category icon tiles — horizontal scroll */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '0 16px 14px' }} className="no-scrollbar">
+            {/* Main filter tabs as icon tiles */}
+            {([
+              { key: 'all' as FilterTab, emoji: '🎁', label: t('home.tab.all'), color: '#16a34a' },
+              { key: 'expiring' as FilterTab, emoji: '⏰', label: t('home.tab.expiring'), color: '#d97706' },
+              { key: 'shared' as FilterTab, emoji: '👥', label: t('home.tab.shared'), color: '#7c3aed' },
+              { key: 'shared_with_me' as FilterTab, emoji: '🤝', label: t('home.shared.with.me'), color: '#2563eb' },
+            ]).map(({ key, emoji, label, color }) => {
+              const active = filterTab === key
+              return (
+                <button key={key} onClick={() => setFilterTab(key)}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, minWidth: 52, fontFamily: 'Heebo, sans-serif' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 13, background: active ? color + '20' : 'var(--c-bg)', border: `1.5px solid ${active ? color + '60' : 'var(--c-border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, transition: 'all 0.15s' }}>
+                    {emoji}
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: active ? color : 'var(--c-text3)', textAlign: 'center', whiteSpace: 'nowrap', maxWidth: 52, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {label.replace(/ \(\d+\)/, '')}
+                  </span>
+                </button>
+              )
+            })}
+
+            {/* Divider */}
+            {allCategories.length > 0 && (
+              <div style={{ width: 1, background: 'var(--c-border)', alignSelf: 'stretch', margin: '6px 4px', flexShrink: 0 }} />
+            )}
+
+            {/* Category tiles */}
+            {allCategories.map(cat => {
+              const emoji = CAT_EMOJIS_MAP[cat] || '🏷️'
+              const color = CAT_COLORS_HOME[cat] || '#16a34a'
+              const active = filterCats.includes(cat)
+              return (
+                <button key={cat}
+                  onClick={() => setFilterCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, minWidth: 52, fontFamily: 'Heebo, sans-serif' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 13, background: active ? color + '20' : 'var(--c-bg)', border: `1.5px solid ${active ? color + '60' : 'var(--c-border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, transition: 'all 0.15s' }}>
+                    {emoji}
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: active ? color : 'var(--c-text3)', textAlign: 'center', whiteSpace: 'nowrap', maxWidth: 52, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {cat}
+                  </span>
+                </button>
+              )
+            })}
+
+            {/* Clear category filters tile */}
+            {filterCats.length > 0 && (
+              <button onClick={() => setFilterCats([])}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, minWidth: 52, fontFamily: 'Heebo, sans-serif' }}>
+                <div style={{ width: 46, height: 46, borderRadius: 13, background: 'rgba(239,68,68,0.1)', border: '1.5px solid rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+                  ✕
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: '#ef4444', textAlign: 'center' }}>נקה</span>
+              </button>
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -747,28 +817,27 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Sticky filter bar ── */}
+      {/* ── Sticky controls bar (sort / view toggle) ── */}
       <div data-guide="filter-bar" className="sticky top-0 z-30" style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
-        {/* Tabs */}
         {!isSelectMode && (
-          <div className="flex items-center px-4 py-2 gap-2 overflow-x-auto no-scrollbar">
-            {([
-              { key: 'all',           label: `${t('home.tab.all')} (${vouchers.length})`,                                                        icon: null },
-              { key: 'expiring',      label: t('home.tab.expiring'),                                                                              icon: AlertTriangle },
-              { key: 'shared',        label: t('home.tab.shared'),                                                                                icon: Users },
-              { key: 'shared_with_me', label: `${t('home.shared.with.me')}${sharedWithMe.length > 0 ? ` (${sharedWithMe.length})` : ''}`,       icon: Handshake },
-            ] as { key: FilterTab; label: string; icon: React.ElementType | null }[]).map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setFilterTab(key)}
-                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
-                  filterTab === key ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                {Icon && <Icon className="w-3 h-3" />}
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center px-4 py-2 gap-2">
+            {/* Active filter summary */}
+            {(filterTab !== 'all' || filterCats.length > 0) && (
+              <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                {filterTab !== 'all' && (
+                  <span className="text-xs px-2.5 py-1 rounded-full font-semibold bg-green-100 text-green-700 flex-shrink-0 flex items-center gap-1">
+                    {filterTab === 'expiring' ? '⏰' : filterTab === 'shared' ? '👥' : '🤝'}
+                    {filterTab === 'expiring' ? t('home.tab.expiring') : filterTab === 'shared' ? t('home.tab.shared') : t('home.shared.with.me')}
+                  </span>
+                )}
+                {filterCats.map(cat => (
+                  <span key={cat} className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0"
+                    style={{ background: (CAT_COLORS_HOME[cat] || '#16a34a') + '18', color: CAT_COLORS_HOME[cat] || '#16a34a' }}>
+                    {CAT_EMOJIS_MAP[cat] || '🏷️'} {cat}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex-1" />
             <button
               onClick={() => setViewMode(v => v === 'grid' ? 'rows' : 'grid')}
@@ -780,12 +849,11 @@ export default function HomePage() {
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-                showFilters || filterCats.length > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                showFilters ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               {t('home.filter')}
-              {filterCats.length > 0 && <span className="bg-green-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">{filterCats.length}</span>}
             </button>
           </div>
         )}
@@ -804,54 +872,27 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Filters panel */}
+        {/* Sort panel */}
         {showFilters && !isSelectMode && (
-          <div className="px-4 pb-3 border-t pt-3" style={{ background: 'var(--c-bg)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-gray-600">קטגוריות</span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-600 ml-2">מיון:</span>
-                <select
-                  value={sortKey}
-                  onChange={e => setSortKey(e.target.value as SortKey)}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
-                >
-                  <option value="expiry">תפוגה</option>
-                  <option value="balance">₪ יתרה</option>
-                  <option value="store">חנות</option>
-                  <option value="added">הוספה</option>
-                </select>
-                <button
-                  onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all ${sortDir === 'desc' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-gray-200 text-gray-500'}`}
-                  title={sortDir === 'asc' ? 'סדר עולה' : 'סדר יורד'}
-                >
-                  <ArrowUpDown className="w-3.5 h-3.5" />
-                  {sortDir === 'asc' ? '↑' : '↓'}
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {allCategories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setFilterCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])}
-                  className={`text-xs px-3 py-1 rounded-full transition-all ${
-                    filterCats.includes(cat) ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-white text-gray-600 border border-gray-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-              {filterCats.length > 0 && (
-                <button
-                  onClick={() => setFilterCats([])}
-                  className="text-xs px-3 py-1 rounded-full bg-red-50 text-red-500 border border-red-200"
-                >
-                  <X className="w-3 h-3 inline" /> נקה
-                </button>
-              )}
-            </div>
+          <div className="px-4 pb-3 border-t pt-3 flex items-center gap-2" style={{ background: 'var(--c-bg)' }}>
+            <span className="text-xs font-medium text-gray-500">מיון:</span>
+            <select
+              value={sortKey}
+              onChange={e => setSortKey(e.target.value as SortKey)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
+            >
+              <option value="expiry">תפוגה</option>
+              <option value="balance">₪ יתרה</option>
+              <option value="store">חנות</option>
+              <option value="added">הוספה</option>
+            </select>
+            <button
+              onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all ${sortDir === 'desc' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-gray-200 text-gray-500'}`}
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
           </div>
         )}
       </div>
