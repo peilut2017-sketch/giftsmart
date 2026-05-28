@@ -1119,6 +1119,18 @@ export default function AdminPage() {
 
   const usersCount = systemStats?.total_users ?? null
 
+  // Inbox counts (fetched on every load)
+  const [inboxCounts, setInboxCounts] = useState<{ support_unread: number; reports_pending: number; submissions_pending: number } | null>(null)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.rpc('admin_get_inbox_counts').then(({ data }) => {
+      if (data) setInboxCounts(data as typeof inboxCounts)
+    })
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const inboxTotal = (inboxCounts?.support_unread ?? 0) + (inboxCounts?.reports_pending ?? 0) + (inboxCounts?.submissions_pending ?? 0)
+
   return (
     <div className="flex-1 bg-gray-50">
       {deleteTarget && (
@@ -1169,6 +1181,47 @@ export default function AdminPage() {
       </div>
 
       <div className="p-4 pb-24 space-y-4">
+
+        {/* ── Inbox summary banner ── */}
+        {inboxCounts !== null && inboxTotal > 0 && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-amber-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-sm font-bold text-gray-800">
+                {inboxTotal} פריטים ממתינים לטיפול
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {inboxCounts.support_unread > 0 && (
+                <button
+                  onClick={() => { setShowMessages(true); setTimeout(() => document.getElementById('admin-messages')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.support_unread}</span>
+                  הודעות תמיכה
+                </button>
+              )}
+              {inboxCounts.reports_pending > 0 && (
+                <button
+                  onClick={() => { setShowReports(true); setTimeout(() => document.getElementById('admin-reports')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.reports_pending}</span>
+                  דיווחי משתמשים
+                </button>
+              )}
+              {inboxCounts.submissions_pending > 0 && (
+                <button
+                  onClick={() => { setShowDiscounts(true); setDiscountTab('submissions'); setTimeout(() => document.getElementById('admin-discounts')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.submissions_pending}</span>
+                  הגשות הנחות
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Premium feature flag ── */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -1865,7 +1918,7 @@ export default function AdminPage() {
         </div>
 
         {/* ── Support Messages ── */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+        <div id="admin-messages" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between p-4"
             onClick={() => setShowMessages(v => !v)}
@@ -2429,7 +2482,8 @@ export default function AdminPage() {
         </div>
 
         {/* Reports */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+
+        <div id="admin-reports" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between px-4 py-4"
             onClick={() => { const next = !showReports; setShowReports(next); if (next) loadReports() }}
@@ -2648,7 +2702,7 @@ export default function AdminPage() {
         </div>
 
         {/* ── הנחות חכמות ── */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+        <div id="admin-discounts" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between p-4"
             onClick={() => {
