@@ -645,7 +645,7 @@ export default function HomePage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <img src="/logo.png" alt="GiftSmart" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+              <img src="/logo.png" alt="GiftSmart" style={{ width: 26, height: 26, objectFit: 'contain', mixBlendMode: 'screen' }} />
             </div>
             <div>
               <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, letterSpacing: '-0.3px' }}>GiftSmart</div>

@@ -191,7 +191,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+            <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" style={{ mixBlendMode: 'screen' }} />
           </div>
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
             <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5 shadow-lg bg-gradient-to-br from-green-400 to-emerald-600`}>
@@ -241,7 +241,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+          <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" style={{ mixBlendMode: 'screen' }} />
           <span className="text-xs text-gray-400 mt-1 block">{t('auth.version')} {APP_VERSION}</span>
         </div>
 
