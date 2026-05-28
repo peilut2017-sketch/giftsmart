@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, Copy, Tag, Eye, Heart, X } from 'lucide-react'
+import { ExternalLink, Copy, Tag, Eye, Heart, X, Flag } from 'lucide-react'
 import { useDiscounts } from '../contexts/DiscountsContext'
 import { useT } from '../lib/i18n'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
+import { supabase } from '../lib/supabase'
 import type { DiscountDeal } from '../types'
 
 const STORE_PALETTE = [
@@ -73,12 +74,39 @@ function isSafeUrl(url: string | undefined): boolean {
 }
 
 // ── Detail Sheet ─────────────────────────────────────────────────────────────
+const REPORT_REASONS = [
+  { key: 'wrong',   labelKey: 'deal.report.reason.wrong'   },
+  { key: 'expired', labelKey: 'deal.report.reason.expired' },
+  { key: 'items',   labelKey: 'deal.report.reason.items'   },
+  { key: 'other',   labelKey: 'deal.report.reason.other'   },
+] as const
+
 function DealDetailSheet({ deal, onClose }: { deal: DiscountDeal; onClose: () => void }) {
   const { copyPromoCode, incrementDealViewCount, toggleLike, likedDealIds } = useDiscounts()
   const { t } = useT()
   const trackedRef = useRef(false)
   const isLiked = likedDealIds.has(deal.deal_id)
+  const [showReport, setShowReport] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportSent, setReportSent] = useState(false)
   useBodyScrollLock()
+
+  async function handleSubmitReport() {
+    if (!reportReason) return
+    setReportLoading(true)
+    try {
+      await supabase.rpc('submit_deal_report', {
+        p_deal_id: deal.deal_id,
+        p_reason: reportReason,
+        p_details: reportDetails || null,
+      })
+      setReportSent(true)
+    } finally {
+      setReportLoading(false)
+    }
+  }
 
   // Count the view only when the sheet opens (user actually viewed the deal)
   useEffect(() => {
@@ -231,6 +259,61 @@ function DealDetailSheet({ deal, onClose }: { deal: DiscountDeal; onClose: () =>
               <ExternalLink className="w-4 h-4" />
               {t('discounts.open_deal')}
             </a>
+          )}
+
+          {/* Report section */}
+          {reportSent ? (
+            <p className="text-xs text-center text-green-600 dark:text-green-400 py-2">{t('deal.report.sent')}</p>
+          ) : showReport ? (
+            <div className="border border-red-100 dark:border-red-900/40 rounded-2xl p-4 space-y-3 bg-red-50/50 dark:bg-red-900/10">
+              <p className="text-xs font-bold text-red-700 dark:text-red-400">{t('deal.report.title')}</p>
+              <div className="flex flex-wrap gap-2">
+                {REPORT_REASONS.map(r => (
+                  <button
+                    key={r.key}
+                    onClick={() => setReportReason(r.key)}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${
+                      reportReason === r.key
+                        ? 'border-red-500 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                        : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    {t(r.labelKey)}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={reportDetails}
+                onChange={e => setReportDetails(e.target.value)}
+                placeholder={t('deal.report.details.placeholder')}
+                rows={2}
+                className="w-full text-xs px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                dir="rtl"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSubmitReport}
+                  disabled={!reportReason || reportLoading}
+                  className="flex-1 py-2 text-xs font-semibold bg-red-500 text-white rounded-xl disabled:opacity-50 active:scale-95 transition-transform"
+                >
+                  {reportLoading ? '...' : t('deal.report.submit')}
+                </button>
+                <button
+                  onClick={() => { setShowReport(false); setReportReason(''); setReportDetails('') }}
+                  className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-xl"
+                >
+                  {t('app.cancel')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowReport(true)}
+              className="flex items-center justify-center gap-1.5 w-full py-2 text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              <Flag className="w-3.5 h-3.5" />
+              {t('deal.report.button')}
+            </button>
           )}
         </div>
       </div>

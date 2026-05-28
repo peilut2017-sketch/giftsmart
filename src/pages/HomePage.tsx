@@ -725,13 +725,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Collapsible Search Bar ── */}
-      {searchOpen && (
+      {/* ── Search Bar — always visible when query active, toggle otherwise ── */}
+      {(searchOpen || !!search) && (
         <div style={{ background: 'var(--c-surface)', padding: '10px 16px', borderBottom: '1px solid var(--c-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--c-bg)', borderRadius: 12, padding: '0 12px' }}>
             <Search size={16} color="var(--c-text3)" />
             <input
-              autoFocus
+              autoFocus={searchOpen}
               type="search"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -739,7 +739,10 @@ export default function HomePage() {
               style={{ flex: 1, height: 42, border: 'none', background: 'transparent', fontSize: 15, color: 'var(--c-text)', fontFamily: 'Heebo, sans-serif', outline: 'none', direction: 'rtl' }}
             />
             {search && (
-              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2 }}>
+              <button
+                onClick={() => { setSearch(''); setSearchOpen(false) }}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2 }}
+              >
                 <X size={15} color="var(--c-text3)" />
               </button>
             )}

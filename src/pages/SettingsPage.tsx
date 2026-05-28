@@ -110,6 +110,7 @@ export default function SettingsPage() {
   // Clubs selector state
   const [localClubIds, setLocalClubIds] = useState<string[]>([])
   const [savingClubs, setSavingClubs] = useState(false)
+  const [clubsOpen, setClubsOpen] = useState(false)
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
@@ -1050,96 +1051,117 @@ export default function SettingsPage() {
         {/* ── הכרטיסים והמועדונים שלי ── */}
         <SL>{t('settings.my_clubs')}</SL>
         <Card>
-          <div className="p-4 space-y-4">
-            <p className="text-xs" style={{ color: 'var(--c-text3)' }}>{t('settings.my_clubs.sub')}</p>
+          <button
+            onClick={() => setClubsOpen(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3.5 text-right"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>{t('settings.my_clubs')}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--c-text3)' }}>{t('settings.my_clubs.sub')}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 mr-2">
+              {localClubIds.length > 0 && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--c-primary)', color: '#fff' }}>
+                  {localClubIds.length}
+                </span>
+              )}
+              {clubsOpen
+                ? <ChevronUp className="w-4 h-4" style={{ color: 'var(--c-text3)' }} />
+                : <ChevronDown className="w-4 h-4" style={{ color: 'var(--c-text3)' }} />
+              }
+            </div>
+          </button>
 
-            {clubs.length === 0 ? (
-              <p className="text-sm text-center py-4" style={{ color: 'var(--c-text3)' }}>
-                {t('app.loading')}
-              </p>
-            ) : (
-              <>
-                {/* Credit cards */}
-                {clubs.filter(c => c.type === 'credit_card').length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <CreditCard className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
-                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
-                        {t('settings.clubs.credit_card')}
-                      </span>
+          {clubsOpen && (
+            <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: 'var(--c-border)' }}>
+              {clubs.length === 0 ? (
+                <p className="text-sm text-center py-4" style={{ color: 'var(--c-text3)' }}>
+                  {t('app.loading')}
+                </p>
+              ) : (
+                <>
+                  {/* Credit cards */}
+                  {clubs.filter(c => c.type === 'credit_card').length > 0 && (
+                    <div className="pt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CreditCard className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
+                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                          {t('settings.clubs.credit_card')}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {clubs.filter(c => c.type === 'credit_card').map(club => {
+                          const selected = localClubIds.includes(club.id)
+                          return (
+                            <button
+                              key={club.id}
+                              onClick={() => setLocalClubIds(prev =>
+                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                              )}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                                selected
+                                  ? 'border-green-500 bg-green-50 text-green-700'
+                                  : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                              }`}
+                            >
+                              {selected && <Check className="w-3 h-3" />}
+                              {club.name}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {clubs.filter(c => c.type === 'credit_card').map(club => {
-                        const selected = localClubIds.includes(club.id)
-                        return (
-                          <button
-                            key={club.id}
-                            onClick={() => setLocalClubIds(prev =>
-                              selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
-                            )}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                              selected
-                                ? 'border-green-500 bg-green-50 text-green-700'
-                                : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
-                            }`}
-                          >
-                            {selected && <Check className="w-3 h-3" />}
-                            {club.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Loyalty clubs */}
-                {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Tag className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
-                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
-                        {t('settings.clubs.loyalty_club')}
-                      </span>
+                  {/* Loyalty clubs */}
+                  {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Tag className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
+                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                          {t('settings.clubs.loyalty_club')}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {clubs.filter(c => c.type === 'loyalty_club').map(club => {
+                          const selected = localClubIds.includes(club.id)
+                          return (
+                            <button
+                              key={club.id}
+                              onClick={() => setLocalClubIds(prev =>
+                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                              )}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                                selected
+                                  ? 'border-green-500 bg-green-50 text-green-700'
+                                  : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                              }`}
+                            >
+                              {selected && <Check className="w-3 h-3" />}
+                              {club.name}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {clubs.filter(c => c.type === 'loyalty_club').map(club => {
-                        const selected = localClubIds.includes(club.id)
-                        return (
-                          <button
-                            key={club.id}
-                            onClick={() => setLocalClubIds(prev =>
-                              selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
-                            )}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                              selected
-                                ? 'border-green-500 bg-green-50 text-green-700'
-                                : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
-                            }`}
-                          >
-                            {selected && <Check className="w-3 h-3" />}
-                            {club.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                <button
-                  onClick={handleSaveClubs}
-                  disabled={savingClubs}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: 'var(--c-primary)' }}
-                >
-                  {savingClubs
-                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <Check className="w-4 h-4" />
-                  }
-                  {t('app.save')}
-                </button>
-              </>
-            )}
-          </div>
+                  <button
+                    onClick={handleSaveClubs}
+                    disabled={savingClubs}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ background: 'var(--c-primary)' }}
+                  >
+                    {savingClubs
+                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <Check className="w-4 h-4" />
+                    }
+                    {t('app.save')}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* ── כלים ── */}

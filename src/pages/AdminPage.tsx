@@ -159,6 +159,8 @@ export default function AdminPage() {
     created_at: string
     purchase_id: string | null
     listing_id: string | null
+    deal_id: string | null
+    source: string | null
   }[]>([])
   const [reportsLoaded, setReportsLoaded] = useState(false)
   const [reportsError, setReportsError] = useState<string | null>(null)
@@ -2467,10 +2469,20 @@ export default function AdminPage() {
                 <div key={r.report_id} className={`border rounded-2xl p-4 space-y-2 ${r.status === 'pending' ? 'border-red-200 bg-red-50' : r.status === 'reviewed' ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium text-gray-800">{r.reason}</p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {r.source === 'discount' && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">🏷 הנחות</span>
+                        )}
+                        <p className="text-sm font-medium text-gray-800">{r.reason}</p>
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">
                         מדווח: <span className="font-medium">{r.reporter_email}</span>
-                        {' · '}על: <span className="font-medium text-red-700">{r.reported_email}</span>
+                        {r.source !== 'discount' && (
+                          <>{' · '}על: <span className="font-medium text-red-700">{r.reported_email}</span></>
+                        )}
+                        {r.source === 'discount' && r.deal_id && (
+                          <>{' · '}הנחה: <span className="font-medium text-purple-700 font-mono text-[10px]">{r.deal_id}</span></>
+                        )}
                       </p>
                     </div>
                     <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${r.status === 'pending' ? 'bg-red-100 text-red-700' : r.status === 'reviewed' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
