@@ -97,12 +97,15 @@ function DealDetailSheet({ deal, onClose }: { deal: DiscountDeal; onClose: () =>
     if (!reportReason) return
     setReportLoading(true)
     try {
-      await supabase.rpc('submit_deal_report', {
+      const { error } = await supabase.rpc('submit_deal_report', {
         p_deal_id: deal.deal_id,
         p_reason: reportReason,
         p_details: reportDetails || null,
       })
+      if (error) throw error
       setReportSent(true)
+    } catch {
+      alert('שגיאה בשליחת הדיווח — נסה שוב')
     } finally {
       setReportLoading(false)
     }
