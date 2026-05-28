@@ -51,10 +51,25 @@ const TermsPage        = lazy(() => import('./pages/TermsPage'))
 const SharedVoucherPage = lazy(() => import('./pages/SharedVoucherPage'))
 const GiftPage         = lazy(() => import('./pages/GiftPage'))
 
+function LoadingDots({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const dotClass = size === 'sm' ? 'w-2 h-2' : 'w-2.5 h-2.5'
+  return (
+    <div className="flex items-center gap-1.5">
+      {[0, 1, 2].map(i => (
+        <div
+          key={i}
+          className={`${dotClass} rounded-full bg-green-500 animate-bounce`}
+          style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }}
+        />
+      ))}
+    </div>
+  )
+}
+
 function PageSpinner() {
   return (
     <div className="flex-1 flex items-center justify-center min-h-[200px]">
-      <div className="w-8 h-8 border-2 border-green-200 border-t-green-500 rounded-full animate-spin" />
+      <LoadingDots />
     </div>
   )
 }
@@ -340,7 +355,7 @@ function AppRoutes() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-gray-50">
         <GiftSmartSplash />
-        <div className="w-8 h-8 border-3 border-green-200 border-t-green-500 rounded-full animate-spin" style={{ borderWidth: 3 }} />
+        <LoadingDots />
       </div>
     )
   }

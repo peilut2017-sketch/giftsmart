@@ -3,11 +3,7 @@ import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
-import { extractFromSMS } from '../utils/smsExtractor'
-import type { ExtractionCandidate } from '../utils/smsExtractor'
-import { analyzeVoucherImage, analyzeVoucherText, isGeminiAvailable } from '../lib/gemini'
-import { phCapture } from '../lib/posthog'
-import { X, Clipboard, Plus, Camera, Tag, Link, ImagePlus, Sparkles, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar, HelpCircle } from 'lucide-react'
+import { X, Plus, Camera, Tag, Link, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar } from 'lucide-react'
 import { useT } from '../lib/i18n'
 
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
@@ -17,8 +13,6 @@ import { supabase } from '../lib/supabase'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { useAuth } from '../contexts/AuthContext'
-
-const OCR_STORAGE_KEY = () => `ocr_scans_${new Date().toISOString().slice(0, 7)}` // YYYY-MM
 
 // ── Date display helpers (Israeli format DD.MM.YYYY) ──────────────────────────
 function isoToDisplay(iso: string): string {
@@ -59,7 +53,7 @@ interface Props {
 
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
-  const { limits, openUpgradeSheet } = useSubscription()
+  useSubscription()
   const { hasVault, isUnifiedVault, hint, isVaultUnlocked, setupVaultFromPassword, unlockVault, unlockVaultFromRecovery, encrypt, decrypt, decryptedMap } = useE2EE()
   const { user } = useAuth()
   const { t } = useT()
@@ -68,7 +62,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
   const [showStoreDropdown, setShowStoreDropdown] = useState(false)
   const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
-  const [balance, setBalance] = useState(voucher?.balance?.toString() || '')
+  const [balance] = useState(voucher?.balance?.toString() || '')
   // item_name: for item-mode vouchers; also supports legacy "📦 " prefix in notes
   const [itemName, setItemName] = useState(() => {
     if (voucher?.item_name) return voucher.item_name
@@ -95,23 +89,16 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [newCatName, setNewCatName] = useState('')
   const [showCatInput, setShowCatInput] = useState(false)
   const [showCatDropdown, setShowCatDropdown] = useState(false)
-  const [showSMSInput, setShowSMSInput] = useState(false)
-  const [smsText, setSmsText] = useState('')
   const [loading, setLoading] = useState(false)
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
   const [isLocked, setIsLocked] = useState(voucher?.is_locked || false)
   const [lockReason, setLockReason] = useState(voucher?.lock_reason || '')
   const [showScanner, setShowScanner] = useState(false)
-  const [ocrLoading, setOcrLoading] = useState(false)
-  const [smsLoading, setSmsLoading] = useState(false)
-  const [showImageMenu, setShowImageMenu] = useState(false)
-  const [pendingCandidates, setPendingCandidates] = useState<ExtractionCandidate | null>(null)
   const [amountUnit, setAmountUnit] = useState<AmountUnit>(() => {
     if (voucher?.item_name || voucher?.notes?.startsWith('📦 ')) return 'פריט'
     return '₪'
   })
   const [showUnitPicker, setShowUnitPicker] = useState(false)
-  const geminiAvailable = isGeminiAvailable()
 
   // E2EE vault — for new vouchers, default to user's preference
   const [e2eeEnabled, setE2eeEnabled] = useState(
@@ -125,9 +112,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [vaultLoading, setVaultLoading] = useState(false)
   const [vaultError, setVaultError] = useState('')
   const scannerRef = useRef<Html5Qrcode | null>(null)
-  const imageCameraRef = useRef<HTMLInputElement>(null)
-  const imageFileRef = useRef<HTMLInputElement>(null)
-  const imageMenuRef = useRef<HTMLDivElement>(null)
   const operatorPickerRef = useRef<HTMLDivElement>(null)
   const hiddenDateRef = useRef<HTMLInputElement>(null)
 
@@ -163,21 +147,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [operators, setOperators] = useState<{ id: string; name: string; url: string }[]>([])
   const [showOperatorPicker, setShowOperatorPicker] = useState(false)
   const [operatorsLoaded, setOperatorsLoaded] = useState(false)
-
-  useEffect(() => {
-    if (!showImageMenu) return
-    function onOutside(e: MouseEvent | TouchEvent) {
-      if (imageMenuRef.current && !imageMenuRef.current.contains(e.target as Node)) {
-        setShowImageMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', onOutside)
-    document.addEventListener('touchstart', onOutside)
-    return () => {
-      document.removeEventListener('mousedown', onOutside)
-      document.removeEventListener('touchstart', onOutside)
-    }
-  }, [showImageMenu])
 
   // Close operator picker on outside click
   useEffect(() => {
@@ -285,144 +254,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     } catch {}
     scannerRef.current = null
     setShowScanner(false)
-  }
-
-  function applyExtracted(extracted: { store_name?: string; amount?: number; balance?: number; code?: string; cvv?: string; expiry_date?: string; categories?: string[]; link?: string; candidates?: ExtractionCandidate }) {
-    let found = 0
-    if (extracted.store_name) { setStoreName(extracted.store_name); setStoreSearch(extracted.store_name); found++ }
-    if (extracted.amount) { setAmount(extracted.amount.toString()); if (!balance) setBalance(extracted.amount.toString()); found++ }
-    if (extracted.balance && !extracted.amount) { setBalance(extracted.balance.toString()); found++ }
-    if (extracted.code) { setCode(extracted.code); found++ }
-    if (extracted.cvv) { setCvv(extracted.cvv); found++ }
-    if (extracted.expiry_date) { setExpiryDate(extracted.expiry_date); setDisplayDate(isoToDisplay(extracted.expiry_date)); found++ }
-    if (extracted.link) { setLink(extracted.link); found++ }
-    if (extracted.categories && extracted.categories.length > 0) {
-      // Map category IDs to Hebrew names used by the form
-      const names = extracted.categories
-        .map(id => categories.find(c => c.id === id)?.name)
-        .filter((n): n is string => !!n)
-      if (names.length > 0) { setSelectedCats(names); found++ }
-    }
-    // Surface ambiguous candidates as quick-answer questions
-    if (extracted.candidates && Object.keys(extracted.candidates).length > 0) {
-      setPendingCandidates(extracted.candidates)
-    }
-    return found
-  }
-
-  function dismissCandidate(field: keyof ExtractionCandidate) {
-    setPendingCandidates(prev => {
-      if (!prev) return null
-      const next = { ...prev }
-      delete next[field]
-      return Object.keys(next).length > 0 ? next : null
-    })
-  }
-
-  async function handleImageOCR(file: File) {
-    if (file.type && !file.type.startsWith('image/')) return toast.error('יש לבחור קובץ תמונה')
-    const scanKey = OCR_STORAGE_KEY()
-    const scansThisMonth = parseInt(localStorage.getItem(scanKey) || '0')
-    if (scansThisMonth >= limits.maxScansPerMonth) {
-      openUpgradeSheet(`הגעת למגבלת ${limits.maxScansPerMonth} הסריקות לחודש זה`)
-      return
-    }
-    setOcrLoading(true)
-    const usingGemini = isGeminiAvailable()
-    const toastId = toast.loading(usingGemini ? 'מנתח תמונה עם AI...' : 'מנתח תמונה... (עד 15 שניות)')
-    try {
-      let extracted: ReturnType<typeof extractFromSMS>
-
-      if (usingGemini) {
-        extracted = await analyzeVoucherImage(file)
-      } else {
-        // Fallback: Tesseract → regex
-        const { createWorker } = await import('tesseract.js')
-        const worker = await createWorker(['heb', 'eng'])
-        const url = URL.createObjectURL(file)
-        const { data: { text } } = await worker.recognize(url)
-        URL.revokeObjectURL(url)
-        await worker.terminate()
-        if (!text.trim()) {
-          toast.dismiss(toastId)
-          return toast.error('לא ניתן לחלץ טקסט מהתמונה')
-        }
-        extracted = extractFromSMS(text)
-      }
-
-      // Increment scan counter
-      localStorage.setItem(scanKey, (scansThisMonth + 1).toString())
-
-      const found = applyExtracted(extracted)
-      toast.dismiss(toastId)
-      if (found > 0) toast.success(`זוהו ${found} פרטים${usingGemini ? ' (AI)' : ''}`)
-      else toast('לא זוהו פרטי שובר — נסה תמונה ברורה יותר', { icon: '🔍' })
-    } catch (err) {
-      // Gemini failed — try Tesseract as last resort
-      if (isGeminiAvailable()) {
-        try {
-          toast.dismiss(toastId)
-          const toastId2 = toast.loading('מנסה OCR...')
-          const { createWorker } = await import('tesseract.js')
-          const worker = await createWorker(['heb', 'eng'])
-          const url = URL.createObjectURL(file)
-          const { data: { text } } = await worker.recognize(url)
-          URL.revokeObjectURL(url)
-          await worker.terminate()
-          const extracted = extractFromSMS(text)
-          localStorage.setItem(scanKey, (scansThisMonth + 1).toString())
-          const found = applyExtracted(extracted)
-          toast.dismiss(toastId2)
-          if (found > 0) toast.success(`זוהו ${found} פרטים (OCR)`)
-          else toast('לא זוהו פרטי שובר — נסה תמונה ברורה יותר', { icon: '🔍' })
-          return
-        } catch {}
-      }
-      toast.dismiss(toastId)
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error('[OCR]', msg)
-      phCapture('voucher_scan_failed', { error: msg, source: 'image' })
-      phCapture('ocr_failed', { error: msg, source: 'image' })
-      // Show a hint if it's an HEIC file
-      if (msg.includes('decode') || msg.includes('heic') || msg.includes('heif')) {
-        toast.error('פורמט HEIC לא נתמך — שמור כ-JPEG/PNG ונסה שוב')
-      } else if (msg.includes('GEMINI_API_KEY')) {
-        toast.error('מפתח Gemini לא מוגדר בשרת — הגדר GEMINI_API_KEY ב-Supabase Secrets')
-      } else {
-        toast.error(`שגיאה בניתוח התמונה: ${msg}`)
-      }
-    } finally {
-      setOcrLoading(false)
-    }
-  }
-
-  async function handleSMSExtract() {
-    if (!smsText.trim()) return
-    if (geminiAvailable) {
-      setSmsLoading(true)
-      const toastId = toast.loading('מנתח טקסט עם AI...')
-      try {
-        const extracted = await analyzeVoucherText(smsText)
-        const found = applyExtracted(extracted)
-        toast.dismiss(toastId)
-        if (found > 0) toast.success(`זוהו ${found} פרטים (AI)`)
-        else toast('לא זוהו פרטי שובר — נסה להדביק טקסט אחר', { icon: '🔍' })
-      } catch (smsErr) {
-        toast.dismiss(toastId)
-        phCapture('voucher_scan_failed', { error: String(smsErr), source: 'sms' })
-        phCapture('ocr_failed', { error: String(smsErr), source: 'sms' })
-        const extracted = extractFromSMS(smsText)
-        applyExtracted(extracted)
-        toast.success('פרטים חולצו')
-      } finally {
-        setSmsLoading(false)
-      }
-    } else {
-      const extracted = extractFromSMS(smsText)
-      applyExtracted(extracted)
-      toast.success('פרטים חולצו בהצלחה!')
-    }
-    setShowSMSInput(false)
   }
 
   function toggleCat(cat: string) {
@@ -608,198 +439,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-bold">{voucher ? t('form.edit.voucher') : t('form.add.voucher')}</h2>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSMSInput(!showSMSInput)}
-              className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-medium"
-              type="button"
-            >
-              <Clipboard className="w-3.5 h-3.5" />
-              {t('form.paste.sms')}
-              {geminiAvailable && <Sparkles className="w-3 h-3 text-purple-400" />}
-            </button>
-            <div className="relative" ref={imageMenuRef}>
-              <button
-                type="button"
-                disabled={ocrLoading}
-                onClick={() => setShowImageMenu(v => !v)}
-                className="flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-full font-medium disabled:opacity-50"
-              >
-                <ImagePlus className="w-3.5 h-3.5" />
-                {ocrLoading ? 'מנתח...' : t('form.scan.image')}
-                {geminiAvailable && !ocrLoading && <Sparkles className="w-3 h-3 text-purple-400" />}
-              </button>
-              {showImageMenu && (
-                <div className="absolute top-full mt-1 right-0 bg-white rounded-2xl shadow-lg border border-gray-100 py-1 z-50 min-w-[140px]">
-                  <button
-                    type="button"
-                    onClick={() => { setShowImageMenu(false); imageCameraRef.current?.click() }}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <Camera className="w-4 h-4 text-gray-500" />
-                    מצלמה
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowImageMenu(false); imageFileRef.current?.click() }}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <ImagePlus className="w-4 h-4 text-gray-500" />
-                    גלריה / קבצים
-                  </button>
-                </div>
-              )}
-              {/* Camera input */}
-              <input
-                ref={imageCameraRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleImageOCR(f); e.target.value = '' }}
-              />
-              {/* Gallery / files input */}
-              <input
-                ref={imageFileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleImageOCR(f); e.target.value = '' }}
-              />
-            </div>
             <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
-
-        {/* SMS Input */}
-        {showSMSInput && (
-          <div className="p-4 bg-blue-50 border-b">
-            <textarea
-              value={smsText}
-              onChange={e => setSmsText(e.target.value)}
-              placeholder="הדבק כאן את הודעת ה-SMS או המייל עם פרטי השובר..."
-              className="w-full p-3 rounded-xl border border-blue-200 text-sm bg-white resize-none h-24 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              dir="auto"
-            />
-            <button
-              onClick={handleSMSExtract}
-              disabled={!smsText.trim() || smsLoading}
-              className="mt-2 w-full bg-blue-500 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
-              type="button"
-            >
-              {smsLoading ? 'מנתח...' : (
-                <>
-                  {geminiAvailable && <Sparkles className="w-3.5 h-3.5" />}
-                  חלץ פרטים {geminiAvailable ? '(AI)' : ''}
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
-        {/* Quick-answer candidates panel */}
-        {pendingCandidates && (
-          <div className="p-4 bg-amber-50 border-b border-amber-100">
-            <div className="flex items-center gap-1.5 mb-3">
-              <HelpCircle className="w-4 h-4 text-amber-600" />
-              <span className="text-sm font-semibold text-amber-800">{t('extract.candidates.title')}</span>
-            </div>
-            <div className="space-y-3">
-              {pendingCandidates.code && pendingCandidates.code.length > 1 && (
-                <div>
-                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.code')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {pendingCandidates.code.map(c => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => { setCode(c); dismissCandidate('code') }}
-                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs font-mono hover:bg-amber-100 transition-colors"
-                      >{c}</button>
-                    ))}
-                    <button type="button" onClick={() => dismissCandidate('code')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
-                  </div>
-                </div>
-              )}
-              {pendingCandidates.expiry_date && pendingCandidates.expiry_date.length > 1 && (
-                <div>
-                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.expiry')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {pendingCandidates.expiry_date.map(d => (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => { setExpiryDate(d); setDisplayDate(isoToDisplay(d)); dismissCandidate('expiry_date') }}
-                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
-                      >{d}</button>
-                    ))}
-                    <button type="button" onClick={() => dismissCandidate('expiry_date')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
-                  </div>
-                </div>
-              )}
-              {pendingCandidates.store_name && pendingCandidates.store_name.length > 1 && (
-                <div>
-                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.store')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {pendingCandidates.store_name.map(n => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => { setStoreName(n); setStoreSearch(n); dismissCandidate('store_name') }}
-                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
-                      >{n}</button>
-                    ))}
-                    <button type="button" onClick={() => dismissCandidate('store_name')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
-                  </div>
-                </div>
-              )}
-              {pendingCandidates.amount && pendingCandidates.amount.length > 1 && (
-                <div>
-                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.amount')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {pendingCandidates.amount.map(a => (
-                      <button
-                        key={a}
-                        type="button"
-                        onClick={() => { setAmount(a.toString()); dismissCandidate('amount') }}
-                        className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
-                      >₪{a}</button>
-                    ))}
-                    <button type="button" onClick={() => dismissCandidate('amount')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
-                  </div>
-                </div>
-              )}
-              {pendingCandidates.categories && pendingCandidates.categories.length > 1 && (
-                <div>
-                  <p className="text-xs text-amber-700 font-medium mb-1.5">{t('extract.candidates.categories')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {pendingCandidates.categories.map((catSet, i) => {
-                      const labels = catSet
-                        .map(id => categories.find(c => c.id === id))
-                        .filter(Boolean)
-                        .map(c => `${c!.emoji} ${c!.name}`)
-                        .join(', ')
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => {
-                            const names = catSet.map(id => categories.find(c => c.id === id)?.name).filter((n): n is string => !!n)
-                            setSelectedCats(names)
-                            dismissCandidate('categories')
-                          }}
-                          className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-full text-xs hover:bg-amber-100 transition-colors"
-                        >{labels || catSet.join(', ')}</button>
-                      )
-                    })}
-                    <button type="button" onClick={() => dismissCandidate('categories')} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">{t('extract.candidates.skip')}</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Camera Scanner */}
         {showScanner && (
