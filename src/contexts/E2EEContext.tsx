@@ -88,6 +88,7 @@ interface E2EEContextValue {
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   enableBiometricVaultUnlock: (userId: string, userName: string, email?: string) => Promise<boolean>
+  unlockVaultWithBiometric: () => Promise<boolean>
   // Re-keys the vault using the current in-memory vault key (no old passphrase needed).
   // Call this when the login password changes so the vault stays in sync.
   reDeriveVaultKeyFromPassword: (
@@ -590,6 +591,34 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     return registerBiometricWithVault(userId, userName, vaultKey, email)
   }, [vaultKey])
 
+  // ── Unlock vault via biometric (PRF-wrapped key) ────────────────────────────
+  const unlockVaultWithBiometric = useCallback(async (): Promise<boolean> => {
+    try {
+      const { verifyBiometricForVaultUnlock } = await import('../lib/passkey')
+      const result = await verifyBiometricForVaultUnlock()
+      if (!result.authenticated) return false
+      if (!result.vaultKey) {
+        // PRF not available or no wrapped key stored — store PRF bytes so next manual
+        // unlock can wrap and store the vault key automatically.
+        if (result.prfBytes) {
+          const b64 = btoa(String.fromCharCode(...result.prfBytes))
+          sessionStorage.setItem(PRF_PENDING_KEY, b64)
+        }
+        return false
+      }
+      const check = localStorage.getItem(CHECK_KEY)
+      if (check) {
+        const dec = await decryptField(result.vaultKey, check)
+        if (dec !== VERIFY_PLAINTEXT) return false
+      }
+      setVaultKey(result.vaultKey)
+      await persistVaultKey(result.vaultKey)
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   const dismissRecoveryPhrase = useCallback(() => {
     setPendingRecoveryPhrase(null)
     setNeedsOAuthVaultSetup(false)
@@ -788,6 +817,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       resetVault,
       migrateVault,
       enableBiometricVaultUnlock,
+      unlockVaultWithBiometric,
       reDeriveVaultKeyFromPassword,
       regenerateRecoveryKey,
       dismissRecoveryPhrase,

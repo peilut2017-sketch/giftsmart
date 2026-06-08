@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase'
 import ChatModal from '../components/ChatModal'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
+import { usePageView } from '../hooks/usePageView'
 
 // ─── Rating Stars ────────────────────────────────────────────────────────────
 function StarRating({ value, max = 5, onChange }: { value: number; max?: number; onChange?: (v: number) => void }) {
@@ -774,6 +775,151 @@ function MarketplaceAccessGate() {
   )
 }
 
+// ─── Seller Profile Modal ─────────────────────────────────────────────────────
+interface SellerProfileRow {
+  user_id: string
+  full_name: string
+  phone: string
+  email: string
+  id_number: string
+  verification_status: 'pending' | 'verified' | 'rejected'
+  admin_note: string | null
+}
+
+function SellerProfileModal({
+  existing,
+  onClose,
+  onSaved,
+}: {
+  existing: SellerProfileRow | null
+  onClose: () => void
+  onSaved: (profile: SellerProfileRow) => void
+}) {
+  const { t } = useT()
+  const { user } = useAuth()
+  const [fullName, setFullName] = useState(existing?.full_name ?? '')
+  const [phone, setPhone] = useState(existing?.phone ?? '')
+  const [email, setEmail] = useState(existing?.email ?? user?.email ?? '')
+  const [idNumber, setIdNumber] = useState(existing?.id_number ?? '')
+  const [saving, setSaving] = useState(false)
+  useBodyScrollLock()
+
+  const isPending = existing?.verification_status === 'pending'
+  const isRejected = existing?.verification_status === 'rejected'
+  const readOnly = isPending
+
+  async function handleSubmit() {
+    if (!fullName.trim() || !phone.trim() || !idNumber.trim()) {
+      toast.error(t('seller.profile.required')); return
+    }
+    setSaving(true)
+    try {
+      const { data, error } = await supabase.rpc('upsert_seller_profile', {
+        p_full_name: fullName.trim(),
+        p_phone: phone.trim(),
+        p_email: email.trim() || null,
+        p_id_number: idNumber.trim(),
+      })
+      if (error) throw error
+      toast.success(t('seller.profile.saved'))
+      onSaved((data as SellerProfileRow) ?? { user_id: user!.id, full_name: fullName, phone, email, id_number: idNumber, verification_status: 'pending', admin_note: null })
+    } catch {
+      toast.error(t('seller.profile.error'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
+      <div
+        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[90dvh]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+          <h2 className="font-bold text-lg">{t('seller.profile.title')}</h2>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-4">
+          {isPending && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-800">
+              <p className="font-semibold mb-1">{t('admin.sellers.status.pending')}</p>
+              <p>{t('seller.profile.pending')}</p>
+            </div>
+          )}
+
+          {isRejected && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700 space-y-1">
+              <p className="font-semibold">{t('seller.profile.rejected')}</p>
+              {existing?.admin_note && (
+                <p>{t('seller.profile.rejected.note')} {existing.admin_note}</p>
+              )}
+              <p className="text-xs text-red-500 mt-1">ניתן לשנות ולשלוח שוב לאישור</p>
+            </div>
+          )}
+
+          {!isPending && (
+            <p className="text-sm text-gray-500">{t('seller.profile.subtitle')}</p>
+          )}
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.full_name')}</label>
+              <input
+                className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
+                value={fullName} onChange={e => setFullName(e.target.value)} disabled={readOnly}
+                placeholder={t('seller.profile.full_name')}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.phone')}</label>
+              <input
+                type="tel" className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
+                value={phone} onChange={e => setPhone(e.target.value)} disabled={readOnly}
+                placeholder="05X-XXXXXXX"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.email')}</label>
+              <input
+                type="email" className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
+                value={email} onChange={e => setEmail(e.target.value)} disabled={readOnly}
+                placeholder="user@example.com"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.id_number')}</label>
+              <input
+                className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
+                value={idNumber} onChange={e => setIdNumber(e.target.value)} disabled={readOnly}
+                placeholder="XXXXXXXXX"
+                maxLength={9}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
+          {readOnly ? (
+            <button onClick={onClose} className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-semibold text-sm">
+              סגור
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('seller.profile.submit')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MarketplacePage() {
   const navigate = useNavigate()
@@ -781,6 +927,7 @@ export default function MarketplacePage() {
   const { isAdmin, user, profile } = useAuth()
   const { logAction } = useVouchers()
   const { t } = useT()
+  usePageView('market')
   const {
     listings, myListings, myPurchases,
     loadingListings, loadingMyListings, loadingMyPurchases,
@@ -821,6 +968,24 @@ export default function MarketplacePage() {
 
   // Conversations modal (seller picks buyer to chat with)
   const [convsListing, setConvsListing] = useState<MarketplaceListing | null>(null)
+
+  // Seller profile gate
+  const [showSellerProfile, setShowSellerProfile] = useState(false)
+  const [sellerProfile, setSellerProfile] = useState<SellerProfileRow | null | undefined>(undefined)
+
+  async function checkAndPublish() {
+    if (sellerProfile === undefined) {
+      const { data } = await supabase.rpc('get_seller_profile')
+      const p = (data as SellerProfileRow | null) ?? null
+      setSellerProfile(p)
+      if (p?.verification_status === 'verified') { navigate('/market/bulk'); return }
+      setShowSellerProfile(true)
+    } else if (sellerProfile?.verification_status === 'verified') {
+      navigate('/market/bulk')
+    } else {
+      setShowSellerProfile(true)
+    }
+  }
 
   // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(
@@ -1122,7 +1287,7 @@ export default function MarketplacePage() {
                 )}
               </button>
               <button
-                onClick={() => navigate('/market/bulk')}
+                onClick={checkAndPublish}
                 className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-xl"
               >
                 <ShoppingBag className="w-3.5 h-3.5" /> {t('market.bulk.publish')}
@@ -1380,6 +1545,13 @@ export default function MarketplacePage() {
       </div>
 
       {/* ── Modals ── */}
+      {showSellerProfile && (
+        <SellerProfileModal
+          existing={sellerProfile ?? null}
+          onClose={() => setShowSellerProfile(false)}
+          onSaved={p => { setSellerProfile(p); setShowSellerProfile(false) }}
+        />
+      )}
       {ratingPurchase && (
         <RateModal purchase={ratingPurchase} onClose={() => setRatingPurchase(null)} />
       )}

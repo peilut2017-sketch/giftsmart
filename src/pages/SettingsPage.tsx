@@ -15,6 +15,7 @@ import { useE2EE } from '../contexts/E2EEContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useLocale, useT } from '../lib/i18n'
 import { useDiscounts } from '../contexts/DiscountsContext'
+import { usePageView } from '../hooks/usePageView'
 
 interface SupportMessageReply {
   id: string
@@ -102,6 +103,7 @@ export default function SettingsPage() {
   const { locale, setLocale } = useLocale()
   const { t } = useT()
   const { clubs, userClubIds, fetchClubs, setUserClubs } = useDiscounts()
+  usePageView('settings')
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'

@@ -182,6 +182,18 @@ function DealDetailSheet({ deal, onClose }: { deal: DiscountDeal; onClose: () =>
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-5 pb-6 space-y-4">
+          {/* Deal image */}
+          {deal.image_url && (
+            <div className="rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700">
+              <img
+                src={deal.image_url}
+                alt={deal.title}
+                className="w-full object-cover max-h-52"
+                loading="lazy"
+              />
+            </div>
+          )}
+
           {/* Title */}
           <div className="font-semibold text-gray-800 dark:text-gray-100 text-sm leading-snug">
             {deal.title}

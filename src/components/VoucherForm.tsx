@@ -3,7 +3,8 @@ import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
-import { X, Plus, Camera, Tag, Link, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar } from 'lucide-react'
+import { X, Plus, Camera, Tag, Link, Lock, ChevronDown, Shield, AlertTriangle, Lightbulb, Calendar, Fingerprint } from 'lucide-react'
+import { isBiometricEnabled, hasBiometricWrappedVaultKey } from '../lib/passkey'
 import { useT } from '../lib/i18n'
 
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
@@ -54,7 +55,7 @@ interface Props {
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
   useSubscription()
-  const { hasVault, isUnifiedVault, hint, isVaultUnlocked, setupVaultFromPassword, unlockVault, unlockVaultFromRecovery, encrypt, decrypt, decryptedMap } = useE2EE()
+  const { hasVault, isUnifiedVault, hint, isVaultUnlocked, setupVaultFromPassword, unlockVault, unlockVaultFromRecovery, unlockVaultWithBiometric, encrypt, decrypt, decryptedMap } = useE2EE()
   const { user } = useAuth()
   const { t } = useT()
 
@@ -111,6 +112,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [vaultHintInput, setVaultHintInput] = useState('')
   const [vaultLoading, setVaultLoading] = useState(false)
   const [vaultError, setVaultError] = useState('')
+  const [biometricLoading, setBiometricLoading] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const operatorPickerRef = useRef<HTMLDivElement>(null)
   const hiddenDateRef = useRef<HTMLInputElement>(null)
@@ -567,7 +569,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
                 {/* עלות שובר */}
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">כמה עלה לי (₪)</label>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500 shrink-0">₪</span>
                     <input
@@ -671,7 +673,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   </div>
                 ) : (
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">כמה עלה לי (₪)</label>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-500 shrink-0">₪</span>
                       <input
@@ -698,7 +700,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           {/* Actual cost — shown in edit mode only when NOT in item mode (item mode includes it in the grid above) */}
           {voucher && amountUnit !== 'פריט' && (
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">עלות שובר (₪)</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">כמה עלה לי (₪)</label>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500 shrink-0">₪</span>
                 <input
@@ -1106,6 +1108,32 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             ) : hint ? (
               <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> רמז: <span className="font-medium">{hint}</span></p>
             ) : null}
+
+            {/* Biometric unlock — only in unlock mode when biometric is configured with PRF */}
+            {vaultModalMode === 'unlock' && isBiometricEnabled() && hasBiometricWrappedVaultKey() && (
+              <button
+                type="button"
+                disabled={biometricLoading}
+                onClick={async () => {
+                  setBiometricLoading(true)
+                  try {
+                    const ok = await unlockVaultWithBiometric()
+                    if (ok) {
+                      setE2eeEnabled(true)
+                      setShowVaultModal(false)
+                    } else {
+                      setVaultError('אימות ביומטרי נכשל — נסה סיסמה')
+                    }
+                  } finally {
+                    setBiometricLoading(false)
+                  }
+                }}
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl text-sm font-semibold disabled:opacity-50 mb-3"
+              >
+                <Fingerprint className="w-4 h-4" />
+                {biometricLoading ? 'ממתין...' : 'פתח עם ביומטרי'}
+              </button>
+            )}
 
             <div className="w-full max-w-xs space-y-2.5">
               <input

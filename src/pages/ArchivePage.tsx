@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { useT } from '../lib/i18n'
+import { usePageView } from '../hooks/usePageView'
 
 type SortKey = 'added' | 'store' | 'balance' | 'expiry'
 
@@ -16,6 +17,7 @@ export default function ArchivePage() {
   const { archivedVouchers, unarchiveVoucher, deleteVoucher } = useVouchers()
   const { isVaultUnlocked, decryptedMap } = useE2EE()
   const { t } = useT()
+  usePageView('archive')
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('added')
   const [showSort, setShowSort] = useState(false)

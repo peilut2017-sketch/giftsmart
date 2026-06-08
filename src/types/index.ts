@@ -288,6 +288,7 @@ export interface DiscountDeal {
   is_upcoming: boolean
   view_count?: number
   is_liked?: boolean
+  image_url?: string
 }
 
 export interface DiscountSubmission {

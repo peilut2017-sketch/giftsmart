@@ -8,6 +8,7 @@ import DealCard from '../components/DealCard'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
+import { usePageView } from '../hooks/usePageView'
 
 const ALL_TAGS = [
   'מסעדות', 'קפה', 'קניות', 'אופנה', 'סופר', 'בריאות',
@@ -32,6 +33,8 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
     discount_value: '', promo_code: '', external_link: '',
     tags: '', start_date: '', expiration_date: '',
   })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -43,6 +46,20 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
     setSending(true)
     try {
       const tagsArr = form.tags.split(',').map(s => s.trim()).filter(Boolean)
+
+      // Upload image first if one was selected
+      let uploadedImageUrl: string | null = null
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop() || 'jpg'
+        const path = `${Date.now()}.${ext}`
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('discount-images')
+          .upload(path, imageFile, { cacheControl: '3600', upsert: false })
+        if (uploadError) throw uploadError
+        const { data: { publicUrl } } = supabase.storage.from('discount-images').getPublicUrl(uploadData.path)
+        uploadedImageUrl = publicUrl
+      }
+
       const { error } = await supabase.rpc('submit_discount_deal', {
         p_club_name:       form.club_name.trim(),
         p_business_name:   form.business_name.trim(),
@@ -55,6 +72,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
         p_tags:            tagsArr,
         p_start_date:      form.start_date || null,
         p_expiration_date: form.expiration_date || null,
+        p_image_url:       uploadedImageUrl,
       })
       if (error) throw error
       setSent(true)
@@ -164,6 +182,43 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
                 dir="ltr"
               />
 
+              {/* Deal image upload */}
+              <div>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1 block">
+                  תמונת הפרסום <span className="font-normal text-gray-400">(אופציונלי)</span>
+                </label>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl py-4 cursor-pointer hover:border-green-400 transition-colors">
+                  {imagePreview ? (
+                    <div className="w-full relative">
+                      <img src={imagePreview} alt="תצוגה מקדימה" className="w-full max-h-40 object-cover rounded-lg" />
+                      <button
+                        type="button"
+                        onClick={e => { e.preventDefault(); setImageFile(null); setImagePreview(null) }}
+                        className="absolute top-1 left-1 bg-white rounded-full p-1 shadow text-gray-500"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Plus className="w-5 h-5 text-gray-400 mb-1" />
+                      <span className="text-xs text-gray-400">העלה תמונת ההנחה</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      setImageFile(f)
+                      setImagePreview(URL.createObjectURL(f))
+                    }}
+                  />
+                </label>
+              </div>
+
               {/* Advanced toggle */}
               <button
                 type="button"
@@ -233,6 +288,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function DiscountsPage() {
   const { t } = useT()
+  usePageView('discounts')
   const navigate = useNavigate()
   const location = useLocation()
   const targetDealId = (location.state as { dealId?: string } | null)?.dealId

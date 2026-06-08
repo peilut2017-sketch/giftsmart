@@ -409,7 +409,8 @@ function AppRoutes() {
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}
       <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
-      <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto overflow-x-hidden">
+      {/* padding-bottom reserves space so content is never hidden behind the fixed BottomNav */}
+      <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto" style={{ paddingBottom: 'var(--nav-h)' }}>
         <OfflineBanner />
         <main id="main-content" className="flex-1 flex flex-col">
           <Suspense fallback={<PageSpinner />}>
@@ -433,8 +434,9 @@ function AppRoutes() {
           </Suspense>
         </main>
         <PWAInstallBanner />
-        <BottomNav />
       </div>
+      {/* BottomNav is outside the container so overflow:hidden/transform never traps it */}
+      <BottomNav />
       {widgetEnabled && <AccessibilityWidget />}
       <OnboardingGuide />
     </MarketplaceProvider>

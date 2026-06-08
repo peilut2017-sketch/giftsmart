@@ -17,6 +17,7 @@ import { formatCurrency, formatDate, getExpiryStatus, getDaysUntilExpiry } from 
 import { sendUsageNotification } from '../hooks/useNotifications'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { usePageView } from '../hooks/usePageView'
 
 type SortKey = 'expiry' | 'balance' | 'store' | 'added'
 type FilterTab = 'all' | 'expiring' | 'shared' | 'shared_with_me'
@@ -26,6 +27,7 @@ type SortDir = 'asc' | 'desc'
 export default function HomePage() {
   const navigate = useNavigate()
   const { t } = useT()
+  usePageView('home')
   const { user } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { listings } = useMarketplace()

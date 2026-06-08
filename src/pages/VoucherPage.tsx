@@ -4,18 +4,21 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { formatCurrency, formatDate, getExpiryStatus, isAlphanumeric } from '../utils/helpers'
 import { useT } from '../lib/i18n'
-import { ArrowRight, Copy, Check, ExternalLink, Lock } from 'lucide-react'
+import { ArrowRight, Share2, Pencil, Check, ExternalLink, Lock } from 'lucide-react'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
+import type { Voucher } from '../types'
+import VoucherForm from '../components/VoucherForm'
 
 export default function VoucherPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { t } = useT()
-  const { vouchers, archivedVouchers } = useVouchers()
+  const { vouchers, archivedVouchers, updateVoucher } = useVouchers()
   const { decryptedMap, isVaultUnlocked } = useE2EE()
   const [copied, setCopied] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   const barcodeRef = useRef<SVGSVGElement>(null)
   const qrRef = useRef<HTMLCanvasElement>(null)
@@ -68,6 +71,30 @@ export default function VoucherPage() {
     }
   }
 
+  async function handleShare() {
+    const text = displayCode
+      ? `${voucher!.store_name}: ${displayCode}`
+      : voucher!.store_name
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: voucher!.store_name, text })
+      } catch {}
+    } else {
+      await copyCode()
+    }
+  }
+
+  async function handleSave(vData: any) {
+    if (!voucher) return
+    const usedAmount = voucher.balance - vData.balance
+    const { _storeUsed, ...voucherData } = vData
+    await updateVoucher(voucher.id, voucherData as Partial<Voucher>, _storeUsed ?? null)
+    toast.success(t('voucher.updated'))
+    if (usedAmount > 0 && vData.balance <= 0 && !vData.item_name) {
+      toast(t('voucher.redeemed.title'), { icon: '✅' })
+    }
+  }
+
   const expiryStatus = getExpiryStatus(voucher?.expiry_date)
   const expiryColor = {
     expired: 'text-red-600',
@@ -99,6 +126,22 @@ export default function VoucherPage() {
         {voucher.is_archived && (
           <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">ארכיון</span>
         )}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleShare}
+            className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="שתף שובר"
+          >
+            <Share2 className="w-4.5 h-4.5" />
+          </button>
+          <button
+            onClick={() => setShowEdit(true)}
+            className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="ערוך שובר"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
@@ -116,7 +159,7 @@ export default function VoucherPage() {
           )}
         </div>
 
-        {/* Code / barcode */}
+        {/* Code / barcode — tap the code to copy */}
         <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm">
           {isEncryptedLocked ? (
             <div className="flex flex-col items-center gap-2 py-4 text-indigo-400">
@@ -134,14 +177,23 @@ export default function VoucherPage() {
                   <svg ref={barcodeRef} className="max-w-full" />
                 </div>
               )}
-              <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3">
-                <span className="flex-1 font-mono text-base font-semibold tracking-widest text-gray-800 dark:text-white text-center select-all">
+              {/* Tap the code to copy */}
+              <button
+                onClick={copyCode}
+                className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 active:scale-[0.97] transition-transform"
+                aria-label="לחץ להעתקת הקוד"
+              >
+                {copied
+                  ? <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  : null
+                }
+                <span className="font-mono text-base font-semibold tracking-widest text-gray-800 dark:text-white select-all">
                   {displayCode}
                 </span>
-                <button onClick={copyCode} className="p-1.5 text-gray-400 hover:text-green-600 transition-colors">
-                  {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
+              </button>
+              <p className="text-[10px] text-center text-gray-400 mt-1.5">
+                {copied ? '✓ הועתק' : 'לחץ להעתקה'}
+              </p>
               {displayCvv && (
                 <p className="text-xs text-center text-gray-400 mt-2">CVV: <span className="font-mono font-semibold text-gray-600 dark:text-gray-300">{displayCvv}</span></p>
               )}
@@ -177,6 +229,12 @@ export default function VoucherPage() {
               <span>נוסף</span>
               <span>{formatDate(voucher.created_at)}</span>
             </div>
+            {voucher.actual_cost && (
+              <div className="flex justify-between">
+                <span>כמה עלה לי</span>
+                <span>{formatCurrency(voucher.actual_cost)}</span>
+              </div>
+            )}
             {voucher.source && (
               <div className="flex justify-between">
                 <span>מקור</span>
@@ -186,6 +244,15 @@ export default function VoucherPage() {
           </div>
         </div>
       </div>
+
+      {/* Edit modal */}
+      {showEdit && (
+        <VoucherForm
+          voucher={voucher}
+          onClose={() => setShowEdit(false)}
+          onSave={handleSave}
+        />
+      )}
     </div>
   )
 }
