@@ -212,8 +212,10 @@ export default function AdminPage() {
     club_id: '', business_id: '', title: '', description: '',
     discount_type: 'percent' as 'percent' | 'fixed' | 'free_item' | 'other',
     discount_value: '', promo_code: '', external_link: '', tags: '',
-    start_date: '', expiration_date: '', is_active: true,
+    start_date: '', expiration_date: '', is_active: true, image_url: '',
   })
+  const [dealImageFile, setDealImageFile] = useState<File | null>(null)
+  const [dealImagePreview, setDealImagePreview] = useState<string | null>(null)
   const [savingDiscount, setSavingDiscount] = useState(false)
 
   // Quick-add inline (inside deal form)
@@ -385,6 +387,15 @@ export default function AdminPage() {
     }
     setSavingDiscount(true)
     try {
+      let imageUrl = dealForm.image_url || null
+      if (dealImageFile) {
+        const ext = dealImageFile.name.split('.').pop() ?? 'jpg'
+        const path = `deal-${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('discount-images').upload(path, dealImageFile, { upsert: true })
+        if (upErr) { toast.error('שגיאה בהעלאת תמונה: ' + upErr.message); return }
+        const { data: { publicUrl } } = supabase.storage.from('discount-images').getPublicUrl(path)
+        imageUrl = publicUrl
+      }
       const tagsArr = dealForm.tags.split(',').map(s => s.trim()).filter(Boolean)
       const { error } = await supabase.rpc('admin_upsert_deal', {
         p_id: editingDeal?.deal_id ?? null,
@@ -400,11 +411,13 @@ export default function AdminPage() {
         p_start_date: dealForm.start_date || null,
         p_expiration_date: dealForm.expiration_date || null,
         p_is_active: dealForm.is_active,
+        p_image_url: imageUrl,
       })
       if (error) throw error
       toast.success(editingDeal ? 'עסקה עודכנה' : 'עסקה נוספה')
       setShowDealForm(false); setEditingDeal(null)
-      setDealForm({ club_id: '', business_id: '', title: '', description: '', discount_type: 'percent', discount_value: '', promo_code: '', external_link: '', tags: '', start_date: '', expiration_date: '', is_active: true })
+      setDealForm({ club_id: '', business_id: '', title: '', description: '', discount_type: 'percent', discount_value: '', promo_code: '', external_link: '', tags: '', start_date: '', expiration_date: '', is_active: true, image_url: '' })
+      setDealImageFile(null); setDealImagePreview(null)
       await loadAdminDeals()
     } catch (e: any) { toast.error(e.message || t('admin.save.error')) }
     finally { setSavingDiscount(false) }
@@ -563,8 +576,10 @@ export default function AdminPage() {
       promo_code: d.promo_code || '', external_link: d.external_link || '',
       tags: d.tags.join(', '),
       start_date: d.start_date || '', expiration_date: d.expiration_date || '',
-      is_active: true,
+      is_active: true, image_url: d.image_url || '',
     })
+    setDealImageFile(null)
+    setDealImagePreview(d.image_url || null)
     setShowDealForm(true)
   }
 
@@ -3115,7 +3130,7 @@ export default function AdminPage() {
               {discountTab === 'deals' && (
                 <div className="p-4 space-y-3">
                   <button
-                    onClick={() => { setEditingDeal(null); setDealForm({ club_id: '', business_id: '', title: '', description: '', discount_type: 'percent', discount_value: '', promo_code: '', external_link: '', tags: '', start_date: '', expiration_date: '', is_active: true }); setShowDealForm(true) }}
+                    onClick={() => { setEditingDeal(null); setDealForm({ club_id: '', business_id: '', title: '', description: '', discount_type: 'percent', discount_value: '', promo_code: '', external_link: '', tags: '', start_date: '', expiration_date: '', is_active: true, image_url: '' }); setDealImageFile(null); setDealImagePreview(null); setShowDealForm(true) }}
                     className="flex items-center gap-2 text-sm font-medium text-green-600 bg-green-50 px-3 py-2 rounded-xl"
                   >
                     <Plus className="w-4 h-4" /> {t('admin.discounts.add_deal')}
@@ -3226,6 +3241,39 @@ export default function AdminPage() {
                         <input type="checkbox" checked={dealForm.is_active} onChange={e => setDealForm(f => ({ ...f, is_active: e.target.checked }))} />
                         עסקה פעילה
                       </label>
+
+                      {/* Deal image upload */}
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">תמונת פרסומת (אופציונלי)</label>
+                        {dealImagePreview ? (
+                          <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                            <img src={dealImagePreview} alt="תצוגה מקדימה" className="w-full object-cover max-h-36" />
+                            <button
+                              type="button"
+                              onClick={() => { setDealImageFile(null); setDealImagePreview(null); setDealForm(f => ({ ...f, image_url: '' })) }}
+                              className="absolute top-2 left-2 bg-black/50 text-white rounded-full p-1"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-4 cursor-pointer hover:border-green-400 transition-colors text-sm text-gray-400">
+                            <Image className="w-4 h-4" />
+                            העלה תמונה
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                setDealImageFile(file)
+                                setDealImagePreview(URL.createObjectURL(file))
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
 
                       <button onClick={handleSaveDeal} disabled={savingDiscount || !dealForm.club_id || !dealForm.business_id || !dealForm.title} className="w-full py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
                         {savingDiscount ? '...' : t('app.save')}
