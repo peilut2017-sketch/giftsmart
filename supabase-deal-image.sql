@@ -112,4 +112,62 @@ BEGIN
 END;
 $$;
 
+-- Update admin_upsert_deal to accept optional image_url
+CREATE OR REPLACE FUNCTION admin_upsert_deal(
+  p_id              UUID      DEFAULT NULL,
+  p_club_id         UUID      DEFAULT NULL,
+  p_business_id     UUID      DEFAULT NULL,
+  p_title           TEXT      DEFAULT NULL,
+  p_description     TEXT      DEFAULT NULL,
+  p_discount_type   TEXT      DEFAULT 'percent',
+  p_discount_value  NUMERIC   DEFAULT NULL,
+  p_promo_code      TEXT      DEFAULT NULL,
+  p_external_link   TEXT      DEFAULT NULL,
+  p_tags            TEXT[]    DEFAULT '{}',
+  p_start_date      DATE      DEFAULT NULL,
+  p_expiration_date DATE      DEFAULT NULL,
+  p_is_active       BOOLEAN   DEFAULT TRUE,
+  p_image_url       TEXT      DEFAULT NULL
+)
+RETURNS UUID
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_admin BOOLEAN;
+  v_id    UUID;
+BEGIN
+  SELECT is_admin INTO v_admin FROM profiles WHERE id = auth.uid();
+  IF NOT COALESCE(v_admin, FALSE) THEN RAISE EXCEPTION 'not_admin'; END IF;
+
+  v_id := COALESCE(p_id, gen_random_uuid());
+
+  INSERT INTO discount_deals(
+    id, club_id, business_id, title, description,
+    discount_type, discount_value, promo_code, external_link,
+    tags, start_date, expiration_date, is_active, image_url
+  ) VALUES (
+    v_id, p_club_id, p_business_id, p_title, p_description,
+    p_discount_type, p_discount_value, p_promo_code, p_external_link,
+    p_tags, p_start_date, p_expiration_date, p_is_active, p_image_url
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    club_id         = EXCLUDED.club_id,
+    business_id     = EXCLUDED.business_id,
+    title           = EXCLUDED.title,
+    description     = EXCLUDED.description,
+    discount_type   = EXCLUDED.discount_type,
+    discount_value  = EXCLUDED.discount_value,
+    promo_code      = EXCLUDED.promo_code,
+    external_link   = EXCLUDED.external_link,
+    tags            = EXCLUDED.tags,
+    start_date      = EXCLUDED.start_date,
+    expiration_date = EXCLUDED.expiration_date,
+    is_active       = EXCLUDED.is_active,
+    image_url       = EXCLUDED.image_url,
+    updated_at      = NOW();
+
+  RETURN v_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION admin_upsert_deal(UUID,UUID,UUID,TEXT,TEXT,TEXT,NUMERIC,TEXT,TEXT,TEXT[],DATE,DATE,BOOLEAN,TEXT) TO authenticated;
+
 SELECT pg_notify('pgrst', 'reload schema');
