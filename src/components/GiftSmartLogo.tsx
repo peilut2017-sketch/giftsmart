@@ -69,7 +69,7 @@ export function GiftSmartLogoFull({ iconSize = 72 }: { iconSize?: number }) {
 export function GiftSmartSplash() {
   return (
     <div className="flex flex-col items-center gap-2">
-      <img src="/logo.png" alt="GiftSmart" className="w-24 h-24 object-contain" />
+      <img src="/logo.png" alt="GiftSmart" className="w-24 h-24 object-contain" style={{ mixBlendMode: 'screen' }} />
       <p className="text-4xl font-extrabold text-gray-800 tracking-tight mt-2">GiftSmart</p>
       <p className="text-sm text-gray-500">ניהול שוברים וכרטיסי מתנה</p>
     </div>

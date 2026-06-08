@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { Fingerprint, ShieldCheck, X, Lock, Eye, EyeOff } from 'lucide-react'
-import { verifyBiometricForVaultUnlock } from '../lib/passkey'
+import { Fingerprint, ShieldCheck, X, Lock, Eye, EyeOff, KeyRound } from 'lucide-react'
+import { verifyBiometricForVaultUnlock, disableBiometric, disableBiometricLocally, isBiometricNative, getBiometricEmail } from '../lib/passkey'
 import { exportVaultKey } from '../lib/e2ee'
+import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
 const SESSION_KEY_V2    = 'gs_e2ee_key_v2'
@@ -15,11 +16,20 @@ interface Props {
 }
 
 export default function BiometricGate({ onUnlock, onSignOut }: Props) {
+  const { signIn } = useAuth()
   const [step, setStep] = useState<'biometric' | 'vault'>('biometric')
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
   const [vaultPass, setVaultPass] = useState('')
   const [showVaultPass, setShowVaultPass] = useState(false)
+  // Password fallback (when biometric credential is missing/broken)
+  const [showPasswordFallback, setShowPasswordFallback] = useState(false)
+  const [fallbackEmail, setFallbackEmail] = useState(() => getBiometricEmail() ?? '')
+  const [fallbackPassword, setFallbackPassword] = useState('')
+  const [showFallbackPass, setShowFallbackPass] = useState(false)
+  const [fallbackError, setFallbackError] = useState('')
+  const [fallbackLoading, setFallbackLoading] = useState(false)
+  const biometricNative = isBiometricNative()
   const isMountedRef = useRef(true)
 
   useEffect(() => {
@@ -80,6 +90,34 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     onUnlock()
   }
 
+  async function handlePasswordFallback() {
+    if (!fallbackEmail || !fallbackPassword) return
+    setFallbackLoading(true); setFallbackError('')
+    try {
+      const { error } = await signIn(fallbackEmail, fallbackPassword)
+      if (error) {
+        setFallbackError('אימייל או סיסמה שגויים')
+        return
+      }
+      // Store password so E2EEProvider can derive/unlock the vault
+      sessionStorage.setItem(VAULT_PW_PENDING, fallbackPassword)
+      // If the credential was registered natively on this device but is now broken →
+      // disable globally (Supabase included). If it was only synced here from Supabase
+      // (no private key on this device), clear only local storage so the credential
+      // keeps working on the device where it was originally set up.
+      if (isBiometricNative()) {
+        disableBiometric()
+      } else {
+        disableBiometricLocally()
+      }
+      onUnlock()
+    } catch {
+      setFallbackError('שגיאה בהתחברות — נסה שוב')
+    } finally {
+      setFallbackLoading(false)
+    }
+  }
+
   // ── Vault unlock step ────────────────────────────────────────────────────
   if (step === 'vault') {
     return (
@@ -137,6 +175,78 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     )
   }
 
+  // ── Password fallback (broken/missing credential) ───────────────────────
+  if (showPasswordFallback) {
+    return (
+      <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5 shadow-lg bg-gradient-to-br from-blue-400 to-blue-600">
+            <KeyRound className="w-10 h-10 text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-1">כניסה עם סיסמה</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            {biometricNative
+              ? 'הזן את פרטי הכניסה שלך — הזיהוי הביומטרי יאופס במכשיר זה'
+              : 'הזן את פרטי הכניסה שלך כדי להיכנס ללא ביומטרי'}
+          </p>
+
+          <div className="space-y-3 mb-4">
+            <input
+              type="email"
+              placeholder="אימייל"
+              value={fallbackEmail}
+              onChange={e => setFallbackEmail(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              dir="ltr"
+              autoComplete="email"
+            />
+            <div className="relative">
+              <input
+                type={showFallbackPass ? 'text' : 'password'}
+                placeholder="סיסמה"
+                value={fallbackPassword}
+                onChange={e => setFallbackPassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handlePasswordFallback()}
+                className="w-full px-4 py-3 pl-10 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                dir="ltr"
+                autoComplete="current-password"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowFallbackPass(v => !v)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              >
+                {showFallbackPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {fallbackError && <p className="text-xs text-red-500 mb-3">{fallbackError}</p>}
+
+          <button
+            onClick={handlePasswordFallback}
+            disabled={fallbackLoading || !fallbackEmail || !fallbackPassword}
+            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md disabled:opacity-50 mb-3"
+          >
+            {fallbackLoading ? 'מתחבר...' : 'כניסה'}
+          </button>
+          <button
+            onClick={() => setShowPasswordFallback(false)}
+            className="w-full text-sm text-gray-400 hover:text-gray-600 py-2"
+          >
+            חזרה לזיהוי ביומטרי
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 mt-4 text-xs text-gray-400">
+          <ShieldCheck className="w-4 h-4" />
+          <span>מוגן על ידי WebAuthn / Passkey</span>
+        </div>
+      </div>
+    )
+  }
+
   // ── Biometric step ───────────────────────────────────────────────────────
   return (
     <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
@@ -162,6 +272,16 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         >
           {loading ? 'מאמת...' : 'אמת זהות'}
         </button>
+
+        {failed && (
+          <button
+            onClick={() => setShowPasswordFallback(true)}
+            className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 py-3 rounded-2xl font-medium text-sm mb-2 flex items-center justify-center gap-2 transition-colors"
+          >
+            <KeyRound className="w-4 h-4" />
+            כניסה עם סיסמה במקום
+          </button>
+        )}
 
         <button
           onClick={onSignOut}

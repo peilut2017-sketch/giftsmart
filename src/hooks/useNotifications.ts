@@ -1,10 +1,31 @@
 import { useEffect } from 'react'
 import type { Voucher } from '../types'
 import { supabase } from '../lib/supabase'
+import { sendExpiryReminderEmail } from '../lib/emailService'
 
 const NOTIF_KEY = 'last_expiry_notification'
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
-const EXPIRY_WINDOW_DAYS = 30
+
+export interface NotifChannels {
+  push: boolean
+  email: boolean
+  telegram: boolean
+}
+
+export function getNotifChannels(userId?: string): NotifChannels {
+  if (!userId) return { push: true, email: false, telegram: true }
+  try {
+    const raw = localStorage.getItem(`notif_channels_${userId}`)
+    if (!raw) return { push: true, email: false, telegram: true }
+    return { push: true, email: false, telegram: true, ...JSON.parse(raw) }
+  } catch {
+    return { push: true, email: false, telegram: true }
+  }
+}
+
+export function saveNotifChannels(userId: string, channels: NotifChannels) {
+  localStorage.setItem(`notif_channels_${userId}`, JSON.stringify(channels))
+}
 
 async function showNotification(title: string, options: NotificationOptions) {
   try {
@@ -23,7 +44,13 @@ async function sendTelegram(userId: string, message: string) {
   }
 }
 
-export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean, userId?: string) {
+export function useExpiryNotifications(
+  vouchers: Voucher[],
+  isPro: boolean,
+  userId?: string,
+  userEmail?: string,
+  userName?: string,
+) {
   useEffect(() => {
     if (!isPro) return
     if (!('Notification' in window)) return
@@ -34,30 +61,20 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean, user
       const last = localStorage.getItem(NOTIF_KEY)
       if (last && Date.now() - parseInt(last) < CHECK_INTERVAL_MS) return
 
-      let permission = Notification.permission
-      if (permission === 'default') {
-        permission = await Notification.requestPermission()
-      }
-      if (permission !== 'granted') return
-
+      const expiryWindowDays = parseInt(localStorage.getItem(`reminder_days_${userId}`) || '14')
       const nowTime = Date.now()
       const expiring: Voucher[] = []
       for (const v of vouchers) {
         if (!v.expiry_date) continue
         const daysLeft = Math.ceil((new Date(v.expiry_date).getTime() - nowTime) / (1000 * 60 * 60 * 24))
-        if (daysLeft >= 0 && daysLeft <= EXPIRY_WINDOW_DAYS) expiring.push(v)
+        if (daysLeft >= 0 && daysLeft <= expiryWindowDays) expiring.push(v)
       }
 
       if (expiring.length === 0) return
 
       localStorage.setItem(NOTIF_KEY, Date.now().toString())
 
-      const baseOptions: NotificationOptions = {
-        icon: '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
-        tag: 'expiry-warning',
-        data: { url: '/' },
-      }
+      const channels = getNotifChannels(userId)
 
       const urgent = expiring.filter(v =>
         Math.ceil((new Date(v.expiry_date!).getTime() - nowTime) / (1000 * 60 * 60 * 24)) <= 3
@@ -65,7 +82,7 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean, user
 
       const title = urgent.length > 0
         ? `${urgent.length} שובר${urgent.length > 1 ? 'ים' : ''} פגים בקרוב!`
-        : `${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${EXPIRY_WINDOW_DAYS} יום`
+        : `${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${expiryWindowDays} יום`
 
       const body = expiring
         .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
@@ -76,9 +93,47 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean, user
         })
         .join('\n')
 
-      await showNotification(title, { ...baseOptions, body, requireInteraction: urgent.length > 0 })
+      // Push notification
+      if (channels.push) {
+        let permission = Notification.permission
+        if (permission === 'default') {
+          permission = await Notification.requestPermission()
+        }
+        if (permission === 'granted') {
+          const baseOptions: NotificationOptions = {
+            icon: '/pwa-192x192.png',
+            badge: '/pwa-192x192.png',
+            tag: 'expiry-warning',
+            data: { url: '/' },
+          }
+          await showNotification(title, { ...baseOptions, body, requireInteraction: urgent.length > 0 })
+        }
+      }
 
-      if (userId) {
+      // Email notification
+      if (channels.email && userEmail) {
+        try {
+          const vouchers_list = expiring
+            .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
+            .slice(0, 10)
+            .map(v => {
+              const d = Math.ceil((new Date(v.expiry_date!).getTime() - nowTime) / (1000 * 60 * 60 * 24))
+              return `• ${v.store_name} — יתרה ₪${v.balance}${v.expiry_date ? `, תוקף: ${new Date(v.expiry_date).toLocaleDateString('he-IL')}` : ''} (${d === 0 ? 'היום' : d === 1 ? 'מחר' : `עוד ${d} ימים`})`
+            })
+            .join('\n')
+          await sendExpiryReminderEmail({
+            to_email: userEmail,
+            to_name: userName || userEmail,
+            count: expiring.length,
+            vouchers_list,
+          })
+        } catch {
+          // email is best-effort
+        }
+      }
+
+      // Telegram notification
+      if (channels.telegram && userId) {
         const lines = expiring
           .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
           .slice(0, 5)
@@ -95,7 +150,7 @@ export function useExpiryNotifications(vouchers: Voucher[], isPro: boolean, user
     }
 
     checkAndNotify()
-  }, [vouchers, isPro, userId])
+  }, [vouchers, isPro, userId, userEmail, userName])
 }
 
 // Request push permission proactively (call from Settings page or first launch)
@@ -128,7 +183,6 @@ export async function sendUsageNotification(
     ? `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} — השובר נוצל`
     : `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} | יתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`
 
-  // Browser push
   if ('Notification' in window && Notification.permission === 'granted') {
     const options: NotificationOptions = {
       body,
@@ -144,7 +198,6 @@ export async function sendUsageNotification(
     }
   }
 
-  // Telegram mirror
   if (userId) {
     const icon = fullyRedeemed ? '🎯' : '💳'
     const tgBody = fullyRedeemed
@@ -154,7 +207,6 @@ export async function sendUsageNotification(
   }
 }
 
-// Get the notification status for UI display
 export function getNotificationStatus(): 'granted' | 'denied' | 'default' | 'unsupported' {
   if (!('Notification' in window)) return 'unsupported'
   return Notification.permission

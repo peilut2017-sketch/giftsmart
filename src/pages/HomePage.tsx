@@ -17,6 +17,7 @@ import { formatCurrency, formatDate, getExpiryStatus, getDaysUntilExpiry } from 
 import { sendUsageNotification } from '../hooks/useNotifications'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { usePageView } from '../hooks/usePageView'
 
 type SortKey = 'expiry' | 'balance' | 'store' | 'added'
 type FilterTab = 'all' | 'expiring' | 'shared' | 'shared_with_me'
@@ -26,6 +27,7 @@ type SortDir = 'asc' | 'desc'
 export default function HomePage() {
   const navigate = useNavigate()
   const { t } = useT()
+  usePageView('home')
   const { user } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, loading, walletError, isOnline, walletName, addVoucher, updateVoucher, deleteVoucher, archiveVoucher, archiveExpired } = useVouchers()
   const { listings } = useMarketplace()
@@ -76,6 +78,29 @@ export default function HomePage() {
   // Dedicated archive-with-reason state (single voucher)
   const [archiveTarget, setArchiveTarget] = useState<string | null>(null)
   const [archiveReason, setArchiveReason] = useState('')
+
+  // Google Calendar prompt state
+  const [calendarVoucher, setCalendarVoucher] = useState<{ id: string; storeName: string; expiryDate: string } | null>(null)
+  const reminderDays = parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
+  const [calendarModalDays, setCalendarModalDays] = useState(reminderDays)
+
+  function openGoogleCalendar(id: string, storeName: string, expiryDate: string, days: number) {
+    const expiry = new Date(expiryDate)
+    const eventDay = new Date(expiry)
+    eventDay.setDate(expiry.getDate() - days)
+    const fmt = (d: Date) => d.toISOString().replace(/-/g, '').split('T')[0]
+    const start = fmt(eventDay)
+    const end = fmt(new Date(eventDay.getTime() + 86_400_000))
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: `תזכורת: שובר ${storeName} פג בקרוב`,
+      dates: `${start}/${end}`,
+      details: `שובר ${storeName} פג תוקפו ב-${expiry.toLocaleDateString('he-IL')} — עוד ${days} ימים!\n\nפתח את השובר: ${appUrl}/voucher/${id}`,
+    })
+    window.open(`https://calendar.google.com/calendar/render?${params}`, '_blank', 'noopener,noreferrer')
+    setCalendarVoucher(null)
+  }
 
   // Clear all pending undo-delete timers when unmounting to avoid stale async ops
   useEffect(() => () => { pendingDeletesRef.current.forEach(clearTimeout) }, [])
@@ -227,8 +252,14 @@ export default function HomePage() {
       }
     } else {
       try {
-        await addVoucher(vData)
+        const newVoucher = await addVoucher(vData)
         toast.success(t('voucher.added'))
+        // Offer Google Calendar event if feature enabled and voucher has expiry date
+        const calendarEnabled = localStorage.getItem(`calendar_reminder_enabled_${user?.id}`) !== 'false'
+        if (calendarEnabled && vData.expiry_date && newVoucher) {
+          setCalendarModalDays(reminderDays)
+          setCalendarVoucher({ id: newVoucher.id, storeName: vData.store_name, expiryDate: vData.expiry_date })
+        }
       } catch (err: any) {
         toast.error(err?.message || t('voucher.save.error'))
         throw err
@@ -494,6 +525,63 @@ export default function HomePage() {
         </ConfirmDialog>
       )}
 
+      {/* ── Google Calendar prompt ── */}
+      {calendarVoucher && (
+        <div className="fixed inset-0 bg-black/50 z-[90] flex items-end justify-center" onClick={() => setCalendarVoucher(null)}>
+          <div className="bg-white dark:bg-gray-900 rounded-t-3xl w-full max-w-2xl p-5 pb-8" onClick={e => e.stopPropagation()} dir="rtl">
+            <div className="flex justify-center mb-3">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-xl">📅</div>
+              <div>
+                <p className="font-bold text-gray-900 dark:text-white text-sm">{t('voucher.calendar.title')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  שובר: <strong>{calendarVoucher.storeName}</strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mb-4 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3">
+              <span className="text-sm text-gray-600 dark:text-gray-400 flex-1">{t('voucher.calendar.days.label')}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCalendarModalDays(d => Math.max(1, d - 1))}
+                  className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-white font-bold text-sm flex items-center justify-center"
+                >−</button>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={calendarModalDays}
+                  onChange={e => setCalendarModalDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 1)))}
+                  className="w-14 text-center text-sm font-semibold border border-gray-200 rounded-xl py-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCalendarModalDays(d => Math.min(365, d + 1))}
+                  className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-white font-bold text-sm flex items-center justify-center"
+                >+</button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => openGoogleCalendar(calendarVoucher.id, calendarVoucher.storeName, calendarVoucher.expiryDate, calendarModalDays)}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
+              >
+                📅 {t('voucher.calendar.cta')}
+              </button>
+              <button
+                onClick={() => setCalendarVoucher(null)}
+                className="px-5 py-3 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-2xl font-medium text-sm"
+              >
+                {t('voucher.calendar.skip')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Vault unlock modal ── */}
       {showVaultModal && (
         <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-6" onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }}>
@@ -559,7 +647,7 @@ export default function HomePage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <img src="/logo.png" alt="GiftSmart" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+              <img src="/logo.png" alt="GiftSmart" style={{ width: 26, height: 26, objectFit: 'contain', mixBlendMode: 'screen' }} />
             </div>
             <div>
               <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, letterSpacing: '-0.3px' }}>GiftSmart</div>
@@ -639,13 +727,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Collapsible Search Bar ── */}
-      {searchOpen && (
+      {/* ── Search Bar — always visible when query active, toggle otherwise ── */}
+      {(searchOpen || !!search) && (
         <div style={{ background: 'var(--c-surface)', padding: '10px 16px', borderBottom: '1px solid var(--c-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--c-bg)', borderRadius: 12, padding: '0 12px' }}>
             <Search size={16} color="var(--c-text3)" />
             <input
-              autoFocus
+              autoFocus={searchOpen}
               type="search"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -653,7 +741,10 @@ export default function HomePage() {
               style={{ flex: 1, height: 42, border: 'none', background: 'transparent', fontSize: 15, color: 'var(--c-text)', fontFamily: 'Heebo, sans-serif', outline: 'none', direction: 'rtl' }}
             />
             {search && (
-              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2 }}>
+              <button
+                onClick={() => { setSearch(''); setSearchOpen(false) }}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2 }}
+              >
                 <X size={15} color="var(--c-text3)" />
               </button>
             )}

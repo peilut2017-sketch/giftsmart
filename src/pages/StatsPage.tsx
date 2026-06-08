@@ -10,12 +10,14 @@ import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useT } from '../lib/i18n'
+import { usePageView } from '../hooks/usePageView'
 
 export default function StatsPage() {
   const { vouchers, archivedVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const { isVaultUnlocked, decryptedMap } = useE2EE()
   const { t } = useT()
+  usePageView('stats')
   const [showSavingsInfo, setShowSavingsInfo] = useState(false)
 
   const stats = useMemo(() => {

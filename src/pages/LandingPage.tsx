@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './LandingPage.css'
+import AccessibilityWidget from '../components/AccessibilityWidget'
 
 // ── Types ─────────────────────────────────────────────────────────
 interface DemoCard {
@@ -423,6 +424,7 @@ export default function LandingPage() {
   }, [])
 
   return (
+    <>
     <div id="lp-root">
       {/* ── NAVBAR ── */}
       <nav id="lp-nav" ref={navRef}>
@@ -984,5 +986,7 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
+    <AccessibilityWidget />
+    </>
   )
 }

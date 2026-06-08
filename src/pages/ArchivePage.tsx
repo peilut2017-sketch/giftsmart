@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { useT } from '../lib/i18n'
+import { usePageView } from '../hooks/usePageView'
 
 type SortKey = 'added' | 'store' | 'balance' | 'expiry'
 
@@ -16,6 +17,7 @@ export default function ArchivePage() {
   const { archivedVouchers, unarchiveVoucher, deleteVoucher } = useVouchers()
   const { isVaultUnlocked, decryptedMap } = useE2EE()
   const { t } = useT()
+  usePageView('archive')
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('added')
   const [showSort, setShowSort] = useState(false)
@@ -191,8 +193,10 @@ export default function ArchivePage() {
                       return <div style={{ fontSize: 11, color: 'var(--c-text3)', fontFamily: 'monospace', marginTop: 2 }}>{displayCode}</div>
                     })()}
                     {v.archive_reason && (
-                      <div style={{ fontSize: 11, color: 'var(--c-text3)', marginTop: 2 }}>
-                        <span style={{ fontWeight: 500 }}>{t('archive.reason.label')}</span> {v.archive_reason}
+                      <div style={{ marginTop: 4 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, background: 'rgba(107,114,128,0.1)', color: 'var(--c-text2)', padding: '2px 8px', borderRadius: 999 }}>
+                          {t('archive.reason.label')} {v.archive_reason}
+                        </span>
                       </div>
                     )}
                     {v.expiry_date && (

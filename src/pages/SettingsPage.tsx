@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -6,7 +6,8 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff } from 'lucide-react'
+import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff, Mail, CalendarDays } from 'lucide-react'
+import { getNotifChannels, saveNotifChannels, type NotifChannels } from '../hooks/useNotifications'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../lib/passkey'
@@ -14,6 +15,7 @@ import { useE2EE } from '../contexts/E2EEContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useLocale, useT } from '../lib/i18n'
 import { useDiscounts } from '../contexts/DiscountsContext'
+import { usePageView } from '../hooks/usePageView'
 
 interface SupportMessageReply {
   id: string
@@ -101,6 +103,7 @@ export default function SettingsPage() {
   const { locale, setLocale } = useLocale()
   const { t } = useT()
   const { clubs, userClubIds, fetchClubs, setUserClubs } = useDiscounts()
+  usePageView('settings')
 
   const [a11yWidgetEnabled, setA11yWidgetEnabled] = useState(
     () => localStorage.getItem('a11y_widget_enabled') !== 'false'
@@ -109,6 +112,7 @@ export default function SettingsPage() {
   // Clubs selector state
   const [localClubIds, setLocalClubIds] = useState<string[]>([])
   const [savingClubs, setSavingClubs] = useState(false)
+  const [clubsOpen, setClubsOpen] = useState(false)
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
@@ -288,10 +292,77 @@ export default function SettingsPage() {
   const [reminderDays, setReminderDays] = useState(() =>
     parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
   )
+  const [calendarReminderEnabled, setCalendarReminderEnabled] = useState(
+    () => localStorage.getItem(`calendar_reminder_enabled_${user?.id}`) !== 'false'
+  )
+  const [notifChannels, setNotifChannels] = useState<NotifChannels>(() => getNotifChannels(user?.id))
+
+  // Refs hold latest values so the debounced save always uses current state
+  const reminderDaysRef = useRef(reminderDays)
+  const calendarEnabledRef = useRef(calendarReminderEnabled)
+  const notifChannelsRef = useRef(notifChannels)
+  useEffect(() => { reminderDaysRef.current = reminderDays }, [reminderDays])
+  useEffect(() => { calendarEnabledRef.current = calendarReminderEnabled }, [calendarReminderEnabled])
+  useEffect(() => { notifChannelsRef.current = notifChannels }, [notifChannels])
+
+  const supabaseSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function scheduleSupabaseSave() {
+    if (supabaseSaveTimer.current) clearTimeout(supabaseSaveTimer.current)
+    supabaseSaveTimer.current = setTimeout(async () => {
+      try {
+        await supabase.rpc('upsert_user_settings', {
+          p_reminder_days: reminderDaysRef.current,
+          p_notif_channels: notifChannelsRef.current,
+          p_calendar_reminder_enabled: calendarEnabledRef.current,
+        })
+      } catch {}
+    }, 800)
+  }
+
+  // Load settings from Supabase on mount (cross-device sync)
+  useEffect(() => {
+    if (!user?.id) return
+    ;(async () => {
+      try {
+        const { data } = await supabase.rpc('get_user_settings')
+        const row = Array.isArray(data) ? data[0] : data
+        if (!row) return
+        if (row.reminder_days != null) {
+          const d = Math.max(1, Math.min(90, row.reminder_days))
+          setReminderDays(d)
+          localStorage.setItem(reminderKey, String(d))
+        }
+        if (row.notif_channels) {
+          const ch: NotifChannels = { push: true, email: false, telegram: true, ...row.notif_channels }
+          setNotifChannels(ch)
+          saveNotifChannels(user.id, ch)
+        }
+        if (row.calendar_reminder_enabled != null) {
+          setCalendarReminderEnabled(row.calendar_reminder_enabled)
+          localStorage.setItem(`calendar_reminder_enabled_${user.id}`, String(row.calendar_reminder_enabled))
+        }
+      } catch {}
+    })()
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function saveReminderDays(days: number) {
     const val = Math.max(1, Math.min(90, days))
     setReminderDays(val)
     localStorage.setItem(reminderKey, String(val))
+    scheduleSupabaseSave()
+  }
+
+  function saveCalendarEnabled(val: boolean) {
+    setCalendarReminderEnabled(val)
+    localStorage.setItem(`calendar_reminder_enabled_${user?.id}`, String(val))
+    scheduleSupabaseSave()
+  }
+
+  function updateNotifChannel(key: keyof NotifChannels, value: boolean) {
+    const next = { ...notifChannels, [key]: value }
+    setNotifChannels(next)
+    if (user?.id) saveNotifChannels(user.id, next)
+    scheduleSupabaseSave()
   }
 
   async function saveProfile() {
@@ -544,7 +615,7 @@ export default function SettingsPage() {
   }
 
   // Check telegram link status on mount
-  useState(() => {
+  useEffect(() => {
     if (!user) return
     supabase
       .from('telegram_users')
@@ -552,7 +623,7 @@ export default function SettingsPage() {
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data }) => setTelegramLinked(!!data))
-  })
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load admin broadcasts on mount
   useEffect(() => {
@@ -814,6 +885,21 @@ export default function SettingsPage() {
         <Card>
           {/* Reminder days */}
           <div className="p-4">
+            {/* Google Calendar toggle */}
+            <label className="flex items-center justify-between cursor-pointer mb-4">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-blue-500" />
+                <span className="text-sm text-gray-700">{t('settings.calendar.enabled')}</span>
+              </div>
+              <button
+                role="switch"
+                aria-checked={calendarReminderEnabled}
+                onClick={() => saveCalendarEnabled(!calendarReminderEnabled)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${calendarReminderEnabled ? 'bg-green-500' : 'bg-gray-200'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${calendarReminderEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </label>
             <p className="text-sm text-gray-700 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
             <div className="flex items-center gap-3">
               <input
@@ -833,6 +919,62 @@ export default function SettingsPage() {
             <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
               <span>1 יום</span>
               <span>90 ימים</span>
+            </div>
+            {/* Notification channels */}
+            <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--c-border)' }}>
+              <p className="text-xs font-semibold text-gray-500 mb-2">{t('settings.notif.channels')}</p>
+              <p className="text-xs text-gray-400 mb-3">{t('settings.notif.channels.note')}</p>
+              <div className="space-y-2">
+                {/* Push */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-orange-500" />
+                    <span className="text-sm text-gray-700">{t('settings.notif.push')}</span>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.push}
+                    onClick={() => updateNotifChannel('push', !notifChannels.push)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.push ? 'bg-green-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.push ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+                {/* Email */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-blue-500" />
+                    <span className="text-sm text-gray-700">{t('settings.notif.email')}</span>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.email}
+                    onClick={() => updateNotifChannel('email', !notifChannels.email)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.email ? 'bg-green-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.email ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+                {/* Telegram */}
+                <label className={`flex items-center justify-between ${!telegramLinked ? 'opacity-50' : 'cursor-pointer'}`}>
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4 text-sky-500" />
+                    <div>
+                      <span className="text-sm text-gray-700">{t('settings.notif.telegram')}</span>
+                      {!telegramLinked && <p className="text-[10px] text-gray-400">יש לקשר טלגרם תחילה</p>}
+                    </div>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.telegram}
+                    onClick={() => telegramLinked && updateNotifChannel('telegram', !notifChannels.telegram)}
+                    disabled={!telegramLinked}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.telegram && telegramLinked ? 'bg-green-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.telegram && telegramLinked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+              </div>
             </div>
           </div>
           {/* Telegram */}
@@ -911,96 +1053,117 @@ export default function SettingsPage() {
         {/* ── הכרטיסים והמועדונים שלי ── */}
         <SL>{t('settings.my_clubs')}</SL>
         <Card>
-          <div className="p-4 space-y-4">
-            <p className="text-xs" style={{ color: 'var(--c-text3)' }}>{t('settings.my_clubs.sub')}</p>
+          <button
+            onClick={() => setClubsOpen(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3.5 text-right"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>{t('settings.my_clubs')}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--c-text3)' }}>{t('settings.my_clubs.sub')}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 mr-2">
+              {localClubIds.length > 0 && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--c-primary)', color: '#fff' }}>
+                  {localClubIds.length}
+                </span>
+              )}
+              {clubsOpen
+                ? <ChevronUp className="w-4 h-4" style={{ color: 'var(--c-text3)' }} />
+                : <ChevronDown className="w-4 h-4" style={{ color: 'var(--c-text3)' }} />
+              }
+            </div>
+          </button>
 
-            {clubs.length === 0 ? (
-              <p className="text-sm text-center py-4" style={{ color: 'var(--c-text3)' }}>
-                {t('app.loading')}
-              </p>
-            ) : (
-              <>
-                {/* Credit cards */}
-                {clubs.filter(c => c.type === 'credit_card').length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <CreditCard className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
-                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
-                        {t('settings.clubs.credit_card')}
-                      </span>
+          {clubsOpen && (
+            <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: 'var(--c-border)' }}>
+              {clubs.length === 0 ? (
+                <p className="text-sm text-center py-4" style={{ color: 'var(--c-text3)' }}>
+                  {t('app.loading')}
+                </p>
+              ) : (
+                <>
+                  {/* Credit cards */}
+                  {clubs.filter(c => c.type === 'credit_card').length > 0 && (
+                    <div className="pt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CreditCard className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
+                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                          {t('settings.clubs.credit_card')}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {clubs.filter(c => c.type === 'credit_card').map(club => {
+                          const selected = localClubIds.includes(club.id)
+                          return (
+                            <button
+                              key={club.id}
+                              onClick={() => setLocalClubIds(prev =>
+                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                              )}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                                selected
+                                  ? 'border-green-500 bg-green-50 text-green-700'
+                                  : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                              }`}
+                            >
+                              {selected && <Check className="w-3 h-3" />}
+                              {club.name}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {clubs.filter(c => c.type === 'credit_card').map(club => {
-                        const selected = localClubIds.includes(club.id)
-                        return (
-                          <button
-                            key={club.id}
-                            onClick={() => setLocalClubIds(prev =>
-                              selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
-                            )}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                              selected
-                                ? 'border-green-500 bg-green-50 text-green-700'
-                                : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
-                            }`}
-                          >
-                            {selected && <Check className="w-3 h-3" />}
-                            {club.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Loyalty clubs */}
-                {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Tag className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
-                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
-                        {t('settings.clubs.loyalty_club')}
-                      </span>
+                  {/* Loyalty clubs */}
+                  {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Tag className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
+                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                          {t('settings.clubs.loyalty_club')}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {clubs.filter(c => c.type === 'loyalty_club').map(club => {
+                          const selected = localClubIds.includes(club.id)
+                          return (
+                            <button
+                              key={club.id}
+                              onClick={() => setLocalClubIds(prev =>
+                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                              )}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                                selected
+                                  ? 'border-green-500 bg-green-50 text-green-700'
+                                  : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                              }`}
+                            >
+                              {selected && <Check className="w-3 h-3" />}
+                              {club.name}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {clubs.filter(c => c.type === 'loyalty_club').map(club => {
-                        const selected = localClubIds.includes(club.id)
-                        return (
-                          <button
-                            key={club.id}
-                            onClick={() => setLocalClubIds(prev =>
-                              selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
-                            )}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                              selected
-                                ? 'border-green-500 bg-green-50 text-green-700'
-                                : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
-                            }`}
-                          >
-                            {selected && <Check className="w-3 h-3" />}
-                            {club.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                <button
-                  onClick={handleSaveClubs}
-                  disabled={savingClubs}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: 'var(--c-primary)' }}
-                >
-                  {savingClubs
-                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <Check className="w-4 h-4" />
-                  }
-                  {t('app.save')}
-                </button>
-              </>
-            )}
-          </div>
+                  <button
+                    onClick={handleSaveClubs}
+                    disabled={savingClubs}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ background: 'var(--c-primary)' }}
+                  >
+                    {savingClubs
+                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <Check className="w-4 h-4" />
+                    }
+                    {t('app.save')}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* ── כלים ── */}

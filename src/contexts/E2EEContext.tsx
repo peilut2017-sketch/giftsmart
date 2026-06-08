@@ -20,6 +20,36 @@ import {
 } from '../lib/e2ee'
 import { registerBiometricWithVault, hasBiometricWrappedVaultKey } from '../lib/passkey'
 import { useAuth } from './AuthContext'
+import { supabase } from '../lib/supabase'
+
+// ── Supabase vault-meta helpers (cross-device sync) ──────────────────────────
+
+async function saveVaultMeta(saltB64: string, check: string) {
+  try {
+    await supabase.rpc('upsert_vault_meta', { p_salt: saltB64, p_check: check })
+  } catch {}
+}
+
+async function fetchVaultMeta(): Promise<{ vault_salt: string; vault_check: string } | null> {
+  try {
+    const { data } = await supabase.rpc('get_vault_meta')
+    const row = Array.isArray(data) ? data[0] : data
+    if (row?.vault_salt && row?.vault_check) return row as { vault_salt: string; vault_check: string }
+  } catch {}
+  return null
+}
+
+// Push localStorage salt+check to Supabase if not already there (self-healing for existing users)
+async function syncVaultMetaIfNeeded() {
+  if (!isV2Vault()) return
+  const saltB64 = localStorage.getItem(SALT_KEY)
+  const check   = localStorage.getItem(CHECK_KEY)
+  if (!saltB64 || !check) return
+  try {
+    const meta = await fetchVaultMeta()
+    if (!meta) await saveVaultMeta(saltB64, check)
+  } catch {}
+}
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 const SALT_KEY           = 'gs_e2ee_salt'
@@ -58,6 +88,7 @@ interface E2EEContextValue {
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   enableBiometricVaultUnlock: (userId: string, userName: string, email?: string) => Promise<boolean>
+  unlockVaultWithBiometric: () => Promise<boolean>
   // Re-keys the vault using the current in-memory vault key (no old passphrase needed).
   // Call this when the login password changes so the vault stays in sync.
   reDeriveVaultKeyFromPassword: (
@@ -133,6 +164,21 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const [pendingRecoveryPhrase, setPendingRecoveryPhrase] = useState<string | null>(null)
   const autoUnlockAttempted = useRef(false)
 
+  // Restore vault metadata from Supabase when localStorage is empty (new/cleared device).
+  // Runs before VoucherForm renders so it never shows "setup vault" when one already exists.
+  useEffect(() => {
+    if (!user?.id) return
+    if (localStorage.getItem(CHECK_KEY)) return
+    fetchVaultMeta().then(meta => {
+      if (meta) {
+        localStorage.setItem(SALT_KEY, meta.vault_salt)
+        localStorage.setItem(CHECK_KEY, meta.vault_check)
+        localStorage.setItem(VAULT_V2_FLAG, 'true')
+        setHasVault(true)
+      }
+    })
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-unlock on mount (runs once after user is available)
   useEffect(() => {
     if (autoUnlockAttempted.current) return
@@ -144,7 +190,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     const savedKeyB64 = sessionStorage.getItem(SESSION_KEY_V2)
     if (savedKeyB64) {
       importVaultKey(savedKeyB64)
-        .then(key => setVaultKey(key))
+        .then(key => { setVaultKey(key); syncVaultMetaIfNeeded() })
         .catch(() => sessionStorage.removeItem(SESSION_KEY_V2))
       return
     }
@@ -153,36 +199,45 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     const pendingPw = sessionStorage.getItem(VAULT_PW_PENDING)
     if (pendingPw && userId) {
       sessionStorage.removeItem(VAULT_PW_PENDING)
-      const saltB64 = localStorage.getItem(SALT_KEY)
-      const check   = localStorage.getItem(CHECK_KEY)
+      ;(async () => {
+        let saltB64 = localStorage.getItem(SALT_KEY)
+        let check   = localStorage.getItem(CHECK_KEY)
 
-      if (!saltB64 || !check) {
-        // No local vault metadata — could be a new user OR an existing user who
-        // cleared localStorage / switched devices (with encrypted vouchers in Supabase).
-        // Save login password for manual vault setup from Settings — never auto-create
-        // because overwriting could make existing encrypted vouchers permanently unreadable.
-        sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
-        return
-      }
+        if (!saltB64 || !check) {
+          // No local metadata — try to fetch from Supabase (new device or cleared storage)
+          const meta = await fetchVaultMeta()
+          if (meta) {
+            saltB64 = meta.vault_salt
+            check   = meta.vault_check
+            localStorage.setItem(SALT_KEY, saltB64)
+            localStorage.setItem(CHECK_KEY, check)
+            localStorage.setItem(VAULT_V2_FLAG, 'true')
+            setHasVault(true)
+          } else {
+            // Truly new user — save password for manual vault setup
+            sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
+            return
+          }
+        }
 
-      if (isV2Vault()) {
-        // Existing v2 vault — derive key and verify
-        deriveVaultKey(pendingPw, userId, saltFromB64(saltB64))
-          .then(async key => {
-            const dec = await decryptField(key, check)
+        if (isV2Vault()) {
+          try {
+            const key = await deriveVaultKey(pendingPw, userId, saltFromB64(saltB64!))
+            const dec = await decryptField(key, check!)
             if (dec === VERIFY_PLAINTEXT) {
               setVaultKey(key)
               await persistVaultKey(key)
               await tryStoreBiometricKey(key)
+              syncVaultMetaIfNeeded()
             }
-          })
-          .catch(() => {})
-        return
-      }
+          } catch {}
+          return
+        }
 
-      // Existing vault but old format → save login password for migration, then prompt
-      sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
-      setNeedsMigration(true)
+        // Existing vault but old format → save login password for migration, then prompt
+        sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
+        setNeedsMigration(true)
+      })()
       return
     }
 
@@ -234,6 +289,30 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     userId: string,
     hintText?: string,
   ): Promise<string> => {
+    // Check Supabase for an existing vault first — if the password matches, adopt it
+    // rather than overwriting it with a new salt (which would break other devices).
+    const remoteMeta = await fetchVaultMeta()
+    if (remoteMeta) {
+      try {
+        const existingKey = await deriveVaultKey(password, userId, saltFromB64(remoteMeta.vault_salt))
+        const dec = await decryptField(existingKey, remoteMeta.vault_check)
+        if (dec === VERIFY_PLAINTEXT) {
+          localStorage.setItem(SALT_KEY, remoteMeta.vault_salt)
+          localStorage.setItem(CHECK_KEY, remoteMeta.vault_check)
+          localStorage.setItem(VAULT_V2_FLAG, 'true')
+          setHasVault(true)
+          setNeedsMigration(false)
+          setVaultKey(existingKey)
+          await persistVaultKey(existingKey)
+          await tryStoreBiometricKey(existingKey)
+          track('vault_opened')
+          phCapture('vault_opened')
+          return ''
+        }
+      } catch {}
+      // Password doesn't match remote vault — fall through and create a fresh vault
+    }
+
     const salt  = generateSalt()
     const key   = await deriveVaultKey(password, userId, salt)
     const check = await encryptField(key, VERIFY_PLAINTEXT)
@@ -248,6 +327,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(VAULT_V2_FLAG, 'true')
     localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
     sessionStorage.removeItem(SESSION_PASS_KEY)
+    await saveVaultMeta(saltToB64(salt), check) // sync to Supabase for cross-device access
 
     if (hintText?.trim()) {
       localStorage.setItem(HINT_KEY, hintText.trim())
@@ -291,9 +371,22 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     password: string,
     userId: string,
   ): Promise<boolean> => {
-    const saltB64 = localStorage.getItem(SALT_KEY)
-    const check   = localStorage.getItem(CHECK_KEY)
-    if (!saltB64 || !check) return false
+    let saltB64 = localStorage.getItem(SALT_KEY)
+    let check   = localStorage.getItem(CHECK_KEY)
+    if (!saltB64 || !check) {
+      // Try to restore from Supabase (new device or cleared localStorage)
+      const meta = await fetchVaultMeta()
+      if (meta) {
+        saltB64 = meta.vault_salt
+        check   = meta.vault_check
+        localStorage.setItem(SALT_KEY, saltB64)
+        localStorage.setItem(CHECK_KEY, check)
+        localStorage.setItem(VAULT_V2_FLAG, 'true')
+        setHasVault(true)
+      } else {
+        return false
+      }
+    }
     try {
       const key = await deriveVaultKey(password, userId, saltFromB64(saltB64))
       const dec = await decryptField(key, check)
@@ -423,6 +516,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
     sessionStorage.removeItem(SESSION_PASS_KEY)
     sessionStorage.removeItem(VAULT_MIGRATE_PW)
+    await saveVaultMeta(saltToB64(newSalt), newCheck) // sync to Supabase
 
     setVaultKey(newKey)
     setNeedsMigration(false)
@@ -467,6 +561,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
     localStorage.removeItem('gs_e2ee_biometric_wrapped_v2')
     sessionStorage.removeItem(SESSION_PASS_KEY)
+    await saveVaultMeta(saltToB64(newSalt), newCheck) // sync to Supabase
 
     setVaultKey(newKey)
     setNeedsMigration(false)
@@ -495,6 +590,34 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     if (!vaultKey) return false
     return registerBiometricWithVault(userId, userName, vaultKey, email)
   }, [vaultKey])
+
+  // ── Unlock vault via biometric (PRF-wrapped key) ────────────────────────────
+  const unlockVaultWithBiometric = useCallback(async (): Promise<boolean> => {
+    try {
+      const { verifyBiometricForVaultUnlock } = await import('../lib/passkey')
+      const result = await verifyBiometricForVaultUnlock()
+      if (!result.authenticated) return false
+      if (!result.vaultKey) {
+        // PRF not available or no wrapped key stored — store PRF bytes so next manual
+        // unlock can wrap and store the vault key automatically.
+        if (result.prfBytes) {
+          const b64 = btoa(String.fromCharCode(...result.prfBytes))
+          sessionStorage.setItem(PRF_PENDING_KEY, b64)
+        }
+        return false
+      }
+      const check = localStorage.getItem(CHECK_KEY)
+      if (check) {
+        const dec = await decryptField(result.vaultKey, check)
+        if (dec !== VERIFY_PLAINTEXT) return false
+      }
+      setVaultKey(result.vaultKey)
+      await persistVaultKey(result.vaultKey)
+      return true
+    } catch {
+      return false
+    }
+  }, [])
 
   const dismissRecoveryPhrase = useCallback(() => {
     setPendingRecoveryPhrase(null)
@@ -608,6 +731,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       setPendingRecoveryPhrase(phrase)
       sessionStorage.removeItem(SESSION_PASS_KEY)
       await persistVaultKey(newKey)
+      await saveVaultMeta(saltToB64(newSalt), newCheck) // sync to Supabase
     } else {
       sessionStorage.setItem(SESSION_PASS_KEY, newPass)
     }
@@ -693,6 +817,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       resetVault,
       migrateVault,
       enableBiometricVaultUnlock,
+      unlockVaultWithBiometric,
       reDeriveVaultKeyFromPassword,
       regenerateRecoveryKey,
       dismissRecoveryPhrase,

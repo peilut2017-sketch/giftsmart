@@ -27,7 +27,7 @@ import AccessibilityWidget from './components/AccessibilityWidget'
 import RecoveryKeyModal from './components/RecoveryKeyModal'
 import VaultMigrationModal from './components/VaultMigrationModal'
 import OAuthVaultSetupPrompt from './components/OAuthVaultSetupPrompt'
-import { isBiometricEnabled, getBiometricEmail } from './lib/passkey'
+import { isBiometricEnabled, getBiometricEmail, syncBiometricFromSupabase } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
 import { AlertTriangle } from 'lucide-react'
@@ -36,6 +36,7 @@ import { useE2EE } from './contexts/E2EEContext'
 import type { ReactNode } from 'react'
 
 const CheckoutPage     = lazy(() => import('./pages/CheckoutPage'))
+const VoucherPage      = lazy(() => import('./pages/VoucherPage'))
 const ArchivePage      = lazy(() => import('./pages/ArchivePage'))
 const StatsPage        = lazy(() => import('./pages/StatsPage'))
 const SettingsPage     = lazy(() => import('./pages/SettingsPage'))
@@ -50,10 +51,25 @@ const TermsPage        = lazy(() => import('./pages/TermsPage'))
 const SharedVoucherPage = lazy(() => import('./pages/SharedVoucherPage'))
 const GiftPage         = lazy(() => import('./pages/GiftPage'))
 
+function LoadingDots({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const dotClass = size === 'sm' ? 'w-2 h-2' : 'w-2.5 h-2.5'
+  return (
+    <div className="flex items-center gap-1.5">
+      {[0, 1, 2].map(i => (
+        <div
+          key={i}
+          className={`${dotClass} rounded-full bg-green-500 animate-bounce`}
+          style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }}
+        />
+      ))}
+    </div>
+  )
+}
+
 function PageSpinner() {
   return (
     <div className="flex-1 flex items-center justify-center min-h-[200px]">
-      <div className="w-8 h-8 border-2 border-green-200 border-t-green-500 rounded-full animate-spin" />
+      <LoadingDots />
     </div>
   )
 }
@@ -142,9 +158,42 @@ function E2EEBridge() {
 
 function NotificationBridge() {
   const { vouchers } = useVouchers()
-  const { user } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { isPro } = useSubscription()
-  useExpiryNotifications(vouchers, isPro, user?.id)
+  useExpiryNotifications(vouchers, isPro, user?.id, user?.email ?? undefined, profile?.name ?? undefined)
+
+  // Admin: receive push notification for new support messages from any page
+  useEffect(() => {
+    if (!isAdmin) return
+    const channel = supabase
+      .channel('admin-support-global')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'support_messages',
+      }, (payload) => {
+        const msg = payload.new as { subject: string; user_email?: string; user_name?: string }
+        if (Notification.permission === 'granted') {
+          new Notification('📩 הודעת תמיכה חדשה', {
+            body: `${msg.user_email || msg.user_name || 'משתמש'}: ${msg.subject}`,
+            icon: '/logo.png',
+            tag: 'admin-support',
+          })
+        }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'support_message_replies',
+      }, (payload) => {
+        const reply = payload.new as { sender: string; message_id: string }
+        if (reply.sender === 'user' && Notification.permission === 'granted') {
+          new Notification('💬 תשובה חדשה מהמשתמש', {
+            body: 'משתמש השיב להודעת תמיכה',
+            icon: '/logo.png',
+            tag: 'admin-support-reply',
+          })
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [isAdmin])
 
   // On mount: show any unseen push broadcasts + subscribe to future ones
   useEffect(() => {
@@ -226,6 +275,7 @@ function AppRoutes() {
   const { user, loading, passwordRecovery, signOut } = useAuth()
   const navigate = useNavigate()
   const [biometricLocked, setBiometricLocked] = useState(false)
+  const [biometricSyncChecking, setBiometricSyncChecking] = useState(false)
 
   interface BannerData {
     id: string
@@ -275,25 +325,37 @@ function AppRoutes() {
   }, [])
 
   useEffect(() => {
-    if (user && isBiometricEnabled()) {
-      // Only lock if biometric was registered for THIS user's email
-      const biometricEmail = getBiometricEmail()
-      if (biometricEmail && biometricEmail.toLowerCase() !== (user.email ?? '').toLowerCase()) return
-      // Only lock if the last successful biometric was more than 5 minutes ago.
-      // sessionStorage survives page reload in the same tab (not browser restart),
-      // so brief app-switches on mobile won't trigger a re-prompt.
-      const lastTs = parseInt(sessionStorage.getItem('gs_biometric_unlock_ts') || '0')
-      if (Date.now() - lastTs > 5 * 60 * 1000) {
-        setBiometricLocked(true)
-      }
-    }
-  }, [user])
+    if (!user) return
 
-  if (loading) {
+    function applyBiometricLock() {
+      const biometricEmail = getBiometricEmail()
+      if (biometricEmail && biometricEmail.toLowerCase() !== (user!.email ?? '').toLowerCase()) return
+      const lastTs = parseInt(sessionStorage.getItem('gs_biometric_unlock_ts') || '0')
+      if (Date.now() - lastTs > 5 * 60 * 1000) setBiometricLocked(true)
+    }
+
+    if (isBiometricEnabled()) {
+      // Already in localStorage — lock synchronously, no Supabase round-trip needed
+      applyBiometricLock()
+    } else {
+      // Not in localStorage — check Supabase (synced passkey from another device)
+      setBiometricSyncChecking(true)
+      ;(async () => {
+        try {
+          const restored = await syncBiometricFromSupabase()
+          if (restored) applyBiometricLock()
+        } finally {
+          setBiometricSyncChecking(false)
+        }
+      })()
+    }
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading || biometricSyncChecking) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-gray-50">
         <GiftSmartSplash />
-        <div className="w-8 h-8 border-3 border-green-200 border-t-green-500 rounded-full animate-spin" style={{ borderWidth: 3 }} />
+        <LoadingDots />
       </div>
     )
   }
@@ -347,12 +409,14 @@ function AppRoutes() {
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}
       <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
-      <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto overflow-x-hidden">
+      {/* padding-bottom reserves space so content is never hidden behind the fixed BottomNav */}
+      <div className="flex flex-col min-h-dvh w-full max-w-2xl mx-auto" style={{ paddingBottom: 'var(--nav-h)' }}>
         <OfflineBanner />
         <main id="main-content" className="flex-1 flex flex-col">
           <Suspense fallback={<PageSpinner />}>
             <AnimatedRoutes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/voucher/:id" element={<VoucherPage />} />
               <Route path="/checkout/:id" element={<CheckoutPage />} />
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/stats" element={<StatsPage />} />
@@ -370,8 +434,9 @@ function AppRoutes() {
           </Suspense>
         </main>
         <PWAInstallBanner />
-        <BottomNav />
       </div>
+      {/* BottomNav is outside the container so overflow:hidden/transform never traps it */}
+      <BottomNav />
       {widgetEnabled && <AccessibilityWidget />}
       <OnboardingGuide />
     </MarketplaceProvider>

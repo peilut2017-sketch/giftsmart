@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck, Percent, CreditCard, Tag, Building2, X } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck, Percent, CreditCard, Tag, Building2, X, UserCheck, Activity } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher, DiscountClub, DiscountBusiness, DiscountDeal, DiscountSubmission } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { SUPER_VOUCHER_STORES } from '../types'
+import { usePageView } from '../hooks/usePageView'
 
 
 interface UserRow {
@@ -72,10 +73,12 @@ export default function AdminPage() {
   const { t } = useT()
   const { user, profile, isAdmin } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, updateWalletName } = useVouchers()
+  usePageView('admin')
 
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [proCount, setProCount] = useState<number | null>(null)
   const [allUsers, setAllUsers] = useState<UserRow[]>([])
+  const [usersRefreshing, setUsersRefreshing] = useState(false)
   const [showUsers, setShowUsers] = useState(false)
   const [editingWalletName, setEditingWalletName] = useState(false)
   const [newWalletName, setNewWalletName] = useState(walletName)
@@ -158,6 +161,8 @@ export default function AdminPage() {
     created_at: string
     purchase_id: string | null
     listing_id: string | null
+    deal_id: string | null
+    source: string | null
   }[]>([])
   const [reportsLoaded, setReportsLoaded] = useState(false)
   const [reportsError, setReportsError] = useState<string | null>(null)
@@ -233,6 +238,74 @@ export default function AdminPage() {
     tags: '', start_date: '', expiration_date: '',
   })
   const [savingEdit, setSavingEdit] = useState(false)
+
+  // ── Page views ───────────────────────────────────────────────────────────
+  const [showPageViews, setShowPageViews] = useState(false)
+  const [pageViewsFilter, setPageViewsFilter] = useState<'day' | 'week' | 'month' | 'custom'>('week')
+  const [pageViewsFrom, setPageViewsFrom] = useState('')
+  const [pageViewsTo, setPageViewsTo] = useState('')
+  const [pageViewsData, setPageViewsData] = useState<{ page: string; views: number; unique_users: number }[]>([])
+  const [pageViewsLoading, setPageViewsLoading] = useState(false)
+
+  // ── Admin seller profiles ────────────────────────────────────────────────
+  const [showSellerProfiles, setShowSellerProfiles] = useState(false)
+  const [sellerProfilesList, setSellerProfilesList] = useState<{
+    user_id: string; user_email: string | null; full_name: string; phone: string;
+    email: string; id_number: string; verification_status: string; admin_note: string | null; created_at: string
+  }[]>([])
+  const [sellerProfilesLoaded, setSellerProfilesLoaded] = useState(false)
+  const [updatingSellerProfile, setUpdatingSellerProfile] = useState<string | null>(null)
+  const [rejectNoteInputs, setRejectNoteInputs] = useState<Record<string, string>>({})
+  const [showRejectNoteFor, setShowRejectNoteFor] = useState<string | null>(null)
+
+  async function loadSellerProfiles() {
+    const { data } = await supabase.rpc('admin_get_seller_profiles')
+    if (data) setSellerProfilesList(data)
+    setSellerProfilesLoaded(true)
+  }
+
+  async function handleSellerProfileDecision(userId: string, status: 'verified' | 'rejected') {
+    setUpdatingSellerProfile(userId)
+    try {
+      const note = rejectNoteInputs[userId] ?? null
+      const { error } = await supabase.rpc('admin_update_seller_verification', {
+        p_user_id: userId,
+        p_status: status,
+        p_note: status === 'rejected' ? note : null,
+      })
+      if (error) throw error
+      toast.success(status === 'verified' ? t('admin.sellers.approved') : t('admin.sellers.rejected'))
+      setSellerProfilesList(prev => prev.map(p => p.user_id === userId ? { ...p, verification_status: status, admin_note: status === 'rejected' ? note : null } : p))
+      setShowRejectNoteFor(null)
+    } catch {
+      toast.error(t('admin.error'))
+    } finally {
+      setUpdatingSellerProfile(null)
+    }
+  }
+
+  async function loadPageViews() {
+    setPageViewsLoading(true)
+    try {
+      const now = new Date()
+      let from: string
+      let to: string = now.toISOString()
+      if (pageViewsFilter === 'day') {
+        const d = new Date(now); d.setHours(0, 0, 0, 0); from = d.toISOString()
+      } else if (pageViewsFilter === 'week') {
+        const d = new Date(now); d.setDate(d.getDate() - 7); from = d.toISOString()
+      } else if (pageViewsFilter === 'month') {
+        const d = new Date(now); d.setMonth(d.getMonth() - 1); from = d.toISOString()
+      } else {
+        from = pageViewsFrom ? new Date(pageViewsFrom).toISOString() : new Date(now.setMonth(now.getMonth() - 1)).toISOString()
+        to = pageViewsTo ? new Date(pageViewsTo + 'T23:59:59').toISOString() : new Date().toISOString()
+      }
+      const { data } = await supabase.rpc('admin_get_page_views', { p_from: from, p_to: to })
+      if (data) setPageViewsData(data)
+    } finally {
+      setPageViewsLoading(false)
+    }
+  }
 
   async function loadAdminClubs() {
     const { data } = await supabase.rpc('admin_get_all_clubs')
@@ -617,21 +690,47 @@ export default function AdminPage() {
     }
   }
 
-  useEffect(() => {
-    if (!isAdmin) return
-    supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
-    Promise.all([
-      supabase.rpc('get_all_users'),
-      supabase.from('subscriptions').select('user_id, current_period_end').eq('plan', 'pro').eq('status', 'active'),
-    ]).then(([{ data }, { data: subs }]) => {
+  async function loadUsers(showSpinner = false) {
+    if (showSpinner) setUsersRefreshing(true)
+    try {
+      const [{ data, error }, { data: subs }] = await Promise.all([
+        supabase.rpc('get_all_users'),
+        supabase.from('subscriptions').select('user_id, current_period_end').eq('plan', 'pro').eq('status', 'active'),
+      ])
+      if (error) {
+        console.error('[admin] get_all_users error:', error)
+        if (showSpinner) toast.error('שגיאה בטעינת משתמשים: ' + error.message)
+        return
+      }
       if (!data) return
       const subMap = new Map((subs ?? []).map((s: { user_id: string; current_period_end: string | null }) => [s.user_id, s.current_period_end]))
       setAllUsers(data.map((u: UserRow) => ({ ...u, pro_expires_at: subMap.has(u.id) ? subMap.get(u.id) ?? null : undefined })))
-    })
+    } finally {
+      if (showSpinner) setUsersRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
+    loadUsers()
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
     supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(data !== false) })
     supabase.rpc('get_marketplace_mode').then(({ data }) => { if (data) setMarketplaceMode(data as 'enabled' | 'disabled' | 'selective') })
-  }, [isAdmin])
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Realtime on profiles is blocked by RLS (users see only their own row).
+  // Instead: re-fetch when the admin returns to the tab, and poll every 60s.
+  useEffect(() => {
+    if (!isAdmin) return
+    const onVisible = () => { if (document.visibilityState === 'visible') loadUsers() }
+    document.addEventListener('visibilitychange', onVisible)
+    const interval = setInterval(() => loadUsers(), 60_000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(interval)
+    }
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleTogglePremium() {
     if (premiumEnabled === null) return
@@ -1090,6 +1189,18 @@ export default function AdminPage() {
 
   const usersCount = systemStats?.total_users ?? null
 
+  // Inbox counts (fetched on every load)
+  const [inboxCounts, setInboxCounts] = useState<{ support_unread: number; reports_pending: number; submissions_pending: number } | null>(null)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.rpc('admin_get_inbox_counts').then(({ data }) => {
+      if (data) setInboxCounts(data as typeof inboxCounts)
+    })
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const inboxTotal = (inboxCounts?.support_unread ?? 0) + (inboxCounts?.reports_pending ?? 0) + (inboxCounts?.submissions_pending ?? 0)
+
   return (
     <div className="flex-1 bg-gray-50">
       {deleteTarget && (
@@ -1140,6 +1251,47 @@ export default function AdminPage() {
       </div>
 
       <div className="p-4 pb-24 space-y-4">
+
+        {/* ── Inbox summary banner ── */}
+        {inboxCounts !== null && inboxTotal > 0 && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-amber-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-sm font-bold text-gray-800">
+                {inboxTotal} פריטים ממתינים לטיפול
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {inboxCounts.support_unread > 0 && (
+                <button
+                  onClick={() => { setShowMessages(true); setTimeout(() => document.getElementById('admin-messages')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.support_unread}</span>
+                  הודעות תמיכה
+                </button>
+              )}
+              {inboxCounts.reports_pending > 0 && (
+                <button
+                  onClick={() => { setShowReports(true); setTimeout(() => document.getElementById('admin-reports')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.reports_pending}</span>
+                  דיווחי משתמשים
+                </button>
+              )}
+              {inboxCounts.submissions_pending > 0 && (
+                <button
+                  onClick={() => { setShowDiscounts(true); setDiscountTab('submissions'); setTimeout(() => document.getElementById('admin-discounts')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.submissions_pending}</span>
+                  הגשות הנחות
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Premium feature flag ── */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -1352,13 +1504,23 @@ export default function AdminPage() {
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between p-4"
-            onClick={() => setShowUsers(v => !v)}
+            onClick={() => setShowUsers(v => { if (!v) loadUsers(true); return !v })}
           >
             <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-500" />
               רשימת משתמשים ({allUsers.length || usersCount || '...'})
             </span>
             <div className="flex items-center gap-2">
+              <button
+                onClick={e => { e.stopPropagation(); loadUsers(true) }}
+                className="text-xs text-blue-500 bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1"
+                title="רענן רשימת משתמשים"
+              >
+                {usersRefreshing
+                  ? <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  : '↺'}
+                רענן
+              </button>
               {allUsers.length > 0 && (
                 <button
                   onClick={e => { e.stopPropagation(); exportUsersCSV() }}
@@ -1826,7 +1988,7 @@ export default function AdminPage() {
         </div>
 
         {/* ── Support Messages ── */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+        <div id="admin-messages" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between p-4"
             onClick={() => setShowMessages(v => !v)}
@@ -2390,7 +2552,8 @@ export default function AdminPage() {
         </div>
 
         {/* Reports */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+
+        <div id="admin-reports" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between px-4 py-4"
             onClick={() => { const next = !showReports; setShowReports(next); if (next) loadReports() }}
@@ -2430,10 +2593,20 @@ export default function AdminPage() {
                 <div key={r.report_id} className={`border rounded-2xl p-4 space-y-2 ${r.status === 'pending' ? 'border-red-200 bg-red-50' : r.status === 'reviewed' ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium text-gray-800">{r.reason}</p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {r.source === 'discount' && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">🏷 הנחות</span>
+                        )}
+                        <p className="text-sm font-medium text-gray-800">{r.reason}</p>
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">
                         מדווח: <span className="font-medium">{r.reporter_email}</span>
-                        {' · '}על: <span className="font-medium text-red-700">{r.reported_email}</span>
+                        {r.source !== 'discount' && (
+                          <>{' · '}על: <span className="font-medium text-red-700">{r.reported_email}</span></>
+                        )}
+                        {r.source === 'discount' && r.deal_id && (
+                          <>{' · '}הנחה: <span className="font-medium text-purple-700 font-mono text-[10px]">{r.deal_id}</span></>
+                        )}
                       </p>
                     </div>
                     <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${r.status === 'pending' ? 'bg-red-100 text-red-700' : r.status === 'reviewed' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
@@ -2599,7 +2772,7 @@ export default function AdminPage() {
         </div>
 
         {/* ── הנחות חכמות ── */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+        <div id="admin-discounts" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between p-4"
             onClick={() => {
@@ -3095,6 +3268,189 @@ export default function AdminPage() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Page Views ── */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <button
+            className="w-full flex items-center justify-between"
+            onClick={() => { setShowPageViews(v => !v); if (!showPageViews) loadPageViews() }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-sky-50">
+                <Activity className="w-5 h-5 text-sky-500" />
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-800 text-sm">{t('admin.pageviews.title')}</p>
+                <p className="text-xs text-gray-400 mt-0.5">כניסות לכל עמוד לפי תאריך</p>
+              </div>
+            </div>
+            {showPageViews ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+
+          {showPageViews && (
+            <div className="mt-4 space-y-3">
+              {/* Filter tabs */}
+              <div className="flex gap-1.5">
+                {(['day', 'week', 'month', 'custom'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => { setPageViewsFilter(f); if (f !== 'custom') setTimeout(loadPageViews, 0) }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+                      pageViewsFilter === f ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {t(`admin.pageviews.${f}`)}
+                  </button>
+                ))}
+              </div>
+
+              {pageViewsFilter === 'custom' && (
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 block mb-1">מ</label>
+                    <input type="date" className="w-full border rounded-xl px-3 py-2 text-xs" value={pageViewsFrom} onChange={e => setPageViewsFrom(e.target.value)} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 block mb-1">עד</label>
+                    <input type="date" className="w-full border rounded-xl px-3 py-2 text-xs" value={pageViewsTo} onChange={e => setPageViewsTo(e.target.value)} />
+                  </div>
+                  <button onClick={loadPageViews} className="px-3 py-2 bg-sky-500 text-white text-xs rounded-xl">הצג</button>
+                </div>
+              )}
+
+              {pageViewsLoading ? (
+                <p className="text-xs text-gray-400 text-center py-3">טוען...</p>
+              ) : pageViewsData.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">אין נתונים לטווח זה</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-gray-100">
+                        <th className="text-right py-1.5 font-medium">{t('admin.pageviews.page')}</th>
+                        <th className="text-center py-1.5 font-medium px-2">{t('admin.pageviews.views')}</th>
+                        <th className="text-center py-1.5 font-medium">{t('admin.pageviews.unique')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageViewsData.map(row => (
+                        <tr key={row.page} className="border-b border-gray-50">
+                          <td className="py-2 text-gray-700 font-medium">{row.page}</td>
+                          <td className="py-2 text-center text-gray-800 font-bold px-2">{row.views}</td>
+                          <td className="py-2 text-center text-gray-500">{row.unique_users}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Seller Profiles ── */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <button
+            className="w-full flex items-center justify-between"
+            onClick={() => { setShowSellerProfiles(v => !v); if (!showSellerProfiles && !sellerProfilesLoaded) loadSellerProfiles() }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50">
+                <UserCheck className="w-5 h-5 text-indigo-500" />
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-800 text-sm">{t('admin.sellers.title')}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {sellerProfilesLoaded
+                    ? `${sellerProfilesList.filter(p => p.verification_status === 'pending').length} ממתין לאישור`
+                    : 'אישור פרופילי מוכרים'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {sellerProfilesList.filter(p => p.verification_status === 'pending').length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-bold">
+                  {sellerProfilesList.filter(p => p.verification_status === 'pending').length}
+                </span>
+              )}
+              {showSellerProfiles ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </div>
+          </button>
+
+          {showSellerProfiles && (
+            <div className="mt-4 space-y-2">
+              {!sellerProfilesLoaded ? (
+                <p className="text-xs text-gray-400 text-center py-3">טוען...</p>
+              ) : sellerProfilesList.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">{t('admin.sellers.empty')}</p>
+              ) : sellerProfilesList.map(sp => (
+                <div key={sp.user_id} className="bg-gray-50 rounded-2xl p-3 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{sp.full_name}</p>
+                      <p className="text-xs text-gray-400">{sp.user_email || sp.email}</p>
+                      <div className="flex gap-2 mt-1 text-xs text-gray-500">
+                        <span>📞 {sp.phone}</span>
+                        <span>🪪 {sp.id_number}</span>
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                      sp.verification_status === 'verified' ? 'bg-green-100 text-green-700'
+                      : sp.verification_status === 'rejected' ? 'bg-red-100 text-red-600'
+                      : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {sp.verification_status === 'verified' ? t('admin.sellers.status.verified')
+                        : sp.verification_status === 'rejected' ? t('admin.sellers.status.rejected')
+                        : t('admin.sellers.status.pending')}
+                    </span>
+                  </div>
+
+                  {sp.admin_note && (
+                    <p className="text-xs text-red-500 italic">{t('seller.profile.rejected.note')} {sp.admin_note}</p>
+                  )}
+
+                  {sp.verification_status === 'pending' && (
+                    <div className="space-y-1.5 pt-1">
+                      {showRejectNoteFor === sp.user_id && (
+                        <input
+                          className="w-full border rounded-xl px-3 py-1.5 text-xs"
+                          placeholder="הערת דחייה (אופציונלי)"
+                          value={rejectNoteInputs[sp.user_id] ?? ''}
+                          onChange={e => setRejectNoteInputs(prev => ({ ...prev, [sp.user_id]: e.target.value }))}
+                        />
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSellerProfileDecision(sp.user_id, 'verified')}
+                          disabled={updatingSellerProfile === sp.user_id}
+                          className="flex-1 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                        >
+                          {updatingSellerProfile === sp.user_id ? '...' : t('admin.sellers.approve')}
+                        </button>
+                        {showRejectNoteFor === sp.user_id ? (
+                          <button
+                            onClick={() => handleSellerProfileDecision(sp.user_id, 'rejected')}
+                            disabled={updatingSellerProfile === sp.user_id}
+                            className="flex-1 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                          >
+                            {updatingSellerProfile === sp.user_id ? '...' : 'שלח דחייה'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setShowRejectNoteFor(sp.user_id)}
+                            className="flex-1 py-1.5 bg-red-100 text-red-600 text-xs font-semibold rounded-lg"
+                          >
+                            {t('admin.sellers.reject')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
