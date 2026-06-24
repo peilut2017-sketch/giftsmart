@@ -7,7 +7,7 @@ import { useT } from '../lib/i18n'
 import {
   ShoppingBag, Search, Star, X, CheckCircle, Loader2,
   Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
-  Bell, Plus, Trash2, SlidersHorizontal, Check, Settings,
+  Bell, Plus, Trash2, SlidersHorizontal, Check, Settings, UserCheck,
 } from 'lucide-react'
 import { formatDate } from '../utils/helpers'
 import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem, PaymentMethod } from '../types'
@@ -1047,7 +1047,15 @@ export default function MarketplacePage() {
   // When the user explicitly switches to a tab, ensure its data is up-to-date
   useEffect(() => {
     if (tab === 'all') fetchListings(search || undefined)
-    else if (tab === 'mine') fetchMyListings()
+    else if (tab === 'mine') {
+      fetchMyListings()
+      // Prefetch seller profile so the banner renders immediately
+      if (sellerProfile === undefined) {
+        supabase.rpc('get_seller_profile').then(({ data }) => {
+          setSellerProfile((data as SellerProfileRow | null) ?? null)
+        })
+      }
+    }
     else fetchMyPurchases()
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1262,6 +1270,38 @@ export default function MarketplacePage() {
         {/* ── My listings ── */}
         {tab === 'mine' && (
           <>
+            {/* Seller profile status banner */}
+            <button
+              onClick={() => { if (sellerProfile === undefined) checkAndPublish(); else setShowSellerProfile(true) }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-sm text-right ${
+                sellerProfile?.verification_status === 'verified'
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : sellerProfile?.verification_status === 'pending'
+                  ? 'bg-amber-50 border-amber-200 text-amber-700'
+                  : sellerProfile?.verification_status === 'rejected'
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-gray-50 border-gray-200 text-gray-600'
+              }`}
+            >
+              <UserCheck className="w-5 h-5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-xs">
+                  {sellerProfile?.verification_status === 'verified' ? 'פרופיל מוכר מאושר ✓'
+                    : sellerProfile?.verification_status === 'pending' ? 'פרופיל ממתין לאישור'
+                    : sellerProfile?.verification_status === 'rejected' ? 'פרופיל נדחה — לחץ לעדכון'
+                    : 'השלם פרופיל מוכר לפני פרסום'}
+                </p>
+                {sellerProfile?.verification_status !== 'verified' && (
+                  <p className="text-[10px] opacity-70 mt-0.5">
+                    {sellerProfile?.verification_status === 'pending'
+                      ? 'המנהל יאשר בהקדם'
+                      : 'נדרש אישור מנהל לפרסום שוברים'}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="w-4 h-4 shrink-0 opacity-50" />
+            </button>
+
             <div className="flex justify-between items-center">
               <button
                 onClick={() => setShowPaymentSettings(v => !v)}
