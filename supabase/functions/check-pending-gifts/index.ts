@@ -52,10 +52,12 @@ serve(async (req) => {
 
   const appUrl = Deno.env.get('APP_URL') || 'https://gifttest.vercel.app'
   const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: Deno.env.get('SES_SMTP_HOST') ?? 'email-smtp.us-east-1.amazonaws.com',
+    port: Number(Deno.env.get('SES_SMTP_PORT') ?? 587),
+    secure: false,
     auth: {
-      user: Deno.env.get('GMAIL_USER')!,
-      pass: Deno.env.get('GMAIL_APP_PASSWORD')!,
+      user: Deno.env.get('SES_SMTP_USER')!,
+      pass: Deno.env.get('SES_SMTP_PASS')!,
     },
   })
 
@@ -94,7 +96,7 @@ serve(async (req) => {
 
     try {
       await transporter.sendMail({
-        from: `"ארנק שוברים" <${Deno.env.get('GMAIL_USER')}>`,
+        from: `"ארנק שוברים" <${Deno.env.get('SES_FROM_EMAIL') ?? Deno.env.get('GMAIL_USER')}>`,
         to: gift.recipient_email,
         subject: `🎁 ${senderName} שלח/ה לך מתנה: ${storeName}`,
         html,
