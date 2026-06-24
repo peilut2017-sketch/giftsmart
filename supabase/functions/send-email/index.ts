@@ -171,14 +171,16 @@ serve(async (req) => {
     }
 
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: Deno.env.get('SES_SMTP_HOST') ?? 'email-smtp.us-east-1.amazonaws.com',
+      port: Number(Deno.env.get('SES_SMTP_PORT') ?? 587),
+      secure: false,
       auth: {
-        user: Deno.env.get('GMAIL_USER')!,
-        pass: Deno.env.get('GMAIL_APP_PASSWORD')!,
+        user: Deno.env.get('SES_SMTP_USER')!,
+        pass: Deno.env.get('SES_SMTP_PASS')!,
       },
     })
 
-    const from = `"ארנק שוברים" <${Deno.env.get('GMAIL_USER')}>`
+    const from = `"ארנק שוברים" <${Deno.env.get('SES_FROM_EMAIL') ?? Deno.env.get('GMAIL_USER')}>`
 
     if (type === 'invite') {
       const { to_email, to_name, from_name, wallet_name } = params
