@@ -170,54 +170,72 @@ serve(async (req) => {
       }
     }
 
-    const transporter = nodemailer.createTransport({
-      host: Deno.env.get('SES_SMTP_HOST') ?? 'email-smtp.us-east-1.amazonaws.com',
-      port: Number(Deno.env.get('SES_SMTP_PORT') ?? 587),
-      secure: false,
-      auth: {
-        user: Deno.env.get('SES_SMTP_USER')!,
-        pass: Deno.env.get('SES_SMTP_PASS')!,
-      },
-    })
-
-    const from = `"ארנק שוברים" <${Deno.env.get('SES_FROM_EMAIL') ?? Deno.env.get('GMAIL_USER')}>`
+    // Try SES first; if it fails (e.g. still in sandbox) fall back to Gmail
+    async function sendMail(mailOptions: Record<string, unknown>) {
+      const sesUser = Deno.env.get('SES_SMTP_USER')
+      const sesPass = Deno.env.get('SES_SMTP_PASS')
+      if (sesUser && sesPass) {
+        try {
+          const ses = nodemailer.createTransport({
+            host: Deno.env.get('SES_SMTP_HOST') ?? 'email-smtp.us-east-1.amazonaws.com',
+            port: Number(Deno.env.get('SES_SMTP_PORT') ?? 587),
+            secure: false,
+            auth: { user: sesUser, pass: sesPass },
+          })
+          await ses.sendMail({
+            ...mailOptions,
+            from: `"ארנק שוברים" <${Deno.env.get('SES_FROM_EMAIL') ?? sesUser}>`,
+          })
+          return
+        } catch (sesErr) {
+          console.warn('SES failed, falling back to Gmail:', sesErr)
+        }
+      }
+      // Gmail fallback
+      const gmail = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: Deno.env.get('GMAIL_USER')!,
+          pass: Deno.env.get('GMAIL_APP_PASSWORD')!,
+        },
+      })
+      await gmail.sendMail({
+        ...mailOptions,
+        from: `"ארנק שוברים" <${Deno.env.get('GMAIL_USER')}>`,
+      })
+    }
 
     if (type === 'invite') {
       const { to_email, to_name, from_name, wallet_name } = params
-      await transporter.sendMail({
-        from,
+      await sendMail({
         to: to_email,
         subject: `${esc(from_name)} הזמין/ה אותך לארנק: ${esc(wallet_name)}`,
         html: inviteHtml({ to_name, from_name, wallet_name, app_url: appUrl }),
       })
     } else if (type === 'expiry') {
       const { to_email, to_name, count, vouchers_list } = params
-      await transporter.sendMail({
-        from,
+      await sendMail({
         to: to_email,
         subject: `⏰ תזכורת: ${count} שוברים עומדים לפוג בקרוב`,
         html: expiryHtml({ to_name, count, vouchers_list, app_url: appUrl }),
       })
     } else if (type === 'share') {
       const { to_email, to_name, from_name, store_name } = params
-      await transporter.sendMail({
-        from,
+      await sendMail({
         to: to_email,
         subject: `${esc(from_name)} שיתף/ה איתך שובר: ${esc(store_name)}`,
         html: shareHtml({ to_name, from_name, store_name, app_url: appUrl }),
       })
     } else if (type === 'share_invite') {
       const { to_email, from_name, store_name } = params
-      await transporter.sendMail({
-        from,
+      await sendMail({
         to: to_email,
         subject: `${esc(from_name)} הזמין/ה אותך לשתף שובר: ${esc(store_name)}`,
         html: shareInviteHtml({ from_name, store_name, app_url: appUrl }),
       })
     } else if (type === 'gift') {
       const { to_email, sender_name, message, store_name, balance, gift_link } = params
-      await transporter.sendMail({
-        from,
+      await sendMail({
         to: to_email,
         subject: `🎁 ${esc(sender_name)} שלח/ה לך מתנה: ${esc(store_name)}`,
         html: giftHtml({ sender_name, message, store_name, balance, gift_link, app_url: appUrl }),

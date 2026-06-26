@@ -51,15 +51,41 @@ serve(async (req) => {
   }
 
   const appUrl = Deno.env.get('APP_URL') || 'https://gifttest.vercel.app'
-  const transporter = nodemailer.createTransport({
-    host: Deno.env.get('SES_SMTP_HOST') ?? 'email-smtp.us-east-1.amazonaws.com',
-    port: Number(Deno.env.get('SES_SMTP_PORT') ?? 587),
-    secure: false,
-    auth: {
-      user: Deno.env.get('SES_SMTP_USER')!,
-      pass: Deno.env.get('SES_SMTP_PASS')!,
-    },
-  })
+
+  // Try SES first; if it fails (e.g. still in sandbox) fall back to Gmail
+  async function sendMail(mailOptions: Record<string, unknown>) {
+    const sesUser = Deno.env.get('SES_SMTP_USER')
+    const sesPass = Deno.env.get('SES_SMTP_PASS')
+    if (sesUser && sesPass) {
+      try {
+        const ses = nodemailer.createTransport({
+          host: Deno.env.get('SES_SMTP_HOST') ?? 'email-smtp.us-east-1.amazonaws.com',
+          port: Number(Deno.env.get('SES_SMTP_PORT') ?? 587),
+          secure: false,
+          auth: { user: sesUser, pass: sesPass },
+        })
+        await ses.sendMail({
+          ...mailOptions,
+          from: `"ארנק שוברים" <${Deno.env.get('SES_FROM_EMAIL') ?? sesUser}>`,
+        })
+        return
+      } catch (sesErr) {
+        console.warn('SES failed, falling back to Gmail:', sesErr)
+      }
+    }
+    // Gmail fallback
+    const gmail = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: Deno.env.get('GMAIL_USER')!,
+        pass: Deno.env.get('GMAIL_APP_PASSWORD')!,
+      },
+    })
+    await gmail.sendMail({
+      ...mailOptions,
+      from: `"ארנק שוברים" <${Deno.env.get('GMAIL_USER')}>`,
+    })
+  }
 
   let sent = 0
   for (const gift of gifts) {
@@ -95,8 +121,7 @@ serve(async (req) => {
 </body></html>`
 
     try {
-      await transporter.sendMail({
-        from: `"ארנק שוברים" <${Deno.env.get('SES_FROM_EMAIL') ?? Deno.env.get('GMAIL_USER')}>`,
+      await sendMail({
         to: gift.recipient_email,
         subject: `🎁 ${senderName} שלח/ה לך מתנה: ${storeName}`,
         html,
