@@ -48,6 +48,7 @@ interface MarketplaceContextValue {
   marketplaceMode: MarketplaceMode
   myAccessStatus: MarketplaceAccessStatus
   requestMarketplaceAccess: (message?: string) => Promise<void>
+  isMarketplaceBlocked: boolean
 }
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null)
@@ -78,6 +79,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     () => (localStorage.getItem('gs_marketplace_mode') as MarketplaceMode) || 'enabled'
   )
   const [myAccessStatus, setMyAccessStatus] = useState<MarketplaceAccessStatus>('none')
+  // Blocked status is independent of marketplaceMode — a blocked user is kept
+  // out even when the marketplace is open to everyone ('enabled').
+  const [isMarketplaceBlocked, setIsMarketplaceBlocked] = useState(false)
 
   useEffect(() => {
     supabase.rpc('get_marketplace_mode').then(({ data }) => {
@@ -89,9 +93,12 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!user) { setMyAccessStatus('none'); return }
+    if (!user) { setMyAccessStatus('none'); setIsMarketplaceBlocked(false); return }
     supabase.rpc('get_my_marketplace_access').then(({ data }) => {
       setMyAccessStatus((data as MarketplaceAccessStatus) || 'none')
+    })
+    supabase.rpc('get_my_marketplace_block_status').then(({ data }) => {
+      setIsMarketplaceBlocked(data === true)
     })
   }, [user])
 
@@ -520,6 +527,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         marketplaceMode,
         myAccessStatus,
         requestMarketplaceAccess,
+        isMarketplaceBlocked,
       }}
     >
       {children}

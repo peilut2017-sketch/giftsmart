@@ -82,6 +82,11 @@ DECLARE
   v_listing  marketplace_listings;
   v_msg      marketplace_messages;
 BEGIN
+  -- Blocked users cannot message or send/respond to offers, regardless of marketplace mode
+  IF EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND marketplace_blocked = true) THEN
+    RAISE EXCEPTION 'marketplace_blocked';
+  END IF;
+
   SELECT * INTO v_listing FROM marketplace_listings WHERE id = p_listing_id;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'listing_not_found'; END IF;
@@ -174,6 +179,11 @@ DECLARE
   v_purchase     marketplace_purchases;
   v_agreed_price NUMERIC;
 BEGIN
+  -- Blocked users cannot buy, regardless of the marketplace's open/selective mode
+  IF EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND marketplace_blocked = true) THEN
+    RAISE EXCEPTION 'marketplace_blocked';
+  END IF;
+
   SELECT * INTO v_listing
   FROM marketplace_listings
   WHERE id = p_listing_id AND status = 'active';

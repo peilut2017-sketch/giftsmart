@@ -2,6 +2,34 @@
 -- Admin helper functions — run in Supabase SQL Editor
 -- =============================================
 
+-- 0. Self-healing backfill: catches any auth.users row still missing its
+--    profiles row (e.g. if handle_new_user's trigger ever regresses again —
+--    see supabase-schema.sql). Called at the top of every admin user-listing
+--    function below so the admin panel can never silently miss a registered
+--    user, independent of whether the signup trigger is currently healthy.
+CREATE OR REPLACE FUNCTION backfill_missing_profiles()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO profiles (id, email, name, created_at)
+  SELECT
+    u.id,
+    u.email,
+    COALESCE(
+      NULLIF(TRIM(u.raw_user_meta_data->>'name'), ''),
+      NULLIF(TRIM(u.raw_user_meta_data->>'full_name'), ''),
+      split_part(u.email, '@', 1)
+    ),
+    u.created_at
+  FROM auth.users u
+  WHERE NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = u.id)
+  ON CONFLICT (id) DO NOTHING;
+END;
+$$;
+
 -- 1. Count all registered users (bypasses RLS)
 CREATE OR REPLACE FUNCTION get_registered_users_count()
 RETURNS INTEGER
@@ -13,6 +41,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true) THEN
     RAISE EXCEPTION 'permission_denied';
   END IF;
+  PERFORM backfill_missing_profiles();
   RETURN (SELECT COUNT(*)::INTEGER FROM profiles);
 END;
 $$;
@@ -29,6 +58,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true) THEN
     RAISE EXCEPTION 'permission_denied';
   END IF;
+  PERFORM backfill_missing_profiles();
   RETURN QUERY
     SELECT p.id, p.email, p.name, p.created_at
     FROM profiles p
@@ -48,6 +78,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true) THEN
     RAISE EXCEPTION 'permission_denied';
   END IF;
+  PERFORM backfill_missing_profiles();
   RETURN (
     SELECT json_build_object(
       'total_vouchers',   (SELECT COUNT(*) FROM vouchers WHERE is_archived = false),

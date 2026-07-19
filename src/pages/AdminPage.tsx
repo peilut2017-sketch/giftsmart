@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
-import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck, Percent, CreditCard, Tag, Building2, X, UserCheck, Activity } from 'lucide-react'
+import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck, Percent, CreditCard, Tag, Building2, X, UserCheck, Activity, Ban } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SuperVoucher, DiscountClub, DiscountBusiness, DiscountDeal, DiscountSubmission } from '../types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -184,6 +184,10 @@ export default function AdminPage() {
   const [accessRequests, setAccessRequests] = useState<{ user_id: string; user_email: string | null; user_name: string | null; message: string | null; status: string; updated_at: string }[]>([])
   const [accessRequestsLoaded, setAccessRequestsLoaded] = useState(false)
   const [handlingAccess, setHandlingAccess] = useState<string | null>(null)
+  // Marketplace user blocking — independent of marketplaceMode; blocks apply even when the market is open to everyone
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set())
+  const [blockedLoaded, setBlockedLoaded] = useState(false)
+  const [togglingBlock, setTogglingBlock] = useState<string | null>(null)
 
   // ── Discount Matcher admin state ─────────────────────────────────────────
   const [showDiscounts, setShowDiscounts] = useState(false)
@@ -627,6 +631,37 @@ export default function AdminPage() {
       loadAccessRequests()
     }
   }, [showUsers, marketplaceMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadBlockedUsers() {
+    setBlockedLoaded(false)
+    const { data } = await supabase.rpc('admin_get_marketplace_blocked_users')
+    if (data) setBlockedUserIds(new Set((data as { user_id: string }[]).map(r => r.user_id)))
+    setBlockedLoaded(true)
+  }
+
+  // Load blocked-user list whenever the users list is expanded — independent
+  // of marketplaceMode, since blocks apply even when the market is open to everyone
+  useEffect(() => {
+    if (showUsers && !blockedLoaded) loadBlockedUsers()
+  }, [showUsers]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleToggleBlock(userId: string, blocked: boolean) {
+    setTogglingBlock(userId)
+    try {
+      const { error } = await supabase.rpc('admin_set_marketplace_blocked', { p_user_id: userId, p_blocked: blocked })
+      if (error) throw error
+      setBlockedUserIds(prev => {
+        const next = new Set(prev)
+        if (blocked) next.add(userId); else next.delete(userId)
+        return next
+      })
+      toast.success(blocked ? t('admin.market.block.blocked') : t('admin.market.block.unblocked'))
+    } catch {
+      toast.error(t('admin.error'))
+    } finally {
+      setTogglingBlock(null)
+    }
+  }
 
   async function loadReports() {
     setReportsLoaded(false)
@@ -1606,6 +1641,20 @@ export default function AdminPage() {
                       </div>
                     )}
                     <p className="text-xs text-gray-400">{formatDate(u.created_at)}</p>
+                    {u.id !== user?.id && (
+                      <button
+                        onClick={() => handleToggleBlock(u.id, !blockedUserIds.has(u.id))}
+                        disabled={togglingBlock === u.id}
+                        className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                          blockedUserIds.has(u.id)
+                            ? 'text-red-600 bg-red-50 hover:bg-red-100'
+                            : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                        }`}
+                        title={blockedUserIds.has(u.id) ? 'בטל חסימה מהשוק' : 'חסום מהשוק'}
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {u.id !== user?.id && (
                       <button
                         onClick={() => setDeleteTarget(u)}

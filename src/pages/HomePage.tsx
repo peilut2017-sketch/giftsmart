@@ -923,7 +923,7 @@ export default function HomePage() {
                       key={v.id}
                       voucher={v}
                       superVoucherName={sv?.name}
-                      onClick={() => navigate(`/checkout/${v.id}`)}
+                      onClick={() => navigate(`/checkout/${v.id}`, { state: { voucherIds: displayVouchers.map(dv => dv.id) } })}
                       onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
                       onDelete={() => requestDelete(v.id)}
                       onArchive={() => requestArchive(v.id)}

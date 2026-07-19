@@ -117,6 +117,24 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const operatorPickerRef = useRef<HTMLDivElement>(null)
   const hiddenDateRef = useRef<HTMLInputElement>(null)
 
+  // Live duplicate-code detection — updates as the user types, independent of
+  // this voucher's own E2EE toggle. Matches plain-text codes always, and
+  // E2EE codes only when the vault is unlocked (decryptedMap populated).
+  const duplicateVoucher = useMemo(() => {
+    const normalizedCode = code.trim().toLowerCase()
+    if (!normalizedCode) return null
+    const allVouchers = [...vouchers, ...archivedVouchers]
+    return allVouchers.find(v =>
+      !v.is_e2ee &&
+      v.code.toLowerCase().trim() === normalizedCode &&
+      (!voucher || v.id !== voucher.id)
+    ) ?? allVouchers.find(v =>
+      v.is_e2ee &&
+      (decryptedMap.get(v.id)?.code ?? '').toLowerCase().trim() === normalizedCode &&
+      (!voucher || v.id !== voucher.id)
+    ) ?? null
+  }, [code, vouchers, archivedVouchers, decryptedMap, voucher])
+
   function openDatePicker() {
     if (hiddenDateRef.current) {
       if (typeof hiddenDateRef.current.showPicker === 'function') {
@@ -346,27 +364,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (!storeName) return toast.error('יש לבחור שם חנות')
     if (!code) return toast.error('יש להזין קוד שובר')
 
-    // Duplicate check — plain vouchers and E2EE vouchers (using decryptedMap)
-    if (!e2eeEnabled) {
-      const allVouchers = [...vouchers, ...archivedVouchers]
-      const normalizedCode = code.toLowerCase().trim()
-      const duplicate =
-        // plain-text match
-        allVouchers.find(v =>
-          !v.is_e2ee &&
-          v.code.toLowerCase().trim() === normalizedCode &&
-          (!voucher || v.id !== voucher.id)
-        ) ??
-        // decrypted E2EE match (only when vault is open)
-        allVouchers.find(v =>
-          v.is_e2ee &&
-          (decryptedMap.get(v.id)?.code ?? '').toLowerCase().trim() === normalizedCode &&
-          (!voucher || v.id !== voucher.id)
-        )
-      if (duplicate) {
-        const proceed = confirm(`קוד שובר זה כבר קיים (${duplicate.store_name}). האם להמשיך בכל זאת?`)
-        if (!proceed) return
-      }
+    // Duplicate check — runs regardless of the new voucher's own E2EE setting;
+    // compares against plain-text vouchers and decrypted E2EE vouchers (via decryptedMap)
+    if (duplicateVoucher) {
+      const proceed = confirm(`קוד שובר זה כבר קיים (${duplicateVoucher.store_name}). האם להמשיך בכל זאת?`)
+      if (!proceed) return
     }
 
     // E2EE: ensure vault is unlocked before encrypting
@@ -744,6 +746,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 <Camera className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
+            {duplicateVoucher && (
+              <p className="text-xs mt-1.5 text-amber-600 flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                קוד שובר זה כבר קיים בשובר "{duplicateVoucher.store_name}"
+              </p>
+            )}
           </div>
 
           {/* E2EE toggle */}

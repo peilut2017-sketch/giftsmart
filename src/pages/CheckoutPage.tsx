@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useSwipeable } from 'react-swipeable'
 import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
@@ -11,7 +12,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import { supabase } from '../lib/supabase'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock, ShoppingBag, Loader2, Shield, Lightbulb } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, AlertTriangle, Star, Eye, EyeOff, Archive, Check, Share2, Link2, Trash2, X, Clock, PlusCircle, Pencil, PackageCheck, Undo2, MinusCircle, UserPlus, Users, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Gift, Calendar, Mail, LinkIcon, Lock, Unlock, ShoppingBag, Loader2, Shield, Lightbulb } from 'lucide-react'
 import VoucherForm from '../components/VoucherForm'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -37,10 +38,13 @@ const CAT_COLORS: Record<string, string> = {
   'סופר': '#84cc16', 'מתנה': '#f97316', 'אחר': '#6b7280',
 }
 
+const SWIPE_THRESHOLD = 100
+
 export default function CheckoutPage() {
   const { t } = useT()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, profile } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts, refreshVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
@@ -99,6 +103,48 @@ export default function CheckoutPage() {
   const [sellDescription, setSellDescription] = useState('')
   const [sellLoading, setSellLoading] = useState(false)
   const [removingFromSale, setRemovingFromSale] = useState(false)
+
+  // Swipe between vouchers — the ordered id list comes from wherever we navigated
+  // from (HomePage / ArchivePage pass it via navigate state); without it, no
+  // adjacent voucher is known and swiping is a no-op.
+  const voucherIds = (location.state as { voucherIds?: string[] } | null)?.voucherIds
+  const swipeIndex = voucherIds ? voucherIds.indexOf(id ?? '') : -1
+  const prevVoucherId = voucherIds && swipeIndex > 0 ? voucherIds[swipeIndex - 1] : null
+  const nextVoucherId = voucherIds && swipeIndex !== -1 && swipeIndex < voucherIds.length - 1 ? voucherIds[swipeIndex + 1] : null
+  const [dragX, setDragX] = useState(0)
+  const [dragging, setDragging] = useState(false)
+
+  function goToSwipedVoucher(targetId: string, direction: 1 | -1) {
+    setDragging(false)
+    setDragX(direction * -window.innerWidth)
+    setTimeout(() => {
+      navigate(`/checkout/${targetId}`, { replace: true, state: { voucherIds } })
+    }, 180)
+  }
+
+  const swipeHandlers = useSwipeable({
+    onSwiping: ({ deltaX, dir }) => {
+      if (dir !== 'Left' && dir !== 'Right') return
+      let x = deltaX
+      if (x > 0 && !prevVoucherId) x = Math.min(x, 40)
+      if (x < 0 && !nextVoucherId) x = Math.max(x, -40)
+      setDragging(true)
+      setDragX(x)
+    },
+    onSwiped: ({ deltaX }) => {
+      setDragging(false)
+      const passed = Math.abs(deltaX) > SWIPE_THRESHOLD
+      if (passed && deltaX < 0 && nextVoucherId) goToSwipedVoucher(nextVoucherId, 1)
+      else if (passed && deltaX > 0 && prevVoucherId) goToSwipedVoucher(prevVoucherId, -1)
+      else setDragX(0)
+    },
+    delta: 60,
+    preventScrollOnSwipe: false,
+    trackMouse: false,
+  })
+
+  // Reset drag offset whenever we land on a new voucher
+  useEffect(() => { setDragX(0) }, [id])
 
   // Lock body scroll when sell modal is open
   useBodyScrollLock(showSellModal)
@@ -668,6 +714,36 @@ export default function CheckoutPage() {
           onClose={() => setShowEditForm(false)}
         />
       )}
+      {/* Swipe-to-navigate direction hints — fixed to viewport, independent of the sliding content below */}
+      {prevVoucherId && (
+        <div
+          className="fixed top-1/2 -translate-y-1/2 right-3 z-40 pointer-events-none transition-opacity"
+          style={{ opacity: Math.max(0, Math.min(1, dragX / SWIPE_THRESHOLD)) }}
+        >
+          <div className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center">
+            <ChevronRight className="w-5 h-5 text-white" />
+          </div>
+        </div>
+      )}
+      {nextVoucherId && (
+        <div
+          className="fixed top-1/2 -translate-y-1/2 left-3 z-40 pointer-events-none transition-opacity"
+          style={{ opacity: Math.max(0, Math.min(1, -dragX / SWIPE_THRESHOLD)) }}
+        >
+          <div className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center">
+            <ChevronLeft className="w-5 h-5 text-white" />
+          </div>
+        </div>
+      )}
+
+      <div
+        {...swipeHandlers}
+        style={{
+          transform: `translateX(${dragX}px)`,
+          transition: dragging ? 'none' : 'transform 220ms ease-out',
+          touchAction: 'pan-y',
+        }}
+      >
       {/* ── Gradient Hero Header ── */}
       <div style={{
         background: `linear-gradient(160deg, ${catColor}dd 0%, ${catColor}99 100%)`,
@@ -685,6 +761,11 @@ export default function CheckoutPage() {
           </button>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{sv?.name || voucher.store_name}</div>
           <div style={{ display: 'flex', gap: 6 }}>
+            {!isArchived && (
+              <button onClick={openShareModal} aria-label={t('checkout.share.action')} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Share2 className="w-4 h-4" style={{ color: '#fff' }} />
+              </button>
+            )}
             {!isSharedVoucher && !isArchived && (
               <button onClick={() => setShowEditForm(true)} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Edit2 className="w-4 h-4" style={{ color: '#fff' }} />
@@ -817,7 +898,7 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {/* Normal code display (unlocked or non-E2EE) */}
+          {/* Normal code display (unlocked or non-E2EE) — tap the code to copy */}
           {(!voucher.is_e2ee || isVaultUnlocked) && (
             <>
           <div className="w-full overflow-hidden flex items-center justify-center mb-4">
@@ -827,33 +908,36 @@ export default function CheckoutPage() {
               <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />
             )}
           </div>
-          <div className="font-mono text-lg font-bold tracking-widest text-gray-800 mb-3 break-all flex items-center justify-center gap-2">
-            {effectiveCode ?? voucher.code}
+          <button
+            type="button"
+            onClick={copyCode}
+            className="w-full flex items-center justify-center gap-2 mb-1 active:scale-[0.98] transition-transform"
+            aria-label={t('checkout.copy.code')}
+          >
+            {copied && <Check className="w-4 h-4 text-green-500 shrink-0" />}
+            <span className="font-mono text-lg font-bold tracking-widest text-gray-800 break-all">
+              {effectiveCode ?? voucher.code}
+            </span>
             {voucher.is_e2ee && isVaultUnlocked && (
-              <button onClick={lockVault} title={t('checkout.e2ee.lock.vault.title')} className="text-indigo-300 hover:text-indigo-500 ml-1">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={e => { e.stopPropagation(); lockVault() }}
+                title={t('checkout.e2ee.lock.vault.title')}
+                className="text-indigo-300 hover:text-indigo-500 ml-1"
+              >
                 <Shield className="w-4 h-4" />
-              </button>
+              </span>
             )}
-          </div>
+          </button>
+          <p className="text-xs text-center text-gray-400 mb-3">
+            {copied ? t('checkout.copied') : t('checkout.tap.to.copy')}
+          </p>
             </>
           )}
 
-          <div className="flex items-center justify-center flex-wrap gap-2">
-            <button
-              onClick={copyCode}
-              disabled={!!(voucher?.is_e2ee && !isVaultUnlocked)}
-              title={voucher?.is_e2ee && !isVaultUnlocked ? t('checkout.copy.vault.locked.title') : undefined}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all ${
-                voucher?.is_e2ee && !isVaultUnlocked
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
-                  : copied ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? t('checkout.copied') : t('checkout.copy.code')}
-            </button>
-
-            {isSafeUrl(voucher.link) && (
+          {isSafeUrl(voucher.link) && (
+            <div className="flex items-center justify-center">
               <a
                 href={voucher.link}
                 target="_blank"
@@ -863,19 +947,8 @@ export default function CheckoutPage() {
                 <ExternalLink className="w-4 h-4" />
                 {t('checkout.open.link')}
               </a>
-            )}
-
-            {!isArchived && (
-              <button
-                onClick={openShareModal}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-purple-50 text-purple-600 hover:bg-purple-100"
-              >
-                <Share2 className="w-4 h-4" />
-                {t('checkout.share')}
-              </button>
-            )}
-
-          </div>
+            </div>
+          )}
         </div>
 
         {/* CVV */}
@@ -1200,6 +1273,7 @@ export default function CheckoutPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Share Modal */}

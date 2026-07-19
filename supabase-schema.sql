@@ -40,12 +40,33 @@ CREATE POLICY "Users can update own profile"
 CREATE POLICY "Users can insert own profile"
   ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
--- Auto-create profile on signup
+-- Auto-create profile on signup.
+-- Hardened: wrapped in its own BEGIN/EXCEPTION block so that a failure here
+-- (duplicate key on retry, a bad downstream trigger, etc.) can never roll
+-- back the auth.users INSERT and block registration. This is the canonical
+-- version of this function — do not reintroduce an unwrapped variant in a
+-- new migration file, since whichever CREATE OR REPLACE runs last wins.
+-- (Admin panel also self-heals against any gap via backfill_missing_profiles()
+-- in supabase-admin-functions.sql, as a second line of defense.)
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  INSERT INTO profiles (id, email, name)
-  VALUES (NEW.id, NEW.email, split_part(NEW.email, '@', 1));
+  BEGIN
+    INSERT INTO profiles (id, email, name, created_at)
+    VALUES (
+      NEW.id,
+      NEW.email,
+      COALESCE(
+        NULLIF(TRIM(NEW.raw_user_meta_data->>'name'), ''),
+        NULLIF(TRIM(NEW.raw_user_meta_data->>'full_name'), ''),
+        split_part(NEW.email, '@', 1)
+      ),
+      NEW.created_at
+    )
+    ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'handle_new_user: failed to create profile for %: %', NEW.id, SQLERRM;
+  END;
   RETURN NEW;
 END;
 $$;

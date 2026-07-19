@@ -183,6 +183,11 @@ LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
   v_listing marketplace_listings;
 BEGIN
+  -- Blocked users cannot list vouchers, regardless of the marketplace's open/selective mode
+  IF EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND marketplace_blocked = true) THEN
+    RAISE EXCEPTION 'marketplace_blocked';
+  END IF;
+
   -- Validate caller owns the voucher
   IF NOT EXISTS (
     SELECT 1 FROM vouchers WHERE id = p_voucher_id AND user_id = auth.uid()

@@ -172,7 +172,7 @@ export default function ArchivePage() {
             {sortedFiltered.map(v => (
               <div
                 key={v.id}
-                onClick={() => navigate(`/checkout/${v.id}`)}
+                onClick={() => navigate(`/checkout/${v.id}`, { state: { voucherIds: sortedFiltered.map(sv => sv.id) } })}
                 style={{ display: 'flex', overflow: 'hidden', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', background: 'var(--c-surface)', opacity: 0.75, cursor: 'pointer' }}
               >
                 {/* Left color strip */}

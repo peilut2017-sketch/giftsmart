@@ -7,7 +7,7 @@ import { useT } from '../lib/i18n'
 import {
   ShoppingBag, Search, Star, X, CheckCircle, Loader2,
   Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
-  Bell, Plus, Trash2, SlidersHorizontal, Check, Settings, UserCheck,
+  Bell, Plus, Trash2, SlidersHorizontal, Check, Settings, UserCheck, Ban,
 } from 'lucide-react'
 import { formatDate } from '../utils/helpers'
 import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem, PaymentMethod } from '../types'
@@ -775,6 +775,19 @@ function MarketplaceAccessGate() {
   )
 }
 
+function MarketplaceBlockedGate() {
+  const { t } = useT()
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+      <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-4">
+        <Ban className="w-8 h-8 text-red-500" />
+      </div>
+      <h2 className="text-lg font-bold text-gray-800 mb-2">{t('market.blocked.title')}</h2>
+      <p className="text-sm text-gray-500 max-w-xs">{t('market.blocked.body')}</p>
+    </div>
+  )
+}
+
 // ─── Seller Profile Modal ─────────────────────────────────────────────────────
 interface SellerProfileRow {
   user_id: string
@@ -934,7 +947,7 @@ export default function MarketplacePage() {
     fetchListings, fetchMyListings, fetchMyPurchases,
     removeFromSale, confirmPaymentReceived, cancelPurchase,
     unreadByListing, updateListingPrice,
-    marketplaceMode, myAccessStatus,
+    marketplaceMode, myAccessStatus, isMarketplaceBlocked,
   } = useMarketplace()
 
   const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>(
@@ -1106,6 +1119,21 @@ export default function MarketplacePage() {
     } finally {
       setDeletingWatch(null)
     }
+  }
+
+  // Blocked users are kept out regardless of marketplace mode (even 'enabled')
+  if (isMarketplaceBlocked && !isAdmin) {
+    return (
+      <div className="flex flex-col min-h-dvh bg-gray-50">
+        <div className="bg-white border-b px-4 py-4">
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <ShoppingBag className="w-5 h-5 text-purple-600" />
+            {t('market.title')}
+          </h1>
+        </div>
+        <MarketplaceBlockedGate />
+      </div>
+    )
   }
 
   // Selective mode: non-approved users see the access request screen
