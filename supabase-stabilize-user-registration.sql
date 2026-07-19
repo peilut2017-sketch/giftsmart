@@ -110,6 +110,9 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION get_registered_users_count() TO authenticated;
 
+-- NOTE: RETURNS TABLE(id, ...) creates a PL/pgSQL OUT parameter named `id`.
+-- The admin check below must qualify `profiles.id` — an unqualified `id`
+-- is ambiguous against that OUT parameter and raises 42702 at call time.
 CREATE OR REPLACE FUNCTION get_all_users()
 RETURNS TABLE(id UUID, email TEXT, name TEXT, created_at TIMESTAMPTZ)
 LANGUAGE plpgsql
@@ -117,7 +120,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true) THEN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND is_admin = true) THEN
     RAISE EXCEPTION 'permission_denied';
   END IF;
   PERFORM backfill_missing_profiles();
