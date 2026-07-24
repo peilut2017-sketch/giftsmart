@@ -65,16 +65,16 @@ function MenuItem({ icon: Icon, label, desc, onClick, danger = false, right }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors rounded-2xl text-right ${danger ? 'text-red-600' : ''}`}
+      className="w-full flex items-center gap-3 p-4 transition-colors rounded-2xl text-right hover:bg-bg"
     >
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${danger ? 'bg-red-50' : 'bg-gray-100'}`}>
-        <Icon className={`w-5 h-5 ${danger ? 'text-red-500' : 'text-gray-600'}`} />
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: danger ? 'var(--c-error)' + '1a' : 'var(--c-bg)' }}>
+        <Icon className="w-5 h-5" style={{ color: danger ? 'var(--c-error)' : 'var(--c-text2)' }} />
       </div>
       <div className="flex-1">
-        <p className={`text-sm font-medium ${danger ? 'text-red-600' : 'text-gray-800'}`}>{label}</p>
-        {desc && <p className="text-xs text-gray-400">{desc}</p>}
+        <p className="text-sm font-medium" style={{ color: danger ? 'var(--c-error)' : 'var(--c-text)' }}>{label}</p>
+        {desc && <p className="text-xs" style={{ color: 'var(--c-text3)' }}>{desc}</p>}
       </div>
-      {right || <ChevronRight className="w-4 h-4 text-gray-300 rotate-180" />}
+      {right || <ChevronRight className="w-4 h-4 rotate-180" style={{ color: 'var(--c-text3)' }} />}
     </button>
   )
 }
@@ -95,7 +95,7 @@ interface WalletMemberRow {
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { user, profile, signOut, updateProfile } = useAuth()
+  const { user, profile, signOut, updateProfile, isAdmin } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { syncToCloud, isOnline, refreshVouchers, vouchers, archivedVouchers, walletId, walletName, inviteMember, removeMember, logAction, updateVoucher } = useVouchers()
   const { hasVault, hint, isVaultUnlocked, isUnifiedVault, unlockVault, unlockVaultFromRecovery, encrypt, resetVault, changePassphrase, disableVault, migrateVault, regenerateRecoveryKey, enableBiometricVaultUnlock, reDeriveVaultKeyFromPassword } = useE2EE()
@@ -573,6 +573,34 @@ export default function SettingsPage() {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
     if (data) setMyMessages(data)
     setShowMyMessages(true)
+  }
+
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  async function handleDeleteAccount() {
+    // Two-step confirmation for an irreversible action.
+    if (!confirm(t('settings.delete.account.confirm1'))) return
+    if (!confirm(t('settings.delete.account.confirm2'))) return
+    setDeletingAccount(true)
+    try {
+      // No self-serve hard-delete RPC exists yet; file a deletion request through
+      // the same support-message channel the Privacy Policy documents ("Settings →
+      // Support, deleted within 30 days"). Keeps this honest without inventing a
+      // backend path that can't be verified here.
+      const { error } = await supabase.from('support_messages').insert({
+        user_id: user!.id,
+        user_email: user!.email,
+        user_name: profile?.name || null,
+        subject: t('settings.delete.account.subject'),
+        body: t('settings.delete.account.body'),
+        category: 'general',
+      })
+      if (error) throw error
+      toast.success(t('settings.delete.account.sent'))
+    } catch (e: any) {
+      toast.error(e?.message || t('settings.delete.account.error'))
+    } finally {
+      setDeletingAccount(false)
+    }
   }
 
   async function loadMyMessages() {
@@ -1874,6 +1902,22 @@ export default function SettingsPage() {
               label="מדיניות פרטיות"
               desc="כיצד אנו מגינים על המידע שלך"
               onClick={() => navigate('/privacy')}
+            />
+            {isAdmin && (
+              <MenuItem
+                icon={ShieldCheck}
+                label={t('settings.admin.link')}
+                desc={t('settings.admin.link.desc')}
+                onClick={() => navigate('/admin')}
+              />
+            )}
+            <MenuItem
+              icon={Trash2}
+              label={t('settings.delete.account')}
+              desc={t('settings.delete.account.desc')}
+              onClick={handleDeleteAccount}
+              danger
+              right={deletingAccount ? <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" /> : undefined}
             />
             <MenuItem
               icon={LogOut}
