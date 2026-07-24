@@ -829,7 +829,7 @@ export default function CheckoutPage() {
               <button onClick={() => setShowStores(s => !s)} className="flex items-center gap-1.5 text-sm font-semibold text-text">
                 <Icon name="star" size={16} filled color="var(--c-gold)" />
                 {t('checkout.super.stores.label')} {sv.name}
-                <Icon name={showStores ? 'expand_less' : 'expand_more'} size={16} color="var(--c-text3)" />
+                <Icon name={showStores ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={16} color="var(--c-text3)" />
               </button>
               {isSafeUrl(sv.balance_check_url) && (
                 <a href={sv.balance_check_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100">
@@ -862,7 +862,7 @@ export default function CheckoutPage() {
             <h3 className="text-sm font-semibold text-text flex items-center gap-1.5">
               <Icon name="history" size={16} color="var(--c-text3)" /> {t('checkout.activity.title')}
             </h3>
-            <Icon name={activityOpen ? 'expand_less' : 'expand_more'} size={18} color="var(--c-text3)" />
+            <Icon name={activityOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={18} color="var(--c-text3)" />
           </button>
           {activityOpen && (
             <div className="mt-4">
@@ -911,7 +911,7 @@ export default function CheckoutPage() {
                         case 'gift_link':
                           iconName = 'link'; dotColor = 'bg-pink-400 text-white'; label = t('checkout.log.gift.link'); break
                         case 'gift_received':
-                          iconName = 'card_giftcard'; dotColor = 'bg-rose-500 text-white'; label = t('checkout.log.gift.received')
+                          iconName = 'redeem'; dotColor = 'bg-rose-500 text-white'; label = t('checkout.log.gift.received')
                           if (entry.details?.sender) detail = `${t('checkout.log.from')}: ${entry.details.sender}`
                           break
                         case 'gift_balance_update':
@@ -1090,7 +1090,7 @@ export default function CheckoutPage() {
             {([
               { key: 'link', icon: 'link', label: t('checkout.share.tab.link') },
               { key: 'user', icon: 'group', label: t('checkout.share.tab.user') },
-              { key: 'gift', icon: 'card_giftcard', label: t('checkout.share.tab.gift') },
+              { key: 'gift', icon: 'redeem', label: t('checkout.share.tab.gift') },
             ] as const).map(tab => (
               <button
                 key={tab.key}
@@ -1215,12 +1215,12 @@ export default function CheckoutPage() {
               <input type="datetime-local" value={giftDate} onChange={e => setGiftDate(e.target.value)} min={new Date().toISOString().slice(0, 16)} className="w-full px-3 py-2.5 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text" dir="ltr" />
             )}
             <Button variant="primary" fullWidth loading={giftSending} disabled={giftMode === 'email' && (!giftEmail.trim() || (giftScheduled && !giftDate))} onClick={handleSendGift}>
-              <Icon name={giftMode === 'link' ? 'link' : 'card_giftcard'} size={18} />
+              <Icon name={giftMode === 'link' ? 'link' : 'redeem'} size={18} />
               {giftSending ? t('checkout.gift.creating') : giftMode === 'link' ? t('checkout.gift.create.link.btn') : giftScheduled && giftDate ? t('checkout.gift.schedule.btn') : t('checkout.gift.send.now')}
             </Button>
             {giftLink && (
               <div className="bg-primary-light border border-primary/30 rounded-2xl p-3 space-y-2">
-                <p className="text-xs font-medium text-primary-dark flex items-center gap-1"><Icon name="card_giftcard" size={14} /> {t('checkout.gift.link.label')}:</p>
+                <p className="text-xs font-medium text-primary-dark flex items-center gap-1"><Icon name="redeem" size={14} /> {t('checkout.gift.link.label')}:</p>
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-primary-dark font-mono break-all flex-1">{giftLink}</p>
                   <button onClick={() => { navigator.clipboard.writeText(giftLink).catch(() => {}); toast.success(t('checkout.copied')) }} className="flex-shrink-0 p-2 bg-primary/10 hover:bg-primary/20 rounded-xl"><Icon name="content_copy" size={16} color="var(--c-primary-dark)" /></button>

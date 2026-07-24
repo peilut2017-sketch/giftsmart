@@ -674,7 +674,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     <div className="flex gap-1.5">
                       <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." className={`flex-1 min-w-0 ${inputCls}`} dir="ltr" />
                       <button type="button" onClick={openOperatorPicker} className="flex-shrink-0 flex items-center gap-1 px-3 py-2 bg-teal-50 border border-teal-200 text-teal-700 rounded-2xl text-xs font-medium whitespace-nowrap">
-                        מפעיל <Icon name="expand_more" size={12} />
+                        מפעיל <Icon name="keyboard_arrow_down" size={12} />
                       </button>
                     </div>
                     {showOperatorPicker && (
@@ -895,7 +895,7 @@ function UnitPicker({ unitPickerRef, amountUnit, showUnitPicker, setShowUnitPick
   return (
     <div className="relative" ref={unitPickerRef}>
       <button type="button" onClick={() => setShowUnitPicker(v => !v)} className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-bg text-text2 hover:opacity-80 text-xs font-semibold">
-        {amountUnit} <Icon name="expand_more" size={12} />
+        {amountUnit} <Icon name="keyboard_arrow_down" size={12} />
       </button>
       {showUnitPicker && (
         <div className="absolute top-full left-0 mt-1 bg-surface rounded-xl shadow-lg border border-border py-1 z-30 min-w-[70px]">

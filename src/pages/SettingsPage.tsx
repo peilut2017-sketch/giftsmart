@@ -1117,7 +1117,7 @@ export default function SettingsPage() {
                   {localClubIds.length}
                 </span>
               )}
-              <Icon name={clubsOpen ? 'expand_less' : 'expand_more'} size={16} color="var(--c-text3)" />
+              <Icon name={clubsOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={16} color="var(--c-text3)" />
             </div>
           </button>
 
@@ -1227,7 +1227,7 @@ export default function SettingsPage() {
             <div className="px-4 py-2.5 border-b border-border flex items-center justify-end">
               <button onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }} className="text-xs text-primary flex items-center gap-1">
                 ההודעות שלי
-                <Icon name={showMyMessages ? 'expand_less' : 'expand_more'} size={14} />
+                <Icon name={showMyMessages ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={14} />
               </button>
             </div>
             {!supportSent ? (
@@ -1518,7 +1518,7 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-text">{t('settings.vault')}</p>
                 <p className="text-xs text-text3">{isVaultUnlocked ? 'פתוחה כעת' : 'נעולה'} · שנה סיסמה או אפס</p>
               </div>
-              <Icon name={showVaultSection ? 'expand_less' : 'expand_more'} size={16} color="var(--c-text3)" />
+              <Icon name={showVaultSection ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={16} color="var(--c-text3)" />
             </button>
 
             {showVaultSection && (

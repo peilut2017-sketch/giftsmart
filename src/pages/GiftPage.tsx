@@ -207,7 +207,7 @@ export default function GiftPage() {
     <div className="min-h-dvh flex flex-col items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, var(--c-primary-light), var(--c-bg) 60%)' }}>
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-primary-mid to-primary-dark rounded-2xl shadow-fab mb-3">
-          <Icon name="card_giftcard" size={28} color="#fff" />
+          <Icon name="redeem" size={28} color="#fff" />
         </div>
         <h1 className="text-lg font-bold text-text2">{t('gift.heading')}</h1>
         {gift?.sender_name && (
@@ -347,7 +347,7 @@ export default function GiftPage() {
                     onClick={() => setShowUpdateForm(true)}
                     className="w-full flex items-center justify-center gap-2 px-6 py-4 text-sm font-semibold text-primary"
                   >
-                    <Icon name="expand_more" size={16} />
+                    <Icon name="keyboard_arrow_down" size={16} />
                     {t('gift.btn.update_balance')}
                   </button>
                 ) : (
@@ -419,7 +419,7 @@ export default function GiftPage() {
                 <Button onClick={handleClaim} disabled={claiming} loading={claiming} fullWidth>
                   {user ? (
                     <>
-                      <Icon name="card_giftcard" size={16} />
+                      <Icon name="redeem" size={16} />
                       {t('gift.btn.add_to_wallet')}
                     </>
                   ) : (
