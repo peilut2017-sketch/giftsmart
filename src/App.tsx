@@ -36,6 +36,7 @@ import { useE2EE } from './contexts/E2EEContext'
 import type { ReactNode } from 'react'
 
 const CheckoutPage     = lazy(() => import('./pages/CheckoutPage'))
+const SearchPage       = lazy(() => import('./pages/SearchPage'))
 const VoucherPage      = lazy(() => import('./pages/VoucherPage'))
 const ArchivePage      = lazy(() => import('./pages/ArchivePage'))
 const StatsPage        = lazy(() => import('./pages/StatsPage'))
@@ -416,6 +417,7 @@ function AppRoutes() {
           <Suspense fallback={<PageSpinner />}>
             <AnimatedRoutes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/search" element={<SearchPage />} />
               <Route path="/voucher/:id" element={<VoucherPage />} />
               <Route path="/checkout/:id" element={<CheckoutPage />} />
               <Route path="/archive" element={<ArchivePage />} />

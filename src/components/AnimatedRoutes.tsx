@@ -2,15 +2,16 @@ import { useRef } from 'react'
 import { Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 
-// Tab order (RTL layout: rightmost = index 0)
+// Tab order (RTL layout: rightmost = index 0).
+// Market/Discounts/Archive/Admin are no longer top-level nav tabs — they're reached
+// from Settings, so they're intentionally absent here and fall through to the
+// isDeepRoute (-1) branch below, which already gives them a fade/scale transition
+// instead of a horizontal slide. That's the correct behavior for a "pushed" page.
 const TAB_ORDER: Record<string, number> = {
-  '/':           0,
-  '/market':     1,
-  '/discounts':  2,
-  '/archive':    3,
-  '/stats':      4,
-  '/settings':   5,
-  '/admin':      6,
+  '/':         0,
+  '/search':   1,
+  '/stats':    2,
+  '/settings': 3,
 }
 
 function tabIndex(pathname: string): number {
