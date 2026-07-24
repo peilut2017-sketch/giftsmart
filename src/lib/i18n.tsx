@@ -689,6 +689,8 @@ const translations: Record<string, string> = {
   'stats.active.vouchers.en': 'Active vouchers',
   'stats.used.label': 'נוצל:',
   'stats.used.label.en': 'Used:',
+  'stats.used.footnote': '"נוצלו" מבוסס על שוברים שעודכנו ויש להם יתרה חלקית או שהוארכבו',
+  'stats.used.footnote.en': '"Used" is based on vouchers that were updated and have a partial balance, or were archived',
   'stats.usage.title': 'ניצול שוברים',
   'stats.usage.title.en': 'Voucher Usage',
   'stats.original': 'מקורי:',
