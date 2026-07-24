@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
-import { Copy, AlertTriangle, Wallet, ChevronDown, Check, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { useT } from '../lib/i18n'
+import Icon from '../components/ui/Icon'
 
 function isSafeUrl(url: string | undefined | null): boolean {
   if (!url) return false
@@ -184,7 +184,7 @@ export default function SharedVoucherPage() {
                 toast.success(t('shared.toast.undone'))
               }
             }}
-            className="text-blue-600 font-semibold underline text-sm"
+            className="text-primary font-semibold underline text-sm"
           >
             {t('shared.btn.cancel')}
           </button>
@@ -197,74 +197,74 @@ export default function SharedVoucherPage() {
   const expiryStatus = voucher ? getExpiryStatus(voucher.expiry_date ?? undefined) : 'none'
   const expiryLabel = voucher ? getExpiryLabel(voucher.expiry_date ?? undefined) : ''
   const pct = voucher && voucher.amount > 0 ? (voucher.balance / voucher.amount) * 100 : 0
-  const barColor = pct > 60 ? 'bg-green-500' : pct > 25 ? 'bg-yellow-400' : 'bg-red-400'
+  const barColor = pct > 60 ? 'bg-primary' : pct > 25 ? 'bg-warning' : 'bg-error'
   const isAlpha = voucher ? isAlphanumeric(voucher.code) : false
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-dvh flex flex-col items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, var(--c-primary-light), var(--c-bg) 60%)' }}>
       <div className="text-center mb-6">
-        <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl shadow-lg mb-3">
-          <Wallet className="w-7 h-7 text-white" />
+        <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-primary-mid to-primary-dark rounded-2xl shadow-fab mb-3">
+          <Icon name="account_balance_wallet" size={28} color="#fff" />
         </div>
-        <h1 className="text-lg font-bold text-gray-700">{t('shared.heading')}</h1>
+        <h1 className="text-lg font-bold text-text2">{t('shared.heading')}</h1>
       </div>
 
       <div className="w-full max-w-sm">
         {loading && (
-          <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
-            <div className="w-10 h-10 border-4 border-green-200 border-t-green-500 rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-gray-500 mt-3">{t('shared.loading')}</p>
+          <div className="bg-surface rounded-[28px] shadow-fab p-8 text-center">
+            <div className="w-10 h-10 border-4 border-primary-light border-t-primary rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-text3 mt-3">{t('shared.loading')}</p>
           </div>
         )}
 
         {error && (
-          <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
-            <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
-            <p className="text-gray-700 font-semibold">{error}</p>
-            <p className="text-sm text-gray-400 mt-1">{t('shared.error.hint')}</p>
+          <div className="bg-surface rounded-[28px] shadow-fab p-8 text-center">
+            <Icon name="warning" size={48} color="var(--c-error)" className="mx-auto mb-3" />
+            <p className="text-text font-semibold">{error}</p>
+            <p className="text-sm text-text3 mt-1">{t('shared.error.hint')}</p>
           </div>
         )}
 
         {voucher && !loading && (
-          <div className={`bg-white rounded-3xl shadow-xl overflow-hidden border-2 ${
-            expiryStatus === 'critical' ? 'border-red-200' :
-            expiryStatus === 'warning'  ? 'border-orange-200' : 'border-gray-100'
+          <div className={`bg-surface rounded-[28px] shadow-fab overflow-hidden border-2 ${
+            expiryStatus === 'critical' ? 'border-error/30' :
+            expiryStatus === 'warning'  ? 'border-warning/30' : 'border-border'
           }`}>
             <div className="p-6 pb-4">
               {/* Header: store + balance */}
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-800">{voucher.store_name}</h2>
+                  <h2 className="text-xl font-bold text-text">{voucher.store_name}</h2>
                   {expiryLabel && (
                     <div className={`flex items-center gap-1 mt-1 ${
-                      expiryStatus === 'expired'  ? 'text-gray-400' :
-                      expiryStatus === 'critical' ? 'text-red-600' :
-                      expiryStatus === 'warning'  ? 'text-orange-600' : 'text-gray-400'
+                      expiryStatus === 'expired'  ? 'text-text3' :
+                      expiryStatus === 'critical' ? 'text-error' :
+                      expiryStatus === 'warning'  ? 'text-warning' : 'text-text3'
                     }`}>
                       {(expiryStatus === 'critical' || expiryStatus === 'warning') && (
-                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <Icon name="warning" size={14} />
                       )}
                       <span className="text-xs font-medium">{expiryLabel}</span>
                     </div>
                   )}
                 </div>
                 <div className="text-left">
-                  <div className="text-2xl font-bold text-gray-900">{formatCurrency(voucher.balance)}</div>
+                  <div className="text-2xl font-bold text-text">{formatCurrency(voucher.balance)}</div>
                   {voucher.amount !== voucher.balance && voucher.amount > 0 && (
-                    <div className="text-xs text-gray-400">{t('shared.of', { amount: formatCurrency(voucher.amount) })}</div>
+                    <div className="text-xs text-text3">{t('shared.of', { amount: formatCurrency(voucher.amount) })}</div>
                   )}
                 </div>
               </div>
 
               {/* Balance bar */}
               {voucher.amount > 0 && (
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-4">
+                <div className="h-2 bg-bg rounded-full overflow-hidden mb-4">
                   <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
                 </div>
               )}
 
               {/* Barcode / QR */}
-              <div className="bg-gray-50 rounded-2xl p-4 text-center mb-3">
+              <div className="bg-bg rounded-2xl p-4 text-center mb-3">
                 <div className="flex items-center justify-center mb-3">
                   {isAlpha ? (
                     <canvas ref={qrRef} className="rounded-xl" />
@@ -272,26 +272,26 @@ export default function SharedVoucherPage() {
                     <svg ref={barcodeRef} className="max-w-full" />
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mb-1">{t('shared.voucher_code')}</p>
-                <p className="text-xl font-mono font-bold text-gray-800 tracking-wider mb-3">{voucher.code}</p>
+                <p className="text-xs text-text3 mb-1">{t('shared.voucher_code')}</p>
+                <p className="text-xl font-mono font-bold text-text tracking-wider mb-3">{voucher.code}</p>
                 <button
                   onClick={copyCode}
                   className={`flex items-center gap-2 mx-auto px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
-                    copied ? 'bg-green-500 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    copied ? 'bg-primary text-white' : 'bg-primary-light text-primary'
                   }`}
                 >
-                  <Copy className="w-4 h-4" />
+                  <Icon name={copied ? 'check' : 'content_copy'} size={16} />
                   {copied ? t('shared.btn.copied') : t('shared.btn.copy_code')}
                 </button>
               </div>
 
               {voucher.expiry_date && (
-                <p className="text-xs text-gray-400 text-center mt-3">
+                <p className="text-xs text-text3 text-center mt-3">
                   {t('shared.valid_until', { date: formatDate(voucher.expiry_date) })}
                 </p>
               )}
               {voucher.notes && (
-                <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3 mt-3">{voucher.notes}</p>
+                <p className="text-xs text-text2 bg-bg rounded-xl p-3 mt-3">{voucher.notes}</p>
               )}
 
               {/* External links */}
@@ -302,9 +302,9 @@ export default function SharedVoucherPage() {
                       href={voucher.link!}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary-light px-3 py-2 rounded-xl"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <Icon name="open_in_new" size={14} />
                       {t('shared.open.link')}
                     </a>
                   )}
@@ -313,9 +313,9 @@ export default function SharedVoucherPage() {
                       href={voucher.balance_check_url!}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-3 py-2 rounded-xl hover:bg-green-100 transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary-light px-3 py-2 rounded-xl"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <Icon name="open_in_new" size={14} />
                       {t('shared.check.balance')}
                     </a>
                   )}
@@ -324,18 +324,18 @@ export default function SharedVoucherPage() {
             </div>
 
             {/* Balance update section */}
-            <div className="border-t border-gray-100">
+            <div className="border-t border-border">
               {!showUpdateForm ? (
                 <button
                   onClick={() => setShowUpdateForm(true)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-4 text-sm font-semibold text-green-700 hover:bg-green-50 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 text-sm font-semibold text-primary"
                 >
-                  <ChevronDown className="w-4 h-4" />
+                  <Icon name="expand_more" size={16} />
                   עדכן יתרה לאחר שימוש
                 </button>
               ) : (
-                <div className="p-4 space-y-3 bg-green-50">
-                  <p className="text-sm font-semibold text-gray-700 text-center">עדכון יתרה</p>
+                <div className="p-4 space-y-3 bg-primary-light">
+                  <p className="text-sm font-semibold text-text2 text-center">עדכון יתרה</p>
                   <div className="flex gap-2">
                     <input
                       ref={usedInputRef}
@@ -345,17 +345,17 @@ export default function SharedVoucherPage() {
                       onChange={e => setUsedAmount(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
                       placeholder="סכום שימוש"
-                      className="flex-1 text-center text-lg font-bold border border-gray-200 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white"
+                      className="flex-1 text-center text-lg font-bold border border-border rounded-2xl px-4 py-2.5 bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                       dir="ltr"
                     />
                     <button
                       onClick={handleUpdateBalance}
                       disabled={updating || !usedAmount || isNaN(parseFloat(usedAmount)) || parseFloat(usedAmount) <= 0}
-                      className="px-5 py-2.5 bg-green-600 text-white rounded-2xl font-semibold text-sm disabled:opacity-50 flex items-center gap-1.5"
+                      className="px-5 py-2.5 bg-primary text-white rounded-2xl font-semibold text-sm disabled:opacity-50 flex items-center gap-1.5"
                     >
                       {updating
-                        ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        : <Check className="w-4 h-4" />}
+                        ? <Icon name="progress_activity" size={16} className="animate-spin" />
+                        : <Icon name="check" size={16} />}
                       אשר
                     </button>
                   </div>
@@ -366,7 +366,7 @@ export default function SharedVoucherPage() {
                       onChange={e => setStoreUsed(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
                       placeholder="באיזה חנות? (אופציונלי)"
-                      className="w-full text-sm border border-gray-200 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white"
+                      className="w-full text-sm border border-border rounded-2xl px-4 py-2.5 bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                       dir="rtl"
                     />
                   )}
@@ -374,14 +374,14 @@ export default function SharedVoucherPage() {
                     const amount = parseFloat(usedAmount)
                     if (isNaN(amount) || amount <= 0 || amount > voucher.balance) return null
                     return (
-                      <p className="text-xs text-center text-gray-500">
-                        יתרה חדשה: <strong className="text-green-700">{formatCurrency(Math.max(0, voucher.balance - amount))}</strong>
+                      <p className="text-xs text-center text-text3">
+                        יתרה חדשה: <strong className="text-primary">{formatCurrency(Math.max(0, voucher.balance - amount))}</strong>
                       </p>
                     )
                   })()}
                   <button
                     onClick={() => { setShowUpdateForm(false); setUsedAmount(''); setStoreUsed('') }}
-                    className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
+                    className="w-full text-xs text-text3 py-1"
                   >
                     ביטול
                   </button>
@@ -389,8 +389,8 @@ export default function SharedVoucherPage() {
               )}
             </div>
 
-            <div className="bg-gray-50 px-6 py-3 text-center border-t border-gray-100">
-              <p className="text-xs text-gray-400">שותף דרך GiftSmart</p>
+            <div className="bg-bg px-6 py-3 text-center border-t border-border">
+              <p className="text-xs text-text3">שותף דרך GiftSmart</p>
             </div>
           </div>
         )}
