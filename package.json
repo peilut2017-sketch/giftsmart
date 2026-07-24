@@ -22,6 +22,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.577.0",
+    "material-symbols": "^0.45.9",
     "postcss": "^8.5.8",
     "posthog-js": "^1.372.9",
     "qrcode": "^1.5.4",

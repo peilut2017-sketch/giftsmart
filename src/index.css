@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+/* Material Symbols is self-hosted (see package "material-symbols") rather than pulled
+   from Google's CDN via @import — that path kept failing in production (CSP edge cases,
+   ad-blockers, and the app's own service worker cache-first-ing a stale/broken font
+   fetch) with icons rendering as their literal ligature text ("search", "shield", ...).
+   Self-hosting serves the font from our own origin so it's covered by the same
+   content-hashed, SW-cache-busted asset pipeline as the rest of the JS/CSS bundle. */
+@import 'material-symbols/rounded.css';
 
 @tailwind base;
 @tailwind components;
@@ -97,26 +104,11 @@
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
 
 /* ── Material Symbols icon font (new design system) ──────────────
-   Usage: <span class="material-symbols-rounded">icon_name</span>
-   Toggle fill/weight via inline style or the .ms-fill helper class —
-   see src/components/ui/Icon.tsx, which wraps this. */
+   Base glyph rules (font-family, font-feature-settings: 'liga', etc.) come from the
+   self-hosted "material-symbols/rounded.css" package imported above. This just adds
+   the FILL-axis default and the .ms-fill helper toggle — see src/components/ui/Icon.tsx,
+   which sets the rest of the variation axes inline per instance. */
 .material-symbols-rounded {
-  font-family: 'Material Symbols Rounded';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
-  -webkit-font-feature-settings: 'liga';
-  -moz-font-feature-settings: 'liga';
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 .material-symbols-rounded.ms-fill {
