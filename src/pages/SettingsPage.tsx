@@ -6,7 +6,6 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../utils/helpers'
 import { sendExpiryReminderEmail } from '../lib/emailService'
-import { Lock, CloudUpload, Wifi, LogOut, ChevronRight, Check, Bell, Fingerprint, Send, Link, Link2Off, Trash2, UserPlus, Crown, ChevronDown, ChevronUp, Clock, Pencil, BookOpen, Shield, ShieldCheck, Moon, Sun, Globe, CreditCard, Tag, FileText, Key, Eye, EyeOff, Mail, CalendarDays } from 'lucide-react'
 import { getNotifChannels, saveNotifChannels, type NotifChannels } from '../hooks/useNotifications'
 import toast from 'react-hot-toast'
 import ActivityLog from '../components/ActivityLog'
@@ -16,6 +15,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useLocale, useT } from '../lib/i18n'
 import { useDiscounts } from '../contexts/DiscountsContext'
 import { usePageView } from '../hooks/usePageView'
+import Icon from '../components/ui/Icon'
 
 interface SupportMessageReply {
   id: string
@@ -57,34 +57,38 @@ function getPasswordStrength(password: string, t: (k: string) => string): Passwo
   ]
   const score = checks.filter(c => c.ok).length
   const labels = [t('auth.strength.very.weak'), t('auth.strength.weak'), t('auth.strength.medium'), t('auth.strength.strong'), t('auth.strength.very.strong')]
-  const colors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-green-600']
+  const colors = ['bg-error', 'bg-warning', 'bg-warning', 'bg-primary-mid', 'bg-primary']
   return { score, label: labels[Math.min(score, 4)], color: colors[Math.min(score, 4)], checks }
 }
 
-function MenuItem({ icon: Icon, label, desc, onClick, danger = false, right }: { icon: React.ElementType; label: string; desc?: string; onClick?: () => void; danger?: boolean; right?: React.ReactNode }) {
+function MenuItem({ icon, label, desc, onClick, danger = false, right }: { icon: string; label: string; desc?: string; onClick?: () => void; danger?: boolean; right?: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
       className="w-full flex items-center gap-3 p-4 transition-colors rounded-2xl text-right hover:bg-bg"
     >
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: danger ? 'var(--c-error)' + '1a' : 'var(--c-bg)' }}>
-        <Icon className="w-5 h-5" style={{ color: danger ? 'var(--c-error)' : 'var(--c-text2)' }} />
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${danger ? 'bg-error/10' : 'bg-bg'}`}>
+        <Icon name={icon} size={20} color={danger ? 'var(--c-error)' : 'var(--c-text2)'} />
       </div>
-      <div className="flex-1">
-        <p className="text-sm font-medium" style={{ color: danger ? 'var(--c-error)' : 'var(--c-text)' }}>{label}</p>
-        {desc && <p className="text-xs" style={{ color: 'var(--c-text3)' }}>{desc}</p>}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium ${danger ? 'text-error' : 'text-text'}`}>{label}</p>
+        {desc && <p className="text-xs text-text3">{desc}</p>}
       </div>
-      {right || <ChevronRight className="w-4 h-4 rotate-180" style={{ color: 'var(--c-text3)' }} />}
+      {right || <Icon name="chevron_left" size={16} color="var(--c-text3)" />}
     </button>
   )
 }
 
 function SL({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 20px 6px' }}>{children}</div>
+  return <div className="text-[11px] font-bold text-text3 uppercase tracking-wider px-5 pt-4 pb-1.5">{children}</div>
 }
 
-function Card({ children, noPad = false }: { children: React.ReactNode; noPad?: boolean }) {
-  return <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', margin: '0 0 4px', ...(noPad ? {} : {}) }}>{children}</div>
+function Card({ children }: { children: React.ReactNode }) {
+  return <div className="bg-surface rounded-card shadow-card overflow-hidden mb-1">{children}</div>
+}
+
+function Spinner({ color = 'var(--c-primary)', size = 20 }: { color?: string; size?: number }) {
+  return <Icon name="progress_activity" size={size} color={color} className="animate-spin" />
 }
 
 interface WalletMemberRow {
@@ -733,49 +737,48 @@ export default function SettingsPage() {
   const pwStrength = useMemo(() => getPasswordStrength(newPass, t), [newPass]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex-1" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 bg-bg">
 
       <div className="pb-24 space-y-4">
         {/* Profile hero card */}
-        <div style={{
-          background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 100%)',
-          padding: '24px 20px 20px',
-          marginBottom: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 64, height: 64, borderRadius: 20, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+        <div
+          className="px-5 pt-6 pb-5"
+          style={{ background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 100%)' }}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-[20px] bg-white/20 flex items-center justify-center text-[26px] font-extrabold text-white shrink-0">
               {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
             </div>
-            <div style={{ flex: 1 }}>
+            <div className="flex-1 min-w-0">
               {!editName ? (
                 <>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{profile?.name || 'ללא שם'}</div>
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{user?.email}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, background: isPro ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: 100 }}>
+                  <div className="text-xl font-extrabold text-white">{profile?.name || 'ללא שם'}</div>
+                  <div className="text-[13px] text-white/70 mt-0.5 truncate">{user?.email}</div>
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full text-white ${isPro ? 'bg-white/30' : 'bg-white/20'}`}>
                       {isPro ? 'Pro ★' : 'משתמש רגיל'}
                     </span>
                     {isPro && proExpiryDate && (
-                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
+                      <span className="text-[10px] text-white/65 font-medium">
                         פעיל עד {new Date(proExpiryDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                       </span>
                     )}
                   </div>
                 </>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="שם מלא" style={{ height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 16, padding: '0 12px', fontFamily: 'Heebo, sans-serif', outline: 'none' }} />
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="טלפון" dir="ltr" style={{ height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 16, padding: '0 12px', fontFamily: 'Heebo, sans-serif', outline: 'none' }} />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={saveProfile} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>{t('app.save')}</button>
-                    <button onClick={() => setEditName(false)} style={{ flex: 1, height: 36, borderRadius: 10, background: 'rgba(0,0,0,0.15)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Heebo, sans-serif' }}>{t('app.cancel')}</button>
+                <div className="flex flex-col gap-2">
+                  <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="שם מלא" className="h-[38px] rounded-[10px] border-none bg-white/25 text-white text-base px-3 outline-none placeholder:text-white/60" />
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="טלפון" dir="ltr" className="h-[38px] rounded-[10px] border-none bg-white/25 text-white text-base px-3 outline-none placeholder:text-white/60" />
+                  <div className="flex gap-2">
+                    <button onClick={saveProfile} className="flex-1 h-9 rounded-[10px] bg-white/25 border-none text-white text-sm font-semibold">{t('app.save')}</button>
+                    <button onClick={() => setEditName(false)} className="flex-1 h-9 rounded-[10px] bg-black/15 border-none text-white text-sm font-semibold">{t('app.cancel')}</button>
                   </div>
                 </div>
               )}
             </div>
             {!editName && (
-              <button onClick={() => setEditName(true)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 10, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Pencil className="w-4 h-4" style={{ color: '#fff' }} />
+              <button onClick={() => setEditName(true)} className="bg-white/15 border-none rounded-[10px] w-9 h-9 flex items-center justify-center shrink-0">
+                <Icon name="edit" size={16} color="#fff" />
               </button>
             )}
           </div>
@@ -783,41 +786,64 @@ export default function SettingsPage() {
 
         {/* Pro upgrade card */}
         {!isPro && (
-          <div onClick={() => openUpgradeSheet('שדרג לחוויה מלאה')} className="gs-tap" style={{
-            margin: '0 16px 4px',
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-            borderRadius: 18, padding: '16px 18px',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.2)',
-            cursor: 'pointer', position: 'relative', overflow: 'hidden',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg, var(--c-gold) 0%, #e8b422 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Crown className="w-5 h-5" style={{ color: '#fff' }} />
+          <div
+            onClick={() => openUpgradeSheet('שדרג לחוויה מלאה')}
+            className="gs-tap mx-4 mb-1 rounded-[18px] px-[18px] py-4 cursor-pointer relative overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', boxShadow: '0 4px 24px rgba(0,0,0,0.2)' }}
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-[46px] h-[46px] rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, var(--c-gold) 0%, #e8b422 100%)' }}>
+                <Icon name="workspace_premium" size={20} filled color="#fff" />
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>שדרג ל-GiftSmart Pro</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>שוברים ללא הגבלה · ₪9 לחודש</div>
+              <div className="flex-1">
+                <div className="text-[15px] font-extrabold text-white">שדרג ל-GiftSmart Pro</div>
+                <div className="text-xs text-white/60 mt-0.5">שוברים ללא הגבלה · ₪9 לחודש</div>
               </div>
-              <ChevronRight className="w-4 h-4 rotate-180" style={{ color: 'rgba(255,255,255,0.5)' }} />
+              <Icon name="chevron_left" size={16} color="rgba(255,255,255,0.5)" />
             </div>
           </div>
         )}
 
+        {/* ── ניווט מהיר ── */}
+        <SL>{t('settings.quick.nav')}</SL>
+        <Card>
+          <div className="divide-y divide-border">
+            <MenuItem
+              icon="archive"
+              label={t('nav.archive')}
+              desc={t('settings.quick.archive.desc')}
+              onClick={() => navigate('/archive')}
+              right={archivedVouchers.length > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-bg text-text3">{archivedVouchers.length}</span> : undefined}
+            />
+            <MenuItem
+              icon="storefront"
+              label={t('market.marketplace')}
+              desc={t('settings.quick.market.desc')}
+              onClick={() => navigate('/market')}
+            />
+            <MenuItem
+              icon="percent"
+              label={t('nav.discounts')}
+              desc={t('settings.quick.discounts.desc')}
+              onClick={() => navigate('/discounts')}
+            />
+          </div>
+        </Card>
+
         {/* ── מראה ושפה ── */}
         <SL>מראה ושפה</SL>
         <Card>
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--c-border)' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
-              {theme === 'dark' ? <Moon className="w-5 h-5" style={{ color: 'var(--c-primary)' }} /> : <Sun className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />}
+              <Icon name={theme === 'dark' ? 'dark_mode' : 'light_mode'} size={20} color="var(--c-primary)" />
               <div>
-                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>{t('settings.dark.mode')}</div>
-                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
+                <div className="font-medium text-sm text-text">{t('settings.dark.mode')}</div>
+                <div className="text-xs text-text3">{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
               </div>
             </div>
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-              style={{ background: theme === 'dark' ? 'var(--c-primary)' : 'var(--c-border)' }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-primary' : 'bg-border'}`}
             >
               <span
                 className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
@@ -827,22 +853,18 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
-              <Globe className="w-5 h-5" style={{ color: 'var(--c-primary)' }} />
+              <Icon name="language" size={20} color="var(--c-primary)" />
               <div>
-                <div className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>שפה / Language</div>
-                <div className="text-xs" style={{ color: 'var(--c-text3)' }}>{locale === 'he' ? 'עברית' : 'English'}</div>
+                <div className="font-medium text-sm text-text">שפה / Language</div>
+                <div className="text-xs text-text3">{locale === 'he' ? 'עברית' : 'English'}</div>
               </div>
             </div>
-            <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--c-border)' }}>
+            <div className="flex rounded-xl overflow-hidden border border-border">
               {(['he', 'en'] as const).map(l => (
                 <button
                   key={l}
                   onClick={() => setLocale(l)}
-                  className="px-3 py-1 text-xs font-semibold transition-colors"
-                  style={{
-                    background: locale === l ? 'var(--c-primary)' : 'var(--c-surface)',
-                    color: locale === l ? '#fff' : 'var(--c-text2)',
-                  }}
+                  className={`px-3 py-1 text-xs font-semibold transition-colors ${locale === l ? 'bg-primary text-white' : 'bg-surface text-text2'}`}
                 >
                   {l === 'he' ? 'עב' : 'EN'}
                 </button>
@@ -858,14 +880,14 @@ export default function SettingsPage() {
             {members.length > 0 && (
               <div className="space-y-1 mb-2">
                 {members.map(m => (
-                  <div key={m.user_id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div key={m.user_id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div>
-                      <p className="text-sm text-gray-700">{m.email}</p>
-                      <p className="text-xs text-gray-400">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
+                      <p className="text-sm text-text2">{m.email}</p>
+                      <p className="text-xs text-text3">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
                     </div>
                     {m.role !== 'owner' && (
-                      <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg">
-                        <Trash2 className="w-4 h-4" />
+                      <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="p-1.5 text-error rounded-lg">
+                        <Icon name="delete" size={16} />
                       </button>
                     )}
                   </div>
@@ -873,38 +895,38 @@ export default function SettingsPage() {
               </div>
             )}
             {pendingInviteEmail && (
-              <div className="bg-orange-50 rounded-2xl p-3 space-y-2">
-                <p className="text-sm text-orange-700">המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה. לשלוח הזמנה להצטרף?</p>
+              <div className="bg-warning/10 rounded-2xl p-3 space-y-2">
+                <p className="text-sm text-warning">המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה. לשלוח הזמנה להצטרף?</p>
                 <div className="flex gap-2">
-                  <button onClick={handleSendNotFoundInvite} className="flex-1 bg-orange-500 text-white py-2 rounded-xl text-sm font-medium">שלח הזמנה</button>
-                  <button onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }} className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium">{t('app.cancel')}</button>
+                  <button onClick={handleSendNotFoundInvite} className="flex-1 bg-warning text-white py-2 rounded-xl text-sm font-medium">שלח הזמנה</button>
+                  <button onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }} className="flex-1 bg-bg text-text2 py-2 rounded-xl text-sm font-medium">{t('app.cancel')}</button>
                 </div>
               </div>
             )}
             {!pendingInviteEmail && (
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <UserPlus className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Icon name="person_add" size={16} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     value={inviteEmail}
                     onChange={e => setInviteEmail(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleInvite()}
                     placeholder="כתובת מייל לשיתוף"
-                    className="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    className="w-full pr-9 pl-3 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                     dir="ltr"
                   />
                 </div>
                 <button
                   onClick={handleInvite}
                   disabled={inviteLoading || !inviteEmail.trim()}
-                  className="px-4 py-2.5 bg-green-500 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
+                  className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
                 >
-                  {inviteLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'הוסף'}
+                  {inviteLoading ? <Spinner size={16} color="#fff" /> : 'הוסף'}
                 </button>
               </div>
             )}
-            <p className="text-xs text-gray-400">חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.</p>
+            <p className="text-xs text-text3">חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.</p>
           </div>
         </Card>
 
@@ -916,54 +938,54 @@ export default function SettingsPage() {
             {/* Google Calendar toggle */}
             <label className="flex items-center justify-between cursor-pointer mb-4">
               <div className="flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-blue-500" />
-                <span className="text-sm text-gray-700">{t('settings.calendar.enabled')}</span>
+                <Icon name="calendar_month" size={16} color="#3b82f6" />
+                <span className="text-sm text-text2">{t('settings.calendar.enabled')}</span>
               </div>
               <button
                 role="switch"
                 aria-checked={calendarReminderEnabled}
                 onClick={() => saveCalendarEnabled(!calendarReminderEnabled)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${calendarReminderEnabled ? 'bg-green-500' : 'bg-gray-200'}`}
+                className={`relative w-10 h-5 rounded-full transition-colors ${calendarReminderEnabled ? 'bg-primary' : 'bg-border'}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${calendarReminderEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
               </button>
             </label>
-            <p className="text-sm text-gray-700 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
+            <p className="text-sm text-text2 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
             <div className="flex items-center gap-3">
               <input
                 type="range" min={1} max={90} value={reminderDays}
                 onChange={e => saveReminderDays(parseInt(e.target.value))}
-                className="flex-1 accent-green-500"
+                className="flex-1 accent-primary"
               />
               <div className="flex items-center gap-1">
                 <input
                   type="number" min={1} max={90} value={reminderDays}
                   onChange={e => saveReminderDays(parseInt(e.target.value) || 1)}
-                  className="w-14 text-center px-2 py-1.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-14 text-center px-2 py-1.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
-                <span className="text-sm text-gray-500">ימים</span>
+                <span className="text-sm text-text3">ימים</span>
               </div>
             </div>
-            <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
+            <div className="flex justify-between text-xs text-text3 mt-1 px-0.5">
               <span>1 יום</span>
               <span>90 ימים</span>
             </div>
             {/* Notification channels */}
-            <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--c-border)' }}>
-              <p className="text-xs font-semibold text-gray-500 mb-2">{t('settings.notif.channels')}</p>
-              <p className="text-xs text-gray-400 mb-3">{t('settings.notif.channels.note')}</p>
+            <div className="mt-4 pt-3 border-t border-border">
+              <p className="text-xs font-semibold text-text3 mb-2">{t('settings.notif.channels')}</p>
+              <p className="text-xs text-text3 mb-3">{t('settings.notif.channels.note')}</p>
               <div className="space-y-2">
                 {/* Push */}
                 <label className="flex items-center justify-between cursor-pointer">
                   <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-orange-500" />
-                    <span className="text-sm text-gray-700">{t('settings.notif.push')}</span>
+                    <Icon name="notifications" size={16} color="var(--c-warning)" />
+                    <span className="text-sm text-text2">{t('settings.notif.push')}</span>
                   </div>
                   <button
                     role="switch"
                     aria-checked={notifChannels.push}
                     onClick={() => updateNotifChannel('push', !notifChannels.push)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.push ? 'bg-green-500' : 'bg-gray-200'}`}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.push ? 'bg-primary' : 'bg-border'}`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.push ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
@@ -971,14 +993,14 @@ export default function SettingsPage() {
                 {/* Email */}
                 <label className="flex items-center justify-between cursor-pointer">
                   <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm text-gray-700">{t('settings.notif.email')}</span>
+                    <Icon name="mail" size={16} color="#3b82f6" />
+                    <span className="text-sm text-text2">{t('settings.notif.email')}</span>
                   </div>
                   <button
                     role="switch"
                     aria-checked={notifChannels.email}
                     onClick={() => updateNotifChannel('email', !notifChannels.email)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.email ? 'bg-green-500' : 'bg-gray-200'}`}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.email ? 'bg-primary' : 'bg-border'}`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.email ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
@@ -986,10 +1008,10 @@ export default function SettingsPage() {
                 {/* Telegram */}
                 <label className={`flex items-center justify-between ${!telegramLinked ? 'opacity-50' : 'cursor-pointer'}`}>
                   <div className="flex items-center gap-2">
-                    <Send className="w-4 h-4 text-sky-500" />
+                    <Icon name="send" size={16} color="#0ea5e9" />
                     <div>
-                      <span className="text-sm text-gray-700">{t('settings.notif.telegram')}</span>
-                      {!telegramLinked && <p className="text-[10px] text-gray-400">יש לקשר טלגרם תחילה</p>}
+                      <span className="text-sm text-text2">{t('settings.notif.telegram')}</span>
+                      {!telegramLinked && <p className="text-[10px] text-text3">יש לקשר טלגרם תחילה</p>}
                     </div>
                   </div>
                   <button
@@ -997,7 +1019,7 @@ export default function SettingsPage() {
                     aria-checked={notifChannels.telegram}
                     onClick={() => telegramLinked && updateNotifChannel('telegram', !notifChannels.telegram)}
                     disabled={!telegramLinked}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.telegram && telegramLinked ? 'bg-green-500' : 'bg-gray-200'}`}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.telegram && telegramLinked ? 'bg-primary' : 'bg-border'}`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.telegram && telegramLinked ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
@@ -1006,54 +1028,54 @@ export default function SettingsPage() {
             </div>
           </div>
           {/* Telegram */}
-          <div className="border-t" style={{ borderColor: 'var(--c-border)' }}>
+          <div className="border-t border-border">
             {telegramLinked ? (
               <div className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
-                    <Send className="w-5 h-5 text-sky-500" />
+                  <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
+                    <Icon name="send" size={20} color="#0ea5e9" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-800">מחובר לבוט טלגרם</p>
-                    <p className="text-xs text-gray-400">מקבל את כל ההתראות גם בטלגרם</p>
+                    <p className="text-sm font-medium text-text">מחובר לבוט טלגרם</p>
+                    <p className="text-xs text-text3">מקבל את כל ההתראות גם בטלגרם</p>
                   </div>
-                  <button onClick={handleDisconnectTelegram} className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl flex items-center gap-1">
-                    <Link2Off className="w-3.5 h-3.5" /> נתק
+                  <button onClick={handleDisconnectTelegram} className="text-xs text-error font-medium px-3 py-1.5 bg-error/10 rounded-xl flex items-center gap-1">
+                    <Icon name="link_off" size={14} /> נתק
                   </button>
                 </div>
               </div>
             ) : (
               <div className="p-4 space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                    <Send className="w-5 h-5 text-gray-400" />
+                  <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
+                    <Icon name="send" size={20} color="var(--c-text3)" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-800">קשר לטלגרם</p>
-                    <p className="text-xs text-gray-400">קבל את כל ההתראות גם בטלגרם</p>
+                    <p className="text-sm font-medium text-text">קשר לטלגרם</p>
+                    <p className="text-xs text-text3">קבל את כל ההתראות גם בטלגרם</p>
                   </div>
                   {!telegramCode && (
                     <button
                       onClick={handleGenerateTelegramCode}
                       disabled={telegramLoading}
-                      className="text-xs text-sky-600 font-medium px-3 py-1.5 bg-sky-50 rounded-xl flex items-center gap-1 disabled:opacity-50"
+                      className="text-xs font-medium px-3 py-1.5 bg-bg text-text2 rounded-xl flex items-center gap-1 disabled:opacity-50"
                     >
-                      {telegramLoading ? <div className="w-3.5 h-3.5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /> : <Link className="w-3.5 h-3.5" />}
+                      {telegramLoading ? <Spinner size={14} color="var(--c-text3)" /> : <Icon name="link" size={14} />}
                       קשר
                     </button>
                   )}
                 </div>
                 {telegramCode && (
-                  <div className="bg-sky-50 rounded-2xl p-4 space-y-2">
-                    <p className="text-xs text-sky-700 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
-                    <a href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`} target="_blank" rel="noopener noreferrer" className="block text-center bg-sky-500 text-white py-2.5 rounded-xl text-sm font-medium">פתח בוט טלגרם</a>
-                    <p className="text-xs text-sky-600 text-center">או שלח ידנית לבוט:</p>
-                    <div className="bg-white rounded-xl px-4 py-3 text-center">
-                      <p className="text-xs text-gray-400 mb-1">הפקודה לשליחה:</p>
-                      <p className="font-mono text-lg font-bold tracking-widest text-gray-800 select-all">/start {telegramCode}</p>
+                  <div className="bg-bg rounded-2xl p-4 space-y-2">
+                    <p className="text-xs text-text2 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
+                    <a href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`} target="_blank" rel="noopener noreferrer" className="block text-center bg-primary text-white py-2.5 rounded-xl text-sm font-medium">פתח בוט טלגרם</a>
+                    <p className="text-xs text-text3 text-center">או שלח ידנית לבוט:</p>
+                    <div className="bg-surface rounded-xl px-4 py-3 text-center">
+                      <p className="text-xs text-text3 mb-1">הפקודה לשליחה:</p>
+                      <p className="font-mono text-lg font-bold tracking-widest text-text select-all">/start {telegramCode}</p>
                     </div>
-                    <p className="text-xs text-gray-400 text-center">הקוד תקף ל-10 דקות</p>
-                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-sky-600 py-1.5">צור קוד חדש</button>
+                    <p className="text-xs text-text3 text-center">הקוד תקף ל-10 דקות</p>
+                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-text2 py-1.5">צור קוד חדש</button>
                   </div>
                 )}
               </div>
@@ -1066,12 +1088,12 @@ export default function SettingsPage() {
         <Card>
           <div className="flex items-center justify-between p-4">
             <div className="flex-1 ml-3">
-              <p className="text-sm font-medium text-gray-800">הצג ערך שוק של שוברים</p>
-              <p className="text-xs text-gray-400 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
+              <p className="text-sm font-medium text-text">הצג ערך שוק של שוברים</p>
+              <p className="text-xs text-text3 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
             </div>
             <button
               onClick={() => updateProfile({ show_voucher_value: !profile?.show_voucher_value })}
-              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${profile?.show_voucher_value ? 'bg-green-500' : 'bg-gray-200'}`}
+              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${profile?.show_voucher_value ? 'bg-primary' : 'bg-border'}`}
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${profile?.show_voucher_value ? 'translate-x-0.5' : 'right-0.5'}`} />
             </button>
@@ -1086,26 +1108,23 @@ export default function SettingsPage() {
             className="w-full flex items-center justify-between px-4 py-3.5 text-right"
           >
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>{t('settings.my_clubs')}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--c-text3)' }}>{t('settings.my_clubs.sub')}</p>
+              <p className="text-sm font-semibold text-text">{t('settings.my_clubs')}</p>
+              <p className="text-xs mt-0.5 text-text3">{t('settings.my_clubs.sub')}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0 mr-2">
               {localClubIds.length > 0 && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--c-primary)', color: '#fff' }}>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary text-white">
                   {localClubIds.length}
                 </span>
               )}
-              {clubsOpen
-                ? <ChevronUp className="w-4 h-4" style={{ color: 'var(--c-text3)' }} />
-                : <ChevronDown className="w-4 h-4" style={{ color: 'var(--c-text3)' }} />
-              }
+              <Icon name={clubsOpen ? 'expand_less' : 'expand_more'} size={16} color="var(--c-text3)" />
             </div>
           </button>
 
           {clubsOpen && (
-            <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: 'var(--c-border)' }}>
+            <div className="px-4 pb-4 space-y-4 border-t border-border">
               {clubs.length === 0 ? (
-                <p className="text-sm text-center py-4" style={{ color: 'var(--c-text3)' }}>
+                <p className="text-sm text-center py-4 text-text3">
                   {t('app.loading')}
                 </p>
               ) : (
@@ -1114,8 +1133,8 @@ export default function SettingsPage() {
                   {clubs.filter(c => c.type === 'credit_card').length > 0 && (
                     <div className="pt-3">
                       <div className="flex items-center gap-2 mb-2">
-                        <CreditCard className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
-                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                        <Icon name="credit_card" size={16} color="var(--c-primary)" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-text3">
                           {t('settings.clubs.credit_card')}
                         </span>
                       </div>
@@ -1130,11 +1149,11 @@ export default function SettingsPage() {
                               )}
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
                                 selected
-                                  ? 'border-green-500 bg-green-50 text-green-700'
-                                  : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                                  ? 'border-primary bg-primary-light text-primary'
+                                  : 'border-border bg-surface text-text2'
                               }`}
                             >
-                              {selected && <Check className="w-3 h-3" />}
+                              {selected && <Icon name="check" size={12} />}
                               {club.name}
                             </button>
                           )
@@ -1147,8 +1166,8 @@ export default function SettingsPage() {
                   {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <Tag className="w-4 h-4" style={{ color: 'var(--c-primary)' }} />
-                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--c-text3)' }}>
+                        <Icon name="sell" size={16} color="var(--c-primary)" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-text3">
                           {t('settings.clubs.loyalty_club')}
                         </span>
                       </div>
@@ -1163,11 +1182,11 @@ export default function SettingsPage() {
                               )}
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
                                 selected
-                                  ? 'border-green-500 bg-green-50 text-green-700'
-                                  : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                                  ? 'border-primary bg-primary-light text-primary'
+                                  : 'border-border bg-surface text-text2'
                               }`}
                             >
-                              {selected && <Check className="w-3 h-3" />}
+                              {selected && <Icon name="check" size={12} />}
                               {club.name}
                             </button>
                           )
@@ -1179,13 +1198,9 @@ export default function SettingsPage() {
                   <button
                     onClick={handleSaveClubs}
                     disabled={savingClubs}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                    style={{ background: 'var(--c-primary)' }}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-primary"
                   >
-                    {savingClubs
-                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      : <Check className="w-4 h-4" />
-                    }
+                    {savingClubs ? <Spinner size={16} color="#fff" /> : <Icon name="check" size={16} />}
                     {t('app.save')}
                   </button>
                 </>
@@ -1197,10 +1212,10 @@ export default function SettingsPage() {
         {/* ── כלים ── */}
         <SL>כלים</SL>
         <Card>
-          <div className="divide-y divide-gray-50">
-            <MenuItem icon={CloudUpload} label="סנכרן שוברים לענן" desc={isOnline ? 'העלה שוברים מ-cache לסופאבייס' : 'אין חיבור לאינטרנט'} onClick={handleSync} right={syncing ? <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /> : undefined} />
-            <MenuItem icon={Bell} label="שלח תזכורת תוקף" desc="מייל עם רשימת שוברים שפגי תוקף בקרוב" onClick={handleSendExpiryReminder} right={sendingReminder ? <div className="w-5 h-5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /> : undefined} />
-            <MenuItem icon={Wifi} label="בדוק חיבור" desc="בדיקת תקינות חיבור לבסיס הנתונים" onClick={handleCheckConnection} right={checking ? <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : undefined} />
+          <div className="divide-y divide-border">
+            <MenuItem icon="cloud_upload" label="סנכרן שוברים לענן" desc={isOnline ? 'העלה שוברים מ-cache לסופאבייס' : 'אין חיבור לאינטרנט'} onClick={handleSync} right={syncing ? <Spinner size={20} /> : undefined} />
+            <MenuItem icon="notifications" label="שלח תזכורת תוקף" desc="מייל עם רשימת שוברים שפגי תוקף בקרוב" onClick={handleSendExpiryReminder} right={sendingReminder ? <Spinner size={20} color="var(--c-warning)" /> : undefined} />
+            <MenuItem icon="wifi" label="בדוק חיבור" desc="בדיקת תקינות חיבור לבסיס הנתונים" onClick={handleCheckConnection} right={checking ? <Spinner size={20} color="#3b82f6" /> : undefined} />
           </div>
         </Card>
 
@@ -1209,43 +1224,43 @@ export default function SettingsPage() {
           <>
           <SL>תמיכה</SL>
           <Card>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--c-border, rgba(0,0,0,0.06))', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <button onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }} className="text-xs text-teal-600 flex items-center gap-1">
+            <div className="px-4 py-2.5 border-b border-border flex items-center justify-end">
+              <button onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }} className="text-xs text-primary flex items-center gap-1">
                 ההודעות שלי
-                {showMyMessages ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                <Icon name={showMyMessages ? 'expand_less' : 'expand_more'} size={14} />
               </button>
             </div>
             {!supportSent ? (
               <div className="p-4 space-y-3">
                 <div className="flex gap-2">
-                  <input value={supportSubject} onChange={e => setSupportSubject(e.target.value)} placeholder="נושא" className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300" />
-                  <select value={supportCategory} onChange={e => setSupportCategory(e.target.value)} className="shrink-0 w-28 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white">
+                  <input value={supportSubject} onChange={e => setSupportSubject(e.target.value)} placeholder="נושא" className="flex-1 min-w-0 px-3 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  <select value={supportCategory} onChange={e => setSupportCategory(e.target.value)} className="shrink-0 w-28 px-2 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30">
                     <option value="general">כללי</option>
                     <option value="billing">חיוב</option>
                     <option value="bug">באג</option>
                     <option value="feature">פיצ'ר</option>
                   </select>
                 </div>
-                <textarea value={supportBody} onChange={e => setSupportBody(e.target.value)} placeholder="תאר את הבעיה או הבקשה שלך..." rows={3} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none" />
-                <button onClick={sendSupportMessage} disabled={sendingSupport} className="w-full bg-teal-500 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
-                  <Send className="w-4 h-4" />
+                <textarea value={supportBody} onChange={e => setSupportBody(e.target.value)} placeholder="תאר את הבעיה או הבקשה שלך..." rows={3} className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
+                <button onClick={sendSupportMessage} disabled={sendingSupport} className="w-full bg-primary text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+                  <Icon name="send" size={16} />
                   {sendingSupport ? 'שולח...' : 'שלח הודעה'}
                 </button>
               </div>
             ) : (
               <div className="p-4 flex flex-col items-center gap-2 text-center">
-                <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center"><Check className="w-5 h-5 text-teal-500" /></div>
-                <p className="text-sm font-medium text-gray-800">ההודעה נשלחה!</p>
-                <p className="text-xs text-gray-500">נחזור אליך בהקדם</p>
-                <button onClick={() => setSupportSent(false)} className="text-xs text-teal-600 mt-1">שלח הודעה נוספת</button>
+                <div className="w-10 h-10 bg-primary-light rounded-2xl flex items-center justify-center"><Icon name="check" size={20} color="var(--c-primary)" /></div>
+                <p className="text-sm font-medium text-text">ההודעה נשלחה!</p>
+                <p className="text-xs text-text3">נחזור אליך בהקדם</p>
+                <button onClick={() => setSupportSent(false)} className="text-xs text-primary mt-1">שלח הודעה נוספת</button>
               </div>
             )}
             {showMyMessages && (
-              <div className="border-t">
+              <div className="border-t border-border">
                 {myMessages.length === 0 ? (
-                  <p className="text-center text-xs text-gray-400 py-4">אין הודעות קודמות</p>
+                  <p className="text-center text-xs text-text3 py-4">אין הודעות קודמות</p>
                 ) : (
-                  <div className="divide-y divide-gray-50 max-h-[28rem] overflow-y-auto">
+                  <div className="divide-y divide-border max-h-[28rem] overflow-y-auto">
                     {myMessages.map(m => {
                       const isExpanded = expandedMessageId === m.id
                       const hasReplies = (m.replies?.length ?? 0) > 0
@@ -1254,46 +1269,46 @@ export default function SettingsPage() {
                         <div key={m.id} className="px-4 py-3">
                           <button className="w-full text-right" onClick={() => { setExpandedMessageId(isExpanded ? null : m.id); if (!isExpanded) { void supabase.rpc('user_mark_message_read', { p_message_id: m.id }) } }}>
                             <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-medium text-gray-800">{m.subject}</p>
+                              <p className="text-sm font-medium text-text">{m.subject}</p>
                               <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {hasAdminReply && <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-medium">נענה</span>}
-                                {!hasAdminReply && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">בטיפול</span>}
-                                <span className="text-xs text-gray-400 flex items-center gap-0.5"><Clock className="w-3 h-3" />{formatDate(m.created_at)}</span>
+                                {hasAdminReply && <span className="text-[10px] bg-primary-light text-primary px-1.5 py-0.5 rounded-full font-medium">נענה</span>}
+                                {!hasAdminReply && <span className="text-[10px] bg-bg text-text3 px-1.5 py-0.5 rounded-full">בטיפול</span>}
+                                <span className="text-xs text-text3 flex items-center gap-0.5"><Icon name="schedule" size={12} />{formatDate(m.created_at)}</span>
                               </div>
                             </div>
-                            {!isExpanded && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1 text-right">{m.body}</p>}
+                            {!isExpanded && <p className="text-xs text-text3 mt-0.5 line-clamp-1 text-right">{m.body}</p>}
                           </button>
                           {isExpanded && (
                             <div className="mt-2 space-y-2">
                               <div className="flex justify-end">
-                                <div className="bg-teal-500 text-white rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
+                                <div className="bg-primary text-white rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
                                   <p className="text-xs">{m.body}</p>
-                                  <p className="text-[10px] text-teal-200 mt-0.5">{formatDate(m.created_at)}</p>
+                                  <p className="text-[10px] text-white/70 mt-0.5">{formatDate(m.created_at)}</p>
                                 </div>
                               </div>
                               {hasReplies ? (
                                 m.replies!.map(r => (
                                   <div key={r.id} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${r.sender === 'user' ? 'bg-teal-500 text-white rounded-tl-sm' : 'bg-gray-100 text-gray-800 rounded-tr-sm'}`}>
-                                      {r.sender === 'admin' && <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>}
+                                    <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${r.sender === 'user' ? 'bg-primary text-white rounded-tl-sm' : 'bg-bg text-text rounded-tr-sm'}`}>
+                                      {r.sender === 'admin' && <p className="text-[10px] font-semibold text-primary mb-0.5">תמיכה</p>}
                                       <p className="text-xs">{r.body}</p>
-                                      <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-teal-200' : 'text-gray-400'}`}>{formatDate(r.created_at)}</p>
+                                      <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-white/70' : 'text-text3'}`}>{formatDate(r.created_at)}</p>
                                     </div>
                                   </div>
                                 ))
                               ) : m.admin_reply ? (
                                 <div className="flex justify-start">
-                                  <div className="bg-gray-100 text-gray-800 rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]">
-                                    <p className="text-[10px] font-semibold text-teal-600 mb-0.5">תמיכה</p>
+                                  <div className="bg-bg text-text rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]">
+                                    <p className="text-[10px] font-semibold text-primary mb-0.5">תמיכה</p>
                                     <p className="text-xs">{m.admin_reply}</p>
-                                    {m.replied_at && <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(m.replied_at)}</p>}
+                                    {m.replied_at && <p className="text-[10px] text-text3 mt-0.5">{formatDate(m.replied_at)}</p>}
                                   </div>
                                 </div>
                               ) : null}
                               {hasAdminReply && (
                                 <div className="flex gap-1.5 mt-1">
-                                  <input value={replyTexts[m.id] || ''} onChange={e => setReplyTexts(prev => ({ ...prev, [m.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserReply(m.id) } }} placeholder="כתוב תשובה..." className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-300" />
-                                  <button onClick={() => sendUserReply(m.id)} disabled={sendingUserReply === m.id || !replyTexts[m.id]?.trim()} className="px-3 py-2 bg-teal-500 text-white rounded-xl text-xs disabled:opacity-40 flex items-center gap-1"><Send className="w-3 h-3" /></button>
+                                  <input value={replyTexts[m.id] || ''} onChange={e => setReplyTexts(prev => ({ ...prev, [m.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserReply(m.id) } }} placeholder="כתוב תשובה..." className="flex-1 px-3 py-2 border border-border rounded-xl text-xs bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                  <button onClick={() => sendUserReply(m.id)} disabled={sendingUserReply === m.id || !replyTexts[m.id]?.trim()} className="px-3 py-2 bg-primary text-white rounded-xl text-xs disabled:opacity-40 flex items-center gap-1"><Icon name="send" size={12} /></button>
                                 </div>
                               )}
                             </div>
@@ -1311,22 +1326,22 @@ export default function SettingsPage() {
 
         {adminBroadcasts.length > 0 && (
           <Card>
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <Bell className="w-4 h-4 text-blue-500" />
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text2 flex items-center gap-2">
+                <Icon name="notifications" size={16} color="#3b82f6" />
                 הודעות מערכת
               </h3>
               {adminBroadcasts.some(b => !seenBroadcastIds.has(b.id)) && (
-                <span className="text-xs font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
+                <span className="text-xs font-bold bg-primary text-white px-1.5 py-0.5 rounded-full">
                   {adminBroadcasts.filter(b => !seenBroadcastIds.has(b.id)).length}
                 </span>
               )}
             </div>
-            <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+            <div className="divide-y divide-border max-h-64 overflow-y-auto">
               {adminBroadcasts.map(b => {
                 const isNew = !seenBroadcastIds.has(b.id)
                 return (
-                  <div key={b.id} className={`px-4 py-3 ${isNew ? 'bg-blue-50/50' : ''}`}
+                  <div key={b.id} className={`px-4 py-3 ${isNew ? 'bg-primary-light/40' : ''}`}
                     onMouseEnter={() => {
                       if (isNew) {
                         setSeenBroadcastIds(prev => { const next = new Set(prev); next.add(b.id); localStorage.setItem('seen_broadcast_ids', JSON.stringify([...next])); return next })
@@ -1335,10 +1350,10 @@ export default function SettingsPage() {
                     }}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm font-medium ${isNew ? 'text-gray-900' : 'text-gray-700'}`}>{b.subject}</p>
-                      <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(b.created_at)}</span>
+                      <p className={`text-sm font-medium ${isNew ? 'text-text' : 'text-text2'}`}>{b.subject}</p>
+                      <span className="text-xs text-text3 flex-shrink-0">{formatDate(b.created_at)}</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{b.body}</p>
+                    <p className="text-xs text-text3 mt-0.5">{b.body}</p>
                   </div>
                 )
               })}
@@ -1352,65 +1367,65 @@ export default function SettingsPage() {
         <SL>{t('settings.security')}</SL>
         <Card>
           {!editPass ? (
-            <MenuItem icon={Lock} label="שינוי סיסמה" desc="עדכן את סיסמת הכניסה" onClick={() => setEditPass(true)} />
+            <MenuItem icon="lock" label="שינוי סיסמה" desc="עדכן את סיסמת הכניסה" onClick={() => setEditPass(true)} />
           ) : (
             <div className="p-4 space-y-3">
               {/* Unified-vault notice */}
               {isUnifiedVault && (
                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800 flex items-start gap-2">
-                  <Shield className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <Icon name="shield" size={14} className="flex-shrink-0 mt-0.5" />
                   <p>הכספת מוגנת בסיסמת הכניסה — <strong>הסיסמה החדשה תהיה גם מפתח הכספת</strong> ותצפין מחדש את כל השוברים.</p>
                 </div>
               )}
 
               {/* Current password */}
               <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Icon name="lock" size={16} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
                   type={showCurrentPass ? 'text' : 'password'}
                   value={currentPass}
                   onChange={e => setCurrentPass(e.target.value)}
                   placeholder="סיסמה נוכחית"
-                  className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-full pr-10 pl-10 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                   dir="ltr"
                   autoFocus
                 />
-                <button type="button" onClick={() => setShowCurrentPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <button type="button" onClick={() => setShowCurrentPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-text3">
+                  <Icon name={showCurrentPass ? 'visibility_off' : 'visibility'} size={16} />
                 </button>
               </div>
 
               {/* New password + strength meter */}
               <div>
                 <div className="relative">
-                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Icon name="lock" size={16} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
                   <input
                     type={showNewPass ? 'text' : 'password'}
                     value={newPass}
                     onChange={e => { setNewPass(e.target.value); setShowPassStrength(true) }}
                     placeholder="סיסמה חדשה (לפחות 8 תווים)"
-                    className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                    className="w-full pr-10 pl-10 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                     dir="ltr"
                   />
-                  <button type="button" onClick={() => setShowNewPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <button type="button" onClick={() => setShowNewPass(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-text3">
+                    <Icon name={showNewPass ? 'visibility_off' : 'visibility'} size={16} />
                   </button>
                 </div>
                 {showPassStrength && newPass.length > 0 && (
                   <div className="mt-2 space-y-1.5">
                     <div className="flex gap-1">
                       {[0,1,2,3,4].map(i => (
-                        <div key={i} className={`flex-1 h-1.5 rounded-full ${i < pwStrength.score ? pwStrength.color : 'bg-gray-100'}`} />
+                        <div key={i} className={`flex-1 h-1.5 rounded-full ${i < pwStrength.score ? pwStrength.color : 'bg-bg'}`} />
                       ))}
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className={`text-xs font-medium ${pwStrength.score >= 3 ? 'text-green-600' : 'text-orange-500'}`}>{pwStrength.label}</span>
-                      {pwStrength.score >= 3 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                      <span className={`text-xs font-medium ${pwStrength.score >= 3 ? 'text-primary' : 'text-warning'}`}>{pwStrength.label}</span>
+                      {pwStrength.score >= 3 && <Icon name="verified_user" size={16} color="var(--c-primary)" />}
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                       {pwStrength.checks.map(c => (
-                        <div key={c.label} className={`flex items-center gap-1 text-xs ${c.ok ? 'text-green-600' : 'text-gray-400'}`}>
-                          <Check className={`w-3 h-3 flex-shrink-0 ${c.ok ? 'text-green-500' : 'text-gray-300'}`} />
+                        <div key={c.label} className={`flex items-center gap-1 text-xs ${c.ok ? 'text-primary' : 'text-text3'}`}>
+                          <Icon name="check" size={12} className="flex-shrink-0" color={c.ok ? 'var(--c-primary)' : 'var(--c-border)'} />
                           {c.label}
                         </div>
                       ))}
@@ -1421,17 +1436,17 @@ export default function SettingsPage() {
 
               {/* Confirm */}
               <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Icon name="lock" size={16} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
                   type={showNewPass2 ? 'text' : 'password'}
                   value={newPass2}
                   onChange={e => setNewPass2(e.target.value)}
                   placeholder="אימות סיסמה חדשה"
-                  className="w-full pr-10 pl-10 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="w-full pr-10 pl-10 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                   dir="ltr"
                 />
-                <button type="button" onClick={() => setShowNewPass2(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  {showNewPass2 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <button type="button" onClick={() => setShowNewPass2(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-text3">
+                  <Icon name={showNewPass2 ? 'visibility_off' : 'visibility'} size={16} />
                 </button>
               </div>
 
@@ -1439,7 +1454,7 @@ export default function SettingsPage() {
                 <button
                   onClick={changePassword}
                   disabled={passwordChanging || !currentPass || !newPass || !newPass2}
-                  className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+                  className="flex-1 bg-primary text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
                 >
                   {passwordChanging ? 'משנה...' : isUnifiedVault ? 'שנה סיסמה ועדכן כספת' : 'שנה סיסמה'}
                 </button>
@@ -1449,7 +1464,7 @@ export default function SettingsPage() {
                     setCurrentPass(''); setNewPass(''); setNewPass2('')
                     setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
                   }}
-                  className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium"
+                  className="flex-1 bg-bg text-text2 py-2.5 rounded-xl text-sm font-medium"
                 >
                   {t('app.cancel')}
                 </button>
@@ -1459,21 +1474,21 @@ export default function SettingsPage() {
 
           {/* Biometric */}
           {isBiometricSupported() && (
-            <div className="border-t">
+            <div className="border-t border-border">
               <div className="flex items-center gap-3 p-4">
-                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                  <Fingerprint className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
+                  <Icon name="fingerprint" size={20} color="var(--c-text2)" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">נעילה ביומטרית</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-medium text-text">נעילה ביומטרית</p>
+                  <p className="text-xs text-text3">
                     {biometricEnabled ? 'פעיל — Face ID / טביעת אצבע' : 'כבוי'}
                   </p>
                 </div>
                 {biometricEnabled ? (
                   <button
                     onClick={handleDisableBiometric}
-                    className="text-xs text-red-500 font-medium px-3 py-1.5 bg-red-50 rounded-xl"
+                    className="text-xs text-error font-medium px-3 py-1.5 bg-error/10 rounded-xl"
                   >
                     בטל
                   </button>
@@ -1481,7 +1496,7 @@ export default function SettingsPage() {
                   <button
                     onClick={handleEnableBiometric}
                     disabled={biometricLoading}
-                    className="text-xs text-green-600 font-medium px-3 py-1.5 bg-green-50 rounded-xl disabled:opacity-50"
+                    className="text-xs text-primary font-medium px-3 py-1.5 bg-primary-light rounded-xl disabled:opacity-50"
                   >
                     {biometricLoading ? '...' : 'הפעל'}
                   </button>
@@ -1491,35 +1506,35 @@ export default function SettingsPage() {
           )}
           {/* E2EE Vault */}
           {hasVault && (
-            <div className="border-t">
+            <div className="border-t border-border">
             <button
               onClick={() => setShowVaultSection(s => !s)}
-              className="flex items-center gap-3 w-full p-4 text-right hover:bg-gray-50"
+              className="flex items-center gap-3 w-full p-4 text-right hover:bg-bg"
             >
               <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                <Shield className="w-5 h-5 text-indigo-500" />
+                <Icon name="shield" size={20} color="#6366f1" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800">{t('settings.vault')}</p>
-                <p className="text-xs text-gray-400">{isVaultUnlocked ? 'פתוחה כעת' : 'נעולה'} · שנה סיסמה או אפס</p>
+                <p className="text-sm font-medium text-text">{t('settings.vault')}</p>
+                <p className="text-xs text-text3">{isVaultUnlocked ? 'פתוחה כעת' : 'נעולה'} · שנה סיסמה או אפס</p>
               </div>
-              {showVaultSection ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              <Icon name={showVaultSection ? 'expand_less' : 'expand_more'} size={16} color="var(--c-text3)" />
             </button>
 
             {showVaultSection && (
               <div className="px-4 pb-4 space-y-3">
 
                 {/* Single consolidated "must-read" notice */}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-                  <p className="text-xs font-bold text-amber-800 flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 flex-shrink-0" /> חובה לקרוא — כדי לא לאבד את הנתונים שלך
+                <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-bold text-warning flex items-center gap-2">
+                    <Icon name="shield" size={14} className="flex-shrink-0" /> חובה לקרוא — כדי לא לאבד את הנתונים שלך
                   </p>
                   {isUnifiedVault ? (
                     <>
-                      <p className="text-xs text-amber-700 leading-relaxed">
+                      <p className="text-xs text-warning leading-relaxed">
                         הכספת מוצפנת עם <strong>סיסמת הכניסה שלך</strong> — הסיסמה אינה נשמרת בשרתנו.
                       </p>
-                      <ul className="text-xs text-amber-700 space-y-1 list-disc pr-4">
+                      <ul className="text-xs text-warning space-y-1 list-disc pr-4">
                         <li><strong>שחזור סיסמה בדוא"ל לא ישחזר נתונים מוצפנים</strong> — שמור את מפתח השחזור במקום בטוח.</li>
                         <li>לשינוי סיסמה: השתמש בקטע "שינוי סיסמה" למעלה — הכספת תוצפן מחדש אוטומטית.</li>
                         <li>שיתוף שובר מוצפן חושף את הקוד בשרת לצורך השיתוף בלבד.</li>
@@ -1527,19 +1542,19 @@ export default function SettingsPage() {
                       {isVaultUnlocked && (
                         <button
                           onClick={() => regenerateRecoveryKey().catch(() => {})}
-                          className="text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1"
+                          className="text-xs font-semibold text-warning flex items-center gap-1"
                         >
-                          <Key className="w-3 h-3" /> הצג / חדש מפתח שחזור
+                          <Icon name="key" size={12} /> הצג / חדש מפתח שחזור
                         </button>
                       )}
                     </>
                   ) : (
                     <>
-                      <p className="text-xs text-amber-700 leading-relaxed">
+                      <p className="text-xs text-warning leading-relaxed">
                         <strong>הסיסמה אינה ניתנת לשחזור</strong> — שמור אותה במקום בטוח. איבוד הסיסמה יגרום לאיבוד הנתונים המוצפנים לצמיתות.
                       </p>
-                      <p className="text-xs text-amber-700">שיתוף שובר מוצפן חושף את הקוד בשרת לצורך השיתוף בלבד.</p>
-                      <p className="text-xs text-amber-700">שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.</p>
+                      <p className="text-xs text-warning">שיתוף שובר מוצפן חושף את הקוד בשרת לצורך השיתוף בלבד.</p>
+                      <p className="text-xs text-warning">שינוי סיסמה יצפין מחדש אוטומטית את כל השוברים המוצפנים שלך.</p>
                     </>
                   )}
                 </div>
@@ -1553,17 +1568,17 @@ export default function SettingsPage() {
 
                 {/* Recovery key unlock — shown when vault is locked */}
                 {!isVaultUnlocked && localStorage.getItem('gs_e2ee_recovery_wrapped') && (
-                  <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-bold text-teal-800 flex items-center gap-1">
-                      <Key className="w-3.5 h-3.5" /> פתח עם מפתח שחזור
+                  <div className="bg-primary-light border border-primary/20 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-bold text-primary flex items-center gap-1">
+                      <Icon name="key" size={14} /> פתח עם מפתח שחזור
                     </p>
-                    <p className="text-xs text-teal-700">
+                    <p className="text-xs text-primary">
                       שכחת סיסמה? הזן את מפתח השחזור שקיבלת בעת הגדרת הכספת.
                     </p>
                     {!showRecoveryUnlock ? (
                       <button
                         onClick={() => setShowRecoveryUnlock(true)}
-                        className="text-xs font-semibold text-teal-700 hover:text-teal-900"
+                        className="text-xs font-semibold text-primary"
                       >
                         השתמש במפתח שחזור ←
                       </button>
@@ -1575,7 +1590,7 @@ export default function SettingsPage() {
                           value={recoveryPhrase}
                           onChange={e => setRecoveryPhrase(e.target.value)}
                           onKeyDown={e => e.key === 'Enter' && handleRecoveryUnlock()}
-                          className="w-full px-3 py-2 border border-teal-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 font-mono tracking-widest"
+                          className="w-full px-3 py-2 border border-primary/30 rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono tracking-widest"
                           dir="ltr"
                           autoFocus
                           autoComplete="off"
@@ -1584,17 +1599,14 @@ export default function SettingsPage() {
                           <button
                             onClick={handleRecoveryUnlock}
                             disabled={recoveryUnlocking || !recoveryPhrase.trim()}
-                            className="flex-1 py-2 bg-teal-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
+                            className="flex-1 py-2 bg-primary text-white rounded-xl text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
                           >
-                            {recoveryUnlocking
-                              ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              : <Key className="w-3 h-3" />
-                            }
+                            {recoveryUnlocking ? <Spinner size={14} color="#fff" /> : <Icon name="key" size={12} />}
                             {recoveryUnlocking ? 'פותח...' : 'פתח כספת'}
                           </button>
                           <button
                             onClick={() => { setShowRecoveryUnlock(false); setRecoveryPhrase('') }}
-                            className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                            className="flex-1 py-2 bg-bg text-text2 rounded-xl text-xs"
                           >
                             {t('app.cancel')}
                           </button>
@@ -1608,7 +1620,7 @@ export default function SettingsPage() {
                 {!isUnifiedVault && (
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
                     <p className="text-xs font-bold text-blue-800 flex items-center gap-1">
-                      <Shield className="w-3.5 h-3.5" /> שדרג לסיסמה אחת
+                      <Icon name="shield" size={14} /> שדרג לסיסמה אחת
                     </p>
                     <p className="text-xs text-blue-700 leading-relaxed">
                       הכספת שלך עדיין דורשת סיסמה נפרדת מסיסמת הכניסה.
@@ -1617,7 +1629,7 @@ export default function SettingsPage() {
                     {!showMigrateSection ? (
                       <button
                         onClick={() => setShowMigrateSection(true)}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                        className="text-xs font-semibold text-blue-600"
                       >
                         אחד עכשיו ←
                       </button>
@@ -1628,7 +1640,7 @@ export default function SettingsPage() {
                           placeholder="סיסמת כספת נוכחית"
                           value={migrateVaultPass}
                           onChange={e => setMigrateVaultPass(e.target.value)}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-blue-300"
                           dir="ltr"
                           autoComplete="current-password"
                         />
@@ -1637,7 +1649,7 @@ export default function SettingsPage() {
                           placeholder="סיסמת כניסה לאתר"
                           value={migrateLoginPass}
                           onChange={e => setMigrateLoginPass(e.target.value)}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-blue-300"
                           dir="ltr"
                           autoComplete="current-password"
                         />
@@ -1651,7 +1663,7 @@ export default function SettingsPage() {
                           </button>
                           <button
                             onClick={() => { setShowMigrateSection(false); setMigrateVaultPass(''); setMigrateLoginPass('') }}
-                            className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                            className="flex-1 py-2 bg-bg text-text2 rounded-xl text-xs"
                           >
                             ביטול
                           </button>
@@ -1669,7 +1681,7 @@ export default function SettingsPage() {
                       value={vaultOldPass}
                       onChange={e => setVaultOldPass(e.target.value)}
                       placeholder="סיסמה נוכחית"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      className="w-full px-4 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-indigo-300"
                       dir="ltr"
                       autoComplete="current-password"
                       name="vault-current-password"
@@ -1679,7 +1691,7 @@ export default function SettingsPage() {
                       value={vaultNewPass}
                       onChange={e => setVaultNewPass(e.target.value)}
                       placeholder="סיסמה חדשה (לפחות 8 תווים)"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      className="w-full px-4 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-indigo-300"
                       dir="ltr"
                       autoComplete="new-password"
                       name="vault-new-password"
@@ -1689,7 +1701,7 @@ export default function SettingsPage() {
                       value={vaultNewPass2}
                       onChange={e => setVaultNewPass2(e.target.value)}
                       placeholder="אימות סיסמה חדשה"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      className="w-full px-4 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-indigo-300"
                       dir="ltr"
                       autoComplete="new-password"
                       name="vault-new-password-confirm"
@@ -1699,7 +1711,7 @@ export default function SettingsPage() {
                       value={vaultNewHint}
                       onChange={e => setVaultNewHint(e.target.value)}
                       placeholder="רמז לסיסמה החדשה (אופציונלי)"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      className="w-full px-4 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-indigo-300"
                       autoComplete="off"
                       name="vault-new-hint"
                     />
@@ -1713,12 +1725,12 @@ export default function SettingsPage() {
                   </>
                 )}
 
-                <div className="border-t pt-3 space-y-3">
+                <div className="border-t border-border pt-3 space-y-3">
                   {/* Default encryption for new vouchers */}
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">הצפן שוברים חדשים כברירת מחדל</p>
-                      <p className="text-xs text-gray-400 mt-0.5">כל שובר חדש שיתווסף יוצפן אוטומטית</p>
+                      <p className="text-sm font-medium text-text">הצפן שוברים חדשים כברירת מחדל</p>
+                      <p className="text-xs text-text3 mt-0.5">כל שובר חדש שיתווסף יוצפן אוטומטית</p>
                     </div>
                     <button
                       role="switch"
@@ -1728,7 +1740,7 @@ export default function SettingsPage() {
                         setE2eeDefaultNew(next)
                         localStorage.setItem('gs_e2ee_default', String(next))
                       }}
-                      className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${e2eeDefaultNew ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                      className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${e2eeDefaultNew ? 'bg-indigo-600' : 'bg-border'}`}
                     >
                       <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${e2eeDefaultNew ? 'translate-x-0.5' : 'right-0.5'}`} />
                     </button>
@@ -1738,16 +1750,16 @@ export default function SettingsPage() {
                   {!encryptAllConfirm ? (
                     <button
                       onClick={() => setEncryptAllConfirm(true)}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                      className="text-xs text-indigo-600 font-medium"
                     >
                       הצפן את כל השוברים שעדיין לא מוצפנים
                     </button>
                   ) : (
-                    <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
-                      <p className="text-xs font-bold text-amber-900 flex items-center gap-1">
-                        <Shield className="w-3.5 h-3.5" /> שים לב — פעולה בלתי הפיכה
+                    <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-bold text-warning flex items-center gap-1">
+                        <Icon name="shield" size={14} /> שים לב — פעולה בלתי הפיכה
                       </p>
-                      <p className="text-xs text-amber-800">
+                      <p className="text-xs text-warning">
                         קודי השוברים יוצפנו עם סיסמת הכספת הנוכחית.
                         <strong> אם תשכח את הסיסמה — הנתונים יאבדו לצמיתות.</strong>
                         <br />ודא שהסיסמה שמורה במקום בטוח לפני המשך.
@@ -1757,7 +1769,7 @@ export default function SettingsPage() {
                         placeholder="אמת סיסמת כספת"
                         value={encryptAllPass}
                         onChange={e => setEncryptAllPass(e.target.value)}
-                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                        className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-indigo-300"
                         dir="ltr"
                         autoComplete="current-password"
                       />
@@ -1771,7 +1783,7 @@ export default function SettingsPage() {
                         </button>
                         <button
                           onClick={() => { setEncryptAllConfirm(false); setEncryptAllPass('') }}
-                          className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                          className="flex-1 py-2 bg-bg text-text2 rounded-xl text-xs"
                         >
                           ביטול
                         </button>
@@ -1783,13 +1795,13 @@ export default function SettingsPage() {
                   {!vaultDisableConfirm ? (
                     <button
                       onClick={() => setVaultDisableConfirm(true)}
-                      className="text-xs text-orange-500 hover:text-orange-700"
+                      className="text-xs text-warning"
                     >
                       הסר הצפנה (פענח שוברים ושמור בטקסט רגיל)
                     </button>
                   ) : (
-                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
-                      <p className="text-xs text-orange-800 font-medium">
+                    <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 space-y-2">
+                      <p className="text-xs text-warning font-medium">
                         הקודים יפוענחו ויישמרו ב-DB ללא הצפנה. הנתונים לא ימחקו.
                       </p>
                       <input
@@ -1797,20 +1809,20 @@ export default function SettingsPage() {
                         placeholder="סיסמת כספת נוכחית"
                         value={vaultDisablePass}
                         onChange={e => setVaultDisablePass(e.target.value)}
-                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-warning/40"
                         autoComplete="current-password"
                       />
                       <div className="flex gap-2">
                         <button
                           onClick={handleDisableVault}
                           disabled={vaultDisabling || !vaultDisablePass}
-                          className="flex-1 py-2 bg-orange-500 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                          className="flex-1 py-2 bg-warning text-white rounded-xl text-xs font-semibold disabled:opacity-50"
                         >
                           {vaultDisabling ? 'מפענח...' : 'הסר הצפנה'}
                         </button>
                         <button
                           onClick={() => { setVaultDisableConfirm(false); setVaultDisablePass('') }}
-                          className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                          className="flex-1 py-2 bg-bg text-text2 rounded-xl text-xs"
                         >
                           {t('app.cancel')}
                         </button>
@@ -1822,25 +1834,25 @@ export default function SettingsPage() {
                   {!vaultResetConfirm ? (
                     <button
                       onClick={() => setVaultResetConfirm(true)}
-                      className="text-xs text-red-500 hover:text-red-700"
+                      className="text-xs text-error"
                     >
                       אפס כספת (מחק את כל ההצפנה)
                     </button>
                   ) : (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
-                      <p className="text-xs text-red-700 font-medium">
+                    <div className="bg-error/10 border border-error/30 rounded-xl p-3 space-y-2">
+                      <p className="text-xs text-error font-medium">
                         אזהרה: איפוס הכספת ישאיר את קודי השוברים בDB מוצפנים ולא ניתן יהיה לקרוא אותם! יש לוודא תחילה שאין שוברי E2EE חשובים.
                       </p>
                       <div className="flex gap-2">
                         <button
                           onClick={() => { resetVault(); toast.success('כספת אופסה'); setVaultResetConfirm(false); setShowVaultSection(false) }}
-                          className="flex-1 py-2 bg-red-500 text-white rounded-xl text-xs font-semibold"
+                          className="flex-1 py-2 bg-error text-white rounded-xl text-xs font-semibold"
                         >
                           {t('e2ee.reset')}
                         </button>
                         <button
                           onClick={() => setVaultResetConfirm(false)}
-                          className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs"
+                          className="flex-1 py-2 bg-bg text-text2 rounded-xl text-xs"
                         >
                           {t('app.cancel')}
                         </button>
@@ -1857,10 +1869,10 @@ export default function SettingsPage() {
         {/* ── נגישות ופרטיות ── */}
         <SL>נגישות ופרטיות</SL>
         <Card>
-          <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--c-border)' }}>
+          <div className="flex items-center justify-between p-4 border-b border-border">
             <div className="flex-1">
-              <p className="text-sm font-medium text-gray-800">הצג כפתור נגישות</p>
-              <p className="text-xs text-gray-500 mt-0.5">כפתור צף לשינוי גודל טקסט, ניגודיות ועוד</p>
+              <p className="text-sm font-medium text-text">הצג כפתור נגישות</p>
+              <p className="text-xs text-text3 mt-0.5">כפתור צף לשינוי גודל טקסט, ניגודיות ועוד</p>
             </div>
             <button
               role="switch"
@@ -1872,17 +1884,17 @@ export default function SettingsPage() {
                 window.dispatchEvent(new Event('a11y-widget-toggle'))
               }}
               aria-label="הצג כפתור נגישות"
-              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${a11yWidgetEnabled ? 'bg-blue-600' : 'bg-gray-200'}`}
+              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${a11yWidgetEnabled ? 'bg-primary' : 'bg-border'}`}
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${a11yWidgetEnabled ? 'translate-x-0.5' : 'right-0.5'}`} />
             </button>
           </div>
-          <a href="/accessibility" className="block px-4 py-3 text-xs text-blue-600 hover:underline border-b" style={{ borderColor: 'var(--c-border)' }}>
+          <a href="/accessibility" className="block px-4 py-3 text-xs text-primary border-b border-border">
             הצהרת נגישות ←
           </a>
-          <div className="divide-y" style={{ borderColor: 'var(--c-border)' }}>
+          <div className="divide-y divide-border">
             <MenuItem
-              icon={BookOpen}
+              icon="menu_book"
               label={t('settings.onboarding')}
               desc="הצג מחדש את מדריך הפיצ׳רים"
               onClick={() => {
@@ -1892,35 +1904,35 @@ export default function SettingsPage() {
               }}
             />
             <MenuItem
-              icon={FileText}
+              icon="description"
               label="תנאי שימוש"
               desc="הסכם השימוש בשירות GiftSmart"
               onClick={() => navigate('/terms')}
             />
             <MenuItem
-              icon={Shield}
+              icon="shield"
               label="מדיניות פרטיות"
               desc="כיצד אנו מגינים על המידע שלך"
               onClick={() => navigate('/privacy')}
             />
             {isAdmin && (
               <MenuItem
-                icon={ShieldCheck}
+                icon="verified_user"
                 label={t('settings.admin.link')}
                 desc={t('settings.admin.link.desc')}
                 onClick={() => navigate('/admin')}
               />
             )}
             <MenuItem
-              icon={Trash2}
+              icon="delete"
               label={t('settings.delete.account')}
               desc={t('settings.delete.account.desc')}
               onClick={handleDeleteAccount}
               danger
-              right={deletingAccount ? <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" /> : undefined}
+              right={deletingAccount ? <Spinner size={20} color="var(--c-error)" /> : undefined}
             />
             <MenuItem
-              icon={LogOut}
+              icon="logout"
               label={t('settings.logout')}
               desc="יציאה מהחשבון"
               onClick={() => { if (confirm('להתנתק?')) signOut() }}
@@ -1929,7 +1941,7 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        <p className="text-center text-xs text-gray-400">GiftSmart v1.1.0</p>
+        <p className="text-center text-xs text-text3">GiftSmart v1.1.0</p>
       </div>
     </div>
   )

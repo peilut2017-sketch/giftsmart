@@ -4,14 +4,12 @@ import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useT } from '../lib/i18n'
 import { formatDate } from '../utils/helpers'
-import {
-  ArrowRight, Star, Clock, ShoppingBag, X, Loader2, Flag,
-  Phone, Mail, CheckCircle, AlertTriangle, MessageCircle, ExternalLink, Copy, Tag, BadgeCheck,
-} from 'lucide-react'
 import type { MarketplaceListing, PaymentMethod } from '../types'
 import { PAYMENT_METHOD_LABELS } from '../types'
 import ChatModal from '../components/ChatModal'
-import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
+import Icon from '../components/ui/Icon'
+import Button from '../components/ui/Button'
+import BottomSheet from '../components/ui/BottomSheet'
 import toast from 'react-hot-toast'
 
 // ─── Payment link builder ─────────────────────────────────────────────────────
@@ -45,7 +43,7 @@ const METHOD_COLORS: Record<PaymentMethod['type'], string> = {
   paybox:   'bg-orange-500',
   cashcash: 'bg-teal-500',
   lavi:     'bg-emerald-500',
-  other:    'bg-gray-500',
+  other:    'bg-text3',
 }
 
 // ─── Report Modal ─────────────────────────────────────────────────────────────
@@ -65,7 +63,6 @@ function ReportModal({
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
-  useBodyScrollLock()
 
   const reasons = [
     t('listing.report.reason.false_info'),
@@ -90,57 +87,39 @@ function ReportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
-      <div
-        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h2 className="font-bold text-lg flex items-center gap-2">
-            <Flag className="w-5 h-5 text-red-500" /> {t('listing.report.title')}
-          </h2>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={t('listing.report.title')}
+      footer={
+        <Button onClick={submit} disabled={saving || !reason} loading={saving} variant="danger" fullWidth>
+          {t('listing.report.submit')}
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-text3">{t('listing.report.about')}: {reportedName}</p>
+        <div className="space-y-2">
+          {reasons.map(r => (
+            <button
+              key={r}
+              onClick={() => setReason(r)}
+              className={`w-full text-right px-4 py-2.5 rounded-xl border text-sm transition-colors ${
+                reason === r ? 'border-error bg-error/10 text-error font-medium' : 'border-border text-text2'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
         </div>
-
-        {/* Scrollable body */}
-        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-3">
-          <p className="text-sm text-gray-500">{t('listing.report.about')}: {reportedName}</p>
-          <div className="space-y-2">
-            {reasons.map(r => (
-              <button
-                key={r}
-                onClick={() => setReason(r)}
-                className={`w-full text-right px-4 py-2.5 rounded-xl border text-sm transition-colors ${
-                  reason === r ? 'border-red-500 bg-red-50 text-red-700 font-medium' : 'border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <textarea
-            className="w-full border rounded-xl p-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-red-400"
-            placeholder={t('listing.report.details_placeholder')}
-            value={details}
-            onChange={e => setDetails(e.target.value)}
-          />
-        </div>
-
-        {/* Sticky footer */}
-        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
-          <button
-            onClick={submit}
-            disabled={saving || !reason}
-            className="w-full py-3 bg-red-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('listing.report.submit')}
-          </button>
-        </div>
+        <textarea
+          className="w-full border border-border rounded-xl p-3 text-sm bg-surface text-text resize-none h-20 focus:outline-none focus:ring-2 focus:ring-error/30"
+          placeholder={t('listing.report.details_placeholder')}
+          value={details}
+          onChange={e => setDetails(e.target.value)}
+        />
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -161,7 +140,6 @@ function BuyModal({
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
-  useBodyScrollLock()
 
   // Reset copied state when payment method changes
   useEffect(() => { setCopied(false) }, [selectedMethod])
@@ -193,132 +171,107 @@ function BuyModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
-      <div
-        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[90dvh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h2 className="font-bold text-lg">{t('listing.buy.title')}</h2>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={t('listing.buy.title')}
+      className="max-h-[90dvh]"
+      footer={
+        <Button onClick={handleConfirm} disabled={sending || !selectedMethod || methods.length === 0} loading={sending} fullWidth>
+          {t('listing.buy.confirm_button')}
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {/* Voucher summary */}
+        <div className="bg-bg rounded-2xl p-4 space-y-1">
+          <p className="font-semibold text-text">{listing.store_name}</p>
+          <p className="text-sm text-text3">
+            {t('listing.buy.balance_label')}: ₪{listing.balance} · {t('listing.buy.price_label')}:{' '}
+            <span className="text-primary font-bold">₪{listing.asking_price}</span>
+          </p>
         </div>
 
-        {/* Scrollable body */}
-        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-4">
-          {/* Voucher summary */}
-          <div className="bg-gray-50 rounded-2xl p-4 space-y-1">
-            <p className="font-semibold">{listing.store_name}</p>
-            <p className="text-sm text-gray-500">
-              {t('listing.buy.balance_label')}: ₪{listing.balance} · {t('listing.buy.price_label')}:{' '}
-              <span className="text-green-600 font-bold">₪{listing.asking_price}</span>
-            </p>
-          </div>
+        {/* Chat link */}
+        <button
+          onClick={() => { onClose(); onChat() }}
+          className="w-full flex items-center gap-2 p-3 rounded-xl border border-border text-sm text-text2"
+        >
+          <Icon name="chat" size={16} color="var(--c-primary)" />
+          <span>{t('listing.buy.chat_prompt')}</span>
+        </button>
 
-          {/* Chat link */}
-          <button
-            onClick={() => { onClose(); onChat() }}
-            className="w-full flex items-center gap-2 p-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <MessageCircle className="w-4 h-4 text-green-600" />
-            <span>{t('listing.buy.chat_prompt')}</span>
-          </button>
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-sm text-warning flex gap-2">
+          <Icon name="warning" size={16} className="shrink-0 mt-0.5" />
+          <span>{t('listing.buy.warning')}</span>
+        </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800 flex gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{t('listing.buy.warning')}</span>
-          </div>
-
-          {/* Payment methods */}
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-gray-700">{t('listing.buy.methods_label')}</p>
-            {methods.length === 0 ? (
-              <p className="text-sm text-gray-400">{t('listing.buy.no_methods')}</p>
-            ) : (
-              methods.map((m, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedMethod(m)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-colors ${
-                    selectedMethod === m
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${METHOD_COLORS[m.type]}`}
-                  >
-                    {PAYMENT_METHOD_LABELS[m.type][0]}
-                  </div>
-                  <div className="flex-1 text-right">
-                    <p className="text-sm font-medium">{PAYMENT_METHOD_LABELS[m.type]}</p>
-                    <p className="text-xs text-gray-500">{m.value}</p>
-                  </div>
-                  {m.type === 'paypal' ? (
-                    <Mail className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <Phone className="w-4 h-4 text-gray-400" />
-                  )}
-                  {selectedMethod === m && <CheckCircle className="w-5 h-5 text-green-500" />}
-                </button>
-              ))
-            )}
-          </div>
-
-          {/* Selected method details + payment link */}
-          {selectedMethod && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-blue-800">
-                  {t('listing.buy.send_instruction', { amount: listing.asking_price!, method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
-                </p>
-                <div className="flex items-center gap-2">
-                  <p className="font-mono text-base text-blue-900 flex-1 break-all">{selectedMethod.value}</p>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedMethod.value)
-                      setCopied(true)
-                      setTimeout(() => setCopied(false), 2000)
-                    }}
-                    className="p-1.5 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors shrink-0"
-                    aria-label={t('listing.buy.copy_aria')}
-                  >
-                    {copied ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                  </button>
+        {/* Payment methods */}
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-text2">{t('listing.buy.methods_label')}</p>
+          {methods.length === 0 ? (
+            <p className="text-sm text-text3">{t('listing.buy.no_methods')}</p>
+          ) : (
+            methods.map((m, i) => (
+              <button
+                key={i}
+                onClick={() => setSelectedMethod(m)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-colors ${
+                  selectedMethod === m ? 'border-primary bg-primary-light' : 'border-border'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${METHOD_COLORS[m.type]}`}>
+                  {PAYMENT_METHOD_LABELS[m.type][0]}
                 </div>
-              </div>
-
-              {paymentLink && (
-                <a
-                  href={paymentLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 ${METHOD_COLORS[selectedMethod.type]}`}
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  {t('listing.buy.open_app', { method: PAYMENT_METHOD_LABELS[selectedMethod.type], amount: listing.asking_price! })}
-                </a>
-              )}
-            </div>
+                <div className="flex-1 text-right">
+                  <p className="text-sm font-medium text-text">{PAYMENT_METHOD_LABELS[m.type]}</p>
+                  <p className="text-xs text-text3">{m.value}</p>
+                </div>
+                <Icon name={m.type === 'paypal' ? 'mail' : 'call'} size={16} color="var(--c-text3)" />
+                {selectedMethod === m && <Icon name="check_circle" size={20} filled color="var(--c-primary)" />}
+              </button>
+            ))
           )}
         </div>
 
-        {/* Sticky footer */}
-        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
-          <button
-            onClick={handleConfirm}
-            disabled={sending || !selectedMethod || methods.length === 0}
-            className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-          >
-            {sending
-              ? <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-              : t('listing.buy.confirm_button')}
-          </button>
-        </div>
+        {/* Selected method details + payment link */}
+        {selectedMethod && (
+          <div className="bg-primary-light border border-primary/20 rounded-xl p-4 space-y-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-primary">
+                {t('listing.buy.send_instruction', { amount: listing.asking_price!, method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
+              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-base text-text flex-1 break-all">{selectedMethod.value}</p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(selectedMethod.value)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  className="p-1.5 rounded-lg bg-surface text-primary shrink-0"
+                  aria-label={t('listing.buy.copy_aria')}
+                >
+                  <Icon name={copied ? 'check_circle' : 'content_copy'} size={16} filled={copied} />
+                </button>
+              </div>
+            </div>
+
+            {paymentLink && (
+              <a
+                href={paymentLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 ${METHOD_COLORS[selectedMethod.type]}`}
+              >
+                <Icon name="open_in_new" size={16} />
+                {t('listing.buy.open_app', { method: PAYMENT_METHOD_LABELS[selectedMethod.type], amount: listing.asking_price! })}
+              </a>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -368,7 +321,7 @@ export default function ListingDetailPage() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-green-500" />
+        <Icon name="progress_activity" size={32} color="var(--c-primary)" className="animate-spin" />
       </div>
     )
   }
@@ -376,11 +329,9 @@ export default function ListingDetailPage() {
   if (!listing) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center" dir="rtl">
-        <ShoppingBag className="w-12 h-12 text-gray-300" />
-        <p className="font-medium text-gray-500">{t('listing.not_found')}</p>
-        <button onClick={() => navigate('/market')} className="px-6 py-2 bg-green-600 text-white rounded-full text-sm font-medium">
-          {t('listing.back_to_market')}
-        </button>
+        <Icon name="shopping_bag" size={48} color="var(--c-border)" />
+        <p className="font-medium text-text3">{t('listing.not_found')}</p>
+        <Button size="sm" onClick={() => navigate('/market')}>{t('listing.back_to_market')}</Button>
       </div>
     )
   }
@@ -394,61 +345,61 @@ export default function ListingDetailPage() {
   const displayPrice = myReservedPrice ?? currentPrice ?? listing.asking_price
 
   return (
-    <div className="flex-1 bg-gray-50" dir="rtl">
+    <div className="flex-1 bg-bg" dir="rtl">
       {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-20">
+      <div className="bg-surface border-b border-border sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100">
-            <ArrowRight className="w-5 h-5" />
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-bg text-text2">
+            <Icon name="arrow_forward" size={20} />
           </button>
-          <h1 className="font-bold text-lg flex-1">{listing.store_name}</h1>
+          <h1 className="font-bold text-lg flex-1 text-text">{listing.store_name}</h1>
           {!isOwnListing && listing.status === 'active' && (
             <button
               onClick={() => setShowChat(true)}
-              className="p-2 rounded-full hover:bg-green-50 text-green-600"
+              className="p-2 rounded-full bg-primary-light text-primary"
               aria-label={t('listing.chat_aria')}
             >
-              <MessageCircle className="w-5 h-5" />
+              <Icon name="chat" size={20} />
             </button>
           )}
           <button
             onClick={() => setShowReport(true)}
-            className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500"
+            className="p-2 rounded-full bg-bg text-text3"
             aria-label={t('listing.report_aria')}
           >
-            <Flag className="w-5 h-5" />
+            <Icon name="flag" size={20} />
           </button>
         </div>
       </div>
 
       <div className="p-4 space-y-4 pb-40">
         {/* Main info card */}
-        <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <div className="bg-surface rounded-card shadow-card p-5 space-y-4">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-3xl font-bold text-green-600">₪{displayPrice}</p>
+              <p className="text-3xl font-bold text-primary">₪{displayPrice}</p>
               {myReservedPrice != null ? (
                 <div className="flex items-center gap-1 mt-1">
-                  <Tag className="w-3.5 h-3.5 text-green-600" />
-                  <p className="text-sm text-green-700 font-medium">{t('listing.reserved_price')}</p>
+                  <Icon name="sell" size={14} color="var(--c-primary)" />
+                  <p className="text-sm text-primary font-medium">{t('listing.reserved_price')}</p>
                   {listing.asking_price !== myReservedPrice && (
-                    <p className="text-xs text-gray-400 line-through">₪{listing.asking_price}</p>
+                    <p className="text-xs text-text3 line-through">₪{listing.asking_price}</p>
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 mt-1">{t('listing.asking_price')}</p>
+                <p className="text-sm text-text3 mt-1">{t('listing.asking_price')}</p>
               )}
             </div>
             <div className="text-left space-y-1">
-              <p className="text-xl font-semibold text-gray-800">₪{listing.balance}</p>
-              <p className="text-sm text-gray-500">{t('listing.voucher_balance')}</p>
+              <p className="text-xl font-semibold text-text">₪{listing.balance}</p>
+              <p className="text-sm text-text3">{t('listing.voucher_balance')}</p>
               {(() => {
                 const b = listing.balance ?? 0
                 const p = displayPrice ?? 0
                 const pct = b > 0 && p < b ? Math.round(((b - p) / b) * 100) : 0
                 return pct > 0 ? (
                   <span className={`block text-center text-xs font-bold px-2 py-0.5 rounded-full ${
-                    pct >= 30 ? 'bg-green-500 text-white' : pct >= 15 ? 'bg-orange-400 text-white' : 'bg-gray-200 text-gray-600'
+                    pct >= 30 ? 'bg-primary text-white' : pct >= 15 ? 'bg-warning text-white' : 'bg-bg text-text2'
                   }`}>
                     {t('listing.save_pct', { pct: String(pct) })}
                   </span>
@@ -458,8 +409,8 @@ export default function ListingDetailPage() {
           </div>
 
           {expiryDate && (
-            <div className={`flex items-center gap-2 text-sm ${daysLeft && daysLeft < 30 ? 'text-orange-600' : 'text-gray-500'}`}>
-              <Clock className="w-4 h-4" />
+            <div className={`flex items-center gap-2 text-sm ${daysLeft && daysLeft < 30 ? 'text-warning' : 'text-text3'}`}>
+              <Icon name="schedule" size={16} />
               <span>
                 {t('listing.valid_until')}: {formatDate(listing.expiry_date!)}
                 {daysLeft !== null && daysLeft > 0 && ` · ${t('listing.days_left', { days: String(daysLeft) })}`}
@@ -468,48 +419,51 @@ export default function ListingDetailPage() {
           )}
 
           {listing.description && (
-            <p className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3">{listing.description}</p>
+            <p className="text-sm text-text2 bg-bg rounded-xl p-3">{listing.description}</p>
           )}
         </div>
 
         {/* Seller card */}
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-400 font-medium mb-3">{t('listing.about_seller')}</p>
+        <div className="bg-surface rounded-card shadow-card p-4">
+          <p className="text-xs text-text3 font-medium mb-3">{t('listing.about_seller')}</p>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-teal-500 rounded-full flex items-center justify-center text-white font-bold">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary-mid to-primary-dark rounded-full flex items-center justify-center text-white font-bold">
               {(listing.seller_name || listing.seller_email || '?')[0].toUpperCase()}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="font-medium text-gray-800">
+                <p className="font-medium text-text">
                   {listing.seller_name || listing.seller_email?.split('@')[0]}
                 </p>
                 {listing.is_verified_seller && (
-                  <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <Icon name="verified" size={16} filled color="var(--c-primary)" className="shrink-0" />
                 )}
               </div>
               {(listing.avg_rating ?? 0) > 0 ? (
                 <div className="flex items-center gap-1 mt-0.5">
                   {[1,2,3,4,5].map(i => (
-                    <Star
+                    <Icon
                       key={i}
-                      className={`w-3.5 h-3.5 ${i <= Math.round(listing.avg_rating ?? 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                      name="star"
+                      size={14}
+                      filled={i <= Math.round(listing.avg_rating ?? 0)}
+                      color={i <= Math.round(listing.avg_rating ?? 0) ? '#facc15' : 'var(--c-border)'}
                     />
                   ))}
-                  <span className="text-xs text-gray-500 mr-1">
+                  <span className="text-xs text-text3 mr-1">
                     {Number(listing.avg_rating).toFixed(1)} ({listing.rating_count} {t('listing.ratings')})
                   </span>
                 </div>
               ) : (
-                <p className="text-xs text-gray-400">{t('listing.not_rated')}</p>
+                <p className="text-xs text-text3">{t('listing.not_rated')}</p>
               )}
             </div>
             {!isOwnListing && listing.status === 'active' && (
               <button
                 onClick={() => setShowChat(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-green-200 text-green-700 text-xs font-medium hover:bg-green-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 text-primary text-xs font-medium"
               >
-                <MessageCircle className="w-3.5 h-3.5" />
+                <Icon name="chat" size={14} />
                 {t('listing.chat_button')}
               </button>
             )}
@@ -518,14 +472,11 @@ export default function ListingDetailPage() {
 
         {/* Payment methods preview */}
         {(listing.seller_payment_methods?.length ?? 0) > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-gray-400 font-medium mb-3">{t('listing.payment_methods')}</p>
+          <div className="bg-surface rounded-card shadow-card p-4">
+            <p className="text-xs text-text3 font-medium mb-3">{t('listing.payment_methods')}</p>
             <div className="flex flex-wrap gap-2">
               {listing.seller_payment_methods!.map((m, i) => (
-                <span
-                  key={i}
-                  className="text-xs font-medium px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full"
-                >
+                <span key={i} className="text-xs font-medium px-3 py-1.5 bg-bg text-text2 rounded-full">
                   {PAYMENT_METHOD_LABELS[m.type]}
                 </span>
               ))}
@@ -535,13 +486,13 @@ export default function ListingDetailPage() {
 
         {/* Purchased state */}
         {purchased && (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-center space-y-2">
-            <CheckCircle className="w-8 h-8 text-green-500 mx-auto" />
-            <p className="font-semibold text-green-800">{t('listing.purchased.title')}</p>
-            <p className="text-sm text-green-600">{t('listing.purchased.body')}</p>
+          <div className="bg-primary-light border border-primary/20 rounded-2xl p-4 text-center space-y-2">
+            <Icon name="check_circle" size={32} filled color="var(--c-primary)" className="mx-auto" />
+            <p className="font-semibold text-primary">{t('listing.purchased.title')}</p>
+            <p className="text-sm text-primary">{t('listing.purchased.body')}</p>
             <button
               onClick={() => navigate('/market', { state: { initialTab: 'purchases' } })}
-              className="mt-1 text-sm text-green-700 underline"
+              className="mt-1 text-sm text-primary underline"
             >
               {t('listing.purchased.go')}
             </button>
@@ -552,34 +503,31 @@ export default function ListingDetailPage() {
       {/* Buy button (sticky bottom — positioned above BottomNav) */}
       {!isOwnListing && !purchased && listing.status === 'active' && (
         <div
-          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-surface border-t border-border z-40"
           style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
         >
-          <button
-            onClick={() => setShowBuy(true)}
-            className="w-full py-3.5 bg-green-600 text-white rounded-2xl font-bold text-base shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <ShoppingBag className="w-5 h-5" />
+          <Button onClick={() => setShowBuy(true)} fullWidth size="lg">
+            <Icon name="shopping_bag" size={20} />
             {t('listing.buy_now_price', { price: String(displayPrice) })}
-          </button>
+          </Button>
         </div>
       )}
 
       {isOwnListing && (
         <div
-          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-surface border-t border-border z-40"
           style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
         >
-          <p className="text-center text-sm text-gray-500">{t('listing.own_listing')}</p>
+          <p className="text-center text-sm text-text3">{t('listing.own_listing')}</p>
         </div>
       )}
 
       {listing.status !== 'active' && !isOwnListing && (
         <div
-          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t z-40"
+          className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-surface border-t border-border z-40"
           style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
         >
-          <p className="text-center text-sm text-gray-400">{t('listing.unavailable')}</p>
+          <p className="text-center text-sm text-text3">{t('listing.unavailable')}</p>
         </div>
       )}
 

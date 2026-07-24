@@ -4,7 +4,8 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useT } from '../lib/i18n'
-import { ArrowRight, ShoppingBag, Loader2, CheckSquare, Square, AlertCircle } from 'lucide-react'
+import Icon from '../components/ui/Icon'
+import Button from '../components/ui/Button'
 import type { Voucher } from '../types'
 import toast from 'react-hot-toast'
 
@@ -85,57 +86,52 @@ export default function BulkListPage() {
 
   if (done) {
     return (
-      <div className="flex-1 bg-gray-50" dir="rtl">
-        <div className="bg-white border-b sticky top-0 z-20">
+      <div className="flex-1 bg-bg" dir="rtl">
+        <div className="bg-surface border-b border-border sticky top-0 z-20">
           <div className="flex items-center gap-3 px-4 py-3">
-            <button onClick={() => navigate('/market')} className="p-2 rounded-full hover:bg-gray-100">
-              <ArrowRight className="w-5 h-5" />
+            <button onClick={() => navigate('/market')} className="p-2 rounded-full bg-bg text-text2">
+              <Icon name="arrow_forward" size={20} />
             </button>
-            <h1 className="font-bold text-lg flex-1">{t('bulk.results.title')}</h1>
+            <h1 className="font-bold text-lg flex-1 text-text">{t('bulk.results.title')}</h1>
           </div>
         </div>
         <div className="p-4 space-y-3">
           {results.map(r => (
-            <div key={r.id} className={`flex items-center gap-3 p-4 rounded-2xl border ${r.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-              {r.ok
-                ? <ShoppingBag className="w-5 h-5 text-green-600 shrink-0" />
-                : <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />}
+            <div key={r.id} className={`flex items-center gap-3 p-4 rounded-2xl border ${r.ok ? 'bg-primary-light border-primary/20' : 'bg-error/10 border-error/30'}`}>
+              <Icon name={r.ok ? 'shopping_bag' : 'error'} size={20} color={r.ok ? 'var(--c-primary)' : 'var(--c-error)'} className="shrink-0" />
               <div>
-                <p className="font-medium text-gray-800">{r.store}</p>
-                <p className="text-xs text-gray-500">{r.ok ? t('bulk.result.ok') : r.error || t('bulk.result.error')}</p>
+                <p className="font-medium text-text">{r.store}</p>
+                <p className="text-xs text-text3">{r.ok ? t('bulk.result.ok') : r.error || t('bulk.result.error')}</p>
               </div>
             </div>
           ))}
-          <button
-            onClick={() => navigate('/market/mine')}
-            className="w-full py-3 mt-2 bg-green-600 text-white rounded-2xl font-semibold"
-          >
+          <Button onClick={() => navigate('/market/mine')} fullWidth className="mt-2">
             {t('bulk.view.my.listings')}
-          </button>
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 bg-gray-50" dir="rtl">
-      <div className="bg-white border-b sticky top-0 z-20">
+    <div className="flex-1 bg-bg" dir="rtl">
+      <div className="bg-surface border-b border-border sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100">
-            <ArrowRight className="w-5 h-5" />
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-bg text-text2">
+            <Icon name="arrow_forward" size={20} />
           </button>
-          <h1 className="font-bold text-lg flex-1">{t('bulk.title')}</h1>
-          <span className="text-sm text-gray-400">{selected.length} {t('bulk.selected')}</span>
+          <h1 className="font-bold text-lg flex-1 text-text">{t('bulk.title')}</h1>
+          <span className="text-sm text-text3">{selected.length} {t('bulk.selected')}</span>
         </div>
       </div>
 
       {!hasPaymentMethod && (
-        <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+        <div className="mx-4 mt-4 bg-warning/10 border border-warning/30 rounded-2xl p-4 flex items-start gap-3">
+          <Icon name="error" size={20} color="var(--c-warning)" className="shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-yellow-800">{t('bulk.no.payment.title')}</p>
-            <p className="text-xs text-yellow-700 mt-0.5">{t('bulk.no.payment.body')}</p>
-            <button onClick={() => navigate('/settings')} className="text-xs text-yellow-800 font-semibold underline mt-1">
+            <p className="text-sm font-medium text-warning">{t('bulk.no.payment.title')}</p>
+            <p className="text-xs text-warning mt-0.5">{t('bulk.no.payment.body')}</p>
+            <button onClick={() => navigate('/settings')} className="text-xs text-warning font-semibold underline mt-1">
               {t('bulk.go.settings')}
             </button>
           </div>
@@ -144,8 +140,8 @@ export default function BulkListPage() {
 
       <div className="p-4 pb-32 space-y-3">
         {listable.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 space-y-2">
-            <ShoppingBag className="w-10 h-10 mx-auto opacity-30" />
+          <div className="text-center py-12 text-text3 space-y-2">
+            <Icon name="shopping_bag" size={40} color="var(--c-border)" />
             <p className="font-medium">{t('bulk.no.vouchers')}</p>
             <p className="text-sm">{t('bulk.no.vouchers.hint')}</p>
           </div>
@@ -154,11 +150,9 @@ export default function BulkListPage() {
             {/* Select all bar */}
             <button
               onClick={toggleAll}
-              className="w-full flex items-center gap-2 px-4 py-2.5 bg-white rounded-2xl border border-gray-100 shadow-sm text-sm font-medium text-gray-700"
+              className="w-full flex items-center gap-2 px-4 py-2.5 bg-surface rounded-card border border-border shadow-card text-sm font-medium text-text2"
             >
-              {entries.every(e => e.selected)
-                ? <CheckSquare className="w-4 h-4 text-green-600" />
-                : <Square className="w-4 h-4 text-gray-400" />}
+              <Icon name={entries.every(e => e.selected) ? 'check_box' : 'check_box_outline_blank'} size={18} color={entries.every(e => e.selected) ? 'var(--c-primary)' : 'var(--c-text3)'} />
               {entries.every(e => e.selected) ? t('bulk.deselect.all') : t('bulk.select.all')}
             </button>
 
@@ -167,28 +161,26 @@ export default function BulkListPage() {
               return (
                 <div
                   key={v.id}
-                  className={`bg-white rounded-2xl border shadow-sm p-4 space-y-3 transition-colors ${
-                    entry.selected ? 'border-green-300' : 'border-gray-100'
+                  className={`bg-surface rounded-card border shadow-card p-4 space-y-3 transition-colors ${
+                    entry.selected ? 'border-primary/40' : 'border-border'
                   }`}
                 >
                   {/* Voucher header with checkbox */}
                   <div className="flex items-start gap-3">
                     <button onClick={() => toggle(v.id)} className="mt-0.5 shrink-0">
-                      {entry.selected
-                        ? <CheckSquare className="w-5 h-5 text-green-600" />
-                        : <Square className="w-5 h-5 text-gray-400" />}
+                      <Icon name={entry.selected ? 'check_box' : 'check_box_outline_blank'} size={20} color={entry.selected ? 'var(--c-primary)' : 'var(--c-text3)'} />
                     </button>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{v.store_name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{t('bulk.balance')}: ₪{v.balance}</p>
+                      <p className="font-semibold text-text truncate">{v.store_name}</p>
+                      <p className="text-xs text-text3 mt-0.5">{t('bulk.balance')}: ₪{v.balance}</p>
                     </div>
                   </div>
 
                   {/* Price & description inputs — only show when selected */}
                   {entry.selected && (
-                    <div className="space-y-2 pt-1 border-t border-gray-50">
+                    <div className="space-y-2 pt-1 border-t border-border">
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">{t('bulk.asking.price')} *</label>
+                        <label className="text-xs text-text3 block mb-1">{t('bulk.asking.price')} *</label>
                         <input
                           type="number"
                           inputMode="decimal"
@@ -197,17 +189,17 @@ export default function BulkListPage() {
                           value={entry.price}
                           onChange={e => setPrice(v.id, e.target.value)}
                           placeholder={`${t('bulk.price.up.to')} ₪${v.balance}`}
-                          className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                          className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">{t('bulk.description')}</label>
+                        <label className="text-xs text-text3 block mb-1">{t('bulk.description')}</label>
                         <input
                           type="text"
                           value={entry.description}
                           onChange={e => setDescription(v.id, e.target.value)}
                           placeholder={t('bulk.description.placeholder')}
-                          className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                          className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                       </div>
                     </div>
@@ -221,16 +213,15 @@ export default function BulkListPage() {
 
       {/* Fixed bottom submit */}
       {selected.length > 0 && (
-        <div className="fixed bottom-16 left-0 right-0 px-4 pb-2 bg-gradient-to-t from-gray-50 pt-3">
-          <button
-            onClick={submit}
-            disabled={submitting}
-            className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-base shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {submitting
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> {t('bulk.publishing')}...</>
-              : <><ShoppingBag className="w-5 h-5" /> {t('bulk.publish')} {selected.length} {t('bulk.vouchers')}</>}
-          </button>
+        <div className="fixed bottom-16 left-0 right-0 px-4 pb-2 pt-3" style={{ background: 'linear-gradient(to top, var(--c-bg), transparent)' }}>
+          <Button onClick={submit} disabled={submitting} loading={submitting} fullWidth size="lg">
+            {submitting ? `${t('bulk.publishing')}...` : (
+              <>
+                <Icon name="shopping_bag" size={20} />
+                {t('bulk.publish')} {selected.length} {t('bulk.vouchers')}
+              </>
+            )}
+          </Button>
         </div>
       )}
     </div>

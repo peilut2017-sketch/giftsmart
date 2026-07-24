@@ -4,8 +4,9 @@
    to avoid collisions with the main app CSS.
 ═══════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
-
+/* Heebo is already loaded globally via the @import in src/index.css — a second
+   @import here would fetch a duplicate, Material-Symbols-less stylesheet and
+   race the main one for the same font-family declaration. */
 #lp-root {
   font-family: 'Heebo', sans-serif;
   direction: rtl;

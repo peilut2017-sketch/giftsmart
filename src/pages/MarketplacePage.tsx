@@ -4,17 +4,14 @@ import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useT } from '../lib/i18n'
-import {
-  ShoppingBag, Search, Star, X, CheckCircle, Loader2,
-  Tag, Flag, AlertCircle, MessageCircle, ChevronRight, Pencil,
-  Bell, Plus, Trash2, SlidersHorizontal, Check, Settings, UserCheck,
-} from 'lucide-react'
 import { formatDate } from '../utils/helpers'
 import type { MarketplaceListing, MarketplacePurchase, ListingConversation, WatchlistItem, PaymentMethod } from '../types'
 import { PAYMENT_METHOD_LABELS } from '../types'
 import { supabase } from '../lib/supabase'
 import ChatModal from '../components/ChatModal'
-import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
+import Icon from '../components/ui/Icon'
+import Button from '../components/ui/Button'
+import BottomSheet from '../components/ui/BottomSheet'
 import toast from 'react-hot-toast'
 import { usePageView } from '../hooks/usePageView'
 
@@ -32,7 +29,7 @@ function StarRating({ value, max = 5, onChange }: { value: number; max?: number;
           className={`${onChange ? 'cursor-pointer' : 'cursor-default'} focus:outline-none`}
           aria-label={`${i + 1} ${t('market.stars')}`}
         >
-          <Star className={`w-5 h-5 ${i < value ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+          <Icon name="star" size={20} filled={i < value} color={i < value ? '#facc15' : 'var(--c-border)'} />
         </button>
       ))}
     </div>
@@ -46,7 +43,6 @@ function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClo
   const [rating, setRating] = useState(purchase.my_rating ?? 0)
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
-  useBodyScrollLock()
 
   async function submit() {
     if (rating === 0) { toast.error(t('market.rate.choose')); return }
@@ -63,43 +59,29 @@ function RateModal({ purchase, onClose }: { purchase: MarketplacePurchase; onClo
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
-      <div
-        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h2 className="font-bold text-lg">{t('market.rate.seller')}</h2>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-4">
-          <p className="text-sm text-gray-500">
-            {purchase.seller_name || purchase.seller_email} · {purchase.store_name}
-          </p>
-          <StarRating value={rating} onChange={setRating} />
-          <textarea
-            className="w-full border rounded-xl p-3 text-sm resize-none h-24 focus:outline-none focus:ring-2 focus:ring-green-400"
-            placeholder={t('market.rate.comment.placeholder')}
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-          />
-        </div>
-
-        {/* Sticky footer */}
-        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
-          <button
-            onClick={submit}
-            disabled={saving || rating === 0}
-            className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.rate.save')}
-          </button>
-        </div>
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={t('market.rate.seller')}
+      footer={
+        <Button onClick={submit} disabled={saving || rating === 0} loading={saving} fullWidth>
+          {t('market.rate.save')}
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-text3">
+          {purchase.seller_name || purchase.seller_email} · {purchase.store_name}
+        </p>
+        <StarRating value={rating} onChange={setRating} />
+        <textarea
+          className="w-full border border-border rounded-xl p-3 text-sm bg-surface text-text resize-none h-24 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder={t('market.rate.comment.placeholder')}
+          value={comment}
+          onChange={e => setComment(e.target.value)}
+        />
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -118,7 +100,6 @@ function ReportModal({
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
-  useBodyScrollLock()
 
   const reasons = [
     t('market.report.reason.payment'),
@@ -144,55 +125,39 @@ function ReportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
-      <div
-        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h2 className="font-bold text-lg flex items-center gap-2">
-            <Flag className="w-5 h-5 text-red-500" /> {t('market.report.title')}
-          </h2>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={t('market.report.title')}
+      footer={
+        <Button onClick={submit} disabled={saving || !reason} loading={saving} variant="danger" fullWidth>
+          {t('market.report.submit')}
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-text3">{t('market.report.on')}: {reportedName}</p>
+        <div className="space-y-2">
+          {reasons.map(r => (
+            <button
+              key={r}
+              onClick={() => setReason(r)}
+              className={`w-full text-right px-4 py-2.5 rounded-xl border text-sm transition-colors ${
+                reason === r ? 'border-error bg-error/10 text-error font-medium' : 'border-border text-text2'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
         </div>
-
-        {/* Scrollable body */}
-        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-3">
-          <p className="text-sm text-gray-500">{t('market.report.on')}: {reportedName}</p>
-          <div className="space-y-2">
-            {reasons.map(r => (
-              <button
-                key={r}
-                onClick={() => setReason(r)}
-                className={`w-full text-right px-4 py-2.5 rounded-xl border text-sm transition-colors ${
-                  reason === r ? 'border-red-500 bg-red-50 text-red-700 font-medium' : 'border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <textarea
-            className="w-full border rounded-xl p-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-red-400"
-            placeholder={t('market.report.details.placeholder')}
-            value={details}
-            onChange={e => setDetails(e.target.value)}
-          />
-        </div>
-
-        {/* Sticky footer */}
-        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
-          <button
-            onClick={submit}
-            disabled={saving || !reason}
-            className="w-full py-3 bg-red-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.report.submit')}
-          </button>
-        </div>
+        <textarea
+          className="w-full border border-border rounded-xl p-3 text-sm bg-surface text-text resize-none h-20 focus:outline-none focus:ring-2 focus:ring-error/30"
+          placeholder={t('market.report.details.placeholder')}
+          value={details}
+          onChange={e => setDetails(e.target.value)}
+        />
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -210,7 +175,6 @@ function ConversationsModal({
   const { t } = useT()
   const [convs, setConvs] = useState<ListingConversation[]>([])
   const [loading, setLoading] = useState(true)
-  useBodyScrollLock()
 
   useEffect(() => {
     getListingConversations(listing.id)
@@ -226,73 +190,63 @@ function ConversationsModal({
       })
       .catch(() => toast.error(t('market.convs.load.error')))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
-      <div
-        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[85dvh]"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <div>
-            <h2 className="font-bold text-lg">{t('market.convs.title')}</h2>
-            <p className="text-xs text-gray-500">{listing.store_name}</p>
+    <BottomSheet open onClose={onClose} title={t('market.convs.title')}>
+      <p className="text-xs text-text3 -mt-2 mb-3">{listing.store_name}</p>
+      <div className="space-y-2">
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Icon name="progress_activity" size={24} color="var(--c-primary)" className="animate-spin" />
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
-        </div>
-
-        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-4 pb-6 space-y-2">
-          {loading ? (
-            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
-          ) : convs.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 space-y-2">
-              <MessageCircle className="w-10 h-10 mx-auto opacity-30" />
-              <p className="text-sm">{t('market.convs.empty')}</p>
-            </div>
-          ) : (
-            convs.map(c => {
-              const hasUnread = (c.unread_count ?? 0) > 0
-              return (
-                <button
-                  key={c.other_user_id}
-                  onClick={() => onSelectConversation(
-                    c.other_user_id,
-                    c.other_user_name || c.other_user_email || t('market.buyer'),
+        ) : convs.length === 0 ? (
+          <div className="text-center py-10 text-text3 space-y-2">
+            <Icon name="chat" size={40} color="var(--c-border)" />
+            <p className="text-sm">{t('market.convs.empty')}</p>
+          </div>
+        ) : (
+          convs.map(c => {
+            const hasUnread = (c.unread_count ?? 0) > 0
+            return (
+              <button
+                key={c.other_user_id}
+                onClick={() => onSelectConversation(
+                  c.other_user_id,
+                  c.other_user_name || c.other_user_email || t('market.buyer'),
+                )}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-right ${
+                  hasUnread ? 'border-primary/40 bg-primary-light' : 'border-border'
+                }`}
+              >
+                <div className="relative shrink-0">
+                  <div className="w-9 h-9 bg-gradient-to-br from-primary-mid to-primary-dark rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    {(c.other_user_name || c.other_user_email || '?')[0].toUpperCase()}
+                  </div>
+                  {hasUnread && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-error text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+                      {(c.unread_count ?? 0) > 9 ? '9+' : c.unread_count}
+                    </span>
                   )}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 border transition-colors text-right ${
-                    hasUnread ? 'border-green-300 bg-green-50' : 'border-gray-100'
-                  }`}
-                >
-                  <div className="relative shrink-0">
-                    <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {(c.other_user_name || c.other_user_email || '?')[0].toUpperCase()}
-                    </div>
-                    {hasUnread && (
-                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
-                        {(c.unread_count ?? 0) > 9 ? '9+' : c.unread_count}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm truncate ${hasUnread ? 'font-bold text-gray-900' : 'font-medium text-gray-900'}`}>
-                      {c.other_user_name || c.other_user_email}
-                    </p>
-                    <p className={`text-xs truncate ${hasUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
-                      {c.last_body}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="text-xs text-gray-400">{c.message_count} {t('market.messages')}</span>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                  </div>
-                </button>
-              )
-            })
-          )}
-        </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm truncate ${hasUnread ? 'font-bold text-text' : 'font-medium text-text'}`}>
+                    {c.other_user_name || c.other_user_email}
+                  </p>
+                  <p className={`text-xs truncate ${hasUnread ? 'text-text2 font-medium' : 'text-text3'}`}>
+                    {c.last_body}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-xs text-text3">{c.message_count} {t('market.messages')}</span>
+                  <Icon name="chevron_left" size={16} color="var(--c-border)" />
+                </div>
+              </button>
+            )
+          })
+        )}
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -327,20 +281,7 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
     : ''
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-right gs-tap"
-      style={{
-        background: 'var(--c-surface)',
-        borderRadius: 'var(--r-card)',
-        boxShadow: 'var(--shadow-card)',
-        overflow: 'hidden',
-        position: 'relative',
-        border: 'none',
-        cursor: 'pointer',
-        display: 'block',
-      }}
-    >
+    <button onClick={onClick} className="w-full text-right gs-tap bg-surface rounded-card shadow-card overflow-hidden relative block border-none cursor-pointer">
       {/* Top color bar */}
       <div style={{ height: 4, background: `linear-gradient(90deg, ${color}, ${color}88)` }} />
 
@@ -364,63 +305,51 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
 
       <div style={{ padding: pct > 0 ? '14px 14px 14px 72px' : '14px 14px 14px 14px' }}>
         {/* Store + price */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--c-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {listing.store_name}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>
-              {t('market.voucher')} · ₪{listing.balance}
-            </div>
+        <div className="flex justify-between items-start mb-2.5">
+          <div className="flex-1 min-w-0">
+            <div className="text-[17px] font-extrabold text-text truncate">{listing.store_name}</div>
+            <div className="text-[13px] text-text3 mt-0.5">{t('market.voucher')} · ₪{listing.balance}</div>
           </div>
-          <div style={{ textAlign: 'left', flexShrink: 0, marginRight: 8 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--c-primary)', lineHeight: 1 }}>
-              ₪{listing.asking_price}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--c-text3)', textAlign: 'left', marginTop: 2, textDecoration: 'line-through' }}>
-              ₪{listing.balance}
-            </div>
+          <div className="text-left shrink-0 mr-2">
+            <div className="text-xl font-extrabold text-primary leading-none">₪{listing.asking_price}</div>
+            <div className="text-[11px] text-text3 mt-0.5 line-through">₪{listing.balance}</div>
           </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: 'var(--c-border)', margin: '0 0 10px' }} />
+        <div className="h-px bg-border mb-2.5" />
 
         {/* Seller row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: color + '20', border: `1.5px solid ${color}50`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 800, color: color, flexShrink: 0,
-            }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0"
+              style={{ background: color + '20', border: `1.5px solid ${color}50`, color }}
+            >
               {sellerInitial}
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text)' }}>{sellerLabel}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[13px] font-semibold text-text">{sellerLabel}</span>
                 {listing.is_verified_seller && (
-                  <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div className="w-4 h-4 rounded-full bg-[#2563eb] flex items-center justify-center shrink-0">
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </div>
                 )}
               </div>
               {(listing.avg_rating ?? 0) > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
-                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text2)' }}>{Number(listing.avg_rating).toFixed(1)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--c-text3)' }}>({listing.rating_count})</span>
+                <div className="flex items-center gap-0.5 mt-0.5">
+                  <Icon name="star" size={12} filled color="#facc15" />
+                  <span className="text-[11px] font-semibold text-text2">{Number(listing.avg_rating).toFixed(1)}</span>
+                  <span className="text-[11px] text-text3">({listing.rating_count})</span>
                 </div>
               )}
             </div>
           </div>
           {expiryLabel && (
-            <span style={{
-              fontSize: 11, color: expiryColor, background: expiryBg,
-              padding: '3px 8px', borderRadius: 100, fontWeight: 500,
-              border: isExpiringSoon || isExpired ? `1px solid ${expiryColor}40` : 'none',
-            }}>
+            <span
+              className="text-[11px] rounded-full px-2 py-0.5 font-medium"
+              style={{ color: expiryColor, background: expiryBg, border: isExpiringSoon || isExpired ? `1px solid ${expiryColor}40` : 'none' }}
+            >
               {isExpiringSoon ? '⚠ ' : ''}{expiryLabel}
             </span>
           )}
@@ -462,18 +391,18 @@ function MyListingRow({
     cancelled: t('market.status.cancelled'),
   }
   const statusColor: Record<string, string> = {
-    active: 'bg-green-100 text-green-700',
-    pending_payment: 'bg-yellow-100 text-yellow-700',
-    sold: 'bg-gray-100 text-gray-500',
-    cancelled: 'bg-red-100 text-red-600',
+    active: 'bg-primary-light text-primary',
+    pending_payment: 'bg-warning/15 text-warning',
+    sold: 'bg-bg text-text3',
+    cancelled: 'bg-error/10 text-error',
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+    <div className="bg-surface rounded-card border border-border shadow-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 truncate">{listing.store_name}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{t('market.balance.label')}: ₪{listing.balance} · {t('market.price.label')}: ₪{listing.asking_price}</p>
+          <p className="font-semibold text-text truncate">{listing.store_name}</p>
+          <p className="text-xs text-text3 mt-0.5">{t('market.balance.label')}: ₪{listing.balance} · {t('market.price.label')}: ₪{listing.asking_price}</p>
         </div>
         <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${statusColor[listing.status]}`}>
           {statusLabel[listing.status]}
@@ -482,12 +411,12 @@ function MyListingRow({
 
       {/* Buyer confirmed payment — needs seller confirmation */}
       {listing.purchase_status === 'buyer_confirmed' && listing.buyer_name && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-2">
-          <p className="text-sm font-medium text-yellow-800">
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 space-y-2">
+          <p className="text-sm font-medium text-warning">
             {listing.buyer_name || listing.buyer_email} {t('market.listing.buyer.sent.payment')}
           </p>
           {listing.payment_method_used && (
-            <p className="text-xs text-yellow-700">
+            <p className="text-xs text-warning">
               {t('market.listing.payment.method')}: <span className="font-semibold">{listing.payment_method_used}</span>
             </p>
           )}
@@ -498,16 +427,16 @@ function MyListingRow({
                 setConfirming(true)
                 try { await onConfirm() } finally { setConfirming(false) }
               }}
-              className="flex-1 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+              className="flex-1 py-2 bg-primary text-white rounded-xl text-sm font-semibold disabled:opacity-50"
             >
-              {confirming ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.confirm.received')}
+              {confirming ? <Icon name="progress_activity" size={16} className="animate-spin mx-auto" /> : t('market.confirm.received')}
             </button>
             <button
               onClick={onReport}
-              className="p-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50"
+              className="p-2 rounded-xl border border-error/30 text-error"
               aria-label={t('market.report.buyer.aria')}
             >
-              <Flag className="w-4 h-4" />
+              <Icon name="flag" size={16} />
             </button>
           </div>
         </div>
@@ -522,7 +451,7 @@ function MyListingRow({
             value={newPriceInput}
             onChange={e => setNewPriceInput(e.target.value)}
             placeholder={`${t('market.listing.current.price')}: ₪${listing.asking_price}`}
-            className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+            className="flex-1 border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
             autoFocus
           />
           <button
@@ -539,13 +468,13 @@ function MyListingRow({
                 setUpdatingPrice(false)
               }
             }}
-            className="px-3 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+            className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold disabled:opacity-50"
           >
-            {updatingPrice ? <Loader2 className="w-4 h-4 animate-spin" /> : t('app.update')}
+            {updatingPrice ? <Icon name="progress_activity" size={16} className="animate-spin" /> : t('app.update')}
           </button>
           <button
             onClick={() => { setShowPriceInput(false); setNewPriceInput('') }}
-            className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-500"
+            className="px-3 py-2 border border-border rounded-xl text-sm text-text3"
           >
             {t('app.cancel')}
           </button>
@@ -558,12 +487,12 @@ function MyListingRow({
         {(listing.status === 'active' || listing.status === 'pending_payment') && (
           <button
             onClick={onChat}
-            className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+            className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-text2 text-sm"
           >
-            <MessageCircle className="w-4 h-4 text-green-600" />
+            <Icon name="chat" size={16} color="var(--c-primary)" />
             {t('market.chats')}
             {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-error text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -574,9 +503,9 @@ function MyListingRow({
         {listing.status === 'active' && !showPriceInput && (
           <button
             onClick={() => setShowPriceInput(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-text2 text-sm"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Icon name="edit" size={14} />
             {t('market.update.price')}
           </button>
         )}
@@ -589,16 +518,16 @@ function MyListingRow({
               setRemoving(true)
               try { await onRemove() } finally { setRemoving(false) }
             }}
-            className="flex-1 py-2 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-50 disabled:opacity-50"
+            className="flex-1 py-2 border border-error/30 text-error rounded-xl text-sm font-medium disabled:opacity-50"
           >
-            {removing ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('market.remove')}
+            {removing ? <Icon name="progress_activity" size={16} className="animate-spin mx-auto" /> : t('market.remove')}
           </button>
         )}
       </div>
 
       {listing.status === 'sold' && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <CheckCircle className="w-4 h-4 text-green-500" />
+        <div className="flex items-center gap-2 text-sm text-text3">
+          <Icon name="check_circle" size={16} filled color="var(--c-primary)" />
           {t('market.listing.sold.transferred')}
         </div>
       )}
@@ -631,18 +560,18 @@ function MyPurchaseRow({
     cancelled: t('market.status.cancelled'),
   }
   const statusColor: Record<string, string> = {
-    pending_buyer_payment: 'bg-blue-100 text-blue-700',
-    buyer_confirmed: 'bg-yellow-100 text-yellow-700',
-    completed: 'bg-green-100 text-green-700',
-    cancelled: 'bg-gray-100 text-gray-500',
+    pending_buyer_payment: 'bg-primary-light text-primary',
+    buyer_confirmed: 'bg-warning/15 text-warning',
+    completed: 'bg-primary-light text-primary',
+    cancelled: 'bg-bg text-text3',
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+    <div className="bg-surface rounded-card border border-border shadow-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 truncate">{purchase.store_name}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="font-semibold text-text truncate">{purchase.store_name}</p>
+          <p className="text-xs text-text3 mt-0.5">
             ₪{purchase.asking_price} · {t('market.seller')}: {purchase.seller_name || purchase.seller_email?.split('@')[0]}
           </p>
         </div>
@@ -652,15 +581,15 @@ function MyPurchaseRow({
       </div>
 
       {purchase.status === 'buyer_confirmed' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">
-          <AlertCircle className="w-4 h-4 inline ml-1" />
+        <div className="bg-primary-light border border-primary/20 rounded-xl p-3 text-sm text-primary flex items-center gap-1.5">
+          <Icon name="info" size={16} />
           {t('market.purchase.awaiting.seller')}
         </div>
       )}
 
       {purchase.status === 'completed' && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <CheckCircle className="w-4 h-4 text-green-500" />
+        <div className="flex items-center gap-2 text-sm text-text3">
+          <Icon name="check_circle" size={16} filled color="var(--c-primary)" />
           {t('market.purchase.transferred')}
         </div>
       )}
@@ -670,12 +599,12 @@ function MyPurchaseRow({
         {purchase.status !== 'cancelled' && purchase.seller_id && (
           <button
             onClick={onChat}
-            className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+            className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-text2 text-sm"
           >
-            <MessageCircle className="w-4 h-4 text-green-600" />
+            <Icon name="chat" size={16} color="var(--c-primary)" />
             {t('market.chat.with.seller')}
             {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-error text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -685,25 +614,25 @@ function MyPurchaseRow({
         {purchase.status === 'completed' && (
           <button
             onClick={onRate}
-            className="flex-1 py-2 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-xl text-sm font-medium hover:bg-yellow-100 flex items-center justify-center gap-1"
+            className="flex-1 py-2 bg-warning/10 border border-warning/30 text-warning rounded-xl text-sm font-medium flex items-center justify-center gap-1"
           >
-            <Star className="w-4 h-4" />
+            <Icon name="star" size={16} filled />
             {purchase.my_rating ? `${t('market.rated')} (${purchase.my_rating}★)` : t('market.rate.seller.short')}
           </button>
         )}
         {(purchase.status === 'buyer_confirmed' || purchase.status === 'completed') && (
           <button
             onClick={onReport}
-            className="p-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50"
+            className="p-2 rounded-xl border border-error/30 text-error"
             aria-label={t('market.report.seller.aria')}
           >
-            <Flag className="w-4 h-4" />
+            <Icon name="flag" size={16} />
           </button>
         )}
         {purchase.status === 'buyer_confirmed' && (
           <button
             onClick={onCancel}
-            className="px-3 py-2 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50"
+            className="px-3 py-2 border border-border text-text3 rounded-xl text-sm"
           >
             {t('market.cancel')}
           </button>
@@ -735,25 +664,25 @@ function MarketplaceAccessGate() {
   if (myAccessStatus === 'pending') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
-          <ShoppingBag className="w-8 h-8 text-amber-500" />
+        <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center mb-4">
+          <Icon name="shopping_bag" size={32} color="var(--c-warning)" />
         </div>
-        <h2 className="text-lg font-bold text-gray-800 mb-2">{t('market.access.pending.title')}</h2>
-        <p className="text-sm text-gray-500 max-w-xs">{t('market.access.pending.body')}</p>
+        <h2 className="text-lg font-bold text-text mb-2">{t('market.access.pending.title')}</h2>
+        <p className="text-sm text-text3 max-w-xs">{t('market.access.pending.body')}</p>
       </div>
     )
   }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-      <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mb-4">
-        <ShoppingBag className="w-8 h-8 text-purple-500" />
+      <div className="w-16 h-16 bg-primary-light rounded-2xl flex items-center justify-center mb-4">
+        <Icon name="shopping_bag" size={32} color="var(--c-primary)" />
       </div>
-      <h2 className="text-lg font-bold text-gray-800 mb-1">{t('market.title')}</h2>
+      <h2 className="text-lg font-bold text-text mb-1">{t('market.title')}</h2>
       {myAccessStatus === 'rejected' && (
-        <p className="text-sm text-red-500 mb-3">{t('market.access.rejected')}</p>
+        <p className="text-sm text-error mb-3">{t('market.access.rejected')}</p>
       )}
-      <p className="text-sm text-gray-500 mb-6 max-w-xs">
+      <p className="text-sm text-text3 mb-6 max-w-xs">
         {t('market.access.desc')}
       </p>
       <textarea
@@ -761,16 +690,12 @@ function MarketplaceAccessGate() {
         onChange={e => setMessage(e.target.value)}
         placeholder={t('market.access.message.placeholder')}
         rows={3}
-        className="w-full max-w-xs border border-gray-200 rounded-xl px-3 py-2 text-sm mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-purple-300"
+        className="w-full max-w-xs border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
-      <button
-        onClick={handleRequest}
-        disabled={sending}
-        className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2.5 rounded-xl font-semibold text-sm disabled:opacity-50"
-      >
-        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+      <Button onClick={handleRequest} loading={sending}>
+        <Icon name="add" size={16} />
         {t('market.access.request')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -802,7 +727,6 @@ function SellerProfileModal({
   const [email, setEmail] = useState(existing?.email ?? user?.email ?? '')
   const [idNumber, setIdNumber] = useState(existing?.id_number ?? '')
   const [saving, setSaving] = useState(false)
-  useBodyScrollLock()
 
   const isPending = existing?.verification_status === 'pending'
   const isRejected = existing?.verification_status === 'rejected'
@@ -831,92 +755,80 @@ function SellerProfileModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center overflow-hidden" onClick={onClose}>
-      <div
-        className="bg-white rounded-t-3xl w-full max-w-2xl flex flex-col max-h-[90dvh]"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h2 className="font-bold text-lg">{t('seller.profile.title')}</h2>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
-        </div>
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={t('seller.profile.title')}
+      className="max-h-[90dvh]"
+      footer={
+        readOnly ? (
+          <Button variant="secondary" onClick={onClose} fullWidth>{t('app.close')}</Button>
+        ) : (
+          <Button onClick={handleSubmit} disabled={saving} loading={saving} fullWidth>
+            {t('seller.profile.submit')}
+          </Button>
+        )
+      }
+    >
+      <div className="space-y-4">
+        {isPending && (
+          <div className="bg-warning/10 border border-warning/30 rounded-2xl p-4 text-sm text-warning">
+            <p className="font-semibold mb-1">{t('admin.sellers.status.pending')}</p>
+            <p>{t('seller.profile.pending')}</p>
+          </div>
+        )}
 
-        <div className="modal-scroll overflow-y-auto flex-1 min-h-0 px-6 pb-4 space-y-4">
-          {isPending && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-800">
-              <p className="font-semibold mb-1">{t('admin.sellers.status.pending')}</p>
-              <p>{t('seller.profile.pending')}</p>
-            </div>
-          )}
+        {isRejected && (
+          <div className="bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error space-y-1">
+            <p className="font-semibold">{t('seller.profile.rejected')}</p>
+            {existing?.admin_note && (
+              <p>{t('seller.profile.rejected.note')} {existing.admin_note}</p>
+            )}
+            <p className="text-xs mt-1">ניתן לשנות ולשלוח שוב לאישור</p>
+          </div>
+        )}
 
-          {isRejected && (
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700 space-y-1">
-              <p className="font-semibold">{t('seller.profile.rejected')}</p>
-              {existing?.admin_note && (
-                <p>{t('seller.profile.rejected.note')} {existing.admin_note}</p>
-              )}
-              <p className="text-xs text-red-500 mt-1">ניתן לשנות ולשלוח שוב לאישור</p>
-            </div>
-          )}
+        {!isPending && (
+          <p className="text-sm text-text3">{t('seller.profile.subtitle')}</p>
+        )}
 
-          {!isPending && (
-            <p className="text-sm text-gray-500">{t('seller.profile.subtitle')}</p>
-          )}
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.full_name')}</label>
-              <input
-                className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
-                value={fullName} onChange={e => setFullName(e.target.value)} disabled={readOnly}
-                placeholder={t('seller.profile.full_name')}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.phone')}</label>
-              <input
-                type="tel" className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
-                value={phone} onChange={e => setPhone(e.target.value)} disabled={readOnly}
-                placeholder="05X-XXXXXXX"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.email')}</label>
-              <input
-                type="email" className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
-                value={email} onChange={e => setEmail(e.target.value)} disabled={readOnly}
-                placeholder="user@example.com"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">{t('seller.profile.id_number')}</label>
-              <input
-                className="w-full border rounded-xl px-3 py-2.5 text-sm disabled:bg-gray-50"
-                value={idNumber} onChange={e => setIdNumber(e.target.value)} disabled={readOnly}
-                placeholder="XXXXXXXXX"
-                maxLength={9}
-              />
-            </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-text3 mb-1 block">{t('seller.profile.full_name')}</label>
+            <input
+              className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text disabled:bg-bg"
+              value={fullName} onChange={e => setFullName(e.target.value)} disabled={readOnly}
+              placeholder={t('seller.profile.full_name')}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text3 mb-1 block">{t('seller.profile.phone')}</label>
+            <input
+              type="tel" className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text disabled:bg-bg"
+              value={phone} onChange={e => setPhone(e.target.value)} disabled={readOnly}
+              placeholder="05X-XXXXXXX"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text3 mb-1 block">{t('seller.profile.email')}</label>
+            <input
+              type="email" className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text disabled:bg-bg"
+              value={email} onChange={e => setEmail(e.target.value)} disabled={readOnly}
+              placeholder="user@example.com"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text3 mb-1 block">{t('seller.profile.id_number')}</label>
+            <input
+              className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text disabled:bg-bg"
+              value={idNumber} onChange={e => setIdNumber(e.target.value)} disabled={readOnly}
+              placeholder="XXXXXXXXX"
+              maxLength={9}
+            />
           </div>
         </div>
-
-        <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100">
-          {readOnly ? (
-            <button onClick={onClose} className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-semibold text-sm">
-              סגור
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={saving}
-              className="w-full py-3 bg-green-600 text-white rounded-2xl font-semibold disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('seller.profile.submit')}
-            </button>
-          )}
-        </div>
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -1061,8 +973,8 @@ export default function MarketplacePage() {
 
   useEffect(() => {
     if (tab !== 'all') return
-    const t = setTimeout(() => fetchListings(search || undefined), 400)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => fetchListings(search || undefined), 400)
+    return () => clearTimeout(timer)
   }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -1111,10 +1023,10 @@ export default function MarketplacePage() {
   // Selective mode: non-approved users see the access request screen
   if (marketplaceMode === 'selective' && !isAdmin && myAccessStatus !== 'approved') {
     return (
-      <div className="flex flex-col min-h-dvh bg-gray-50">
-        <div className="bg-white border-b px-4 py-4">
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-purple-600" />
+      <div className="flex flex-col min-h-dvh bg-bg">
+        <div className="bg-surface border-b border-border px-4 py-4">
+          <h1 className="text-xl font-bold text-text flex items-center gap-2">
+            <Icon name="shopping_bag" size={20} color="var(--c-primary)" />
             {t('market.title')}
           </h1>
         </div>
@@ -1124,38 +1036,33 @@ export default function MarketplacePage() {
   }
 
   return (
-    <div className="flex-1" style={{ background: 'var(--c-bg)' }} dir="rtl">
+    <div className="flex-1 bg-bg" dir="rtl">
       {/* Header */}
-      <div className="sticky top-0 z-20" style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
-        <div style={{ padding: '16px 20px 0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      <div className="sticky top-0 z-20 bg-surface border-b border-border">
+        <div className="px-5 pt-4">
+          <div className="flex justify-between items-center mb-3.5">
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)' }}>{t('market.marketplace')}</div>
+              <div className="text-[22px] font-extrabold text-text">{t('market.marketplace')}</div>
               {listings.length > 0 && (
-                <div style={{ fontSize: 13, color: 'var(--c-text3)', marginTop: 2 }}>{listings.length} {t('market.active.deals')}</div>
+                <div className="text-[13px] text-text3 mt-0.5">{listings.length} {t('market.active.deals')}</div>
               )}
             </div>
             {tab === 'all' && (
               <button
                 onClick={() => setShowSort(s => !s)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: showSort ? 'var(--c-primary-light)' : 'var(--c-bg)',
-                  border: `1.5px solid ${showSort ? 'var(--c-primary)' : 'var(--c-border)'}`,
-                  borderRadius: 10, padding: '8px 12px', cursor: 'pointer',
-                  color: showSort ? 'var(--c-primary)' : 'var(--c-text2)',
-                  fontFamily: 'Heebo, sans-serif', transition: 'all 0.15s',
-                }}
+                className={`flex items-center gap-1.5 rounded-[10px] px-3 py-2 border ${
+                  showSort ? 'bg-primary-light border-primary text-primary' : 'bg-bg border-border text-text2'
+                }`}
               >
-                <SlidersHorizontal size={14} />
-                <span style={{ fontSize: 13, fontWeight: 500 }}>
+                <Icon name="tune" size={14} />
+                <span className="text-[13px] font-medium">
                   {sortKey === 'discount' ? t('market.sort.discount') : sortKey === 'balance' ? t('market.sort.balance') : sortKey === 'expiry' ? t('market.sort.expiry') : t('market.sort.newest')}
                 </span>
               </button>
             )}
           </div>
           {showSort && tab === 'all' && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingBottom: 12 }}>
+            <div className="flex gap-2 flex-wrap pb-3">
               {([
                 { key: 'newest',   label: t('market.sort.newest.full') },
                 { key: 'discount', label: t('market.sort.discount.full') },
@@ -1165,13 +1072,9 @@ export default function MarketplacePage() {
                 <button
                   key={key}
                   onClick={() => { setSortKey(key); setShowSort(false) }}
-                  style={{
-                    fontSize: 12, padding: '6px 12px', borderRadius: 999, fontWeight: 500,
-                    background: sortKey === key ? 'var(--c-primary-light)' : 'var(--c-bg)',
-                    color: sortKey === key ? 'var(--c-primary)' : 'var(--c-text3)',
-                    border: sortKey === key ? '1px solid var(--c-primary)' : '1px solid transparent',
-                    cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'Heebo, sans-serif',
-                  }}
+                  className={`text-xs px-3 py-1.5 rounded-full font-medium border ${
+                    sortKey === key ? 'bg-primary-light text-primary border-primary' : 'bg-bg text-text3 border-transparent'
+                  }`}
                 >
                   {label}
                 </button>
@@ -1180,22 +1083,16 @@ export default function MarketplacePage() {
           )}
 
           {/* Tabs */}
-          <div style={{ display: 'flex', gap: 0 }}>
+          <div className="flex">
             {([['all', t('market.tab.market')], ['mine', t('market.tab.mine')], ['purchases', t('market.tab.purchases')], ['watchlist', t('market.tab.watchlist')]] as const).map(([tabKey, label]) => (
               <button
                 key={tabKey}
                 onClick={() => setTab(tabKey)}
-                style={{
-                  flex: 1, padding: '10px 0', border: 'none', background: 'none',
-                  cursor: 'pointer', position: 'relative', fontFamily: 'Heebo, sans-serif',
-                  fontSize: 14, fontWeight: tab === tabKey ? 700 : 400,
-                  color: tab === tabKey ? 'var(--c-primary)' : 'var(--c-text3)',
-                  transition: 'color 0.2s',
-                }}
+                className={`flex-1 py-2.5 relative text-sm ${tab === tabKey ? 'font-bold text-primary' : 'font-normal text-text3'}`}
               >
                 {label}
                 {tab === tabKey && (
-                  <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 28, height: 3, borderRadius: '3px 3px 0 0', background: 'var(--c-primary)' }} />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-7 h-[3px] rounded-t-[3px] bg-primary" />
                 )}
               </button>
             ))}
@@ -1205,19 +1102,19 @@ export default function MarketplacePage() {
 
       {/* Search */}
       {tab === 'all' && (
-        <div style={{ padding: '12px 16px', background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--c-bg)', borderRadius: 12, padding: '0 12px' }}>
-            <Search size={16} color="var(--c-text3)" />
+        <div className="px-4 py-3 bg-surface border-b border-border">
+          <div className="flex items-center gap-2.5 bg-bg rounded-xl px-3">
+            <Icon name="search" size={16} color="var(--c-text3)" />
             <input
               type="text"
-              style={{ flex: 1, height: 40, border: 'none', background: 'transparent', fontSize: 15, color: 'var(--c-text)', fontFamily: 'Heebo, sans-serif', outline: 'none', direction: 'rtl' }}
+              className="flex-1 h-10 border-none bg-transparent text-[15px] text-text outline-none"
               placeholder={t('market.search.by.store')}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
             {search && (
-              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2 }}>
-                <X size={15} color="var(--c-text3)" />
+              <button onClick={() => setSearch('')} className="p-0.5">
+                <Icon name="close" size={15} color="var(--c-text3)" />
               </button>
             )}
           </div>
@@ -1247,10 +1144,12 @@ export default function MarketplacePage() {
           return (
             <>
               {loadingListings && listings.length === 0 ? (
-                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
+                <div className="flex justify-center py-12">
+                  <Icon name="progress_activity" size={24} color="var(--c-primary)" className="animate-spin" />
+                </div>
               ) : sorted.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 space-y-2">
-                  <Tag className="w-10 h-10 mx-auto opacity-40" />
+                <div className="text-center py-12 text-text3 space-y-2">
+                  <Icon name="sell" size={40} color="var(--c-border)" />
                   <p className="font-medium">{t('market.no.listings.now')}</p>
                   {search && <p className="text-sm">{t('market.try.other.search')}</p>}
                 </div>
@@ -1275,15 +1174,15 @@ export default function MarketplacePage() {
               onClick={() => { if (sellerProfile === undefined) checkAndPublish(); else setShowSellerProfile(true) }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-sm text-right ${
                 sellerProfile?.verification_status === 'verified'
-                  ? 'bg-green-50 border-green-200 text-green-700'
+                  ? 'bg-primary-light border-primary/20 text-primary'
                   : sellerProfile?.verification_status === 'pending'
-                  ? 'bg-amber-50 border-amber-200 text-amber-700'
+                  ? 'bg-warning/10 border-warning/30 text-warning'
                   : sellerProfile?.verification_status === 'rejected'
-                  ? 'bg-red-50 border-red-200 text-red-700'
-                  : 'bg-gray-50 border-gray-200 text-gray-600'
+                  ? 'bg-error/10 border-error/30 text-error'
+                  : 'bg-bg border-border text-text2'
               }`}
             >
-              <UserCheck className="w-5 h-5 shrink-0" />
+              <Icon name="verified_user" size={20} className="shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-xs">
                   {sellerProfile?.verification_status === 'verified' ? 'פרופיל מוכר מאושר ✓'
@@ -1299,76 +1198,67 @@ export default function MarketplacePage() {
                   </p>
                 )}
               </div>
-              <ChevronRight className="w-4 h-4 shrink-0 opacity-50" />
+              <Icon name="chevron_left" size={16} className="shrink-0 opacity-50" />
             </button>
 
             <div className="flex justify-between items-center">
               <button
                 onClick={() => setShowPaymentSettings(v => !v)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: showPaymentSettings ? 'var(--c-primary-light)' : 'var(--c-bg)',
-                  border: `1.5px solid ${showPaymentSettings ? 'var(--c-primary)' : 'var(--c-border)'}`,
-                  borderRadius: 10, padding: '7px 12px', cursor: 'pointer',
-                  color: showPaymentSettings ? 'var(--c-primary)' : 'var(--c-text2)',
-                  fontFamily: 'Heebo, sans-serif', fontSize: 13, fontWeight: 500,
-                }}
+                className={`flex items-center gap-1.5 rounded-[10px] px-3 py-[7px] border text-[13px] font-medium ${
+                  showPaymentSettings ? 'bg-primary-light border-primary text-primary' : 'bg-bg border-border text-text2'
+                }`}
               >
-                <Settings size={14} />
+                <Icon name="settings" size={14} />
                 {t('market.payment.methods')}
                 {paymentMethods.length > 0 && (
-                  <span style={{
-                    background: 'var(--c-primary)', color: '#fff',
-                    fontSize: 11, fontWeight: 700, borderRadius: 999,
-                    padding: '1px 6px', marginRight: 2,
-                  }}>
+                  <span className="bg-primary text-white text-[11px] font-bold rounded-full px-1.5 mr-0.5">
                     {paymentMethods.length}
                   </span>
                 )}
               </button>
               <button
                 onClick={checkAndPublish}
-                className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-xl"
+                className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white text-sm font-medium rounded-xl"
               >
-                <ShoppingBag className="w-3.5 h-3.5" /> {t('market.bulk.publish')}
+                <Icon name="shopping_bag" size={14} /> {t('market.bulk.publish')}
               </button>
             </div>
 
             {/* Payment methods panel */}
             {showPaymentSettings && (
-              <div style={{ background: 'var(--c-surface)', borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
+              <div className="bg-surface rounded-card shadow-card overflow-hidden">
                 <div className="p-4 space-y-3">
-                  <p className="text-xs text-gray-500">{t('market.payment.methods.hint')}</p>
+                  <p className="text-xs text-text3">{t('market.payment.methods.hint')}</p>
 
                   {paymentMethods.length === 0 && !addingPayment && (
-                    <p className="text-sm text-gray-400 text-center py-2">{t('market.payment.methods.empty')}</p>
+                    <p className="text-sm text-text3 text-center py-2">{t('market.payment.methods.empty')}</p>
                   )}
 
                   {paymentMethods.map((m, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                    <div key={i} className="flex items-center gap-3 p-3 bg-bg rounded-xl">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${m.type === 'paypal' ? 'bg-blue-500' : m.type === 'bit' ? 'bg-purple-500' : m.type === 'paybox' ? 'bg-orange-500' : 'bg-teal-500'}`}>
                         {PAYMENT_METHOD_LABELS[m.type][0]}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{PAYMENT_METHOD_LABELS[m.type]}</p>
-                        <p className="text-xs text-gray-500 truncate">{m.value}</p>
+                        <p className="text-sm font-medium text-text">{PAYMENT_METHOD_LABELS[m.type]}</p>
+                        <p className="text-xs text-text3 truncate">{m.value}</p>
                       </div>
                       <button
                         onClick={() => removePaymentMethod(i)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                        className="p-1.5 rounded-lg text-text3 hover:text-error"
                         aria-label={t('market.payment.remove.aria')}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Icon name="delete" size={16} />
                       </button>
                     </div>
                   ))}
 
                   {addingPayment && (
-                    <div className="space-y-2 border border-green-200 rounded-xl p-3">
+                    <div className="space-y-2 border border-primary/20 rounded-xl p-3">
                       <select
                         value={newPaymentType}
                         onChange={e => setNewPaymentType(e.target.value as PaymentMethod['type'])}
-                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                        className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                       >
                         {(Object.entries(PAYMENT_METHOD_LABELS) as [PaymentMethod['type'], string][]).map(([type, label]) => (
                           <option key={type} value={type}>{label}</option>
@@ -1379,15 +1269,15 @@ export default function MarketplacePage() {
                         value={newPaymentValue}
                         onChange={e => setNewPaymentValue(e.target.value)}
                         placeholder={newPaymentType === 'paypal' ? t('market.payment.paypal.placeholder') : t('market.payment.phone.placeholder')}
-                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                        className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                         dir="ltr"
                       />
                       <div className="flex gap-2">
-                        <button onClick={addPaymentMethod} disabled={savingPayments} className="flex-1 py-2 bg-green-500 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                          <Check className="w-4 h-4" /> {t('app.add')}
+                        <button onClick={addPaymentMethod} disabled={savingPayments} className="flex-1 py-2 bg-primary text-white rounded-xl text-sm font-medium flex items-center justify-center gap-1">
+                          <Icon name="check" size={16} /> {t('app.add')}
                         </button>
-                        <button onClick={() => { setAddingPayment(false); setNewPaymentValue('') }} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
-                          <X className="w-4 h-4" /> {t('app.cancel')}
+                        <button onClick={() => { setAddingPayment(false); setNewPaymentValue('') }} className="flex-1 py-2 bg-bg text-text2 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
+                          <Icon name="close" size={16} /> {t('app.cancel')}
                         </button>
                       </div>
                     </div>
@@ -1396,9 +1286,9 @@ export default function MarketplacePage() {
                   {!addingPayment && paymentMethods.length < 5 && (
                     <button
                       onClick={() => setAddingPayment(true)}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-green-400 hover:text-green-600 transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-border rounded-xl text-sm text-text3"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Icon name="add" size={16} />
                       {t('market.payment.add')}
                     </button>
                   )}
@@ -1406,10 +1296,12 @@ export default function MarketplacePage() {
               </div>
             )}
             {loadingMyListings && myListings.length === 0 ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
+              <div className="flex justify-center py-12">
+                <Icon name="progress_activity" size={24} color="var(--c-primary)" className="animate-spin" />
+              </div>
             ) : myListings.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 space-y-2">
-                <ShoppingBag className="w-10 h-10 mx-auto opacity-40" />
+              <div className="text-center py-12 text-text3 space-y-2">
+                <Icon name="shopping_bag" size={40} color="var(--c-border)" />
                 <p className="font-medium">{t('market.mine.empty')}</p>
                 <p className="text-sm">{t('market.mine.empty.hint')}</p>
               </div>
@@ -1453,43 +1345,43 @@ export default function MarketplacePage() {
         {tab === 'watchlist' && (
           <>
             <div className="flex items-center justify-between mb-1">
-              <h2 className="font-semibold text-gray-800 flex items-center gap-1.5">
-                <Bell className="w-4 h-4 text-indigo-500" /> {t('market.watch.title')}
+              <h2 className="font-semibold text-text flex items-center gap-1.5">
+                <Icon name="notifications" size={16} color="var(--c-primary)" /> {t('market.watch.title')}
               </h2>
               <button
                 onClick={() => setShowAddWatch(v => !v)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-xl"
+                className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-xl"
               >
-                <Plus className="w-3.5 h-3.5" /> {t('app.add')}
+                <Icon name="add" size={14} /> {t('app.add')}
               </button>
             </div>
 
             {showAddWatch && (
-              <div className="bg-white rounded-2xl border border-indigo-100 p-4 space-y-3">
+              <div className="bg-surface rounded-card border border-border p-4 space-y-3">
                 <input
                   type="text"
                   placeholder={t('market.watch.store.placeholder')}
                   value={watchForm.store_name}
                   onChange={e => setWatchForm(f => ({ ...f, store_name: e.target.value }))}
-                  className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-600 shrink-0">{t('market.watch.min.discount')}:</label>
+                  <label className="text-xs text-text2 shrink-0">{t('market.watch.min.discount')}:</label>
                   <input
                     type="number" min={0} max={99} value={watchForm.min_discount_pct}
                     onChange={e => setWatchForm(f => ({ ...f, min_discount_pct: parseInt(e.target.value) || 0 }))}
-                    className="w-20 border rounded-xl px-3 py-1.5 text-sm text-center focus:outline-none"
+                    className="w-20 border border-border rounded-xl px-3 py-1.5 text-sm text-center bg-surface text-text focus:outline-none"
                   />
-                  <span className="text-xs text-gray-400">%</span>
+                  <span className="text-xs text-text3">%</span>
                 </div>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                  <label className="flex items-center gap-1.5 text-xs text-text2 cursor-pointer">
                     <input type="checkbox" checked={watchForm.notify_push}
                       onChange={e => setWatchForm(f => ({ ...f, notify_push: e.target.checked }))}
                       className="rounded" />
                     {t('market.watch.notify.push')}
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                  <label className="flex items-center gap-1.5 text-xs text-text2 cursor-pointer">
                     <input type="checkbox" checked={watchForm.notify_email}
                       onChange={e => setWatchForm(f => ({ ...f, notify_email: e.target.checked }))}
                       className="rounded" />
@@ -1498,11 +1390,11 @@ export default function MarketplacePage() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={addWatchItem} disabled={savingWatch}
-                    className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
-                    {savingWatch ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('app.save')}
+                    className="flex-1 py-2 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                    {savingWatch ? <Icon name="progress_activity" size={16} className="animate-spin mx-auto" /> : t('app.save')}
                   </button>
                   <button onClick={() => setShowAddWatch(false)}
-                    className="px-4 py-2 border rounded-xl text-sm text-gray-500">
+                    className="px-4 py-2 border border-border rounded-xl text-sm text-text3">
                     {t('app.cancel')}
                   </button>
                 </div>
@@ -1510,20 +1402,22 @@ export default function MarketplacePage() {
             )}
 
             {!watchlistLoaded && (
-              <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-indigo-500" /></div>
+              <div className="flex justify-center py-10">
+                <Icon name="progress_activity" size={20} color="var(--c-primary)" className="animate-spin" />
+              </div>
             )}
             {watchlistLoaded && watchlist.length === 0 && !showAddWatch && (
-              <div className="text-center py-12 text-gray-400 space-y-2">
-                <Bell className="w-10 h-10 mx-auto opacity-30" />
+              <div className="text-center py-12 text-text3 space-y-2">
+                <Icon name="notifications" size={40} color="var(--c-border)" />
                 <p className="font-medium">{t('market.watch.empty')}</p>
                 <p className="text-sm">{t('market.watch.empty.hint')}</p>
               </div>
             )}
             {watchlist.map(w => (
-              <div key={w.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+              <div key={w.id} className="bg-surface rounded-card border border-border shadow-card p-4 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 truncate">{w.store_name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="font-semibold text-text truncate">{w.store_name}</p>
+                  <p className="text-xs text-text3 mt-0.5">
                     {t('market.watch.min.discount.label')}: {w.min_discount_pct}% ·
                     {w.notify_push ? ` · ${t('market.watch.push')}` : ''}{w.notify_email ? ` · ${t('market.watch.email')}` : ''}
                   </p>
@@ -1531,9 +1425,9 @@ export default function MarketplacePage() {
                 <button
                   disabled={deletingWatch === w.id}
                   onClick={() => deleteWatchItem(w.id)}
-                  className="p-2 rounded-xl border border-red-200 text-red-400 hover:bg-red-50 disabled:opacity-50"
+                  className="p-2 rounded-xl border border-error/30 text-error disabled:opacity-50"
                 >
-                  {deletingWatch === w.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {deletingWatch === w.id ? <Icon name="progress_activity" size={16} className="animate-spin" /> : <Icon name="delete" size={16} />}
                 </button>
               </div>
             ))}
@@ -1544,10 +1438,12 @@ export default function MarketplacePage() {
         {tab === 'purchases' && (
           <>
             {loadingMyPurchases && myPurchases.length === 0 ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
+              <div className="flex justify-center py-12">
+                <Icon name="progress_activity" size={24} color="var(--c-primary)" className="animate-spin" />
+              </div>
             ) : myPurchases.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 space-y-2">
-                <ShoppingBag className="w-10 h-10 mx-auto opacity-40" />
+              <div className="text-center py-12 text-text3 space-y-2">
+                <Icon name="shopping_bag" size={40} color="var(--c-border)" />
                 <p className="font-medium">{t('market.purchases.empty')}</p>
               </div>
             ) : (
