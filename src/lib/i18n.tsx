@@ -123,6 +123,8 @@ const translations: Record<string, string> = {
   'home.remaining.en': 'left',
 
   // ── Search page (full voucher list — moved out of Home) ─────────
+  'search.page.title': 'שוברים',
+  'search.page.title.en': 'Vouchers',
   'search.placeholder': 'חיפוש שוברים, חנויות, עסקאות...',
   'search.placeholder.en': 'Search vouchers, stores, deals...',
   'search.categories': 'קטגוריות',

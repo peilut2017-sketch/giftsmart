@@ -740,6 +740,8 @@ export default function SettingsPage() {
     <div className="flex-1 bg-bg">
 
       <div className="pb-24 space-y-4">
+        <h1 className="text-center text-lg font-extrabold text-text pt-5">{t('settings.title')}</h1>
+
         {/* Profile hero card */}
         <div
           className="px-5 pt-6 pb-5"
@@ -803,565 +805,6 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
-
-        {/* ── ניווט מהיר ── */}
-        <SL>{t('settings.quick.nav')}</SL>
-        <Card>
-          <div className="divide-y divide-border">
-            <MenuItem
-              icon="archive"
-              label={t('nav.archive')}
-              desc={t('settings.quick.archive.desc')}
-              onClick={() => navigate('/archive')}
-              right={archivedVouchers.length > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-bg text-text3">{archivedVouchers.length}</span> : undefined}
-            />
-            <MenuItem
-              icon="storefront"
-              label={t('market.marketplace')}
-              desc={t('settings.quick.market.desc')}
-              onClick={() => navigate('/market')}
-            />
-            <MenuItem
-              icon="percent"
-              label={t('nav.discounts')}
-              desc={t('settings.quick.discounts.desc')}
-              onClick={() => navigate('/discounts')}
-            />
-          </div>
-        </Card>
-
-        {/* ── מראה ושפה ── */}
-        <SL>מראה ושפה</SL>
-        <Card>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="flex items-center gap-3">
-              <Icon name={theme === 'dark' ? 'dark_mode' : 'light_mode'} size={20} color="var(--c-primary)" />
-              <div>
-                <div className="font-medium text-sm text-text">{t('settings.dark.mode')}</div>
-                <div className="text-xs text-text3">{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
-              </div>
-            </div>
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-primary' : 'bg-border'}`}
-            >
-              <span
-                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
-                style={{ transform: theme === 'dark' ? 'translateX(-24px)' : 'translateX(-4px)' }}
-              />
-            </button>
-          </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Icon name="language" size={20} color="var(--c-primary)" />
-              <div>
-                <div className="font-medium text-sm text-text">שפה / Language</div>
-                <div className="text-xs text-text3">{locale === 'he' ? 'עברית' : 'English'}</div>
-              </div>
-            </div>
-            <div className="flex rounded-xl overflow-hidden border border-border">
-              {(['he', 'en'] as const).map(l => (
-                <button
-                  key={l}
-                  onClick={() => setLocale(l)}
-                  className={`px-3 py-1 text-xs font-semibold transition-colors ${locale === l ? 'bg-primary text-white' : 'bg-surface text-text2'}`}
-                >
-                  {l === 'he' ? 'עב' : 'EN'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </Card>
-
-        {/* ── שיתוף וחברים ── */}
-        <SL>שיתוף וחברים</SL>
-        <Card>
-          <div className="p-4 space-y-3">
-            {members.length > 0 && (
-              <div className="space-y-1 mb-2">
-                {members.map(m => (
-                  <div key={m.user_id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                    <div>
-                      <p className="text-sm text-text2">{m.email}</p>
-                      <p className="text-xs text-text3">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
-                    </div>
-                    {m.role !== 'owner' && (
-                      <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="p-1.5 text-error rounded-lg">
-                        <Icon name="delete" size={16} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {pendingInviteEmail && (
-              <div className="bg-warning/10 rounded-2xl p-3 space-y-2">
-                <p className="text-sm text-warning">המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה. לשלוח הזמנה להצטרף?</p>
-                <div className="flex gap-2">
-                  <button onClick={handleSendNotFoundInvite} className="flex-1 bg-warning text-white py-2 rounded-xl text-sm font-medium">שלח הזמנה</button>
-                  <button onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }} className="flex-1 bg-bg text-text2 py-2 rounded-xl text-sm font-medium">{t('app.cancel')}</button>
-                </div>
-              </div>
-            )}
-            {!pendingInviteEmail && (
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Icon name="person_add" size={16} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={e => setInviteEmail(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                    placeholder="כתובת מייל לשיתוף"
-                    className="w-full pr-9 pl-3 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    dir="ltr"
-                  />
-                </div>
-                <button
-                  onClick={handleInvite}
-                  disabled={inviteLoading || !inviteEmail.trim()}
-                  className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
-                >
-                  {inviteLoading ? <Spinner size={16} color="#fff" /> : 'הוסף'}
-                </button>
-              </div>
-            )}
-            <p className="text-xs text-text3">חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.</p>
-          </div>
-        </Card>
-
-        {/* ── התראות ואינטגרציות ── */}
-        <SL>התראות ואינטגרציות</SL>
-        <Card>
-          {/* Reminder days */}
-          <div className="p-4">
-            {/* Google Calendar toggle */}
-            <label className="flex items-center justify-between cursor-pointer mb-4">
-              <div className="flex items-center gap-2">
-                <Icon name="calendar_month" size={16} color="#3b82f6" />
-                <span className="text-sm text-text2">{t('settings.calendar.enabled')}</span>
-              </div>
-              <button
-                role="switch"
-                aria-checked={calendarReminderEnabled}
-                onClick={() => saveCalendarEnabled(!calendarReminderEnabled)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${calendarReminderEnabled ? 'bg-primary' : 'bg-border'}`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${calendarReminderEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </button>
-            </label>
-            <p className="text-sm text-text2 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
-            <div className="flex items-center gap-3">
-              <input
-                type="range" min={1} max={90} value={reminderDays}
-                onChange={e => saveReminderDays(parseInt(e.target.value))}
-                className="flex-1 accent-primary"
-              />
-              <div className="flex items-center gap-1">
-                <input
-                  type="number" min={1} max={90} value={reminderDays}
-                  onChange={e => saveReminderDays(parseInt(e.target.value) || 1)}
-                  className="w-14 text-center px-2 py-1.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                <span className="text-sm text-text3">ימים</span>
-              </div>
-            </div>
-            <div className="flex justify-between text-xs text-text3 mt-1 px-0.5">
-              <span>1 יום</span>
-              <span>90 ימים</span>
-            </div>
-            {/* Notification channels */}
-            <div className="mt-4 pt-3 border-t border-border">
-              <p className="text-xs font-semibold text-text3 mb-2">{t('settings.notif.channels')}</p>
-              <p className="text-xs text-text3 mb-3">{t('settings.notif.channels.note')}</p>
-              <div className="space-y-2">
-                {/* Push */}
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="flex items-center gap-2">
-                    <Icon name="notifications" size={16} color="var(--c-warning)" />
-                    <span className="text-sm text-text2">{t('settings.notif.push')}</span>
-                  </div>
-                  <button
-                    role="switch"
-                    aria-checked={notifChannels.push}
-                    onClick={() => updateNotifChannel('push', !notifChannels.push)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.push ? 'bg-primary' : 'bg-border'}`}
-                  >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.push ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                  </button>
-                </label>
-                {/* Email */}
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="flex items-center gap-2">
-                    <Icon name="mail" size={16} color="#3b82f6" />
-                    <span className="text-sm text-text2">{t('settings.notif.email')}</span>
-                  </div>
-                  <button
-                    role="switch"
-                    aria-checked={notifChannels.email}
-                    onClick={() => updateNotifChannel('email', !notifChannels.email)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.email ? 'bg-primary' : 'bg-border'}`}
-                  >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.email ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                  </button>
-                </label>
-                {/* Telegram */}
-                <label className={`flex items-center justify-between ${!telegramLinked ? 'opacity-50' : 'cursor-pointer'}`}>
-                  <div className="flex items-center gap-2">
-                    <Icon name="send" size={16} color="#0ea5e9" />
-                    <div>
-                      <span className="text-sm text-text2">{t('settings.notif.telegram')}</span>
-                      {!telegramLinked && <p className="text-[10px] text-text3">יש לקשר טלגרם תחילה</p>}
-                    </div>
-                  </div>
-                  <button
-                    role="switch"
-                    aria-checked={notifChannels.telegram}
-                    onClick={() => telegramLinked && updateNotifChannel('telegram', !notifChannels.telegram)}
-                    disabled={!telegramLinked}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.telegram && telegramLinked ? 'bg-primary' : 'bg-border'}`}
-                  >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.telegram && telegramLinked ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                  </button>
-                </label>
-              </div>
-            </div>
-          </div>
-          {/* Telegram */}
-          <div className="border-t border-border">
-            {telegramLinked ? (
-              <div className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
-                    <Icon name="send" size={20} color="#0ea5e9" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-text">מחובר לבוט טלגרם</p>
-                    <p className="text-xs text-text3">מקבל את כל ההתראות גם בטלגרם</p>
-                  </div>
-                  <button onClick={handleDisconnectTelegram} className="text-xs text-error font-medium px-3 py-1.5 bg-error/10 rounded-xl flex items-center gap-1">
-                    <Icon name="link_off" size={14} /> נתק
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
-                    <Icon name="send" size={20} color="var(--c-text3)" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-text">קשר לטלגרם</p>
-                    <p className="text-xs text-text3">קבל את כל ההתראות גם בטלגרם</p>
-                  </div>
-                  {!telegramCode && (
-                    <button
-                      onClick={handleGenerateTelegramCode}
-                      disabled={telegramLoading}
-                      className="text-xs font-medium px-3 py-1.5 bg-bg text-text2 rounded-xl flex items-center gap-1 disabled:opacity-50"
-                    >
-                      {telegramLoading ? <Spinner size={14} color="var(--c-text3)" /> : <Icon name="link" size={14} />}
-                      קשר
-                    </button>
-                  )}
-                </div>
-                {telegramCode && (
-                  <div className="bg-bg rounded-2xl p-4 space-y-2">
-                    <p className="text-xs text-text2 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
-                    <a href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`} target="_blank" rel="noopener noreferrer" className="block text-center bg-primary text-white py-2.5 rounded-xl text-sm font-medium">פתח בוט טלגרם</a>
-                    <p className="text-xs text-text3 text-center">או שלח ידנית לבוט:</p>
-                    <div className="bg-surface rounded-xl px-4 py-3 text-center">
-                      <p className="text-xs text-text3 mb-1">הפקודה לשליחה:</p>
-                      <p className="font-mono text-lg font-bold tracking-widest text-text select-all">/start {telegramCode}</p>
-                    </div>
-                    <p className="text-xs text-text3 text-center">הקוד תקף ל-10 דקות</p>
-                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-text2 py-1.5">צור קוד חדש</button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* ── פיצ'רים ── */}
-        <SL>פיצ'רים</SL>
-        <Card>
-          <div className="flex items-center justify-between p-4">
-            <div className="flex-1 ml-3">
-              <p className="text-sm font-medium text-text">הצג ערך שוק של שוברים</p>
-              <p className="text-xs text-text3 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
-            </div>
-            <button
-              onClick={() => updateProfile({ show_voucher_value: !profile?.show_voucher_value })}
-              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${profile?.show_voucher_value ? 'bg-primary' : 'bg-border'}`}
-            >
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${profile?.show_voucher_value ? 'translate-x-0.5' : 'right-0.5'}`} />
-            </button>
-          </div>
-        </Card>
-
-        {/* ── הכרטיסים והמועדונים שלי ── */}
-        <SL>{t('settings.my_clubs')}</SL>
-        <Card>
-          <button
-            onClick={() => setClubsOpen(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3.5 text-right"
-          >
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-text">{t('settings.my_clubs')}</p>
-              <p className="text-xs mt-0.5 text-text3">{t('settings.my_clubs.sub')}</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 mr-2">
-              {localClubIds.length > 0 && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary text-white">
-                  {localClubIds.length}
-                </span>
-              )}
-              <Icon name={clubsOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={16} color="var(--c-text3)" />
-            </div>
-          </button>
-
-          {clubsOpen && (
-            <div className="px-4 pb-4 space-y-4 border-t border-border">
-              {clubs.length === 0 ? (
-                <p className="text-sm text-center py-4 text-text3">
-                  {t('app.loading')}
-                </p>
-              ) : (
-                <>
-                  {/* Credit cards */}
-                  {clubs.filter(c => c.type === 'credit_card').length > 0 && (
-                    <div className="pt-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon name="credit_card" size={16} color="var(--c-primary)" />
-                        <span className="text-xs font-bold uppercase tracking-wide text-text3">
-                          {t('settings.clubs.credit_card')}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {clubs.filter(c => c.type === 'credit_card').map(club => {
-                          const selected = localClubIds.includes(club.id)
-                          return (
-                            <button
-                              key={club.id}
-                              onClick={() => setLocalClubIds(prev =>
-                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
-                              )}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                                selected
-                                  ? 'border-primary bg-primary-light text-primary'
-                                  : 'border-border bg-surface text-text2'
-                              }`}
-                            >
-                              {selected && <Icon name="check" size={12} />}
-                              {club.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Loyalty clubs */}
-                  {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon name="sell" size={16} color="var(--c-primary)" />
-                        <span className="text-xs font-bold uppercase tracking-wide text-text3">
-                          {t('settings.clubs.loyalty_club')}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {clubs.filter(c => c.type === 'loyalty_club').map(club => {
-                          const selected = localClubIds.includes(club.id)
-                          return (
-                            <button
-                              key={club.id}
-                              onClick={() => setLocalClubIds(prev =>
-                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
-                              )}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                                selected
-                                  ? 'border-primary bg-primary-light text-primary'
-                                  : 'border-border bg-surface text-text2'
-                              }`}
-                            >
-                              {selected && <Icon name="check" size={12} />}
-                              {club.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleSaveClubs}
-                    disabled={savingClubs}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-primary"
-                  >
-                    {savingClubs ? <Spinner size={16} color="#fff" /> : <Icon name="check" size={16} />}
-                    {t('app.save')}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </Card>
-
-        {/* ── כלים ── */}
-        <SL>כלים</SL>
-        <Card>
-          <div className="divide-y divide-border">
-            <MenuItem icon="cloud_upload" label="סנכרן שוברים לענן" desc={isOnline ? 'העלה שוברים מ-cache לסופאבייס' : 'אין חיבור לאינטרנט'} onClick={handleSync} right={syncing ? <Spinner size={20} /> : undefined} />
-            <MenuItem icon="notifications" label="שלח תזכורת תוקף" desc="מייל עם רשימת שוברים שפגי תוקף בקרוב" onClick={handleSendExpiryReminder} right={sendingReminder ? <Spinner size={20} color="var(--c-warning)" /> : undefined} />
-            <MenuItem icon="wifi" label="בדוק חיבור" desc="בדיקת תקינות חיבור לבסיס הנתונים" onClick={handleCheckConnection} right={checking ? <Spinner size={20} color="#3b82f6" /> : undefined} />
-          </div>
-        </Card>
-
-        {/* ── תמיכה (Pro) + הודעות מערכת + יומן פעילות ── */}
-        {isPro && (
-          <>
-          <SL>תמיכה</SL>
-          <Card>
-            <div className="px-4 py-2.5 border-b border-border flex items-center justify-end">
-              <button onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }} className="text-xs text-primary flex items-center gap-1">
-                ההודעות שלי
-                <Icon name={showMyMessages ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={14} />
-              </button>
-            </div>
-            {!supportSent ? (
-              <div className="p-4 space-y-3">
-                <div className="flex gap-2">
-                  <input value={supportSubject} onChange={e => setSupportSubject(e.target.value)} placeholder="נושא" className="flex-1 min-w-0 px-3 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                  <select value={supportCategory} onChange={e => setSupportCategory(e.target.value)} className="shrink-0 w-28 px-2 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30">
-                    <option value="general">כללי</option>
-                    <option value="billing">חיוב</option>
-                    <option value="bug">באג</option>
-                    <option value="feature">פיצ'ר</option>
-                  </select>
-                </div>
-                <textarea value={supportBody} onChange={e => setSupportBody(e.target.value)} placeholder="תאר את הבעיה או הבקשה שלך..." rows={3} className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
-                <button onClick={sendSupportMessage} disabled={sendingSupport} className="w-full bg-primary text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
-                  <Icon name="send" size={16} />
-                  {sendingSupport ? 'שולח...' : 'שלח הודעה'}
-                </button>
-              </div>
-            ) : (
-              <div className="p-4 flex flex-col items-center gap-2 text-center">
-                <div className="w-10 h-10 bg-primary-light rounded-2xl flex items-center justify-center"><Icon name="check" size={20} color="var(--c-primary)" /></div>
-                <p className="text-sm font-medium text-text">ההודעה נשלחה!</p>
-                <p className="text-xs text-text3">נחזור אליך בהקדם</p>
-                <button onClick={() => setSupportSent(false)} className="text-xs text-primary mt-1">שלח הודעה נוספת</button>
-              </div>
-            )}
-            {showMyMessages && (
-              <div className="border-t border-border">
-                {myMessages.length === 0 ? (
-                  <p className="text-center text-xs text-text3 py-4">אין הודעות קודמות</p>
-                ) : (
-                  <div className="divide-y divide-border max-h-[28rem] overflow-y-auto">
-                    {myMessages.map(m => {
-                      const isExpanded = expandedMessageId === m.id
-                      const hasReplies = (m.replies?.length ?? 0) > 0
-                      const hasAdminReply = m.admin_reply || m.replies?.some(r => r.sender === 'admin')
-                      return (
-                        <div key={m.id} className="px-4 py-3">
-                          <button className="w-full text-right" onClick={() => { setExpandedMessageId(isExpanded ? null : m.id); if (!isExpanded) { void supabase.rpc('user_mark_message_read', { p_message_id: m.id }) } }}>
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-medium text-text">{m.subject}</p>
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {hasAdminReply && <span className="text-[10px] bg-primary-light text-primary px-1.5 py-0.5 rounded-full font-medium">נענה</span>}
-                                {!hasAdminReply && <span className="text-[10px] bg-bg text-text3 px-1.5 py-0.5 rounded-full">בטיפול</span>}
-                                <span className="text-xs text-text3 flex items-center gap-0.5"><Icon name="schedule" size={12} />{formatDate(m.created_at)}</span>
-                              </div>
-                            </div>
-                            {!isExpanded && <p className="text-xs text-text3 mt-0.5 line-clamp-1 text-right">{m.body}</p>}
-                          </button>
-                          {isExpanded && (
-                            <div className="mt-2 space-y-2">
-                              <div className="flex justify-end">
-                                <div className="bg-primary text-white rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
-                                  <p className="text-xs">{m.body}</p>
-                                  <p className="text-[10px] text-white/70 mt-0.5">{formatDate(m.created_at)}</p>
-                                </div>
-                              </div>
-                              {hasReplies ? (
-                                m.replies!.map(r => (
-                                  <div key={r.id} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${r.sender === 'user' ? 'bg-primary text-white rounded-tl-sm' : 'bg-bg text-text rounded-tr-sm'}`}>
-                                      {r.sender === 'admin' && <p className="text-[10px] font-semibold text-primary mb-0.5">תמיכה</p>}
-                                      <p className="text-xs">{r.body}</p>
-                                      <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-white/70' : 'text-text3'}`}>{formatDate(r.created_at)}</p>
-                                    </div>
-                                  </div>
-                                ))
-                              ) : m.admin_reply ? (
-                                <div className="flex justify-start">
-                                  <div className="bg-bg text-text rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]">
-                                    <p className="text-[10px] font-semibold text-primary mb-0.5">תמיכה</p>
-                                    <p className="text-xs">{m.admin_reply}</p>
-                                    {m.replied_at && <p className="text-[10px] text-text3 mt-0.5">{formatDate(m.replied_at)}</p>}
-                                  </div>
-                                </div>
-                              ) : null}
-                              {hasAdminReply && (
-                                <div className="flex gap-1.5 mt-1">
-                                  <input value={replyTexts[m.id] || ''} onChange={e => setReplyTexts(prev => ({ ...prev, [m.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserReply(m.id) } }} placeholder="כתוב תשובה..." className="flex-1 px-3 py-2 border border-border rounded-xl text-xs bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                                  <button onClick={() => sendUserReply(m.id)} disabled={sendingUserReply === m.id || !replyTexts[m.id]?.trim()} className="px-3 py-2 bg-primary text-white rounded-xl text-xs disabled:opacity-40 flex items-center gap-1"><Icon name="send" size={12} /></button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-          </>
-        )}
-
-        {adminBroadcasts.length > 0 && (
-          <Card>
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-text2 flex items-center gap-2">
-                <Icon name="notifications" size={16} color="#3b82f6" />
-                הודעות מערכת
-              </h3>
-              {adminBroadcasts.some(b => !seenBroadcastIds.has(b.id)) && (
-                <span className="text-xs font-bold bg-primary text-white px-1.5 py-0.5 rounded-full">
-                  {adminBroadcasts.filter(b => !seenBroadcastIds.has(b.id)).length}
-                </span>
-              )}
-            </div>
-            <div className="divide-y divide-border max-h-64 overflow-y-auto">
-              {adminBroadcasts.map(b => {
-                const isNew = !seenBroadcastIds.has(b.id)
-                return (
-                  <div key={b.id} className={`px-4 py-3 ${isNew ? 'bg-primary-light/40' : ''}`}
-                    onMouseEnter={() => {
-                      if (isNew) {
-                        setSeenBroadcastIds(prev => { const next = new Set(prev); next.add(b.id); localStorage.setItem('seen_broadcast_ids', JSON.stringify([...next])); return next })
-                        void supabase.rpc('record_broadcast_view', { p_broadcast_id: b.id })
-                      }
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm font-medium ${isNew ? 'text-text' : 'text-text2'}`}>{b.subject}</p>
-                      <span className="text-xs text-text3 flex-shrink-0">{formatDate(b.created_at)}</span>
-                    </div>
-                    <p className="text-xs text-text3 mt-0.5">{b.body}</p>
-                  </div>
-                )
-              })}
-            </div>
-          </Card>
-        )}
-
-        <ActivityLog />
 
         {/* ── אבטחה ── */}
         <SL>{t('settings.security')}</SL>
@@ -1865,6 +1308,565 @@ export default function SettingsPage() {
           </div>
           )}
         </Card>
+
+        {/* ── התראות ואינטגרציות ── */}
+        <SL>התראות ואינטגרציות</SL>
+        <Card>
+          {/* Reminder days */}
+          <div className="p-4">
+            {/* Google Calendar toggle */}
+            <label className="flex items-center justify-between cursor-pointer mb-4">
+              <div className="flex items-center gap-2">
+                <Icon name="calendar_month" size={16} color="#3b82f6" />
+                <span className="text-sm text-text2">{t('settings.calendar.enabled')}</span>
+              </div>
+              <button
+                role="switch"
+                aria-checked={calendarReminderEnabled}
+                onClick={() => saveCalendarEnabled(!calendarReminderEnabled)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${calendarReminderEnabled ? 'bg-primary' : 'bg-border'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${calendarReminderEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </label>
+            <p className="text-sm text-text2 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="range" min={1} max={90} value={reminderDays}
+                onChange={e => saveReminderDays(parseInt(e.target.value))}
+                className="flex-1 accent-primary"
+              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number" min={1} max={90} value={reminderDays}
+                  onChange={e => saveReminderDays(parseInt(e.target.value) || 1)}
+                  className="w-14 text-center px-2 py-1.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <span className="text-sm text-text3">ימים</span>
+              </div>
+            </div>
+            <div className="flex justify-between text-xs text-text3 mt-1 px-0.5">
+              <span>1 יום</span>
+              <span>90 ימים</span>
+            </div>
+            {/* Notification channels */}
+            <div className="mt-4 pt-3 border-t border-border">
+              <p className="text-xs font-semibold text-text3 mb-2">{t('settings.notif.channels')}</p>
+              <p className="text-xs text-text3 mb-3">{t('settings.notif.channels.note')}</p>
+              <div className="space-y-2">
+                {/* Push */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Icon name="notifications" size={16} color="var(--c-warning)" />
+                    <span className="text-sm text-text2">{t('settings.notif.push')}</span>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.push}
+                    onClick={() => updateNotifChannel('push', !notifChannels.push)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.push ? 'bg-primary' : 'bg-border'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.push ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+                {/* Email */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Icon name="mail" size={16} color="#3b82f6" />
+                    <span className="text-sm text-text2">{t('settings.notif.email')}</span>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.email}
+                    onClick={() => updateNotifChannel('email', !notifChannels.email)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.email ? 'bg-primary' : 'bg-border'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.email ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+                {/* Telegram */}
+                <label className={`flex items-center justify-between ${!telegramLinked ? 'opacity-50' : 'cursor-pointer'}`}>
+                  <div className="flex items-center gap-2">
+                    <Icon name="send" size={16} color="#0ea5e9" />
+                    <div>
+                      <span className="text-sm text-text2">{t('settings.notif.telegram')}</span>
+                      {!telegramLinked && <p className="text-[10px] text-text3">יש לקשר טלגרם תחילה</p>}
+                    </div>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifChannels.telegram}
+                    onClick={() => telegramLinked && updateNotifChannel('telegram', !notifChannels.telegram)}
+                    disabled={!telegramLinked}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${notifChannels.telegram && telegramLinked ? 'bg-primary' : 'bg-border'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifChannels.telegram && telegramLinked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+              </div>
+            </div>
+          </div>
+          {/* Telegram */}
+          <div className="border-t border-border">
+            {telegramLinked ? (
+              <div className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
+                    <Icon name="send" size={20} color="#0ea5e9" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-text">מחובר לבוט טלגרם</p>
+                    <p className="text-xs text-text3">מקבל את כל ההתראות גם בטלגרם</p>
+                  </div>
+                  <button onClick={handleDisconnectTelegram} className="text-xs text-error font-medium px-3 py-1.5 bg-error/10 rounded-xl flex items-center gap-1">
+                    <Icon name="link_off" size={14} /> נתק
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
+                    <Icon name="send" size={20} color="var(--c-text3)" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-text">קשר לטלגרם</p>
+                    <p className="text-xs text-text3">קבל את כל ההתראות גם בטלגרם</p>
+                  </div>
+                  {!telegramCode && (
+                    <button
+                      onClick={handleGenerateTelegramCode}
+                      disabled={telegramLoading}
+                      className="text-xs font-medium px-3 py-1.5 bg-bg text-text2 rounded-xl flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {telegramLoading ? <Spinner size={14} color="var(--c-text3)" /> : <Icon name="link" size={14} />}
+                      קשר
+                    </button>
+                  )}
+                </div>
+                {telegramCode && (
+                  <div className="bg-bg rounded-2xl p-4 space-y-2">
+                    <p className="text-xs text-text2 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
+                    <a href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`} target="_blank" rel="noopener noreferrer" className="block text-center bg-primary text-white py-2.5 rounded-xl text-sm font-medium">פתח בוט טלגרם</a>
+                    <p className="text-xs text-text3 text-center">או שלח ידנית לבוט:</p>
+                    <div className="bg-surface rounded-xl px-4 py-3 text-center">
+                      <p className="text-xs text-text3 mb-1">הפקודה לשליחה:</p>
+                      <p className="font-mono text-lg font-bold tracking-widest text-text select-all">/start {telegramCode}</p>
+                    </div>
+                    <p className="text-xs text-text3 text-center">הקוד תקף ל-10 דקות</p>
+                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-text2 py-1.5">צור קוד חדש</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* ── שיתוף וחברים ── */}
+        <SL>שיתוף וחברים</SL>
+        <Card>
+          <div className="p-4 space-y-3">
+            {members.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {members.map(m => (
+                  <div key={m.user_id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <div>
+                      <p className="text-sm text-text2">{m.email}</p>
+                      <p className="text-xs text-text3">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
+                    </div>
+                    {m.role !== 'owner' && (
+                      <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="p-1.5 text-error rounded-lg">
+                        <Icon name="delete" size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {pendingInviteEmail && (
+              <div className="bg-warning/10 rounded-2xl p-3 space-y-2">
+                <p className="text-sm text-warning">המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה. לשלוח הזמנה להצטרף?</p>
+                <div className="flex gap-2">
+                  <button onClick={handleSendNotFoundInvite} className="flex-1 bg-warning text-white py-2 rounded-xl text-sm font-medium">שלח הזמנה</button>
+                  <button onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }} className="flex-1 bg-bg text-text2 py-2 rounded-xl text-sm font-medium">{t('app.cancel')}</button>
+                </div>
+              </div>
+            )}
+            {!pendingInviteEmail && (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Icon name="person_add" size={16} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                    placeholder="כתובת מייל לשיתוף"
+                    className="w-full pr-9 pl-3 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    dir="ltr"
+                  />
+                </div>
+                <button
+                  onClick={handleInvite}
+                  disabled={inviteLoading || !inviteEmail.trim()}
+                  className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
+                >
+                  {inviteLoading ? <Spinner size={16} color="#fff" /> : 'הוסף'}
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-text3">חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.</p>
+          </div>
+        </Card>
+
+        {/* ── מראה ושפה ── */}
+        <SL>מראה ושפה</SL>
+        <Card>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-3">
+              <Icon name={theme === 'dark' ? 'dark_mode' : 'light_mode'} size={20} color="var(--c-primary)" />
+              <div>
+                <div className="font-medium text-sm text-text">{t('settings.dark.mode')}</div>
+                <div className="text-xs text-text3">{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-primary' : 'bg-border'}`}
+            >
+              <span
+                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+                style={{ transform: theme === 'dark' ? 'translateX(-24px)' : 'translateX(-4px)' }}
+              />
+            </button>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Icon name="language" size={20} color="var(--c-primary)" />
+              <div>
+                <div className="font-medium text-sm text-text">שפה / Language</div>
+                <div className="text-xs text-text3">{locale === 'he' ? 'עברית' : 'English'}</div>
+              </div>
+            </div>
+            <div className="flex rounded-xl overflow-hidden border border-border">
+              {(['he', 'en'] as const).map(l => (
+                <button
+                  key={l}
+                  onClick={() => setLocale(l)}
+                  className={`px-3 py-1 text-xs font-semibold transition-colors ${locale === l ? 'bg-primary text-white' : 'bg-surface text-text2'}`}
+                >
+                  {l === 'he' ? 'עב' : 'EN'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        {/* ── ניווט מהיר ── */}
+        <SL>{t('settings.quick.nav')}</SL>
+        <Card>
+          <div className="divide-y divide-border">
+            <MenuItem
+              icon="archive"
+              label={t('nav.archive')}
+              desc={t('settings.quick.archive.desc')}
+              onClick={() => navigate('/archive')}
+              right={archivedVouchers.length > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-bg text-text3">{archivedVouchers.length}</span> : undefined}
+            />
+            <MenuItem
+              icon="storefront"
+              label={t('market.marketplace')}
+              desc={t('settings.quick.market.desc')}
+              onClick={() => navigate('/market')}
+            />
+            <MenuItem
+              icon="percent"
+              label={t('nav.discounts')}
+              desc={t('settings.quick.discounts.desc')}
+              onClick={() => navigate('/discounts')}
+            />
+          </div>
+        </Card>
+
+        {/* ── הכרטיסים והמועדונים שלי ── */}
+        <SL>{t('settings.my_clubs')}</SL>
+        <Card>
+          <button
+            onClick={() => setClubsOpen(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3.5 text-right"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-text">{t('settings.my_clubs')}</p>
+              <p className="text-xs mt-0.5 text-text3">{t('settings.my_clubs.sub')}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 mr-2">
+              {localClubIds.length > 0 && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary text-white">
+                  {localClubIds.length}
+                </span>
+              )}
+              <Icon name={clubsOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={16} color="var(--c-text3)" />
+            </div>
+          </button>
+
+          {clubsOpen && (
+            <div className="px-4 pb-4 space-y-4 border-t border-border">
+              {clubs.length === 0 ? (
+                <p className="text-sm text-center py-4 text-text3">
+                  {t('app.loading')}
+                </p>
+              ) : (
+                <>
+                  {/* Credit cards */}
+                  {clubs.filter(c => c.type === 'credit_card').length > 0 && (
+                    <div className="pt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon name="credit_card" size={16} color="var(--c-primary)" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-text3">
+                          {t('settings.clubs.credit_card')}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {clubs.filter(c => c.type === 'credit_card').map(club => {
+                          const selected = localClubIds.includes(club.id)
+                          return (
+                            <button
+                              key={club.id}
+                              onClick={() => setLocalClubIds(prev =>
+                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                              )}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                                selected
+                                  ? 'border-primary bg-primary-light text-primary'
+                                  : 'border-border bg-surface text-text2'
+                              }`}
+                            >
+                              {selected && <Icon name="check" size={12} />}
+                              {club.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loyalty clubs */}
+                  {clubs.filter(c => c.type === 'loyalty_club').length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon name="sell" size={16} color="var(--c-primary)" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-text3">
+                          {t('settings.clubs.loyalty_club')}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {clubs.filter(c => c.type === 'loyalty_club').map(club => {
+                          const selected = localClubIds.includes(club.id)
+                          return (
+                            <button
+                              key={club.id}
+                              onClick={() => setLocalClubIds(prev =>
+                                selected ? prev.filter(id => id !== club.id) : [...prev, club.id]
+                              )}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                                selected
+                                  ? 'border-primary bg-primary-light text-primary'
+                                  : 'border-border bg-surface text-text2'
+                              }`}
+                            >
+                              {selected && <Icon name="check" size={12} />}
+                              {club.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSaveClubs}
+                    disabled={savingClubs}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-primary"
+                  >
+                    {savingClubs ? <Spinner size={16} color="#fff" /> : <Icon name="check" size={16} />}
+                    {t('app.save')}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {/* ── פיצ'רים ── */}
+        <SL>פיצ'רים</SL>
+        <Card>
+          <div className="flex items-center justify-between p-4">
+            <div className="flex-1 ml-3">
+              <p className="text-sm font-medium text-text">הצג ערך שוק של שוברים</p>
+              <p className="text-xs text-text3 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
+            </div>
+            <button
+              onClick={() => updateProfile({ show_voucher_value: !profile?.show_voucher_value })}
+              className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${profile?.show_voucher_value ? 'bg-primary' : 'bg-border'}`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${profile?.show_voucher_value ? 'translate-x-0.5' : 'right-0.5'}`} />
+            </button>
+          </div>
+        </Card>
+
+        {/* ── כלים ── */}
+        <SL>כלים</SL>
+        <Card>
+          <div className="divide-y divide-border">
+            <MenuItem icon="cloud_upload" label="סנכרן שוברים לענן" desc={isOnline ? 'העלה שוברים מ-cache לסופאבייס' : 'אין חיבור לאינטרנט'} onClick={handleSync} right={syncing ? <Spinner size={20} /> : undefined} />
+            <MenuItem icon="notifications" label="שלח תזכורת תוקף" desc="מייל עם רשימת שוברים שפגי תוקף בקרוב" onClick={handleSendExpiryReminder} right={sendingReminder ? <Spinner size={20} color="var(--c-warning)" /> : undefined} />
+            <MenuItem icon="wifi" label="בדוק חיבור" desc="בדיקת תקינות חיבור לבסיס הנתונים" onClick={handleCheckConnection} right={checking ? <Spinner size={20} color="#3b82f6" /> : undefined} />
+          </div>
+        </Card>
+
+        {/* ── תמיכה (Pro) + הודעות מערכת + יומן פעילות ── */}
+        {isPro && (
+          <>
+          <SL>תמיכה</SL>
+          <Card>
+            <div className="px-4 py-2.5 border-b border-border flex items-center justify-end">
+              <button onClick={() => { if (!showMyMessages) loadMyMessages(); setShowMyMessages(v => !v) }} className="text-xs text-primary flex items-center gap-1">
+                ההודעות שלי
+                <Icon name={showMyMessages ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={14} />
+              </button>
+            </div>
+            {!supportSent ? (
+              <div className="p-4 space-y-3">
+                <div className="flex gap-2">
+                  <input value={supportSubject} onChange={e => setSupportSubject(e.target.value)} placeholder="נושא" className="flex-1 min-w-0 px-3 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  <select value={supportCategory} onChange={e => setSupportCategory(e.target.value)} className="shrink-0 w-28 px-2 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    <option value="general">כללי</option>
+                    <option value="billing">חיוב</option>
+                    <option value="bug">באג</option>
+                    <option value="feature">פיצ'ר</option>
+                  </select>
+                </div>
+                <textarea value={supportBody} onChange={e => setSupportBody(e.target.value)} placeholder="תאר את הבעיה או הבקשה שלך..." rows={3} className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
+                <button onClick={sendSupportMessage} disabled={sendingSupport} className="w-full bg-primary text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+                  <Icon name="send" size={16} />
+                  {sendingSupport ? 'שולח...' : 'שלח הודעה'}
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 flex flex-col items-center gap-2 text-center">
+                <div className="w-10 h-10 bg-primary-light rounded-2xl flex items-center justify-center"><Icon name="check" size={20} color="var(--c-primary)" /></div>
+                <p className="text-sm font-medium text-text">ההודעה נשלחה!</p>
+                <p className="text-xs text-text3">נחזור אליך בהקדם</p>
+                <button onClick={() => setSupportSent(false)} className="text-xs text-primary mt-1">שלח הודעה נוספת</button>
+              </div>
+            )}
+            {showMyMessages && (
+              <div className="border-t border-border">
+                {myMessages.length === 0 ? (
+                  <p className="text-center text-xs text-text3 py-4">אין הודעות קודמות</p>
+                ) : (
+                  <div className="divide-y divide-border max-h-[28rem] overflow-y-auto">
+                    {myMessages.map(m => {
+                      const isExpanded = expandedMessageId === m.id
+                      const hasReplies = (m.replies?.length ?? 0) > 0
+                      const hasAdminReply = m.admin_reply || m.replies?.some(r => r.sender === 'admin')
+                      return (
+                        <div key={m.id} className="px-4 py-3">
+                          <button className="w-full text-right" onClick={() => { setExpandedMessageId(isExpanded ? null : m.id); if (!isExpanded) { void supabase.rpc('user_mark_message_read', { p_message_id: m.id }) } }}>
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-medium text-text">{m.subject}</p>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {hasAdminReply && <span className="text-[10px] bg-primary-light text-primary px-1.5 py-0.5 rounded-full font-medium">נענה</span>}
+                                {!hasAdminReply && <span className="text-[10px] bg-bg text-text3 px-1.5 py-0.5 rounded-full">בטיפול</span>}
+                                <span className="text-xs text-text3 flex items-center gap-0.5"><Icon name="schedule" size={12} />{formatDate(m.created_at)}</span>
+                              </div>
+                            </div>
+                            {!isExpanded && <p className="text-xs text-text3 mt-0.5 line-clamp-1 text-right">{m.body}</p>}
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-2 space-y-2">
+                              <div className="flex justify-end">
+                                <div className="bg-primary text-white rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
+                                  <p className="text-xs">{m.body}</p>
+                                  <p className="text-[10px] text-white/70 mt-0.5">{formatDate(m.created_at)}</p>
+                                </div>
+                              </div>
+                              {hasReplies ? (
+                                m.replies!.map(r => (
+                                  <div key={r.id} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${r.sender === 'user' ? 'bg-primary text-white rounded-tl-sm' : 'bg-bg text-text rounded-tr-sm'}`}>
+                                      {r.sender === 'admin' && <p className="text-[10px] font-semibold text-primary mb-0.5">תמיכה</p>}
+                                      <p className="text-xs">{r.body}</p>
+                                      <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-white/70' : 'text-text3'}`}>{formatDate(r.created_at)}</p>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : m.admin_reply ? (
+                                <div className="flex justify-start">
+                                  <div className="bg-bg text-text rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]">
+                                    <p className="text-[10px] font-semibold text-primary mb-0.5">תמיכה</p>
+                                    <p className="text-xs">{m.admin_reply}</p>
+                                    {m.replied_at && <p className="text-[10px] text-text3 mt-0.5">{formatDate(m.replied_at)}</p>}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {hasAdminReply && (
+                                <div className="flex gap-1.5 mt-1">
+                                  <input value={replyTexts[m.id] || ''} onChange={e => setReplyTexts(prev => ({ ...prev, [m.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserReply(m.id) } }} placeholder="כתוב תשובה..." className="flex-1 px-3 py-2 border border-border rounded-xl text-xs bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                  <button onClick={() => sendUserReply(m.id)} disabled={sendingUserReply === m.id || !replyTexts[m.id]?.trim()} className="px-3 py-2 bg-primary text-white rounded-xl text-xs disabled:opacity-40 flex items-center gap-1"><Icon name="send" size={12} /></button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+          </>
+        )}
+
+        {adminBroadcasts.length > 0 && (
+          <Card>
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text2 flex items-center gap-2">
+                <Icon name="notifications" size={16} color="#3b82f6" />
+                הודעות מערכת
+              </h3>
+              {adminBroadcasts.some(b => !seenBroadcastIds.has(b.id)) && (
+                <span className="text-xs font-bold bg-primary text-white px-1.5 py-0.5 rounded-full">
+                  {adminBroadcasts.filter(b => !seenBroadcastIds.has(b.id)).length}
+                </span>
+              )}
+            </div>
+            <div className="divide-y divide-border max-h-64 overflow-y-auto">
+              {adminBroadcasts.map(b => {
+                const isNew = !seenBroadcastIds.has(b.id)
+                return (
+                  <div key={b.id} className={`px-4 py-3 ${isNew ? 'bg-primary-light/40' : ''}`}
+                    onMouseEnter={() => {
+                      if (isNew) {
+                        setSeenBroadcastIds(prev => { const next = new Set(prev); next.add(b.id); localStorage.setItem('seen_broadcast_ids', JSON.stringify([...next])); return next })
+                        void supabase.rpc('record_broadcast_view', { p_broadcast_id: b.id })
+                      }
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-sm font-medium ${isNew ? 'text-text' : 'text-text2'}`}>{b.subject}</p>
+                      <span className="text-xs text-text3 flex-shrink-0">{formatDate(b.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-text3 mt-0.5">{b.body}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        )}
+
+        <ActivityLog />
 
         {/* ── נגישות ופרטיות ── */}
         <SL>נגישות ופרטיות</SL>

@@ -347,7 +347,7 @@ export default function SearchPage() {
 
       {/* Header + search bar */}
       <div className="px-5 pt-5 pb-3 bg-surface border-b border-border">
-        <h1 className="text-lg font-extrabold text-text text-center mb-3">{t('nav.search')}</h1>
+        <h1 className="text-lg font-extrabold text-text text-center mb-3">{t('search.page.title')}</h1>
         <div className="flex items-center gap-2.5 bg-bg rounded-2xl px-3.5">
           <Icon name="search" size={20} color="var(--c-text3)" />
           <input
