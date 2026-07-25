@@ -210,6 +210,8 @@ export interface Category {
   id: string
   name: string
   emoji: string
+  /** Material Symbols icon name shown in place of the emoji in redesigned screens (e.g. HomePage's category glance row). */
+  icon?: string
   wallet_id?: string
 }
 
@@ -227,21 +229,21 @@ export interface MarketplaceAccessRequest {
 }
 
 export const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'fashion', name: 'אופנה', emoji: '👗' },
-  { id: 'food', name: 'מזון', emoji: '🍕' },
-  { id: 'electronics', name: 'אלקטרוניקה', emoji: '💻' },
-  { id: 'beauty', name: 'יופי', emoji: '💅' },
-  { id: 'home', name: 'בית', emoji: '🏠' },
-  { id: 'sport', name: 'ספורט', emoji: '⚽' },
-  { id: 'travel', name: 'נסיעות', emoji: '✈️' },
-  { id: 'entertainment', name: 'בידור', emoji: '🎬' },
-  { id: 'kids', name: 'ילדים', emoji: '🧸' },
-  { id: 'health', name: 'בריאות', emoji: '💊' },
-  { id: 'books', name: 'ספרים', emoji: '📚' },
-  { id: 'restaurant', name: 'מסעדות', emoji: '🍽️' },
-  { id: 'supermarket', name: 'סופר', emoji: '🛒' },
-  { id: 'gift', name: 'מתנה', emoji: '🎁' },
-  { id: 'other', name: 'אחר', emoji: '🔖' },
+  { id: 'fashion', name: 'אופנה', emoji: '👗', icon: 'checkroom' },
+  { id: 'food', name: 'מזון', emoji: '🍕', icon: 'lunch_dining' },
+  { id: 'electronics', name: 'אלקטרוניקה', emoji: '💻', icon: 'devices' },
+  { id: 'beauty', name: 'יופי', emoji: '💅', icon: 'spa' },
+  { id: 'home', name: 'בית', emoji: '🏠', icon: 'home' },
+  { id: 'sport', name: 'ספורט', emoji: '⚽', icon: 'sports_soccer' },
+  { id: 'travel', name: 'נסיעות', emoji: '✈️', icon: 'flight' },
+  { id: 'entertainment', name: 'בידור', emoji: '🎬', icon: 'theaters' },
+  { id: 'kids', name: 'ילדים', emoji: '🧸', icon: 'toys' },
+  { id: 'health', name: 'בריאות', emoji: '💊', icon: 'medication' },
+  { id: 'books', name: 'ספרים', emoji: '📚', icon: 'menu_book' },
+  { id: 'restaurant', name: 'מסעדות', emoji: '🍽️', icon: 'restaurant' },
+  { id: 'supermarket', name: 'סופר', emoji: '🛒', icon: 'shopping_cart' },
+  { id: 'gift', name: 'מתנה', emoji: '🎁', icon: 'redeem' },
+  { id: 'other', name: 'אחר', emoji: '🔖', icon: 'sell' },
 ]
 
 // ============ Smart Discount Matcher Types ============

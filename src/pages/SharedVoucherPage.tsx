@@ -330,7 +330,7 @@ export default function SharedVoucherPage() {
                   onClick={() => setShowUpdateForm(true)}
                   className="w-full flex items-center justify-center gap-2 px-6 py-4 text-sm font-semibold text-primary"
                 >
-                  <Icon name="expand_more" size={16} />
+                  <Icon name="keyboard_arrow_down" size={16} />
                   עדכן יתרה לאחר שימוש
                 </button>
               ) : (

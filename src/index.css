@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+/* Icons are Material Symbols rendered as inline SVGs (see src/components/ui/Icon.tsx),
+   not a webfont — the font+ligature approach (and later the self-hosted-font variant of
+   it) kept breaking in production for reasons invisible from a curl/build-only sandbox:
+   CSP edge cases, ad-blockers, and this app's own service worker cache-first-ing a
+   stale/broken font fetch forever. Inline SVGs bundled through Vite have no such
+   runtime dependency. */
 
 @tailwind base;
 @tailwind components;
@@ -96,31 +102,12 @@
 [data-theme="dark"] ::-webkit-scrollbar-track { background: #161b22; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
 
-/* ── Material Symbols icon font (new design system) ──────────────
-   Usage: <span class="material-symbols-rounded">icon_name</span>
-   Toggle fill/weight via inline style or the .ms-fill helper class —
-   see src/components/ui/Icon.tsx, which wraps this. */
-.material-symbols-rounded {
-  font-family: 'Material Symbols Rounded';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
-  -webkit-font-feature-settings: 'liga';
-  -moz-font-feature-settings: 'liga';
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-.material-symbols-rounded.ms-fill {
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 * {

@@ -161,6 +161,35 @@ export default function BottomNav() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  function renderTab(item: typeof items[number], idx: number) {
+    const active = activeIdx === idx
+    return (
+      <button
+        key={item.path}
+        ref={el => { btnRefs.current[idx] = el }}
+        role="listitem"
+        onClick={() => { if (!justDragged.current) navigate(item.path) }}
+        aria-label={item.label}
+        aria-current={active ? 'page' : undefined}
+        className="relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+        style={{ zIndex: 1 }}
+      >
+        <Icon
+          name={item.icon}
+          size={22}
+          filled={active}
+          color={active ? 'var(--c-primary)' : 'var(--c-text3)'}
+        />
+        <span
+          className="text-[10px] font-medium whitespace-nowrap"
+          style={{ color: active ? 'var(--c-primary)' : 'var(--c-text3)' }}
+        >
+          {item.label}
+        </span>
+      </button>
+    )
+  }
+
   return (
     <nav className="bottom-nav" aria-label="ניווט ראשי">
       <div className="relative w-full h-full">
@@ -198,34 +227,13 @@ export default function BottomNav() {
           />
 
           {/* ── Tab buttons ──────────────────────────────────────────────── */}
-          {items.map((item, idx) => {
-            const active = activeIdx === idx
-            return (
-              <button
-                key={item.path}
-                ref={el => { btnRefs.current[idx] = el }}
-                role="listitem"
-                onClick={() => { if (!justDragged.current) navigate(item.path) }}
-                aria-label={item.label}
-                aria-current={active ? 'page' : undefined}
-                className="relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                style={{ zIndex: 1 }}
-              >
-                <Icon
-                  name={item.icon}
-                  size={22}
-                  filled={active}
-                  color={active ? 'var(--c-primary)' : 'var(--c-text3)'}
-                />
-                <span
-                  className="text-[10px] font-medium whitespace-nowrap"
-                  style={{ color: active ? 'var(--c-primary)' : 'var(--c-text3)' }}
-                >
-                  {item.label}
-                </span>
-              </button>
-            )
-          })}
+          {/* Rendered in two halves with an inert spacer between them (not a 5th
+              `items` entry — see closestTab/pointer-drag note below) so the FAB above
+              gets its own reserved slot instead of sitting on the boundary between
+              the search and stats buttons, which otherwise crowds both. */}
+          {items.slice(0, 2).map((item, idx) => renderTab(item, idx))}
+          <div aria-hidden="true" className="min-w-[44px] px-3" style={{ visibility: 'hidden' }} />
+          {items.slice(2).map((item, i) => renderTab(item, i + 2))}
         </div>
 
         {/*

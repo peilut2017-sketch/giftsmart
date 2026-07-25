@@ -437,7 +437,7 @@ function MessageBubble({
           {isMe && (
             msg.is_read
               ? <Icon name="done_all" size={14} color="#60a5fa" className="shrink-0" />
-              : <Icon name="done" size={14} color="var(--c-border)" className="shrink-0" />
+              : <Icon name="check" size={14} color="var(--c-border)" className="shrink-0" />
           )}
         </div>
       </div>

@@ -341,7 +341,7 @@ export default function StatsPage() {
           <div className="rounded-[20px] p-5 text-white relative" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9333ea 60%, #a855f7 100%)' }}>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Icon name="auto_awesome" size={20} color="#e9d5ff" />
+                <Icon name="stars" size={20} color="#e9d5ff" />
                 <h3 className="font-bold text-white">{t('stats.savings.title')}</h3>
               </div>
               <button onClick={() => setShowSavingsInfo(v => !v)} className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30">
@@ -379,7 +379,7 @@ export default function StatsPage() {
           <StatCard icon="trending_up" label={t('stats.expired.active')} value={stats.expired} color={stats.expired > 0 ? 'var(--c-error)' : 'var(--c-text3)'} />
           <StatCard icon="group" label={t('stats.shared.count')} value={stats.shared} color="#3b82f6" />
           <StatCard icon="shopping_bag" label={t('stats.near.empty')} value={stats.nearZero} color={stats.nearZero > 0 ? 'var(--c-gold)' : 'var(--c-text3)'} sub={stats.nearZero > 0 ? t('stats.near.empty.hint') : undefined} />
-          {stats.giftVouchers > 0 && <StatCard icon="card_giftcard" label={t('stats.gift.count')} value={stats.giftVouchers} color="#ec4899" />}
+          {stats.giftVouchers > 0 && <StatCard icon="redeem" label={t('stats.gift.count')} value={stats.giftVouchers} color="#ec4899" />}
           <StatCard icon="add_circle" label={t('stats.added.month')} value={stats.addedThisMonth} color="#6366f1" />
         </div>
 

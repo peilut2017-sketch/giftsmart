@@ -129,7 +129,7 @@ export default function HomePage() {
       .slice(0, TOP_CATEGORIES_COUNT)
       .map(([id, count]) => {
         const known = DEFAULT_CATEGORIES.find(c => c.id === id)
-        return { id, name: known?.name ?? id, emoji: known?.emoji ?? '🏷️', count }
+        return { id, name: known?.name ?? id, icon: known?.icon ?? 'sell', count }
       })
   }, [vouchers])
 
@@ -276,11 +276,11 @@ export default function HomePage() {
             <span className="text-[15px] font-extrabold text-text">{t('search.categories')}</span>
             <button onClick={() => navigate('/search')} className="text-[13px] font-bold text-primary">{t('home.see.all')}</button>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-5 px-5 pb-1">
             {topCategories.map(c => (
-              <button key={c.id} onClick={() => navigate('/search', { state: { presetCategory: c.id } })} className="flex flex-col items-center gap-1.5">
-                <div className="w-full aspect-square rounded-2xl flex items-center justify-center text-2xl" style={{ background: `${getCategoryColor(c.id)}22` }}>
-                  {c.emoji}
+              <button key={c.id} onClick={() => navigate('/search', { state: { presetCategory: c.id } })} className="flex flex-col items-center gap-1.5 shrink-0 w-[68px]">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${getCategoryColor(c.id)}22` }}>
+                  <Icon name={c.icon} size={26} color={getCategoryColor(c.id)} />
                 </div>
                 <div className="text-xs font-bold text-text truncate w-full text-center">{c.name}</div>
                 <div className="text-[11px] text-text3 -mt-1">{c.count}</div>

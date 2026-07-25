@@ -198,7 +198,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
             onClick={() => setShowAdvanced(v => !v)}
             className="flex items-center gap-1 text-xs text-text3"
           >
-            <Icon name={showAdvanced ? 'expand_less' : 'expand_more'} size={14} />
+            <Icon name={showAdvanced ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={14} />
             פרטים נוספים (תיאור, קישור, תאריכים, תגיות)
           </button>
 
