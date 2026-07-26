@@ -618,10 +618,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   <input ref={hiddenDateRef} type="date" value={expiryDate} onChange={e => { setExpiryDate(e.target.value); setDisplayDate(isoToDisplay(e.target.value)) }} className="sr-only" tabIndex={-1} aria-hidden />
                 </div>
                 <div className="flex gap-2 items-center">
-                  <input id="vf-expiry" type="text" value={displayDate} onChange={e => handleDateTextChange(e.target.value)} placeholder="DD.MM.YYYY" className="flex-1 px-3 py-3 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40" dir="ltr" />
-                  <div className="flex gap-1">
+                  <input id="vf-expiry" type="text" value={displayDate} onChange={e => handleDateTextChange(e.target.value)} placeholder="DD.MM.YYYY" className="flex-1 min-w-0 px-3 py-3 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40" dir="ltr" />
+                  <div className="flex gap-1 shrink-0">
                     {[{ label: '+1y', years: 1 }, { label: '+2y', years: 2 }, { label: '+5y', years: 5 }].map(({ label, years }) => (
-                      <button key={years} type="button" onClick={() => { const d = new Date(); d.setFullYear(d.getFullYear() + years); const iso = d.toISOString().split('T')[0]; setExpiryDate(iso); setDisplayDate(isoToDisplay(iso)) }} className="px-2.5 py-3 text-xs font-medium bg-bg text-text2 rounded-2xl hover:bg-primary-light hover:text-primary-dark transition">
+                      <button key={years} type="button" onClick={() => { const d = new Date(); d.setFullYear(d.getFullYear() + years); const iso = d.toISOString().split('T')[0]; setExpiryDate(iso); setDisplayDate(isoToDisplay(iso)) }} className="px-2 py-3 text-xs font-medium bg-bg text-text2 rounded-2xl hover:bg-primary-light hover:text-primary-dark transition">
                         {label}
                       </button>
                     ))}
@@ -724,7 +724,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                       </button>
                       {showCatInput && (
                         <div className="w-full flex gap-2 mt-1">
-                          <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="שם קטגוריה חדשה" className="flex-1 px-3 py-2 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                          <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="שם קטגוריה חדשה" className="flex-1 min-w-0 px-3 py-2 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40" />
                           <button type="button" onClick={handleAddCat} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium">{t('app.add')}</button>
                         </div>
                       )}
