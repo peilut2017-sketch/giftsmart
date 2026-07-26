@@ -319,6 +319,12 @@ const translations: Record<string, string> = {
   'checkout.menu.transfer.en': 'Transfer',
   'checkout.card.title': 'שובר מתנה',
   'checkout.card.title.en': 'Gift Card',
+  'checkout.mini.scan.tap': 'הקש כדי לחזור לתצוגת הברקוד המלאה',
+  'checkout.mini.scan.tap.en': 'Tap to return to the full barcode view',
+  'checkout.reveal.code': 'הצג קוד',
+  'checkout.reveal.code.en': 'Reveal code',
+  'checkout.hide.code': 'הסתר קוד',
+  'checkout.hide.code.en': 'Hide code',
 
   // ── Archive Page ───────────────────────────────────────────────
   'archive.title': 'ארכיון',

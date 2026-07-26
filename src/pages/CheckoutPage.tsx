@@ -28,9 +28,19 @@ function isSafeUrl(url: string | undefined): boolean {
   } catch { return false }
 }
 
-const QUICK_AMOUNTS = [50, 100, 200]
-
 type TabKey = 'voucher' | 'use' | 'share' | 'sell' | 'activity'
+
+function drawBarcode(el: SVGSVGElement | null, value: string, opts: { height: number; displayValue: boolean }) {
+  if (!el) return
+  try {
+    JsBarcode(el, value, { format: 'CODE128', width: 2, height: opts.height, displayValue: opts.displayValue, fontSize: 14, margin: opts.displayValue ? 10 : 4 })
+  } catch {}
+}
+
+function drawQr(el: HTMLCanvasElement | null, value: string, size: number) {
+  if (!el) return
+  QRCode.toCanvas(el, value, { width: size, margin: 1, color: { dark: '#1e293b', light: '#ffffff' } }).catch(() => {})
+}
 
 // Small inline spinner (Material Symbols has no animated spinner glyph)
 function Spinner({ className = '' }: { className?: string }) {
@@ -114,6 +124,10 @@ export default function CheckoutPage() {
 
   const barcodeRef = useRef<SVGSVGElement>(null)
   const qrRef = useRef<HTMLCanvasElement>(null)
+  const codeImgRef = useRef<HTMLDivElement>(null)
+  const miniBarcodeRef = useRef<SVGSVGElement>(null)
+  const miniQrRef = useRef<HTMLCanvasElement>(null)
+  const [barcodeVisible, setBarcodeVisible] = useState(true)
   const [showCvv, setShowCvv] = useState(false)
   const [showCode, setShowCode] = useState(false)
   const [customAmount, setCustomAmount] = useState('')
@@ -213,32 +227,40 @@ export default function CheckoutPage() {
   // Effective code for display and barcode rendering
   const effectiveCode = voucher?.is_e2ee ? (plainCode ?? null) : (voucher?.code ?? null)
 
-  // Generate barcode or QR
+  // Generate barcode or QR — the barcode's own printed digits (displayValue) follow the
+  // showCode mask toggle instead of always revealing the real code underneath the bars.
   useEffect(() => {
     if (!effectiveCode) return
     const isAlpha = isAlphanumeric(effectiveCode)
+    if (isAlpha) drawQr(qrRef.current, effectiveCode, 220)
+    else drawBarcode(barcodeRef.current, effectiveCode, { height: 80, displayValue: showCode })
+  }, [effectiveCode, lockConfirmed, showCode])
 
-    if (!isAlpha && barcodeRef.current) {
-      try {
-        JsBarcode(barcodeRef.current, effectiveCode, {
-          format: 'CODE128',
-          width: 2,
-          height: 80,
-          displayValue: true,
-          fontSize: 14,
-          margin: 10,
-        })
-      } catch {}
-    }
+  // Mini scan strip (pinned under the header once the real code scrolls out of view)
+  useEffect(() => {
+    const el = codeImgRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setBarcodeVisible(entry.isIntersecting),
+      { rootMargin: '-64px 0px 0px 0px', threshold: 0 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
-    if (isAlpha && qrRef.current) {
-      QRCode.toCanvas(qrRef.current, effectiveCode, {
-        width: 220,
-        margin: 2,
-        color: { dark: '#1e293b', light: '#ffffff' },
-      }).catch(() => {})
-    }
-  }, [effectiveCode, lockConfirmed])
+  useEffect(() => {
+    if (!effectiveCode || barcodeVisible) return
+    const isAlpha = isAlphanumeric(effectiveCode)
+    if (isAlpha) drawQr(miniQrRef.current, effectiveCode, 56)
+    else drawBarcode(miniBarcodeRef.current, effectiveCode, { height: 28, displayValue: false })
+  }, [effectiveCode, barcodeVisible])
+
+  function scrollToCard() {
+    const el = codeImgRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    window.scrollTo({ top: window.scrollY + rect.top - 64 - 12, behavior: 'smooth' })
+  }
 
   async function copyCode() {
     if (voucher?.is_e2ee && !isVaultUnlocked) {
@@ -655,18 +677,10 @@ export default function CheckoutPage() {
   const currentTab: TabKey = tabs.some(x => x.key === activeTab) ? activeTab : 'voucher'
   const tabIndex = Math.max(0, tabs.findIndex(x => x.key === currentTab))
 
-  // ── Quick actions grid (navigate to the relevant tab / open edit) ──
-  const quickActions: { icon: string; label: string; onClick: () => void }[] = [
-    ...(!isArchived ? [{ icon: 'sync_alt', label: t('checkout.quick.update'), onClick: () => setActiveTab('use') }] : []),
-    ...(!isArchived ? [{ icon: 'ios_share', label: t('checkout.quick.share'), onClick: () => setActiveTab('share') }] : []),
-    ...(!isSharedVoucher && !isArchived && !voucher.is_locked ? [{ icon: 'sell', label: t('checkout.quick.sell'), onClick: () => setActiveTab('sell') }] : []),
-    ...(!isSharedVoucher && !isArchived ? [{ icon: 'edit', label: t('checkout.quick.edit'), onClick: () => setShowEditForm(true) }] : []),
-  ]
-
-  // ── Status strip (expiry | store | category — skip whatever's missing, no placeholders) ──
+  // ── Status strip (expiry | category — store name is already in the header, skip
+  //     whatever's missing, no placeholders) ──
   const statusStripItems: { icon: string; label: string }[] = []
   if (expiryLabel) statusStripItems.push({ icon: 'event', label: expiryLabel })
-  statusStripItems.push({ icon: 'sell', label: sv?.name || voucher.store_name })
   if (voucher.categories?.[0]) statusStripItems.push({ icon: 'folder', label: voucher.categories[0] })
 
   const noPaymentMethod = !(profile?.marketplace_payment_methods?.length)
@@ -820,14 +834,20 @@ export default function CheckoutPage() {
         </div>
       </>
 
-      {/* Lock banner (voucher currently locked but user confirmed past the gate above) */}
-      {voucher.is_locked && (
-        <div className="flex items-center gap-2 px-5 py-2.5 border-b" style={{ background: 'var(--c-gold-light)', borderColor: '#f6d680' }}>
-          <Icon name="lock" size={16} color="var(--c-gold)" />
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--c-gold)' }}>
-            {voucher.lock_reason === 'for_sale' ? t('checkout.lock.banner.for.sale') : `${t('checkout.lock.banner.locked')}: ${voucher.lock_reason}`}
-          </span>
-        </div>
+      {/* Lock state is already conveyed by the badge in the Hero above (and, in detail,
+          by the gate screen the user passed through to get here) — no separate banner. */}
+
+      {/* Mini scan strip — pinned just under the header once the real barcode/QR scrolls
+          out of view, so the voucher stays scannable without scrolling back up. */}
+      {!barcodeVisible && effectiveCode && (!voucher.is_e2ee || isVaultUnlocked) && (
+        <button
+          onClick={scrollToCard}
+          aria-label={t('checkout.mini.scan.tap')}
+          className="fixed inset-x-0 flex items-center justify-center bg-surface/95 backdrop-blur-xl border-b border-border shadow-sm"
+          style={{ top: 64, height: 40, zIndex: 25 }}
+        >
+          {isAlpha ? <canvas ref={miniQrRef} /> : <svg ref={miniBarcodeRef} style={{ height: 28 }} />}
+        </button>
       )}
 
       <div className="p-4 space-y-4" style={{ paddingBottom: fab ? 'calc(var(--nav-h) + 92px)' : 'calc(var(--nav-h) + 24px)' }}>
@@ -890,12 +910,19 @@ export default function CheckoutPage() {
 
           {(!voucher.is_e2ee || isVaultUnlocked) && (
             <>
-              <div className="w-full overflow-hidden flex items-center justify-center mb-4">
+              <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4">
                 {isAlpha ? <canvas ref={qrRef} className="rounded-xl" /> : <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />}
               </div>
-              <div className="font-mono text-lg font-bold tracking-widest text-text mb-3 break-all flex items-center justify-center gap-2">
-                <span dir="ltr">{showCode ? (effectiveCode ?? voucher.code) : maskedCode}</span>
-                <button onClick={() => setShowCode(s => !s)} className="text-text3 hover:text-text2">
+              {/* A CODE128 barcode already prints its own digits under the bars (driven by
+                  showCode above) — showing them again here would just duplicate that. Only
+                  QR codes (which never print text themselves) need this line. */}
+              <div className="mb-3 flex items-center justify-center gap-2">
+                {isAlpha && (
+                  <span className="font-mono text-lg font-bold tracking-widest text-text break-all" dir="ltr">
+                    {showCode ? (effectiveCode ?? voucher.code) : maskedCode}
+                  </span>
+                )}
+                <button onClick={() => setShowCode(s => !s)} className="text-text3 hover:text-text2" title={t(showCode ? 'checkout.hide.code' : 'checkout.reveal.code')}>
                   <Icon name={showCode ? 'visibility_off' : 'visibility'} size={16} />
                 </button>
                 {voucher.is_e2ee && isVaultUnlocked && (
@@ -921,6 +948,9 @@ export default function CheckoutPage() {
                       <button onClick={() => setShowCvv(!showCvv)} className="text-text3 hover:text-text2">
                         <Icon name={showCvv ? 'visibility_off' : 'visibility'} size={14} />
                       </button>
+                      <button onClick={copyCvv} className="text-text3 hover:text-text2">
+                        <Icon name="content_copy" size={14} />
+                      </button>
                     </>
                   )}
                 </div>
@@ -928,7 +958,9 @@ export default function CheckoutPage() {
             </>
           )}
 
-          <div className="flex items-center justify-center flex-wrap gap-2">
+          {/* Share / open-link live in their own tab and info row respectively — a second
+              copy here duplicated those without adding anything. */}
+          <div className="flex items-center justify-center">
             <button
               onClick={copyCode}
               disabled={!!(voucher?.is_e2ee && !isVaultUnlocked)}
@@ -942,30 +974,12 @@ export default function CheckoutPage() {
               <Icon name={copied ? 'check' : 'content_copy'} size={16} />
               {copied ? t('checkout.copied') : t('checkout.copy.code')}
             </button>
-
-            <button onClick={() => setActiveTab('share')} className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-bg text-text2 hover:opacity-80">
-              <Icon name="ios_share" size={16} /> {t('checkout.share')}
-            </button>
-
-            {isSafeUrl(voucher.link) && (
-              <a href={voucher.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">
-                <Icon name="open_in_new" size={16} /> {t('checkout.open.link')}
-              </a>
-            )}
           </div>
         </div>
 
-        {/* ── Quick actions ── */}
-        {quickActions.length > 0 && (
-          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${quickActions.length}, 1fr)` }}>
-            {quickActions.map(a => (
-              <button key={a.label} onClick={a.onClick} className="flex flex-col items-center justify-center gap-1.5 bg-surface rounded-card shadow-card py-3 active:scale-[0.97] transition-transform">
-                <Icon name={a.icon} size={22} color="var(--c-primary)" />
-                <span className="text-[11px] font-semibold text-text2">{a.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Quick Actions grid was removed — it was the same 3 destinations (שימוש/שיתוף/
+            מכירה) as the tab bar below, just styled differently. The tabs are now the one
+            entry point; עריכה lives only in the "…" menu. */}
 
         {/* ── Status strip ── */}
         <div className="flex items-center justify-center gap-2.5 text-xs text-text2 flex-wrap px-1">
@@ -1003,26 +1017,9 @@ export default function CheckoutPage() {
         {/* ── Dynamic tab content ── */}
         {currentTab === 'voucher' && (
           <div className="space-y-4">
+            {/* Code and CVV live only in the Gift Card above — repeating them here with
+                their own copy/reveal controls just meant two controls for one value. */}
             <div className="bg-surface rounded-card shadow-card divide-y divide-border overflow-hidden">
-              <InfoRow
-                label={t('checkout.code')}
-                value={showCode ? (effectiveCode ?? voucher.code) : maskedCode}
-                onCopy={voucher.is_e2ee && !isVaultUnlocked ? undefined : copyCode}
-                ltr
-              />
-              {voucher.cvv && (
-                <InfoRow
-                  label={t('checkout.cvv')}
-                  value={voucher.is_e2ee && !isVaultUnlocked ? t('checkout.e2ee.encrypted') : (showCvv ? (voucher.is_e2ee ? (plainCvv ?? voucher.cvv) : voucher.cvv)! : '•'.repeat((voucher.is_e2ee ? (plainCvv ?? voucher.cvv) : voucher.cvv)?.length ?? 3))}
-                  onCopy={voucher.is_e2ee && !isVaultUnlocked ? undefined : copyCvv}
-                  ltr={!(voucher.is_e2ee && !isVaultUnlocked)}
-                  extra={
-                    !(voucher.is_e2ee && !isVaultUnlocked)
-                      ? <button onClick={() => setShowCvv(s => !s)} className="p-2 text-text2 hover:bg-bg rounded-lg"><Icon name={showCvv ? 'visibility_off' : 'visibility'} size={16} /></button>
-                      : undefined
-                  }
-                />
-              )}
               {isSafeUrl(voucher.link) && (
                 <InfoRow label={t('checkout.link')} value={voucher.link!} onOpen={() => window.open(voucher.link, '_blank', 'noopener,noreferrer')} ltr />
               )}
@@ -1072,42 +1069,29 @@ export default function CheckoutPage() {
         )}
 
         {currentTab === 'use' && (
+          // Balance is already visible in the Hero above regardless of tab — no need to
+          // repeat it here. Store comes before the amount (you know where you are before
+          // you know how much you spent there); the only quick-deduct preset kept is
+          // "מלא" — arbitrary presets like -50/-100/-200 rarely match a real voucher's
+          // balance, "use it all" is the one that's reliably useful.
           <div className="bg-surface rounded-card shadow-card p-4 space-y-4">
-            <div className="text-center">
-              <div className="text-xs text-text3 mb-0.5">{t('checkout.current.balance')}</div>
-              <div className="text-2xl font-bold text-text tabular-nums">{formatCurrency(voucher.balance)}</div>
+            <div>
+              <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.store.used.placeholder')}</p>
+              <input
+                type="text" value={customStore} onChange={e => setCustomStore(e.target.value)}
+                placeholder={t('checkout.store.used.placeholder')}
+                className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm bg-surface text-text"
+                dir="rtl"
+              />
             </div>
 
-            <div>
-              <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.balance.quick')}</p>
-              <div className="grid grid-cols-5 gap-2">
-                {QUICK_AMOUNTS.map(amt => (
-                  <button
-                    key={amt}
-                    onClick={() => { updateBalance(voucher.balance - amt, amt, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
-                    disabled={voucher.balance < amt}
-                    style={{ height: 48 }}
-                    className="bg-bg text-text2 rounded-xl text-sm font-medium hover:opacity-80 disabled:opacity-40 transition"
-                  >
-                    -{amt}
-                  </button>
-                ))}
-                <button
-                  onClick={() => { const half = voucher.balance / 2; updateBalance(half, half, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
-                  style={{ height: 48 }}
-                  className="col-span-2 bg-bg text-text2 rounded-xl text-sm font-medium hover:opacity-80 transition"
-                >
-                  {t('checkout.half')}
-                </button>
-                <button
-                  onClick={() => { updateBalance(0, voucher.balance, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
-                  style={{ height: 48 }}
-                  className="col-span-3 bg-error/10 text-error rounded-xl text-sm font-medium hover:bg-error/20 transition"
-                >
-                  {t('checkout.full')}
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={() => { updateBalance(0, voucher.balance, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
+              style={{ height: 48 }}
+              className="w-full bg-error/10 text-error rounded-xl text-sm font-semibold hover:bg-error/20 transition"
+            >
+              {t('checkout.full')}
+            </button>
 
             <div>
               <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.usage.amount')}</p>
@@ -1123,16 +1107,6 @@ export default function CheckoutPage() {
                 const newBal = Math.max(0, voucher.balance - amount)
                 return <p className={`text-xs mt-2 font-medium ${newBal <= 0 ? 'text-error' : 'text-success'}`}>{t('checkout.new.balance.preview')}: {formatCurrency(newBal)}</p>
               })()}
-            </div>
-
-            <div>
-              <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.store.used.placeholder')}</p>
-              <input
-                type="text" value={customStore} onChange={e => setCustomStore(e.target.value)}
-                placeholder={t('checkout.store.used.placeholder')}
-                className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm bg-surface text-text"
-                dir="rtl"
-              />
             </div>
           </div>
         )}
@@ -1470,14 +1444,10 @@ export default function CheckoutPage() {
       {/* ── More actions sheet ── */}
       <BottomSheet open={showMoreMenu} onClose={() => setShowMoreMenu(false)} title={t('checkout.menu.title')}>
         <div className="flex flex-col">
+          {/* שיתוף/מכירה already have their own tab as the one entry point — listing them
+              here too was a third (and fourth) way into the same place. */}
           {!isSharedVoucher && !isArchived && (
             <MenuRow icon="edit" label={t('checkout.edit')} onClick={() => { setShowMoreMenu(false); setShowEditForm(true) }} />
-          )}
-          {!isArchived && (
-            <MenuRow icon="ios_share" label={t('checkout.menu.transfer')} onClick={() => { setShowMoreMenu(false); setActiveTab('share') }} />
-          )}
-          {!isSharedVoucher && !isArchived && !voucher.is_locked && (
-            <MenuRow icon="sell" label={t('checkout.sell')} onClick={() => { setShowMoreMenu(false); setActiveTab('sell') }} />
           )}
           {!isSharedVoucher && !isArchived && (
             <MenuRow
