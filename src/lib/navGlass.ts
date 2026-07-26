@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'gs_nav_glass_opacity'
-export const DEFAULT_NAV_GLASS_OPACITY = 0.55
+// Matches the Liquid Glass spec's reference alpha for the nav bar's light-mode background.
+export const DEFAULT_NAV_GLASS_OPACITY = 0.16
 
 export function getNavGlassOpacity(): number {
   try {
