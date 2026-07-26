@@ -948,10 +948,11 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* ── Contextual bottom action bar ── flush above the global nav, same liquid-glass
-          treatment (.bottom-action-bar), so it reads as one continuous nav region rather
-          than a separate floating card stacked on top of the real bottom nav. */}
-      <div className="bottom-action-bar fixed left-0 right-0 z-40 flex items-center justify-around px-2 py-2" style={{ bottom: 'var(--nav-h)' }}>
+      {/* ── Contextual bottom action bar ── stacks flush on top of the floating bottom-nav
+          card (same width/margins/corner radius, .bottom-nav--squared-top flattens the
+          nav's top corners where they meet) so together they read as one continuous
+          floating card extended upward, not two separate floating objects. */}
+      <div className="bottom-action-bar fixed z-40 flex items-center justify-around px-2 py-2" style={{ bottom: 'var(--nav-h)' }}>
         {barActions.map(a => (
           <button
             key={a.label}

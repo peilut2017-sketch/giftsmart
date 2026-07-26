@@ -35,7 +35,11 @@
   --shadow-card:     0 1px 3px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.07);
   --shadow-fab:      0 4px 20px rgba(22,163,74,0.40);
   --shadow-nav:      0 -1px 0 rgba(0,0,0,0.06);
-  --nav-h:           calc(72px + env(safe-area-inset-bottom));
+  --nav-card-margin: 12px;
+  --nav-card-height: 72px;
+  /* Total vertical space the floating nav card occupies from the screen's bottom edge —
+     what page content should pad/position above to clear it. */
+  --nav-h:           calc(var(--nav-card-margin) + var(--nav-card-height) + env(safe-area-inset-bottom));
 }
 
 /* ── Dark Mode Tokens ─────────────────────────────────────────── */
@@ -222,24 +226,33 @@ body {
 }
 
 /* ── Bottom nav ───────────────────────────────────────────────── */
+/* Floating card: margins on every side, rounded corners, real drop shadow — not flush
+   with the screen edges. .bottom-nav--squared-top (set only on Checkout, which stacks
+   .bottom-action-bar directly above it) flattens the top corners so the two pieces
+   read as one continuous floating shape instead of a rounded corner peeking out next
+   to the action bar's square bottom edge. */
 .bottom-nav {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: calc(var(--nav-card-margin) + env(safe-area-inset-bottom));
+  left: var(--nav-card-margin);
+  right: var(--nav-card-margin);
   z-index: 50;
-  height: calc(72px + env(safe-area-inset-bottom));
+  height: var(--nav-card-height);
+  border-radius: 24px;
   /* Liquid glass base — soft green tint */
-  background: rgba(220, 252, 231, 0.62);
+  background: rgba(220, 252, 231, 0.72);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border-top: none;
   box-shadow:
-    0 -0.5px 0 0 rgba(134, 239, 172, 0.6),
-    inset 0 1px 0 0 rgba(255,255,255,0.55),
-    0 -8px 32px 0 rgba(22, 163, 74, 0.07);
-  padding-bottom: env(safe-area-inset-bottom);
+    0 10px 30px 0 rgba(22, 163, 74, 0.16),
+    0 2px 8px 0 rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 0 rgba(255,255,255,0.55);
   overflow: hidden;
+  transition: border-radius 0.2s ease;
+}
+.bottom-nav.bottom-nav--squared-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* Subtle green-tinted noise overlay */
@@ -255,16 +268,22 @@ body {
   pointer-events: none;
 }
 
-/* Contextual action bar (e.g. Checkout's Activity/Sell/Share/Use row) that sits flush
-   above .bottom-nav — same liquid-glass treatment so the two read as one continuous
-   nav region instead of a separate floating card stacked on top of the real nav. */
+/* Contextual action bar (e.g. Checkout's Activity/Sell/Share/Use row) — sits flush
+   directly on top of .bottom-nav (same left/right margins, zero gap, matching
+   liquid-glass treatment) with only its top corners rounded, so together the two
+   pieces read as one continuous floating card extended upward, rather than two
+   separate floating objects. */
 .bottom-action-bar {
-  background: rgba(220, 252, 231, 0.62);
+  left: var(--nav-card-margin);
+  right: var(--nav-card-margin);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  background: rgba(220, 252, 231, 0.72);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   box-shadow:
     inset 0 1px 0 0 rgba(255,255,255,0.55),
-    0 -8px 32px 0 rgba(22, 163, 74, 0.07);
+    0 -4px 16px 0 rgba(22, 163, 74, 0.08);
 }
 [data-theme="dark"] .bottom-action-bar { background: rgba(14, 25, 17, 0.75) !important; }
 
