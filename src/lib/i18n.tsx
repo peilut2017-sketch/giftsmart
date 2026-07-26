@@ -325,6 +325,8 @@ const translations: Record<string, string> = {
   'checkout.reveal.code.en': 'Reveal code',
   'checkout.hide.code': 'הסתר קוד',
   'checkout.hide.code.en': 'Hide code',
+  'checkout.tap.to.copy': 'הקש כדי להעתיק את הקוד',
+  'checkout.tap.to.copy.en': 'Tap to copy the code',
 
   // ── Archive Page ───────────────────────────────────────────────
   'archive.title': 'ארכיון',

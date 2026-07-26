@@ -910,26 +910,41 @@ export default function CheckoutPage() {
 
           {(!voucher.is_e2ee || isVaultUnlocked) && (
             <>
-              <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4">
-                {isAlpha ? <canvas ref={qrRef} className="rounded-xl" /> : <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />}
-              </div>
-              {/* A CODE128 barcode already prints its own digits under the bars (driven by
-                  showCode above) — showing them again here would just duplicate that. Only
-                  QR codes (which never print text themselves) need this line. */}
-              <div className="mb-3 flex items-center justify-center gap-2">
+              {/* Tapping the code (image or, for QR, the text under it) copies it — no
+                  separate "copy code" button needed. */}
+              <button
+                type="button"
+                onClick={copyCode}
+                title={t('checkout.tap.to.copy')}
+                className="w-full active:opacity-70 transition-opacity"
+              >
+                <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4">
+                  {isAlpha ? <canvas ref={qrRef} className="rounded-xl" /> : <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />}
+                </div>
+                {/* A CODE128 barcode already prints its own digits under the bars (driven by
+                    showCode above) — showing them again here would just duplicate that. Only
+                    QR codes (which never print text themselves) need this line. */}
                 {isAlpha && (
                   <span className="font-mono text-lg font-bold tracking-widest text-text break-all" dir="ltr">
                     {showCode ? (effectiveCode ?? voucher.code) : maskedCode}
                   </span>
                 )}
+              </button>
+
+              <div className="mb-3 flex items-center justify-center gap-2">
                 <button onClick={() => setShowCode(s => !s)} className="text-text3 hover:text-text2" title={t(showCode ? 'checkout.hide.code' : 'checkout.reveal.code')}>
                   <Icon name={showCode ? 'visibility_off' : 'visibility'} size={16} />
                 </button>
-                {voucher.is_e2ee && isVaultUnlocked && (
-                  <button onClick={lockVault} title={t('checkout.e2ee.lock.vault.title')} className="text-indigo-300 hover:text-indigo-500">
-                    <Icon name="shield" size={16} />
-                  </button>
+                {copied && (
+                  <span className="text-xs font-medium text-primary flex items-center gap-1">
+                    <Icon name="check" size={14} /> {t('checkout.copied')}
+                  </span>
                 )}
+                {/* Vault re-lock shortcut lives only while the vault is actually unlocked
+                    and only where it's needed — here it was showing next to an already-
+                    revealed code, i.e. always in this branch. Dropped; the vault icon now
+                    only ever appears in its locked states (the "enter passphrase" panel
+                    and the encrypted-CVV label below). */}
               </div>
 
               {voucher.cvv && (
@@ -958,23 +973,8 @@ export default function CheckoutPage() {
             </>
           )}
 
-          {/* Share / open-link live in their own tab and info row respectively — a second
-              copy here duplicated those without adding anything. */}
-          <div className="flex items-center justify-center">
-            <button
-              onClick={copyCode}
-              disabled={!!(voucher?.is_e2ee && !isVaultUnlocked)}
-              title={voucher?.is_e2ee && !isVaultUnlocked ? t('checkout.copy.vault.locked.title') : undefined}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium transition ${
-                voucher?.is_e2ee && !isVaultUnlocked
-                  ? 'bg-bg text-text3 cursor-not-allowed opacity-50'
-                  : copied ? 'bg-primary-light text-primary-dark' : 'bg-bg text-text2 hover:opacity-80'
-              }`}
-            >
-              <Icon name={copied ? 'check' : 'content_copy'} size={16} />
-              {copied ? t('checkout.copied') : t('checkout.copy.code')}
-            </button>
-          </div>
+          {/* Tapping the code itself now copies it (see the button above) — this was a
+              second, separate way to trigger the exact same action. */}
         </div>
 
         {/* Quick Actions grid was removed — it was the same 3 destinations (שימוש/שיתוף/
@@ -1448,6 +1448,9 @@ export default function CheckoutPage() {
               here too was a third (and fourth) way into the same place. */}
           {!isSharedVoucher && !isArchived && (
             <MenuRow icon="edit" label={t('checkout.edit')} onClick={() => { setShowMoreMenu(false); setShowEditForm(true) }} />
+          )}
+          {voucher.is_e2ee && isVaultUnlocked && (
+            <MenuRow icon="shield" label={t('checkout.e2ee.lock.vault.title')} onClick={() => { setShowMoreMenu(false); lockVault() }} />
           )}
           {!isSharedVoucher && !isArchived && (
             <MenuRow
