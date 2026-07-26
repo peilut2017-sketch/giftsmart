@@ -922,7 +922,7 @@ export default function CheckoutPage() {
                           }
                           break
                         default:
-                          iconName = 'schedule'; dotColor = 'bg-gray-400 text-white'; label = entry.action
+                          iconName = 'schedule'; dotColor = 'bg-text3 text-white'; label = entry.action
                       }
 
                       return (
@@ -948,22 +948,20 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* ── Contextual bottom action bar (sits above the global nav) ── */}
-      <div className="fixed left-0 right-0 z-40" style={{ bottom: 'var(--nav-h)' }}>
-        <div className="max-w-2xl mx-auto px-3 pb-2">
-          <div className="bg-surface/95 backdrop-blur border border-border rounded-2xl shadow-card flex items-center justify-around px-2 py-2">
-            {barActions.map(a => (
-              <button
-                key={a.label}
-                onClick={a.onClick}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl ${a.primary ? 'bg-gradient-to-br from-primary-mid to-primary-dark text-white' : 'text-text2'}`}
-              >
-                <Icon name={a.icon} size={22} filled={a.primary} />
-                <span className="text-[10px] font-bold">{a.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* ── Contextual bottom action bar ── flush above the global nav, same liquid-glass
+          treatment (.bottom-action-bar), so it reads as one continuous nav region rather
+          than a separate floating card stacked on top of the real bottom nav. */}
+      <div className="bottom-action-bar fixed left-0 right-0 z-40 flex items-center justify-around px-2 py-2" style={{ bottom: 'var(--nav-h)' }}>
+        {barActions.map(a => (
+          <button
+            key={a.label}
+            onClick={a.onClick}
+            className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${a.primary ? 'bg-gradient-to-br from-primary-mid to-primary-dark text-white' : 'text-text2'}`}
+          >
+            <Icon name={a.icon} size={22} filled={a.primary} />
+            <span className="text-[10px] font-bold">{a.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* ── More actions sheet ── */}
@@ -972,9 +970,7 @@ export default function CheckoutPage() {
           {!isSharedVoucher && !isArchived && (
             <MenuRow icon="edit" label={t('checkout.edit')} onClick={() => { setShowMoreMenu(false); setShowEditForm(true) }} />
           )}
-          {!isSharedVoucher && !isArchived && !voucher.is_locked && (
-            <MenuRow icon="sell" label={t('checkout.sell')} onClick={() => { setShowMoreMenu(false); setShowSellModal(true) }} />
-          )}
+          {/* "Sell" lives only in the bottom action bar (barActions below) — having it here too was a duplicate entry point for the same action. */}
           {!isSharedVoucher && !isArchived && (
             <MenuRow
               icon={voucher.is_locked ? 'lock_open' : 'lock'}

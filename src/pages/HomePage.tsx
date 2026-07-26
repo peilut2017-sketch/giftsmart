@@ -127,9 +127,11 @@ export default function HomePage() {
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, TOP_CATEGORIES_COUNT)
-      .map(([id, count]) => {
-        const known = DEFAULT_CATEGORIES.find(c => c.id === id)
-        return { id, name: known?.name ?? id, icon: known?.icon ?? 'sell', count }
+      .map(([name, count]) => {
+        // v.categories stores the category's display name (set in VoucherForm), not its id —
+        // DEFAULT_CATEGORIES must be matched by name here, not id.
+        const known = DEFAULT_CATEGORIES.find(c => c.name === name)
+        return { id: known?.id ?? name, name, icon: known?.icon ?? 'sell', count }
       })
   }, [vouchers])
 
@@ -279,8 +281,8 @@ export default function HomePage() {
           <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-5 px-5 pb-1">
             {topCategories.map(c => (
               <button key={c.id} onClick={() => navigate('/search', { state: { presetCategory: c.id } })} className="flex flex-col items-center gap-1.5 shrink-0 w-[68px]">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${getCategoryColor(c.id)}22` }}>
-                  <Icon name={c.icon} size={26} color={getCategoryColor(c.id)} />
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${getCategoryColor(c.name)}22` }}>
+                  <Icon name={c.icon} size={26} color={getCategoryColor(c.name)} />
                 </div>
                 <div className="text-xs font-bold text-text truncate w-full text-center">{c.name}</div>
                 <div className="text-[11px] text-text3 -mt-1">{c.count}</div>
@@ -320,7 +322,7 @@ export default function HomePage() {
                 <button key={v.id} onClick={() => navigate(`/checkout/${v.id}`)} className="w-full text-right bg-surface rounded-card shadow-card p-3.5 flex gap-3 items-center">
                   <div
                     className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0"
-                    style={{ background: getCategoryColor(v.categories[0] || 'other') }}
+                    style={{ background: getCategoryColor(v.categories[0] || 'אחר') }}
                   >
                     {getStoreInitials(v.store_name)}
                   </div>
