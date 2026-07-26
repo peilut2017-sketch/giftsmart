@@ -37,6 +37,11 @@
   --shadow-nav:      0 -1px 0 rgba(0,0,0,0.06);
   --nav-card-margin: 12px;
   --nav-card-height: 72px;
+  /* User-adjustable nav glass transparency — see BottomNav.tsx, which reads/writes
+     gs_nav_glass_opacity from localStorage and applies it here on :root so both
+     .bottom-nav and .bottom-action-bar share one live value. 0 = fully transparent
+     glass, 1 = fully opaque. */
+  --nav-glass-opacity: 0.55;
   /* Total vertical space the floating nav card occupies from the screen's bottom edge —
      what page content should pad/position above to clear it. */
   --nav-h:           calc(var(--nav-card-margin) + var(--nav-card-height) + env(safe-area-inset-bottom));
@@ -90,7 +95,7 @@
   color: #e6edf3 !important;
   border-color: #30363d !important;
 }
-[data-theme="dark"] .bottom-nav { background: rgba(14, 25, 17, 0.75) !important; }
+[data-theme="dark"] .bottom-nav { background: rgba(14, 25, 17, var(--nav-glass-opacity)) !important; }
 [data-theme="dark"] .glass { background: rgba(22, 27, 34, 0.88) !important; }
 [data-theme="dark"] .gs-skeleton {
   background: linear-gradient(90deg, #21262d 25%, #2d333b 50%, #21262d 75%) !important;
@@ -227,10 +232,7 @@ body {
 
 /* ── Bottom nav ───────────────────────────────────────────────── */
 /* Floating card: margins on every side, rounded corners, real drop shadow — not flush
-   with the screen edges. .bottom-nav--squared-top (set only on Checkout, which stacks
-   .bottom-action-bar directly above it) flattens the top corners so the two pieces
-   read as one continuous floating shape instead of a rounded corner peeking out next
-   to the action bar's square bottom edge. */
+   with the screen edges. */
 .bottom-nav {
   position: fixed;
   bottom: calc(var(--nav-card-margin) + env(safe-area-inset-bottom));
@@ -238,21 +240,20 @@ body {
   right: var(--nav-card-margin);
   z-index: 50;
   height: var(--nav-card-height);
-  border-radius: 24px;
-  /* Liquid glass base — soft green tint */
-  background: rgba(220, 252, 231, 0.72);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  /* Apple "Liquid Glass" tab-bar radius reads close to half the bar's height. */
+  border-radius: 32px;
+  /* Liquid glass — tint alpha is user-adjustable (Settings → Appearance) */
+  background: rgba(220, 252, 231, var(--nav-glass-opacity));
+  backdrop-filter: blur(50px) saturate(220%);
+  -webkit-backdrop-filter: blur(50px) saturate(220%);
   box-shadow:
-    0 10px 30px 0 rgba(22, 163, 74, 0.16),
+    0 12px 32px 0 rgba(22, 163, 74, 0.18),
     0 2px 8px 0 rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 0 rgba(255,255,255,0.55);
+    inset 0 0 0 1px rgba(255,255,255,0.45),
+    inset 0 1.5px 0 0 rgba(255,255,255,0.75),
+    inset 0 -1px 0 0 rgba(0,0,0,0.04);
   overflow: hidden;
   transition: border-radius 0.2s ease;
-}
-.bottom-nav.bottom-nav--squared-top {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
 }
 
 /* Subtle green-tinted noise overlay */
@@ -268,24 +269,18 @@ body {
   pointer-events: none;
 }
 
-/* Contextual action bar (e.g. Checkout's Activity/Sell/Share/Use row) — sits flush
-   directly on top of .bottom-nav (same left/right margins, zero gap, matching
-   liquid-glass treatment) with only its top corners rounded, so together the two
-   pieces read as one continuous floating card extended upward, rather than two
-   separate floating objects. */
-.bottom-action-bar {
+/* Checkout's per-tab floating action button — floats above .bottom-nav with its own
+   gap (not flush/merged), fully pill-shaped, matching the liquid-glass card language. */
+.checkout-fab {
+  position: fixed;
   left: var(--nav-card-margin);
   right: var(--nav-card-margin);
-  border-top-left-radius: 24px;
-  border-top-right-radius: 24px;
-  background: rgba(220, 252, 231, 0.72);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255,255,255,0.55),
-    0 -4px 16px 0 rgba(22, 163, 74, 0.08);
+  bottom: calc(var(--nav-h) + 12px);
+  z-index: 40;
+  border-radius: 999px;
+  height: 60px;
+  box-shadow: 0 12px 28px 0 rgba(22, 163, 74, 0.30), 0 2px 8px 0 rgba(0, 0, 0, 0.10);
 }
-[data-theme="dark"] .bottom-action-bar { background: rgba(14, 25, 17, 0.75) !important; }
 
 /* Expiry colours */
 .expiry-warning { background: linear-gradient(135deg, #fef3c7, #fde68a); }

@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { initPostHog } from './lib/posthog'
+import { applyNavGlassOpacity } from './lib/navGlass'
 
 initPostHog()
+applyNavGlassOpacity()
 
 // Prevent iOS Safari pinch-zoom (gesturestart/gesturechange are Safari-specific events)
 document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false })

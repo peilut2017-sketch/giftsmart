@@ -33,11 +33,6 @@ export default function BottomNav() {
     return i === -1 ? 0 : i
   })()
 
-  // Checkout stacks its own contextual action bar (.bottom-action-bar) directly on top
-  // of this nav — squaring the nav's top corners there makes the two read as one
-  // continuous floating card instead of a rounded corner peeking out next to it.
-  const hasActionBarAbove = location.pathname.startsWith('/checkout/')
-
   // ── Refs ──────────────────────────────────────────────────────────────────
   const navRef  = useRef<HTMLDivElement>(null)
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -196,7 +191,7 @@ export default function BottomNav() {
   }
 
   return (
-    <nav className={`bottom-nav ${hasActionBarAbove ? 'bottom-nav--squared-top' : ''}`} aria-label="ניווט ראשי">
+    <nav className="bottom-nav" aria-label="ניווט ראשי">
       <div className="relative w-full h-full">
         <div
           ref={navRef}

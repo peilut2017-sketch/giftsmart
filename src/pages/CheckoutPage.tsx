@@ -28,15 +28,71 @@ function isSafeUrl(url: string | undefined): boolean {
   } catch { return false }
 }
 
-const QUICK_AMOUNTS = [50, 100]
+const QUICK_AMOUNTS = [50, 100, 200]
+
+type TabKey = 'voucher' | 'use' | 'share' | 'sell' | 'activity'
 
 // Small inline spinner (Material Symbols has no animated spinner glyph)
 function Spinner({ className = '' }: { className?: string }) {
   return <span className={`inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ${className}`} />
 }
 
+// Animates a number toward `target` on change; skips animation entirely under prefers-reduced-motion.
+function useCountUp(target: number): number {
+  const [display, setDisplay] = useState(target)
+  const prevRef = useRef(target)
+  const rafRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const from = prevRef.current
+    const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reduced || from === target) {
+      setDisplay(target)
+      prevRef.current = target
+      return
+    }
+    const duration = 700
+    const start = performance.now()
+    function tick(now: number) {
+      const p = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setDisplay(from + (target - from) * eased)
+      if (p < 1) {
+        rafRef.current = requestAnimationFrame(tick)
+      } else {
+        prevRef.current = target
+      }
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current) }
+  }, [target])
+
+  return display
+}
+
+function InfoRow({ label, value, onCopy, onOpen, extra, ltr }: { label: string; value: string; onCopy?: () => void; onOpen?: () => void; extra?: React.ReactNode; ltr?: boolean }) {
+  if (!value) return null
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 px-4">
+      <div className="min-w-0">
+        <div className="text-xs text-text3">{label}</div>
+        <div className="text-sm font-medium text-text truncate" dir={ltr ? 'ltr' : undefined}>{value}</div>
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {extra}
+        {onOpen && (
+          <button onClick={onOpen} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"><Icon name="open_in_new" size={16} /></button>
+        )}
+        {onCopy && (
+          <button onClick={onCopy} className="p-2 text-text2 hover:bg-bg rounded-lg"><Icon name="content_copy" size={16} /></button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function CheckoutPage() {
-  const { t } = useT()
+  const { t, dir } = useT()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, profile } = useAuth()
@@ -59,6 +115,7 @@ export default function CheckoutPage() {
   const barcodeRef = useRef<SVGSVGElement>(null)
   const qrRef = useRef<HTMLCanvasElement>(null)
   const [showCvv, setShowCvv] = useState(false)
+  const [showCode, setShowCode] = useState(false)
   const [customAmount, setCustomAmount] = useState('')
   const [customStore, setCustomStore] = useState('')
   const [copied, setCopied] = useState(false)
@@ -68,12 +125,11 @@ export default function CheckoutPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
-  const [showUseSheet, setShowUseSheet] = useState(false)
-  const [activityOpen, setActivityOpen] = useState(false)
-  const [showShareModal, setShowShareModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabKey>('voucher')
+  const [headerScrolled, setHeaderScrolled] = useState(false)
   const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
   const [shareLoading, setShareLoading] = useState(false)
-  const [shareTab, setShareTab] = useState<'link' | 'user' | 'gift'>('link')
+  const [shareTab, setShareTab] = useState<'link' | 'user' | 'gift' | null>(null)
   const [shareEmail, setShareEmail] = useState('')
   const [shareEmailLoading, setShareEmailLoading] = useState(false)
   const [voucherShares, setVoucherShares] = useState<VoucherShare[]>([])
@@ -95,12 +151,13 @@ export default function CheckoutPage() {
   const [showStores, setShowStores] = useState(false)
   const [lockConfirmed, setLockConfirmed] = useState(false)
   const [lockToggling, setLockToggling] = useState(false)
-  // Sell modal
-  const [showSellModal, setShowSellModal] = useState(false)
+  // Sell state (now inline in the "מכירה" tab, not a sheet)
   const [sellPrice, setSellPrice] = useState('')
   const [sellDescription, setSellDescription] = useState('')
   const [sellLoading, setSellLoading] = useState(false)
   const [removingFromSale, setRemovingFromSale] = useState(false)
+
+  const animatedBalance = useCountUp(voucher?.balance ?? 0)
 
   // Load voucher activity log
   useEffect(() => {
@@ -128,6 +185,14 @@ export default function CheckoutPage() {
       try { wakeLockRef.current?.release() } catch {}
       wakeLockRef.current = null
     }
+  }, [])
+
+  // Header background swap on scroll
+  useEffect(() => {
+    function onScroll() { setHeaderScrolled(window.scrollY > 40) }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   // Decrypt E2EE fields when vault unlocks
@@ -188,6 +253,18 @@ export default function CheckoutPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  async function copyCvv() {
+    if (!voucher) return
+    if (voucher.is_e2ee && !isVaultUnlocked) {
+      toast.error(t('checkout.copy.vault.locked'))
+      return
+    }
+    const cvvToCopy = voucher.is_e2ee ? plainCvv : voucher.cvv
+    if (!cvvToCopy) return
+    await navigator.clipboard.writeText(cvvToCopy).catch(() => {})
+    toast.success(t('checkout.code.copied'))
+  }
+
   async function updateBalance(newBalance: number, usedAmount?: number, storeUsed?: string | null) {
     if (!voucher) return
     if (!isOnline && isSharedVoucher) {
@@ -222,8 +299,6 @@ export default function CheckoutPage() {
   async function openShareModal() {
     if (!voucher) return
     setShareLoading(true)
-    setShowShareModal(true)
-    setShareTab('link')
     setShareEmail('')
     setPendingShareEmail(null)
     setGiftsLoaded(false)
@@ -443,10 +518,10 @@ export default function CheckoutPage() {
     try {
       await listForSale(voucher!.id, price, sellDescription || undefined)
       toast.success(t('checkout.sell.listed'))
-      setShowSellModal(false)
       setSellPrice('')
       setSellDescription('')
       await refreshVouchers()
+      setActiveTab('voucher')
     } catch (err: any) {
       const msg = err?.message || ''
       if (msg.includes('already_listed')) toast.error(t('checkout.sell.already.listed'))
@@ -471,6 +546,7 @@ export default function CheckoutPage() {
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
   const expiryLabel = getExpiryLabel(voucher.expiry_date)
   const isArchived = archivedVouchers.some(v => v.id === id)
+  const isExpired = expiryStatus === 'expired'
   const catColor = getCategoryColor(voucher.categories?.[0] || 'other')
 
   // Lock gate — show blocking overlay if voucher is locked and not yet confirmed
@@ -552,13 +628,72 @@ export default function CheckoutPage() {
     )
   }
 
-  // Bottom action bar items (contextual — sits above the global nav)
-  const barActions: { icon: string; label: string; onClick: () => void; primary?: boolean }[] = [
-    { icon: 'history', label: t('checkout.activity.short'), onClick: () => { setActivityOpen(true); setTimeout(() => document.getElementById('activity-section')?.scrollIntoView({ behavior: 'smooth' }), 60) } },
-    ...(!isSharedVoucher && !isArchived && !voucher.is_locked ? [{ icon: 'sell', label: t('checkout.sell'), onClick: () => setShowSellModal(true) }] : []),
-    ...(!isArchived ? [{ icon: 'ios_share', label: t('checkout.share'), onClick: openShareModal }] : []),
-    ...(!isArchived ? [{ icon: 'shopping_bag', label: t('checkout.use.voucher'), onClick: () => setShowUseSheet(true), primary: true }] : []),
+  // ── Status badges (max 2 shown) ──
+  const badges: { icon: string; label: string }[] = []
+  if (!isArchived) {
+    if (isExpired) badges.push({ icon: 'event_busy', label: t('checkout.badge.expired') })
+    else if (expiryStatus === 'critical' || expiryStatus === 'warning') badges.push({ icon: 'schedule', label: expiryLabel || t('checkout.badge.expiring') })
+    else badges.push({ icon: 'check_circle', label: t('checkout.badge.active') })
+  }
+  if (voucher.is_locked) {
+    badges.push(voucher.lock_reason === 'for_sale' ? { icon: 'sell', label: t('checkout.badge.for.sale') } : { icon: 'lock', label: t('checkout.badge.locked') })
+  } else if (voucher.is_gift) {
+    badges.push({ icon: 'redeem', label: t('checkout.badge.gift') })
+  } else if (isSharedVoucher) {
+    badges.push({ icon: 'group', label: t('checkout.badge.shared') })
+  }
+  const visibleBadges = badges.slice(0, 2)
+
+  // ── Tabs (filtered by voucher state) ──
+  const tabs: { key: TabKey; icon: string; label: string }[] = [
+    { key: 'voucher', icon: 'confirmation_number', label: t('checkout.tab.voucher') },
+    ...(!isArchived ? [{ key: 'use' as const, icon: 'shopping_bag', label: t('checkout.tab.use') }] : []),
+    ...(!isArchived ? [{ key: 'share' as const, icon: 'ios_share', label: t('checkout.tab.share') }] : []),
+    ...(!isSharedVoucher && !isArchived && !voucher.is_locked ? [{ key: 'sell' as const, icon: 'sell', label: t('checkout.tab.sell') }] : []),
+    { key: 'activity', icon: 'history', label: t('checkout.tab.activity') },
   ]
+  const currentTab: TabKey = tabs.some(x => x.key === activeTab) ? activeTab : 'voucher'
+  const tabIndex = Math.max(0, tabs.findIndex(x => x.key === currentTab))
+
+  // ── Quick actions grid (navigate to the relevant tab / open edit) ──
+  const quickActions: { icon: string; label: string; onClick: () => void }[] = [
+    ...(!isArchived ? [{ icon: 'sync_alt', label: t('checkout.quick.update'), onClick: () => setActiveTab('use') }] : []),
+    ...(!isArchived ? [{ icon: 'ios_share', label: t('checkout.quick.share'), onClick: () => setActiveTab('share') }] : []),
+    ...(!isSharedVoucher && !isArchived && !voucher.is_locked ? [{ icon: 'sell', label: t('checkout.quick.sell'), onClick: () => setActiveTab('sell') }] : []),
+    ...(!isSharedVoucher && !isArchived ? [{ icon: 'edit', label: t('checkout.quick.edit'), onClick: () => setShowEditForm(true) }] : []),
+  ]
+
+  // ── Status strip (expiry | store | category — skip whatever's missing, no placeholders) ──
+  const statusStripItems: { icon: string; label: string }[] = []
+  if (expiryLabel) statusStripItems.push({ icon: 'event', label: expiryLabel })
+  statusStripItems.push({ icon: 'sell', label: sv?.name || voucher.store_name })
+  if (voucher.categories?.[0]) statusStripItems.push({ icon: 'folder', label: voucher.categories[0] })
+
+  const noPaymentMethod = !(profile?.marketplace_payment_methods?.length)
+
+  // ── Floating action — the one task-focused CTA for the active tab ──
+  let fab: { label: string; icon: string; onClick: () => void; disabled?: boolean; loading?: boolean } | null = null
+  if (currentTab === 'voucher' && !isArchived) {
+    fab = { label: t('checkout.use.voucher'), icon: 'shopping_bag', onClick: () => setActiveTab('use') }
+  } else if (currentTab === 'use') {
+    const amount = parseFloat(customAmount)
+    const valid = !isNaN(amount) && amount > 0 && amount <= voucher.balance
+    fab = {
+      label: t('checkout.update.balance'), icon: 'check_circle', disabled: !valid,
+      onClick: () => {
+        if (!valid) return
+        updateBalance(voucher.balance - amount, amount, customStore.trim() || null)
+        setCustomAmount(''); setCustomStore(''); setActiveTab('voucher')
+      },
+    }
+  } else if (currentTab === 'sell' && !noPaymentMethod) {
+    fab = { label: t('checkout.sell.publish'), icon: 'sell', disabled: !sellPrice, loading: sellLoading, onClick: handleListForSale }
+  }
+
+  const codeForDisplay = effectiveCode ?? voucher.code
+  const maskedCode = codeForDisplay
+    ? (codeForDisplay.length <= 4 ? codeForDisplay : '•'.repeat(Math.max(4, codeForDisplay.length - 4)) + codeForDisplay.slice(-4))
+    : ''
 
   return (
     <div className="flex-1 bg-bg">
@@ -606,48 +741,86 @@ export default function CheckoutPage() {
         />
       )}
 
-      {/* ── Gradient Hero Header ── */}
-      <div style={{
-        background: `linear-gradient(160deg, ${catColor}dd 0%, ${catColor}99 100%)`,
-        padding: '0 20px 24px', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ position: 'absolute', top: -30, left: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', pointerEvents: 'none' }} />
-
-        {/* top bar */}
-        <div className="flex items-center justify-between" style={{ padding: '18px 0 20px' }}>
-          <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
-            <Icon name="arrow_forward" size={20} color="#fff" />
+      {/* ── Header (transparent over Hero, solidifies on scroll) + Hero ──
+          position:fixed, not sticky — the app's root layout (#root/main/AnimatedRoutes'
+          motion.div all chain flex:1 with min-height:0) breaks position:sticky's
+          containing-block resolution, so a sticky header here would just scroll away
+          with the page instead of pinning. Fixed sidesteps that entirely. Hero needs no
+          top margin to compensate since a fixed header takes no space in normal flow —
+          its own 64px top padding (below) already keeps its content clear of the header. */}
+      <>
+        <div
+          className={`fixed top-0 inset-x-0 z-30 flex items-center justify-between px-3 transition-colors duration-200 ${headerScrolled ? 'bg-surface/95 backdrop-blur-xl shadow-sm border-b border-border' : ''}`}
+          style={{ height: 64 }}
+        >
+          <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl flex items-center justify-center transition" style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}>
+            <Icon name="arrow_forward" size={20} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
           </button>
-          <div className="text-base font-bold text-white truncate max-w-[55%]">{sv?.name || voucher.store_name}</div>
+          <div className={`text-base font-bold truncate max-w-[55%] transition-colors ${headerScrolled ? 'text-text' : 'text-white'}`}>{sv?.name || voucher.store_name}</div>
           <button
             onClick={() => setShowMoreMenu(true)}
             aria-label={t('checkout.menu.title')}
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'rgba(255,255,255,0.2)' }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition"
+            style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}
           >
-            <Icon name="more_horiz" size={22} color="#fff" />
+            <Icon name="more_horiz" size={22} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
           </button>
         </div>
 
-        {/* Store avatar + balance */}
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-[18px] flex items-center justify-center text-white flex-shrink-0" style={{ background: 'rgba(255,255,255,0.25)', fontSize: 24, fontWeight: 900 }}>
-            {getStoreInitials(sv?.name || voucher.store_name)}
-          </div>
-          <div>
-            <div className="text-[13px] font-medium mb-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{t('checkout.current.balance')}</div>
-            <div className="text-white font-black" style={{ fontSize: 36, letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(voucher.balance)}</div>
-            {voucher.amount > 0 && voucher.amount !== voucher.balance && (
-              <div className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                {t('checkout.original.of')} {formatCurrency(voucher.amount)} {t('checkout.original.label')}
-              </div>
-            )}
-            {sv && <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>{voucher.store_name}</div>}
-          </div>
-        </div>
-      </div>
+        <div style={{
+          background: isExpired
+            ? 'linear-gradient(160deg, #94a3b8dd 0%, #64748b99 100%)'
+            : `linear-gradient(160deg, ${catColor}dd 0%, ${catColor}99 100%)`,
+          padding: '64px 20px 28px', position: 'relative', overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', top: -30, left: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', pointerEvents: 'none' }} />
 
-      {/* Lock banner */}
+          {isArchived && (
+            <div className="absolute top-4 flex items-center gap-1 text-[10px] font-bold text-white px-3 py-1 rounded-full" style={{ insetInlineEnd: 16, background: 'rgba(0,0,0,0.35)' }}>
+              <Icon name="inventory_2" size={12} color="#fff" /> {t('checkout.badge.archived')}
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-[18px] flex items-center justify-center text-white flex-shrink-0" style={{ background: 'rgba(255,255,255,0.25)', fontSize: 24, fontWeight: 900 }}>
+              {getStoreInitials(sv?.name || voucher.store_name)}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium mb-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{t('checkout.current.balance')}</div>
+              <div className="text-white font-black tabular-nums" style={{ fontSize: 44, letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(Math.round(animatedBalance))}</div>
+              {voucher.amount > 0 && voucher.amount !== voucher.balance && (
+                <div className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  {t('checkout.original.of')} {formatCurrency(voucher.amount)} {t('checkout.original.label')}
+                </div>
+              )}
+              {sv && <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>{voucher.store_name}</div>}
+            </div>
+          </div>
+
+          {voucher.amount > 0 && (
+            <div className="mt-4">
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.25)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-[1200ms] ease-out"
+                  style={{ width: `${Math.min(100, (voucher.balance / voucher.amount) * 100)}%`, background: isExpired ? 'var(--c-error)' : '#fff' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {visibleBadges.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+              {visibleBadges.map((b, i) => (
+                <span key={i} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full text-white" style={{ background: 'rgba(255,255,255,0.22)' }}>
+                  <Icon name={b.icon} size={12} color="#fff" /> {b.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </>
+
+      {/* Lock banner (voucher currently locked but user confirmed past the gate above) */}
       {voucher.is_locked && (
         <div className="flex items-center gap-2 px-5 py-2.5 border-b" style={{ background: 'var(--c-gold-light)', borderColor: '#f6d680' }}>
           <Icon name="lock" size={16} color="var(--c-gold)" />
@@ -657,7 +830,7 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      <div className="p-4 space-y-4" style={{ paddingBottom: 'calc(var(--nav-h) + 80px)' }}>
+      <div className="p-4 space-y-4" style={{ paddingBottom: fab ? 'calc(var(--nav-h) + 92px)' : 'calc(var(--nav-h) + 24px)' }}>
         {/* Offline warning for shared */}
         {!isOnline && voucher.is_shared && (
           <div className="bg-warning/10 border border-warning/30 rounded-2xl p-3 flex items-center gap-2 text-sm text-warning">
@@ -665,13 +838,12 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Notes */}
-        {voucher.notes && (
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-sm text-text2">{voucher.notes}</div>
-        )}
+        {/* ── Gift Card ── */}
+        <div className="text-center overflow-hidden bg-surface rounded-[28px] shadow-card p-5">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-text3 mb-4">
+            <Icon name="redeem" size={14} /> {t('checkout.card.title')}
+          </div>
 
-        {/* Barcode / QR */}
-        <div className="text-center overflow-hidden bg-surface rounded-card shadow-card p-5">
           {voucher.is_e2ee && !isVaultUnlocked && (
             <div className="py-6">
               <Icon name="shield" size={40} color="#818cf8" />
@@ -722,13 +894,37 @@ export default function CheckoutPage() {
                 {isAlpha ? <canvas ref={qrRef} className="rounded-xl" /> : <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />}
               </div>
               <div className="font-mono text-lg font-bold tracking-widest text-text mb-3 break-all flex items-center justify-center gap-2">
-                {effectiveCode ?? voucher.code}
+                <span dir="ltr">{showCode ? (effectiveCode ?? voucher.code) : maskedCode}</span>
+                <button onClick={() => setShowCode(s => !s)} className="text-text3 hover:text-text2">
+                  <Icon name={showCode ? 'visibility_off' : 'visibility'} size={16} />
+                </button>
                 {voucher.is_e2ee && isVaultUnlocked && (
-                  <button onClick={lockVault} title={t('checkout.e2ee.lock.vault.title')} className="text-indigo-300 hover:text-indigo-500 ml-1">
+                  <button onClick={lockVault} title={t('checkout.e2ee.lock.vault.title')} className="text-indigo-300 hover:text-indigo-500">
                     <Icon name="shield" size={16} />
                   </button>
                 )}
               </div>
+
+              {voucher.cvv && (
+                <div className="flex items-center justify-center gap-2 mb-3 text-sm">
+                  <span className="text-text3">{t('checkout.cvv.label')}:</span>
+                  {voucher.is_e2ee && !isVaultUnlocked ? (
+                    <span className="text-xs text-indigo-400 flex items-center gap-1"><Icon name="shield" size={14} /> {t('checkout.e2ee.encrypted')}</span>
+                  ) : (
+                    <>
+                      <span className="font-mono font-bold text-text" dir="ltr">
+                        {(() => {
+                          const display = voucher.is_e2ee ? (plainCvv ?? voucher.cvv) : voucher.cvv
+                          return showCvv ? display : '•'.repeat(display?.length ?? 3)
+                        })()}
+                      </span>
+                      <button onClick={() => setShowCvv(!showCvv)} className="text-text3 hover:text-text2">
+                        <Icon name={showCvv ? 'visibility_off' : 'visibility'} size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -747,6 +943,10 @@ export default function CheckoutPage() {
               {copied ? t('checkout.copied') : t('checkout.copy.code')}
             </button>
 
+            <button onClick={() => setActiveTab('share')} className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-bg text-text2 hover:opacity-80">
+              <Icon name="ios_share" size={16} /> {t('checkout.share')}
+            </button>
+
             {isSafeUrl(voucher.link) && (
               <a href={voucher.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">
                 <Icon name="open_in_new" size={16} /> {t('checkout.open.link')}
@@ -755,215 +955,517 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* CVV */}
-        {voucher.cvv && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-center justify-between">
-            <span className="text-sm font-medium text-yellow-800">{t('checkout.cvv.label')}</span>
-            {voucher.is_e2ee && !isVaultUnlocked ? (
-              <span className="text-xs text-indigo-400 flex items-center gap-1">
-                <Icon name="shield" size={14} /> {t('checkout.e2ee.encrypted')}
-              </span>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-yellow-900 text-lg">
-                  {(() => {
-                    const display = voucher.is_e2ee ? (plainCvv ?? voucher.cvv) : voucher.cvv
-                    return showCvv ? display : '•'.repeat(display?.length ?? 4)
-                  })()}
-                </span>
-                <button onClick={() => setShowCvv(!showCvv)} className="text-yellow-600">
-                  <Icon name={showCvv ? 'visibility_off' : 'visibility'} size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Balance Card (display only — quick-deduct moved to Use sheet) */}
-        <div className="bg-surface rounded-card shadow-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-text2">{t('checkout.current.balance')}</span>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-text">{formatCurrency(voucher.balance)}</div>
-              {profile?.show_voucher_value && voucher.value_percent != null && voucher.value_percent > 0 && voucher.value_percent < 100 && (
-                <div className="text-xs text-text3 mt-0.5">{t('checkout.value.label')} {voucher.value_percent.toFixed(0)}%{voucher.actual_cost != null ? ` | ${t('checkout.cost.label')} ${voucher.actual_cost.toLocaleString('he-IL')} ₪` : ''}</div>
-              )}
-            </div>
-          </div>
-
-          {voucher.amount > 0 && (
-            <div className="mb-4">
-              <div className="flex justify-between text-xs text-text3 mb-1">
-                <span>₪0</span>
-                <span>{formatCurrency(voucher.amount)}</span>
-              </div>
-              <div className="h-3 bg-bg rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary-mid to-primary-dark rounded-full transition-all" style={{ width: `${Math.min(100, (voucher.balance / voucher.amount) * 100)}%` }} />
-              </div>
-            </div>
-          )}
-
-          {expiryLabel && (
-            <div className={`flex items-center gap-1.5 text-sm ${
-              expiryStatus === 'expired' ? 'text-text3' :
-              expiryStatus === 'critical' ? 'text-error' :
-              expiryStatus === 'warning' ? 'text-warning' : 'text-text2'
-            }`}>
-              {(expiryStatus === 'critical' || expiryStatus === 'warning') && <Icon name="warning" size={16} />}
-              <span>{expiryLabel}</span>
-              {voucher.expiry_date && expiryStatus !== 'ok' && <span className="text-xs text-text3">({formatDate(voucher.expiry_date)})</span>}
-            </div>
-          )}
-
-          {!isArchived && (
-            <Button variant="primary" fullWidth className="mt-4" onClick={() => setShowUseSheet(true)}>
-              <Icon name="shopping_bag" size={18} /> {t('checkout.use.voucher')}
-            </Button>
-          )}
-        </div>
-
-        {/* Super voucher stores (accordion) */}
-        {sv && (sv.stores.length > 0 || sv.balance_check_url) && (
-          <div className="bg-surface rounded-card shadow-card p-4">
-            <div className="flex items-center justify-between">
-              <button onClick={() => setShowStores(s => !s)} className="flex items-center gap-1.5 text-sm font-semibold text-text">
-                <Icon name="star" size={16} filled color="var(--c-gold)" />
-                {t('checkout.super.stores.label')} {sv.name}
-                <Icon name={showStores ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={16} color="var(--c-text3)" />
+        {/* ── Quick actions ── */}
+        {quickActions.length > 0 && (
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${quickActions.length}, 1fr)` }}>
+            {quickActions.map(a => (
+              <button key={a.label} onClick={a.onClick} className="flex flex-col items-center justify-center gap-1.5 bg-surface rounded-card shadow-card py-3 active:scale-[0.97] transition-transform">
+                <Icon name={a.icon} size={22} color="var(--c-primary)" />
+                <span className="text-[11px] font-semibold text-text2">{a.label}</span>
               </button>
-              {isSafeUrl(sv.balance_check_url) && (
-                <a href={sv.balance_check_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100">
-                  <Icon name="open_in_new" size={14} /> {t('checkout.check.balance')}
-                </a>
-              )}
-            </div>
-            {showStores && sv.stores.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {sv.stores.map((s, i) => (
-                  <span key={i} className="text-xs bg-gold-light text-gold px-3 py-1 rounded-full border border-gold/30">{s}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tags */}
-        {voucher.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {voucher.tags.map((tag, i) => (
-              <span key={i} className="text-xs bg-bg text-text2 px-3 py-1 rounded-full">#{tag}</span>
             ))}
           </div>
         )}
 
-        {/* Activity Timeline (accordion) */}
-        <div id="activity-section" className="bg-surface rounded-card shadow-card p-4">
-          <button onClick={() => setActivityOpen(o => !o)} className="w-full flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-text flex items-center gap-1.5">
-              <Icon name="history" size={16} color="var(--c-text3)" /> {t('checkout.activity.title')}
-            </h3>
-            <Icon name={activityOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={18} color="var(--c-text3)" />
-          </button>
-          {activityOpen && (
-            <div className="mt-4">
-              {logLoading ? (
-                <div className="flex justify-center py-4"><Spinner className="text-text3" /></div>
-              ) : voucherLog.length === 0 ? (
-                <p className="text-xs text-text3 text-center py-2">{t('checkout.activity.empty')}</p>
-              ) : (
-                <div className="relative">
-                  <div className="absolute right-[11px] top-3 bottom-3 w-px bg-border" />
-                  <div className="space-y-4">
-                    {voucherLog.map((entry) => {
-                      const dt = new Date(entry.created_at)
-                      const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
-                      const timeStr = dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+        {/* ── Status strip ── */}
+        <div className="flex items-center justify-center gap-2.5 text-xs text-text2 flex-wrap px-1">
+          {statusStripItems.map((it, i) => (
+            <span key={i} className="flex items-center gap-2.5">
+              {i > 0 && <span className="text-border">|</span>}
+              <span className="flex items-center gap-1"><Icon name={it.icon} size={14} color="var(--c-text3)" />{it.label}</span>
+            </span>
+          ))}
+        </div>
 
-                      let iconName: string
-                      let dotColor: string
-                      let label: string
-                      let detail: string | null = null
+        {/* ── Segment tabs ── */}
+        <div className="grid relative bg-bg rounded-2xl p-1" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+          <div
+            className="absolute rounded-xl bg-surface shadow-sm transition-all duration-300"
+            style={{
+              top: 4, bottom: 4,
+              width: `calc(${100 / tabs.length}% - 4px)`,
+              [dir === 'rtl' ? 'right' : 'left']: `calc(${tabIndex * (100 / tabs.length)}% + 2px)`,
+            }}
+          />
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative z-10 flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl text-[11px] font-medium transition-colors active:scale-[0.97] ${currentTab === tab.key ? 'text-primary' : 'text-text3'}`}
+              style={{ minHeight: 44 }}
+            >
+              <Icon name={tab.icon} size={18} filled={currentTab === tab.key} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-                      switch (entry.action) {
-                        case 'add':
-                          iconName = 'add_circle'; dotColor = 'bg-primary text-white'; label = t('checkout.log.added')
-                          if (entry.details?.amount != null) detail = `${t('checkout.log.amount')}: ₪${Number(entry.details.amount).toLocaleString('he-IL')}`
-                          break
-                        case 'balance_update':
-                          iconName = 'remove_circle'; dotColor = 'bg-blue-500 text-white'; label = t('checkout.log.balance.update')
-                          if (entry.details?.from != null && entry.details?.to != null) {
-                            detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
-                            if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
-                          }
-                          break
-                        case 'edit':
-                          iconName = 'edit'; dotColor = 'bg-indigo-500 text-white'; label = t('checkout.log.edited'); break
-                        case 'archive':
-                          iconName = 'inventory_2'; dotColor = 'bg-orange-400 text-white'; label = t('checkout.log.archived')
-                          if (entry.details?.balance != null) detail = `${t('checkout.log.balance.detail')}: ₪${Number(entry.details.balance).toLocaleString('he-IL')}`
-                          break
-                        case 'unarchive':
-                          iconName = 'undo'; dotColor = 'bg-teal-500 text-white'; label = t('checkout.log.unarchived'); break
-                        case 'gift_sent':
-                          iconName = 'mail'; dotColor = 'bg-pink-500 text-white'; label = t('checkout.log.gift.sent')
-                          if (entry.details?.recipient) detail = `${t('checkout.log.to')}: ${entry.details.recipient}`
-                          break
-                        case 'gift_link':
-                          iconName = 'link'; dotColor = 'bg-pink-400 text-white'; label = t('checkout.log.gift.link'); break
-                        case 'gift_received':
-                          iconName = 'redeem'; dotColor = 'bg-rose-500 text-white'; label = t('checkout.log.gift.received')
-                          if (entry.details?.sender) detail = `${t('checkout.log.from')}: ${entry.details.sender}`
-                          break
-                        case 'gift_balance_update':
-                          iconName = 'remove_circle'; dotColor = 'bg-pink-600 text-white'; label = t('checkout.log.gift.balance.update')
-                          if (entry.details?.from != null && entry.details?.to != null) {
-                            detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
-                            if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
-                          }
-                          break
-                        default:
-                          iconName = 'schedule'; dotColor = 'bg-text3 text-white'; label = entry.action
-                      }
+        {/* ── Dynamic tab content ── */}
+        {currentTab === 'voucher' && (
+          <div className="space-y-4">
+            <div className="bg-surface rounded-card shadow-card divide-y divide-border overflow-hidden">
+              <InfoRow
+                label={t('checkout.code')}
+                value={showCode ? (effectiveCode ?? voucher.code) : maskedCode}
+                onCopy={voucher.is_e2ee && !isVaultUnlocked ? undefined : copyCode}
+                ltr
+              />
+              {voucher.cvv && (
+                <InfoRow
+                  label={t('checkout.cvv')}
+                  value={voucher.is_e2ee && !isVaultUnlocked ? t('checkout.e2ee.encrypted') : (showCvv ? (voucher.is_e2ee ? (plainCvv ?? voucher.cvv) : voucher.cvv)! : '•'.repeat((voucher.is_e2ee ? (plainCvv ?? voucher.cvv) : voucher.cvv)?.length ?? 3))}
+                  onCopy={voucher.is_e2ee && !isVaultUnlocked ? undefined : copyCvv}
+                  ltr={!(voucher.is_e2ee && !isVaultUnlocked)}
+                  extra={
+                    !(voucher.is_e2ee && !isVaultUnlocked)
+                      ? <button onClick={() => setShowCvv(s => !s)} className="p-2 text-text2 hover:bg-bg rounded-lg"><Icon name={showCvv ? 'visibility_off' : 'visibility'} size={16} /></button>
+                      : undefined
+                  }
+                />
+              )}
+              {isSafeUrl(voucher.link) && (
+                <InfoRow label={t('checkout.link')} value={voucher.link!} onOpen={() => window.open(voucher.link, '_blank', 'noopener,noreferrer')} ltr />
+              )}
+              {voucher.categories?.length > 0 && (
+                <InfoRow label={t('checkout.categories')} value={voucher.categories.join('، ')} />
+              )}
+              {voucher.source && <InfoRow label={t('checkout.source')} value={voucher.source} />}
+              <InfoRow label={t('checkout.date.added')} value={formatDate(voucher.created_at)} />
+            </div>
 
-                      return (
-                        <div key={entry.id} className="flex items-start gap-3 relative">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 z-10 ${dotColor}`}>
-                            <Icon name={iconName} size={14} />
-                          </div>
-                          <div className="flex-1 min-w-0 pt-0.5">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="text-sm font-medium text-text">{label}</span>
-                              <span className="text-xs text-text3 flex-shrink-0">{dateStr} {timeStr}</span>
-                            </div>
-                            {detail && <p className="text-xs text-text2 mt-0.5">{detail}</p>}
-                          </div>
-                        </div>
-                      )
-                    })}
+            {voucher.tags?.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {voucher.tags.map((tag, i) => (
+                  <span key={i} className="text-xs bg-bg text-text2 px-3 py-1 rounded-full">#{tag}</span>
+                ))}
+              </div>
+            )}
+
+            {voucher.notes && (
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-sm text-text2">{voucher.notes}</div>
+            )}
+
+            {sv && (sv.stores.length > 0 || sv.balance_check_url) && (
+              <div className="bg-surface rounded-card shadow-card p-4">
+                <div className="flex items-center justify-between">
+                  <button onClick={() => setShowStores(s => !s)} className="flex items-center gap-1.5 text-sm font-semibold text-text">
+                    <Icon name="star" size={16} filled color="var(--c-gold)" />
+                    {t('checkout.super.stores.label')} {sv.name}
+                    <Icon name={showStores ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={16} color="var(--c-text3)" />
+                  </button>
+                  {isSafeUrl(sv.balance_check_url) && (
+                    <a href={sv.balance_check_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100">
+                      <Icon name="open_in_new" size={14} /> {t('checkout.check.balance')}
+                    </a>
+                  )}
+                </div>
+                {showStores && sv.stores.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {sv.stores.map((s, i) => (
+                      <span key={i} className="text-xs bg-gold-light text-gold px-3 py-1 rounded-full border border-gold/30">{s}</span>
+                    ))}
                   </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentTab === 'use' && (
+          <div className="bg-surface rounded-card shadow-card p-4 space-y-4">
+            <div className="text-center">
+              <div className="text-xs text-text3 mb-0.5">{t('checkout.current.balance')}</div>
+              <div className="text-2xl font-bold text-text tabular-nums">{formatCurrency(voucher.balance)}</div>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.balance.quick')}</p>
+              <div className="grid grid-cols-5 gap-2">
+                {QUICK_AMOUNTS.map(amt => (
+                  <button
+                    key={amt}
+                    onClick={() => { updateBalance(voucher.balance - amt, amt, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
+                    disabled={voucher.balance < amt}
+                    style={{ height: 48 }}
+                    className="bg-bg text-text2 rounded-xl text-sm font-medium hover:opacity-80 disabled:opacity-40 transition"
+                  >
+                    -{amt}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { const half = voucher.balance / 2; updateBalance(half, half, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
+                  style={{ height: 48 }}
+                  className="col-span-2 bg-bg text-text2 rounded-xl text-sm font-medium hover:opacity-80 transition"
+                >
+                  {t('checkout.half')}
+                </button>
+                <button
+                  onClick={() => { updateBalance(0, voucher.balance, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
+                  style={{ height: 48 }}
+                  className="col-span-3 bg-error/10 text-error rounded-xl text-sm font-medium hover:bg-error/20 transition"
+                >
+                  {t('checkout.full')}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.usage.amount')}</p>
+              <input
+                type="number" inputMode="decimal" value={customAmount} onChange={e => setCustomAmount(e.target.value)}
+                placeholder={t('checkout.usage.amount.placeholder')}
+                className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text tabular-nums"
+                style={{ fontSize: '16px' }} dir="ltr"
+              />
+              {(() => {
+                const amount = parseFloat(customAmount)
+                if (isNaN(amount) || amount <= 0) return null
+                const newBal = Math.max(0, voucher.balance - amount)
+                return <p className={`text-xs mt-2 font-medium ${newBal <= 0 ? 'text-error' : 'text-success'}`}>{t('checkout.new.balance.preview')}: {formatCurrency(newBal)}</p>
+              })()}
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.store.used.placeholder')}</p>
+              <input
+                type="text" value={customStore} onChange={e => setCustomStore(e.target.value)}
+                placeholder={t('checkout.store.used.placeholder')}
+                className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm bg-surface text-text"
+                dir="rtl"
+              />
+            </div>
+          </div>
+        )}
+
+        {currentTab === 'share' && !isSharedVoucher && (
+          <div className="space-y-3">
+            {voucher.is_e2ee && (
+              <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-xl p-3 text-xs text-warning">
+                <Icon name="shield" size={16} /> <span>{t('checkout.share.e2ee.warning')}</span>
+              </div>
+            )}
+
+            {/* Link card */}
+            <div className="bg-surface rounded-card shadow-card p-4">
+              <button onClick={() => { const next = shareTab === 'link' ? null : 'link'; setShareTab(next); if (next && shareTokens.length === 0 && !shareLoading) openShareModal() }} className="w-full flex items-center gap-3 text-right">
+                <div className="w-10 h-10 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0"><Icon name="link" size={18} color="var(--c-primary-dark)" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-text">{t('checkout.share.tab.link')}</div>
+                  <div className="text-xs text-text3">{t('checkout.share.link.desc')}</div>
+                </div>
+                <Icon name={shareTab === 'link' ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={18} color="var(--c-text3)" />
+              </button>
+              {shareTab === 'link' && (
+                <div className="mt-4">
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {[
+                      { label: t('checkout.share.link.1day'), days: 1 },
+                      { label: t('checkout.share.link.1week'), days: 7 },
+                      { label: t('checkout.share.link.unlimited'), days: undefined },
+                    ].map(opt => (
+                      <button key={opt.label} onClick={() => handleCreateShareLink(opt.days)} disabled={shareLoading} className="flex flex-col items-center gap-1 py-3 rounded-2xl bg-primary-light text-primary-dark text-xs font-medium hover:opacity-80 disabled:opacity-50 transition">
+                        <Icon name="link" size={16} /> {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {shareTokens.length > 0 && (
+                    <div className="space-y-2">
+                      {shareTokens.map(tok => {
+                        const url = `${window.location.origin}/s/${tok.token}`
+                        const expired = tok.expires_at && new Date(tok.expires_at) < new Date()
+                        return (
+                          <div key={tok.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-bg border-border opacity-60' : 'bg-bg border-border'}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-mono text-text2 truncate">{url}</p>
+                              <p className="text-xs text-text3 mt-0.5">
+                                {expired ? t('checkout.share.link.expired') : tok.expires_at ? `${t('checkout.share.link.until')} ${new Date(tok.expires_at).toLocaleDateString('he-IL')}` : t('checkout.share.link.no.limit')}
+                                {' · '}{tok.view_count} {t('checkout.share.link.views')}
+                              </p>
+                            </div>
+                            <button onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
+                            <button onClick={() => handleDeleteShareToken(tok.token)} className="p-2 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {shareLoading && <div className="text-center py-4"><Spinner className="text-primary" /></div>}
                 </div>
               )}
             </div>
-          )}
-        </div>
+
+            {/* User card */}
+            <div className="bg-surface rounded-card shadow-card p-4">
+              <button onClick={() => { const next = shareTab === 'user' ? null : 'user'; setShareTab(next); if (next && !sharesLoaded) openShareModal() }} className="w-full flex items-center gap-3 text-right">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0"><Icon name="group" size={18} color="#3b82f6" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-text">{t('checkout.share.tab.user')}</div>
+                  <div className="text-xs text-text3">{t('checkout.share.user.desc')}</div>
+                </div>
+                <Icon name={shareTab === 'user' ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={18} color="var(--c-text3)" />
+              </button>
+              {shareTab === 'user' && (
+                <div className="mt-4 space-y-4">
+                  {pendingShareEmail && (
+                    <div className="bg-warning/10 rounded-2xl p-3 space-y-2">
+                      <p className="text-sm text-warning">{t('checkout.share.user.not.found.prefix')} <strong>{pendingShareEmail}</strong> {t('checkout.share.user.not.found.suffix')}</p>
+                      <div className="flex gap-2">
+                        <button onClick={handleSendVoucherInvite} className="flex-1 bg-warning text-white py-2 rounded-xl text-sm font-medium">{t('checkout.share.send.invite')}</button>
+                        <button onClick={() => { setPendingShareEmail(null); setShareEmail('') }} className="flex-1 bg-bg text-text2 py-2 rounded-xl text-sm font-medium">{t('checkout.cancel')}</button>
+                      </div>
+                    </div>
+                  )}
+                  {!pendingShareEmail && (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2"><Icon name="person_add" size={16} color="var(--c-text3)" /></span>
+                        <input type="email" value={shareEmail} onChange={e => setShareEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleShareWithUser()} placeholder={t('checkout.share.email.placeholder')} className="w-full min-w-0 pr-9 pl-3 py-2.5 border border-border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text" dir="ltr" />
+                      </div>
+                      <button onClick={handleShareWithUser} disabled={shareEmailLoading || !shareEmail.trim()} className="shrink-0 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                        {shareEmailLoading ? <Spinner /> : t('checkout.share')}
+                      </button>
+                    </div>
+                  )}
+                  {sharesLoaded && voucherShares.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-text2">{t('checkout.share.shared.with')}:</p>
+                      {voucherShares.map(s => (
+                        <div key={s.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                          <p className="text-sm text-text">{s.shared_with_email}</p>
+                          <button onClick={() => handleUnshare(s.shared_with_email)} className="p-1.5 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Gift card */}
+            <div className="bg-surface rounded-card shadow-card p-4">
+              <button onClick={() => { const next = shareTab === 'gift' ? null : 'gift'; setShareTab(next); if (next) loadPendingGifts() }} className="w-full flex items-center gap-3 text-right">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center flex-shrink-0"><Icon name="redeem" size={18} color="#e11d48" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-text">{t('checkout.share.tab.gift')}</div>
+                  <div className="text-xs text-text3">{t('checkout.gift.desc')}</div>
+                </div>
+                <Icon name={shareTab === 'gift' ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={18} color="var(--c-text3)" />
+              </button>
+              {shareTab === 'gift' && (
+                <div className="mt-4 space-y-4">
+                  <div className="flex bg-bg rounded-2xl p-1">
+                    <button onClick={() => { setGiftMode('link'); setGiftLink(null) }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl transition ${giftMode === 'link' ? 'bg-surface shadow text-primary' : 'text-text3'}`}>
+                      <Icon name="link" size={14} /> {t('checkout.gift.create.link')}
+                    </button>
+                    <button onClick={() => { setGiftMode('email'); setGiftLink(null) }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl transition ${giftMode === 'email' ? 'bg-surface shadow text-primary' : 'text-text3'}`}>
+                      <Icon name="mail" size={14} /> {t('checkout.gift.send.email')}
+                    </button>
+                  </div>
+                  {giftMode === 'email' && (
+                    <div className="relative">
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2"><Icon name="mail" size={16} color="var(--c-text3)" /></span>
+                      <input type="email" value={giftEmail} onChange={e => setGiftEmail(e.target.value)} placeholder={t('checkout.gift.recipient.email')} className="w-full pr-9 pl-3 py-2.5 border border-border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text" dir="ltr" />
+                    </div>
+                  )}
+                  <textarea value={giftMessage} onChange={e => setGiftMessage(e.target.value)} placeholder={t('checkout.gift.message.placeholder')} rows={2} className="w-full px-3 py-2.5 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none bg-surface text-text" dir="rtl" />
+                  {giftMode === 'email' && (
+                    <button onClick={() => setGiftScheduled(s => !s)} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition border ${giftScheduled ? 'bg-primary-light border-primary text-primary-dark' : 'bg-bg border-border text-text2'}`}>
+                      <Icon name="event" size={14} /> {t('checkout.gift.schedule')}
+                    </button>
+                  )}
+                  {giftMode === 'email' && giftScheduled && (
+                    <input type="datetime-local" value={giftDate} onChange={e => setGiftDate(e.target.value)} min={new Date().toISOString().slice(0, 16)} className="w-full px-3 py-2.5 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text" dir="ltr" />
+                  )}
+                  <Button variant="primary" fullWidth loading={giftSending} disabled={giftMode === 'email' && (!giftEmail.trim() || (giftScheduled && !giftDate))} onClick={handleSendGift}>
+                    <Icon name={giftMode === 'link' ? 'link' : 'redeem'} size={18} />
+                    {giftSending ? t('checkout.gift.creating') : giftMode === 'link' ? t('checkout.gift.create.link.btn') : giftScheduled && giftDate ? t('checkout.gift.schedule.btn') : t('checkout.gift.send.now')}
+                  </Button>
+                  {giftLink && (
+                    <div className="bg-primary-light border border-primary/30 rounded-2xl p-3 space-y-2">
+                      <p className="text-xs font-medium text-primary-dark flex items-center gap-1"><Icon name="redeem" size={14} /> {t('checkout.gift.link.label')}:</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-primary-dark font-mono break-all flex-1">{giftLink}</p>
+                        <button onClick={() => { navigator.clipboard.writeText(giftLink).catch(() => {}); toast.success(t('checkout.copied')) }} className="flex-shrink-0 p-2 bg-primary/10 hover:bg-primary/20 rounded-xl"><Icon name="content_copy" size={16} color="var(--c-primary-dark)" /></button>
+                      </div>
+                    </div>
+                  )}
+                  {giftsLoaded && pendingGifts.length > 0 && (
+                    <div className="space-y-1 border-t border-border pt-3">
+                      <p className="text-xs font-medium text-text2">{t('checkout.gift.pending.label')}:</p>
+                      {pendingGifts.map(g => (
+                        <div key={g.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                          <div>
+                            <p className="text-sm text-text">{g.recipient_email || <span className="text-text3 italic">{t('checkout.gift.link.only')}</span>}</p>
+                            <p className="text-xs text-text3">{g.email_sent_at ? t('checkout.gift.sent.label') : `${t('checkout.gift.scheduled.label')}: ${new Date(g.send_at).toLocaleDateString('he-IL')}`}</p>
+                          </div>
+                          <button onClick={() => handleCancelGift(g.id)} className="p-1.5 text-error hover:bg-error/10 rounded-lg" title={t('checkout.gift.cancel.title')}><Icon name="delete" size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {currentTab === 'share' && isSharedVoucher && (
+          <div className="bg-surface rounded-card shadow-card p-4">
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: t('checkout.share.link.1day'), days: 1 },
+                { label: t('checkout.share.link.1week'), days: 7 },
+                { label: t('checkout.share.link.unlimited'), days: undefined },
+              ].map(opt => (
+                <button key={opt.label} onClick={() => handleCreateShareLink(opt.days)} disabled={shareLoading} className="flex flex-col items-center gap-1 py-3 rounded-2xl bg-primary-light text-primary-dark text-xs font-medium hover:opacity-80 disabled:opacity-50 transition">
+                  <Icon name="link" size={16} /> {opt.label}
+                </button>
+              ))}
+            </div>
+            {shareTokens.length === 0 && !shareLoading && (() => { openShareModal(); return null })()}
+            {shareTokens.length > 0 && (
+              <div className="space-y-2 mt-3">
+                {shareTokens.map(tok => {
+                  const url = `${window.location.origin}/s/${tok.token}`
+                  return (
+                    <div key={tok.token} className="flex items-center gap-2 p-3 rounded-2xl border bg-bg border-border">
+                      <p className="flex-1 min-w-0 text-xs font-mono text-text2 truncate">{url}</p>
+                      <button onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentTab === 'sell' && (
+          <div className="bg-surface rounded-card shadow-card p-4">
+            {noPaymentMethod ? (
+              <div className="text-center py-6">
+                <div className="w-14 h-14 bg-bg rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Icon name="payments" size={26} color="var(--c-text3)" />
+                </div>
+                <p className="text-sm font-semibold text-text mb-1">{t('checkout.sell.no.payment')}</p>
+                <button onClick={() => navigate('/settings')} className="mt-3 px-5 py-2 bg-primary text-white rounded-xl text-sm font-medium">{t('checkout.sell.go.settings')}</button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-bg rounded-2xl p-4 space-y-1">
+                  <p className="font-semibold text-text">{voucher.store_name}</p>
+                  <p className="text-sm text-text2">{t('checkout.sell.balance.label')}: {formatCurrency(voucher.balance)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text2 mb-1">{t('checkout.sell.price.label')}</label>
+                  <input type="number" inputMode="decimal" value={sellPrice} onChange={e => setSellPrice(e.target.value)} placeholder={t('checkout.sell.price.placeholder')} className="w-full border border-border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40 bg-surface text-text" dir="ltr" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text2 mb-1">{t('checkout.sell.desc.label')}</label>
+                  <textarea value={sellDescription} onChange={e => setSellDescription(e.target.value)} placeholder={t('checkout.sell.desc.placeholder')} className="w-full border border-border rounded-xl px-4 py-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-primary/40 bg-surface text-text" />
+                </div>
+                {sellPrice && !isNaN(parseFloat(sellPrice)) && parseFloat(sellPrice) > 0 && (
+                  <p className="text-xs text-text2">{t('checkout.sell.price.label')}: <span className="font-semibold text-text">{formatCurrency(parseFloat(sellPrice))}</span></p>
+                )}
+                <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-xs text-warning">{t('checkout.sell.notice')}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentTab === 'activity' && (
+          <div className="bg-surface rounded-card shadow-card p-4">
+            {logLoading ? (
+              <div className="flex justify-center py-6"><Spinner className="text-text3" /></div>
+            ) : voucherLog.length === 0 ? (
+              <p className="text-xs text-text3 text-center py-4">{t('checkout.activity.empty')}</p>
+            ) : (
+              <div className="relative">
+                <div className="absolute right-[11px] top-3 bottom-3 w-px bg-border" />
+                <div className="space-y-4">
+                  {voucherLog.map((entry) => {
+                    const dt = new Date(entry.created_at)
+                    const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                    const timeStr = dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+
+                    let iconName: string
+                    let dotColor: string
+                    let label: string
+                    let detail: string | null = null
+
+                    switch (entry.action) {
+                      case 'add':
+                        iconName = 'add_circle'; dotColor = 'bg-primary text-white'; label = t('checkout.log.added')
+                        if (entry.details?.amount != null) detail = `${t('checkout.log.amount')}: ₪${Number(entry.details.amount).toLocaleString('he-IL')}`
+                        break
+                      case 'balance_update':
+                        iconName = 'do_not_disturb_on'; dotColor = 'bg-blue-500 text-white'; label = t('checkout.log.balance.update')
+                        if (entry.details?.from != null && entry.details?.to != null) {
+                          detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
+                          if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
+                        }
+                        break
+                      case 'edit':
+                        iconName = 'edit'; dotColor = 'bg-indigo-500 text-white'; label = t('checkout.log.edited'); break
+                      case 'archive':
+                        iconName = 'inventory_2'; dotColor = 'bg-orange-400 text-white'; label = t('checkout.log.archived')
+                        if (entry.details?.balance != null) detail = `${t('checkout.log.balance.detail')}: ₪${Number(entry.details.balance).toLocaleString('he-IL')}`
+                        break
+                      case 'unarchive':
+                        iconName = 'undo'; dotColor = 'bg-teal-500 text-white'; label = t('checkout.log.unarchived'); break
+                      case 'gift_sent':
+                        iconName = 'mail'; dotColor = 'bg-pink-500 text-white'; label = t('checkout.log.gift.sent')
+                        if (entry.details?.recipient) detail = `${t('checkout.log.to')}: ${entry.details.recipient}`
+                        break
+                      case 'gift_link':
+                        iconName = 'link'; dotColor = 'bg-pink-400 text-white'; label = t('checkout.log.gift.link'); break
+                      case 'gift_received':
+                        iconName = 'redeem'; dotColor = 'bg-rose-500 text-white'; label = t('checkout.log.gift.received')
+                        if (entry.details?.sender) detail = `${t('checkout.log.from')}: ${entry.details.sender}`
+                        break
+                      case 'gift_balance_update':
+                        iconName = 'do_not_disturb_on'; dotColor = 'bg-pink-600 text-white'; label = t('checkout.log.gift.balance.update')
+                        if (entry.details?.from != null && entry.details?.to != null) {
+                          detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
+                          if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
+                        }
+                        break
+                      default:
+                        iconName = 'schedule'; dotColor = 'bg-text3 text-white'; label = entry.action
+                    }
+
+                    return (
+                      <div key={entry.id} className="flex items-start gap-3 relative">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 z-10 ${dotColor}`}>
+                          <Icon name={iconName} size={14} />
+                        </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="text-sm font-medium text-text">{label}</span>
+                            <span className="text-xs text-text3 flex-shrink-0">{dateStr} {timeStr}</span>
+                          </div>
+                          {detail && <p className="text-xs text-text2 mt-0.5">{detail}</p>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Contextual bottom action bar ── stacks flush on top of the floating bottom-nav
-          card (same width/margins/corner radius, .bottom-nav--squared-top flattens the
-          nav's top corners where they meet) so together they read as one continuous
-          floating card extended upward, not two separate floating objects. */}
-      <div className="bottom-action-bar fixed z-40 flex items-center justify-around px-2 py-2" style={{ bottom: 'var(--nav-h)' }}>
-        {barActions.map(a => (
-          <button
-            key={a.label}
-            onClick={a.onClick}
-            className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${a.primary ? 'bg-gradient-to-br from-primary-mid to-primary-dark text-white' : 'text-text2'}`}
-          >
-            <Icon name={a.icon} size={22} filled={a.primary} />
-            <span className="text-[10px] font-bold">{a.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* ── Floating action (per-tab task CTA) ── */}
+      {fab && (
+        <button
+          onClick={fab.onClick}
+          disabled={fab.disabled || fab.loading}
+          className="checkout-fab flex items-center justify-center gap-2 font-bold text-white bg-gradient-to-br from-primary-mid to-primary-dark active:scale-[0.97] transition-transform disabled:opacity-50"
+        >
+          {fab.loading ? <Spinner /> : <Icon name={fab.icon} size={20} />}
+          {fab.label}
+        </button>
+      )}
 
       {/* ── More actions sheet ── */}
       <BottomSheet open={showMoreMenu} onClose={() => setShowMoreMenu(false)} title={t('checkout.menu.title')}>
@@ -971,7 +1473,12 @@ export default function CheckoutPage() {
           {!isSharedVoucher && !isArchived && (
             <MenuRow icon="edit" label={t('checkout.edit')} onClick={() => { setShowMoreMenu(false); setShowEditForm(true) }} />
           )}
-          {/* "Sell" lives only in the bottom action bar (barActions below) — having it here too was a duplicate entry point for the same action. */}
+          {!isArchived && (
+            <MenuRow icon="ios_share" label={t('checkout.menu.transfer')} onClick={() => { setShowMoreMenu(false); setActiveTab('share') }} />
+          )}
+          {!isSharedVoucher && !isArchived && !voucher.is_locked && (
+            <MenuRow icon="sell" label={t('checkout.sell')} onClick={() => { setShowMoreMenu(false); setActiveTab('sell') }} />
+          )}
           {!isSharedVoucher && !isArchived && (
             <MenuRow
               icon={voucher.is_locked ? 'lock_open' : 'lock'}
@@ -987,259 +1494,6 @@ export default function CheckoutPage() {
             <MenuRow icon="delete" label={t('checkout.delete')} danger onClick={() => { setShowMoreMenu(false); setConfirmDelete(true) }} />
           )}
         </div>
-      </BottomSheet>
-
-      {/* ── Use (quick-deduct) sheet ── */}
-      <BottomSheet open={showUseSheet} onClose={() => setShowUseSheet(false)} title={t('checkout.use.voucher')}>
-        <input
-          type="text" value={customStore} onChange={e => setCustomStore(e.target.value)}
-          placeholder={t('checkout.store.used.placeholder')}
-          className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm mb-3 bg-surface text-text"
-          dir="rtl"
-        />
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          {QUICK_AMOUNTS.map(amt => (
-            <button
-              key={amt}
-              onClick={() => { updateBalance(voucher.balance - amt, amt, customStore.trim() || null); setCustomStore(''); setShowUseSheet(false) }}
-              disabled={voucher.balance < amt}
-              className="py-2.5 bg-bg text-text2 rounded-xl text-sm font-medium hover:opacity-80 disabled:opacity-40 transition"
-            >
-              -{amt}
-            </button>
-          ))}
-          <button
-            onClick={() => { const half = voucher.balance / 2; updateBalance(half, half, customStore.trim() || null); setCustomStore(''); setShowUseSheet(false) }}
-            className="py-2.5 bg-bg text-text2 rounded-xl text-sm font-medium hover:opacity-80 transition"
-          >
-            {t('checkout.half')}
-          </button>
-          <button
-            onClick={() => { updateBalance(0, voucher.balance, customStore.trim() || null); setCustomStore(''); setShowUseSheet(false) }}
-            className="py-2.5 bg-error/10 text-error rounded-xl text-sm font-medium hover:bg-error/20 transition"
-          >
-            {t('checkout.full')}
-          </button>
-        </div>
-        <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.usage.amount')}</p>
-        <div className="flex gap-2">
-          <input
-            type="number" inputMode="decimal" value={customAmount} onChange={e => setCustomAmount(e.target.value)}
-            placeholder={t('checkout.usage.amount.placeholder')}
-            className="flex-1 min-w-0 px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text"
-            style={{ fontSize: '16px' }} dir="ltr"
-          />
-          <button
-            onClick={() => {
-              const amount = parseFloat(customAmount)
-              if (!isNaN(amount) && amount > 0) {
-                updateBalance(voucher.balance - amount, amount, customStore.trim() || null)
-                setCustomAmount(''); setCustomStore(''); setShowUseSheet(false)
-              }
-            }}
-            disabled={!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0}
-            className="shrink-0 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:opacity-90 transition"
-          >
-            {t('checkout.update')}
-          </button>
-        </div>
-        {(() => {
-          const amount = parseFloat(customAmount)
-          if (isNaN(amount) || amount <= 0) return null
-          const newBal = Math.max(0, voucher.balance - amount)
-          return <p className={`text-xs mt-2 font-medium ${newBal <= 0 ? 'text-error' : 'text-success'}`}>{t('checkout.new.balance.preview')}: ₪{newBal.toLocaleString('he-IL')}</p>
-        })()}
-      </BottomSheet>
-
-      {/* ── Sell sheet ── */}
-      <BottomSheet
-        open={showSellModal}
-        onClose={() => setShowSellModal(false)}
-        title={t('checkout.sell.modal.title')}
-        footer={
-          <Button variant="primary" fullWidth loading={sellLoading} disabled={!sellPrice} onClick={handleListForSale}>
-            {t('checkout.sell.publish')}
-          </Button>
-        }
-      >
-        <div className="space-y-4">
-          <div className="bg-bg rounded-2xl p-4 space-y-1">
-            <p className="font-semibold text-text">{voucher.store_name}</p>
-            <p className="text-sm text-text2">{t('checkout.sell.balance.label')}: ₪{voucher.balance}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text2 mb-1">{t('checkout.sell.price.label')}</label>
-            <input type="number" inputMode="decimal" value={sellPrice} onChange={e => setSellPrice(e.target.value)} placeholder={t('checkout.sell.price.placeholder')} className="w-full border border-border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40 bg-surface text-text" dir="ltr" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text2 mb-1">{t('checkout.sell.desc.label')}</label>
-            <textarea value={sellDescription} onChange={e => setSellDescription(e.target.value)} placeholder={t('checkout.sell.desc.placeholder')} className="w-full border border-border rounded-xl px-4 py-3 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-primary/40 bg-surface text-text" />
-          </div>
-          <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-xs text-warning">{t('checkout.sell.notice')}</div>
-        </div>
-      </BottomSheet>
-
-      {/* ── Share sheet ── */}
-      <BottomSheet open={showShareModal} onClose={() => setShowShareModal(false)} title={t('checkout.share.modal.title')}>
-        {/* Tabs */}
-        {!isSharedVoucher && (
-          <div className="flex gap-1 bg-bg rounded-2xl p-1 mb-4">
-            {([
-              { key: 'link', icon: 'link', label: t('checkout.share.tab.link') },
-              { key: 'user', icon: 'group', label: t('checkout.share.tab.user') },
-              { key: 'gift', icon: 'redeem', label: t('checkout.share.tab.gift') },
-            ] as const).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => { setShareTab(tab.key); if (tab.key === 'gift') loadPendingGifts() }}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition ${shareTab === tab.key ? 'bg-surface text-primary shadow-sm' : 'text-text3'}`}
-              >
-                <Icon name={tab.icon} size={14} /> {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Link tab */}
-        {shareTab === 'link' && (
-          <>
-            <p className="text-sm text-text2 mb-3">{t('checkout.share.link.desc')}</p>
-            {voucher.is_e2ee && (
-              <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3 text-xs text-warning">
-                <Icon name="shield" size={16} /> <span>{t('checkout.share.e2ee.warning')}</span>
-              </div>
-            )}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {[
-                { label: t('checkout.share.link.1day'), days: 1 },
-                { label: t('checkout.share.link.1week'), days: 7 },
-                { label: t('checkout.share.link.unlimited'), days: undefined },
-              ].map(opt => (
-                <button key={opt.label} onClick={() => handleCreateShareLink(opt.days)} disabled={shareLoading} className="flex flex-col items-center gap-1 py-3 rounded-2xl bg-primary-light text-primary-dark text-xs font-medium hover:opacity-80 disabled:opacity-50 transition">
-                  <Icon name="link" size={16} /> {opt.label}
-                </button>
-              ))}
-            </div>
-            {shareTokens.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-text2">{t('checkout.share.active.links')}:</p>
-                {shareTokens.map(tok => {
-                  const url = `${window.location.origin}/s/${tok.token}`
-                  const expired = tok.expires_at && new Date(tok.expires_at) < new Date()
-                  return (
-                    <div key={tok.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-bg border-border opacity-60' : 'bg-surface border-border'}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-mono text-text2 truncate">{url}</p>
-                        <p className="text-xs text-text3 mt-0.5">
-                          {expired ? `⛔ ${t('checkout.share.link.expired')}` : tok.expires_at ? `${t('checkout.share.link.until')} ${new Date(tok.expires_at).toLocaleDateString('he-IL')}` : t('checkout.share.link.no.limit')}
-                          {' · '}{tok.view_count} {t('checkout.share.link.views')}
-                        </p>
-                      </div>
-                      <button onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
-                      <button onClick={() => handleDeleteShareToken(tok.token)} className="p-2 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            {shareLoading && <div className="text-center py-4"><Spinner className="text-primary" /></div>}
-          </>
-        )}
-
-        {/* User tab */}
-        {shareTab === 'user' && !isSharedVoucher && (
-          <div className="space-y-4">
-            <p className="text-sm text-text2">{t('checkout.share.user.desc')}</p>
-            {pendingShareEmail && (
-              <div className="bg-warning/10 rounded-2xl p-3 space-y-2">
-                <p className="text-sm text-warning">{t('checkout.share.user.not.found.prefix')} <strong>{pendingShareEmail}</strong> {t('checkout.share.user.not.found.suffix')}</p>
-                <div className="flex gap-2">
-                  <button onClick={handleSendVoucherInvite} className="flex-1 bg-warning text-white py-2 rounded-xl text-sm font-medium">{t('checkout.share.send.invite')}</button>
-                  <button onClick={() => { setPendingShareEmail(null); setShareEmail('') }} className="flex-1 bg-bg text-text2 py-2 rounded-xl text-sm font-medium">{t('checkout.cancel')}</button>
-                </div>
-              </div>
-            )}
-            {!pendingShareEmail && (
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2"><Icon name="person_add" size={16} color="var(--c-text3)" /></span>
-                  <input type="email" value={shareEmail} onChange={e => setShareEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleShareWithUser()} placeholder={t('checkout.share.email.placeholder')} className="w-full pr-9 pl-3 py-2.5 border border-border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text" dir="ltr" />
-                </div>
-                <button onClick={handleShareWithUser} disabled={shareEmailLoading || !shareEmail.trim()} className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50">
-                  {shareEmailLoading ? <Spinner /> : t('checkout.share')}
-                </button>
-              </div>
-            )}
-            {sharesLoaded && voucherShares.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-text2">{t('checkout.share.shared.with')}:</p>
-                {voucherShares.map(s => (
-                  <div key={s.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                    <p className="text-sm text-text">{s.shared_with_email}</p>
-                    <button onClick={() => handleUnshare(s.shared_with_email)} className="p-1.5 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Gift tab */}
-        {shareTab === 'gift' && !isSharedVoucher && (
-          <div className="space-y-4">
-            <p className="text-sm text-text2">{t('checkout.gift.desc')}</p>
-            <div className="flex bg-bg rounded-2xl p-1">
-              <button onClick={() => { setGiftMode('link'); setGiftLink(null) }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl transition ${giftMode === 'link' ? 'bg-surface shadow text-primary' : 'text-text3'}`}>
-                <Icon name="link" size={14} /> {t('checkout.gift.create.link')}
-              </button>
-              <button onClick={() => { setGiftMode('email'); setGiftLink(null) }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl transition ${giftMode === 'email' ? 'bg-surface shadow text-primary' : 'text-text3'}`}>
-                <Icon name="mail" size={14} /> {t('checkout.gift.send.email')}
-              </button>
-            </div>
-            {giftMode === 'email' && (
-              <div className="relative">
-                <span className="absolute right-3 top-1/2 -translate-y-1/2"><Icon name="mail" size={16} color="var(--c-text3)" /></span>
-                <input type="email" value={giftEmail} onChange={e => setGiftEmail(e.target.value)} placeholder={t('checkout.gift.recipient.email')} className="w-full pr-9 pl-3 py-2.5 border border-border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text" dir="ltr" />
-              </div>
-            )}
-            <textarea value={giftMessage} onChange={e => setGiftMessage(e.target.value)} placeholder={t('checkout.gift.message.placeholder')} rows={2} className="w-full px-3 py-2.5 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none bg-surface text-text" dir="rtl" />
-            {giftMode === 'email' && (
-              <button onClick={() => setGiftScheduled(s => !s)} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition border ${giftScheduled ? 'bg-primary-light border-primary text-primary-dark' : 'bg-bg border-border text-text2'}`}>
-                <Icon name="event" size={14} /> {t('checkout.gift.schedule')}
-              </button>
-            )}
-            {giftMode === 'email' && giftScheduled && (
-              <input type="datetime-local" value={giftDate} onChange={e => setGiftDate(e.target.value)} min={new Date().toISOString().slice(0, 16)} className="w-full px-3 py-2.5 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface text-text" dir="ltr" />
-            )}
-            <Button variant="primary" fullWidth loading={giftSending} disabled={giftMode === 'email' && (!giftEmail.trim() || (giftScheduled && !giftDate))} onClick={handleSendGift}>
-              <Icon name={giftMode === 'link' ? 'link' : 'redeem'} size={18} />
-              {giftSending ? t('checkout.gift.creating') : giftMode === 'link' ? t('checkout.gift.create.link.btn') : giftScheduled && giftDate ? t('checkout.gift.schedule.btn') : t('checkout.gift.send.now')}
-            </Button>
-            {giftLink && (
-              <div className="bg-primary-light border border-primary/30 rounded-2xl p-3 space-y-2">
-                <p className="text-xs font-medium text-primary-dark flex items-center gap-1"><Icon name="redeem" size={14} /> {t('checkout.gift.link.label')}:</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-primary-dark font-mono break-all flex-1">{giftLink}</p>
-                  <button onClick={() => { navigator.clipboard.writeText(giftLink).catch(() => {}); toast.success(t('checkout.copied')) }} className="flex-shrink-0 p-2 bg-primary/10 hover:bg-primary/20 rounded-xl"><Icon name="content_copy" size={16} color="var(--c-primary-dark)" /></button>
-                </div>
-              </div>
-            )}
-            {giftsLoaded && pendingGifts.length > 0 && (
-              <div className="space-y-1 border-t border-border pt-3">
-                <p className="text-xs font-medium text-text2">{t('checkout.gift.pending.label')}:</p>
-                {pendingGifts.map(g => (
-                  <div key={g.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                    <div>
-                      <p className="text-sm text-text">{g.recipient_email || <span className="text-text3 italic">{t('checkout.gift.link.only')}</span>}</p>
-                      <p className="text-xs text-text3">{g.email_sent_at ? t('checkout.gift.sent.label') : `${t('checkout.gift.scheduled.label')}: ${new Date(g.send_at).toLocaleDateString('he-IL')}`}</p>
-                    </div>
-                    <button onClick={() => handleCancelGift(g.id)} className="p-1.5 text-error hover:bg-error/10 rounded-lg" title={t('checkout.gift.cancel.title')}><Icon name="delete" size={16} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </BottomSheet>
     </div>
   )
