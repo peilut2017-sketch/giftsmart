@@ -35,7 +35,26 @@
   --shadow-card:     0 1px 3px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.07);
   --shadow-fab:      0 4px 20px rgba(22,163,74,0.40);
   --shadow-nav:      0 -1px 0 rgba(0,0,0,0.06);
-  --nav-h:           calc(72px + env(safe-area-inset-bottom));
+  --nav-card-margin: 16px;
+  --nav-card-height: 72px;
+  /* User-adjustable nav glass transparency — see BottomNav.tsx, which reads/writes
+     gs_nav_glass_opacity from localStorage and applies it here on :root. 0.15 = barely
+     tinted glass, 1 = fully opaque. Default (0.16) lands right at the Liquid-Glass spec's
+     reference alpha for light mode; the dark-mode background scales it up (see
+     [data-theme="dark"] .bottom-nav below) since the same alpha reads much fainter on a
+     near-black tint than on a white one. */
+  --nav-glass-opacity: 0.16;
+  --nav-bg-rgb:      255,255,255;
+  --nav-border:      rgba(255,255,255,.25);
+  --nav-shadow-outer: 0 12px 40px rgba(0,0,0,.12);
+  --nav-pill-bg:      rgba(255,255,255,.22);
+  --nav-pill-border:  rgba(255,255,255,.4);
+  --nav-pill-shadow:  inset 0 1px 0 rgba(255,255,255,.5), 0 2px 10px rgba(0,0,0,.10);
+  /* Total vertical space the floating nav card occupies from the screen's bottom edge —
+     what page content should pad/position above to clear it. Bottom offset is the LARGER
+     of the fixed margin or the safe-area inset (not additive), matching how the nav
+     itself is positioned below. */
+  --nav-h: calc(max(var(--nav-card-margin), env(safe-area-inset-bottom)) + var(--nav-card-height));
 }
 
 /* ── Dark Mode Tokens ─────────────────────────────────────────── */
@@ -61,6 +80,12 @@
   --shadow-card:     0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.4);
   --shadow-fab:      0 4px 20px rgba(34,197,94,0.35);
   --shadow-nav:      0 -1px 0 rgba(255,255,255,0.06);
+  --nav-bg-rgb:       30,30,35;
+  --nav-border:       rgba(255,255,255,.08);
+  --nav-shadow-outer: 0 16px 48px rgba(0,0,0,.35);
+  --nav-pill-bg:      rgba(255,255,255,.14);
+  --nav-pill-border:  rgba(255,255,255,.16);
+  --nav-pill-shadow:  inset 0 1px 0 rgba(255,255,255,.18), 0 2px 10px rgba(0,0,0,.35);
 }
 
 [data-theme="dark"] .bg-white { background-color: var(--c-surface) !important; }
@@ -86,7 +111,6 @@
   color: #e6edf3 !important;
   border-color: #30363d !important;
 }
-[data-theme="dark"] .bottom-nav { background: rgba(14, 25, 17, 0.75) !important; }
 [data-theme="dark"] .glass { background: rgba(22, 27, 34, 0.88) !important; }
 [data-theme="dark"] .gs-skeleton {
   background: linear-gradient(90deg, #21262d 25%, #2d333b 50%, #21262d 75%) !important;
@@ -222,51 +246,111 @@ body {
 }
 
 /* ── Bottom nav ───────────────────────────────────────────────── */
+/* Floating capsule: never touches the screen edges, never squared. Bottom offset is
+   whichever is larger of the fixed margin or the safe-area inset (not both stacked), so
+   it sits right at the home-indicator boundary on notched phones instead of floating an
+   extra 16px above it. Capped to 560px and centered so it stays a capsule (not a
+   full-width bar) on wider viewports. */
 .bottom-nav {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: max(var(--nav-card-margin), env(safe-area-inset-bottom));
+  left: var(--nav-card-margin);
+  right: var(--nav-card-margin);
+  max-width: 560px;
+  margin-inline: auto;
   z-index: 50;
-  height: calc(72px + env(safe-area-inset-bottom));
-  /* Liquid glass base — soft green tint */
-  background: rgba(220, 252, 231, 0.62);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border-top: none;
-  box-shadow:
-    0 -0.5px 0 0 rgba(134, 239, 172, 0.6),
-    inset 0 1px 0 0 rgba(255,255,255,0.55),
-    0 -8px 32px 0 rgba(22, 163, 74, 0.07);
-  padding-bottom: env(safe-area-inset-bottom);
-  overflow: hidden;
+  height: var(--nav-card-height);
+  border-radius: 999px;
+  /* Tint alpha is user-adjustable (Settings → Appearance); rgb triplet swaps per theme. */
+  background: rgba(var(--nav-bg-rgb), var(--nav-glass-opacity));
+  backdrop-filter: blur(46px) saturate(180%);
+  -webkit-backdrop-filter: blur(46px) saturate(180%);
+  border: 1px solid var(--nav-border);
+  box-shadow: var(--nav-shadow-outer), inset 0 1px 0 rgba(255,255,255,.25);
+  /* No overflow:hidden — that clipped the raised "+" FAB (a child of this element,
+     positioned to poke above the capsule) to this box's own rounded rect. The glass
+     background/highlight/scroll-overlay layers below are pseudo-elements with their own
+     border-radius, so they stay clipped to the capsule shape without it. */
+  transition: transform 280ms cubic-bezier(.32,.72,0,1);
+}
+[data-theme="dark"] .bottom-nav {
+  /* Same alpha reads far fainter against near-black — scale it up so the default slider
+     position still lands close to the spec's dark-mode reference alpha (~.35). */
+  background: rgba(var(--nav-bg-rgb), min(1, calc(var(--nav-glass-opacity) * 2.2)));
+  box-shadow: var(--nav-shadow-outer), inset 0 1px 0 rgba(255,255,255,.10);
 }
 
-/* Subtle green-tinted noise overlay */
+/* Slides down slightly and the material reads more opaque while scrolling down (see the
+   scroll listener in BottomNav.tsx); returns on scroll up. Transform + opacity only, so
+   this stays GPU-accelerated. */
+.bottom-nav[data-scrolled="true"] {
+  transform: translateY(6px);
+}
+.bottom-nav[data-scrolled="true"]::after {
+  opacity: 0.95;
+}
+
+/* Very soft top-area highlight — a hint of reflected light, not a visible line. */
 .bottom-nav::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(187, 247, 208, 0.20) 0%,
-    rgba(220, 252, 231, 0.06) 100%
-  );
+  border-radius: inherit;
+  background: radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,.06) 0%, rgba(255,255,255,0) 70%);
+  pointer-events: none;
+}
+[data-theme="dark"] .bottom-nav::before {
+  background: radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,.04) 0%, rgba(255,255,255,0) 70%);
+}
+
+/* Scroll-reactive opacity layer — sits behind the tab content (z-index:1 in
+   BottomNav.tsx), fades in via `opacity` (not a background-color transition, which
+   custom-property-driven rgba() values can't animate smoothly). */
+.bottom-nav::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--c-surface);
+  opacity: 0;
+  transition: opacity 280ms ease;
   pointer-events: none;
 }
 
-/* Contextual action bar (e.g. Checkout's Activity/Sell/Share/Use row) that sits flush
-   above .bottom-nav — same liquid-glass treatment so the two read as one continuous
-   nav region instead of a separate floating card stacked on top of the real nav. */
-.bottom-action-bar {
-  background: rgba(220, 252, 231, 0.62);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255,255,255,0.55),
-    0 -8px 32px 0 rgba(22, 163, 74, 0.07);
+@media (prefers-reduced-transparency: reduce) {
+  .bottom-nav {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--c-surface);
+  }
 }
-[data-theme="dark"] .bottom-action-bar { background: rgba(14, 25, 17, 0.75) !important; }
+
+@media (prefers-contrast: more) {
+  .bottom-nav {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--c-surface);
+    border-width: 1.5px;
+    border-color: var(--c-text);
+  }
+}
+
+/* Checkout's per-tab floating action button — floats above .bottom-nav with its own
+   gap (not flush/merged), fully pill-shaped, matching the liquid-glass card language. */
+.checkout-fab {
+  position: fixed;
+  left: var(--nav-card-margin);
+  right: var(--nav-card-margin);
+  /* Match .bottom-nav's cap so the FAB reads as belonging to the same floating-card
+     width, not stretching wider than the capsule it sits above. */
+  max-width: 560px;
+  margin-inline: auto;
+  bottom: calc(var(--nav-h) + 12px);
+  z-index: 40;
+  border-radius: 999px;
+  height: 60px;
+  box-shadow: 0 12px 28px 0 rgba(22, 163, 74, 0.30), 0 2px 8px 0 rgba(0, 0, 0, 0.10);
+}
 
 /* Expiry colours */
 .expiry-warning { background: linear-gradient(135deg, #fef3c7, #fde68a); }

@@ -5,6 +5,17 @@ import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
 
 const SPRING = { type: 'spring' as const, stiffness: 460, damping: 40, mass: 0.75 }
+const REDUCED_MOTION = { duration: 0 }
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
+
+/** Short, light tap feedback (Vibration API — Android Chrome only; iOS Safari doesn't
+    expose haptics to web content at all, so this silently no-ops there). */
+function tapHaptic() {
+  try { navigator.vibrate?.(8) } catch {}
+}
 
 /**
  * Redesigned bottom nav: 5 slots — Wallet / Search / Add (raised FAB) / Stats / Profile.
@@ -42,11 +53,12 @@ export default function BottomNav() {
   const pillW = useMotionValue(48)
   const vel   = useVelocity(pillX)
 
-  // Leading edge gets squared, trailing edge stays round — the jelly pull
-  const tlr = useTransform(vel, [-2000, -80, 0, 80, 2000], [5, 10, 12, 12, 12])
-  const trr = useTransform(vel, [-2000, -80, 0, 80, 2000], [12, 12, 12, 10,  5])
-  const blr = useTransform(vel, [-2000, -80, 0, 80, 2000], [5, 10, 12, 12, 12])
-  const brr = useTransform(vel, [-2000, -80, 0, 80, 2000], [12, 12, 12, 10,  5])
+  // Full pill (999 = stadium) at rest; leading edge only pulls in slightly under fast
+  // drag velocity, trailing edge stays round — organic without ever reading "squared".
+  const tlr = useTransform(vel, [-2000, -80, 0, 80, 2000], [20, 999, 999, 999, 999])
+  const trr = useTransform(vel, [-2000, -80, 0, 80, 2000], [999, 999, 999, 999, 20])
+  const blr = useTransform(vel, [-2000, -80, 0, 80, 2000], [20, 999, 999, 999, 999])
+  const brr = useTransform(vel, [-2000, -80, 0, 80, 2000], [999, 999, 999, 999, 20])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function getMetrics(idx: number): { x: number; w: number } | null {
@@ -61,8 +73,9 @@ export default function BottomNav() {
   function snapTo(idx: number) {
     const m = getMetrics(idx)
     if (!m) return
-    animate(pillX, m.x, SPRING)
-    animate(pillW, m.w, SPRING)
+    const spring = prefersReducedMotion() ? REDUCED_MOTION : SPRING
+    animate(pillX, m.x, spring)
+    animate(pillW, m.w, spring)
   }
 
   // ── Initial placement (after DOM is painted) ──────────────────────────────
@@ -89,6 +102,27 @@ export default function BottomNav() {
   const hoverIdx    = useRef(activeIdx)
   const [draggingVisual, setDraggingVisual] = useState(false)
 
+  // ── Scroll direction (nav slides down + reads more opaque while scrolling down) ──
+  const [scrolledDown, setScrolledDown] = useState(false)
+  useEffect(() => {
+    let lastY = window.scrollY
+    let ticking = false
+    function onScroll() {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        const y = window.scrollY
+        if (Math.abs(y - lastY) > 4) {
+          setScrolledDown(y > lastY && y > 40)
+          lastY = y
+        }
+        ticking = false
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   function closestTab(clientX: number): number {
     const nav = navRef.current
     if (!nav) return activeIdx
@@ -105,8 +139,16 @@ export default function BottomNav() {
     return best
   }
 
+  // Guards onPointerMove so it only reacts while an actual press-and-drag is underway.
+  // Without this, plain mouse hover on desktop (pointermove fires continuously there even
+  // with no button held, unlike touch) was read as drag movement against whatever
+  // dragOrigin last held, dragging the pill toward the cursor and leaving it stuck there
+  // — nothing else ever fires to put it back since no real pointerup/cancel occurred.
+  const pointerActive = useRef(false)
+
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+    pointerActive.current = true
     isDragging.current = false
     didDrag.current    = false
     dragOrigin.current = { clientX: e.clientX, pillX: pillX.get() }
@@ -114,6 +156,7 @@ export default function BottomNav() {
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pointerActive.current) return
     const delta = e.clientX - dragOrigin.current.clientX
     if (!didDrag.current && Math.abs(delta) < 7) return   // dead zone
 
@@ -138,6 +181,7 @@ export default function BottomNav() {
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    pointerActive.current = false
     setDraggingVisual(false)
     isDragging.current = false
 
@@ -149,11 +193,13 @@ export default function BottomNav() {
     justDragged.current = true
     setTimeout(() => { justDragged.current = false }, 80)
 
+    if (ci !== activeIdx) tapHaptic()
     navigate(items[ci]?.path ?? '/')
     snapTo(ci)
   }
 
   function onPointerCancel() {
+    pointerActive.current = false
     setDraggingVisual(false)
     isDragging.current = false
     didDrag.current    = false
@@ -168,21 +214,21 @@ export default function BottomNav() {
         key={item.path}
         ref={el => { btnRefs.current[idx] = el }}
         role="listitem"
-        onClick={() => { if (!justDragged.current) navigate(item.path) }}
+        onClick={() => { if (!justDragged.current) { tapHaptic(); navigate(item.path) } }}
         aria-label={item.label}
         aria-current={active ? 'page' : undefined}
-        className="relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-        style={{ zIndex: 1 }}
+        className="relative flex flex-col items-center justify-center gap-0.5 py-2.5 px-[18px] min-w-[44px] transition-[opacity,transform] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+        style={{ zIndex: 1, opacity: active ? 1 : 0.7 }}
       >
         <Icon
           name={item.icon}
-          size={22}
+          size={24}
           filled={active}
-          color={active ? 'var(--c-primary)' : 'var(--c-text3)'}
+          color={active ? 'var(--c-primary)' : 'var(--c-text2)'}
         />
         <span
-          className="text-[10px] font-medium whitespace-nowrap"
-          style={{ color: active ? 'var(--c-primary)' : 'var(--c-text3)' }}
+          className="text-xs font-medium whitespace-nowrap"
+          style={{ color: active ? 'var(--c-primary)' : 'var(--c-text2)' }}
         >
           {item.label}
         </span>
@@ -191,8 +237,8 @@ export default function BottomNav() {
   }
 
   return (
-    <nav className="bottom-nav" aria-label="ניווט ראשי">
-      <div className="relative w-full h-full">
+    <nav className="bottom-nav" aria-label="ניווט ראשי" data-scrolled={scrolledDown}>
+      <div className="relative w-full h-full" style={{ zIndex: 1 }}>
         <div
           ref={navRef}
           className="relative flex items-center justify-around w-full h-full px-1"
@@ -203,7 +249,8 @@ export default function BottomNav() {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
         >
-          {/* ── Liquid glass pill (single, shared) ───────────────────────── */}
+          {/* ── Liquid glass pill (single, shared) — colors come from --nav-pill-*
+              custom properties so light/dark are handled by CSS, not duplicated here. ── */}
           <motion.div
             aria-hidden="true"
             style={{
@@ -216,11 +263,11 @@ export default function BottomNav() {
               borderTopRightRadius: trr,
               borderBottomLeftRadius: blr,
               borderBottomRightRadius: brr,
-              background: 'rgba(255,255,255,0.52)',
-              backdropFilter: 'blur(16px) saturate(160%)',
-              WebkitBackdropFilter: 'blur(16px) saturate(160%)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 1px 6px rgba(0,0,0,0.07)',
-              border: '1px solid rgba(255,255,255,0.7)',
+              background: 'var(--nav-pill-bg)',
+              backdropFilter: 'blur(20px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+              boxShadow: 'var(--nav-pill-shadow)',
+              border: '1px solid var(--nav-pill-border)',
               pointerEvents: 'none',
               zIndex: 0,
             }}
@@ -246,9 +293,9 @@ export default function BottomNav() {
         */}
         <button
           data-guide="fab"
-          onClick={() => navigate('/?add=1')}
+          onClick={() => { tapHaptic(); navigate('/?add=1') }}
           aria-label={t('form.add.voucher')}
-          className="absolute left-1/2 -translate-x-1/2 -top-[6px] w-[52px] h-[52px] rounded-[18px] flex items-center justify-center text-white bg-gradient-to-br from-primary-mid to-primary-dark shadow-fab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="absolute left-1/2 -translate-x-1/2 -top-[6px] w-[52px] h-[52px] rounded-[18px] flex items-center justify-center text-white bg-gradient-to-br from-primary-mid to-primary-dark shadow-fab transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           style={{ zIndex: 2 }}
         >
           <Icon name="add" size={28} />

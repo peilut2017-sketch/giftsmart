@@ -213,7 +213,7 @@ export default function BulkListPage() {
 
       {/* Fixed bottom submit */}
       {selected.length > 0 && (
-        <div className="fixed bottom-16 left-0 right-0 px-4 pb-2 pt-3" style={{ background: 'linear-gradient(to top, var(--c-bg), transparent)' }}>
+        <div className="fixed left-0 right-0 px-4 pb-2 pt-3" style={{ bottom: 'var(--nav-h)', background: 'linear-gradient(to top, var(--c-bg), transparent)' }}>
           <Button onClick={submit} disabled={submitting} loading={submitting} fullWidth size="lg">
             {submitting ? `${t('bulk.publishing')}...` : (
               <>

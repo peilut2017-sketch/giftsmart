@@ -414,8 +414,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const inputCls = 'w-full px-4 py-3 border border-border rounded-2xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40'
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="relative bg-surface w-full sm:max-w-lg rounded-t-[28px] sm:rounded-[28px] max-h-[92dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+    // Centered on all breakpoints, not just sm:+ — anchoring this to the bottom edge on
+    // mobile (items-end, flush bottom sheet) meant every keyboard open/close cycle across
+    // the wizard's 5 steps jolted the sheet, since its anchor point was exactly where the
+    // keyboard appears from. Centered + a real margin on every side barely moves when the
+    // visual viewport shrinks for the keyboard.
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="relative bg-surface w-full sm:max-w-lg rounded-[28px] max-h-[92dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <button onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center bg-bg text-text2">

@@ -504,7 +504,7 @@ export default function ListingDetailPage() {
       {!isOwnListing && !purchased && listing.status === 'active' && (
         <div
           className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-surface border-t border-border z-40"
-          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+          style={{ bottom: 'var(--nav-h)' }}
         >
           <Button onClick={() => setShowBuy(true)} fullWidth size="lg">
             <Icon name="shopping_bag" size={20} />
@@ -516,7 +516,7 @@ export default function ListingDetailPage() {
       {isOwnListing && (
         <div
           className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-surface border-t border-border z-40"
-          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+          style={{ bottom: 'var(--nav-h)' }}
         >
           <p className="text-center text-sm text-text3">{t('listing.own_listing')}</p>
         </div>
@@ -525,7 +525,7 @@ export default function ListingDetailPage() {
       {listing.status !== 'active' && !isOwnListing && (
         <div
           className="fixed left-0 right-0 max-w-2xl mx-auto p-4 bg-surface border-t border-border z-40"
-          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+          style={{ bottom: 'var(--nav-h)' }}
         >
           <p className="text-center text-sm text-text3">{t('listing.unavailable')}</p>
         </div>
