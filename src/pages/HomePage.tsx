@@ -4,8 +4,10 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
+import { useDiscounts } from '../contexts/DiscountsContext'
 import { useT } from '../lib/i18n'
 import VoucherForm from '../components/VoucherForm'
+import DealCard from '../components/DealCard'
 import Icon from '../components/ui/Icon'
 import type { Voucher } from '../types'
 import { DEFAULT_CATEGORIES } from '../types'
@@ -30,6 +32,9 @@ export default function HomePage() {
   const { vouchers, loading, walletError, isOnline, walletName, addVoucher, archiveExpired } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const { hasVault, hint, isVaultUnlocked, unlockVault, lockVault } = useE2EE()
+  const { recentDeals, fetchRecentDeals } = useDiscounts()
+
+  useEffect(() => { fetchRecentDeals() }, [fetchRecentDeals])
 
   const [showVaultModal, setShowVaultModal] = useState(false)
   const [vaultPassInput, setVaultPassInput] = useState('')
@@ -140,9 +145,11 @@ export default function HomePage() {
     [vouchers]
   )
 
-  // Gauge arc geometry (matches the redesign's semi-circle gauge)
+  // Gauge arc geometry (matches the redesign's semi-circle gauge). The filled arc
+  // represents what's left, not what's spent — it starts full and shrinks as
+  // utilization climbs, like a depleting balance rather than a filling meter.
   const GAUGE_CIRC = 314 // ≈ π * r(100)
-  const gaugeDash = (utilization / 100) * GAUGE_CIRC
+  const gaugeDash = ((100 - utilization) / 100) * GAUGE_CIRC
 
   return (
     <div className="flex-1 bg-bg">
@@ -280,7 +287,7 @@ export default function HomePage() {
           </div>
           <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-5 px-5 pb-1">
             {topCategories.map(c => (
-              <button key={c.id} onClick={() => navigate('/search', { state: { presetCategory: c.id } })} className="flex flex-col items-center gap-1.5 shrink-0 w-[68px]">
+              <button key={c.id} onClick={() => navigate('/search', { state: { presetCategory: c.name } })} className="flex flex-col items-center gap-1.5 shrink-0 w-[68px]">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${getCategoryColor(c.name)}22` }}>
                   <Icon name={c.icon} size={26} color={getCategoryColor(c.name)} />
                 </div>
@@ -293,7 +300,7 @@ export default function HomePage() {
       )}
 
       {/* ── Recent vouchers ── */}
-      <div className="px-5 mt-6 pb-32">
+      <div className={`px-5 mt-6 ${recentDeals.length > 0 ? 'pb-6' : 'pb-32'}`}>
         <div className="flex items-center justify-between mb-3">
           <span className="text-[15px] font-extrabold text-text">{t('home.recent')}</span>
           <button onClick={() => navigate('/search')} className="text-[13px] font-bold text-primary">{t('home.see.all')}</button>
@@ -351,6 +358,19 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* ── Recent discounts ── */}
+      {recentDeals.length > 0 && (
+        <div className="px-5 pb-32">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[15px] font-extrabold text-text">{t('home.recent.discounts')}</span>
+            <button onClick={() => navigate('/discounts')} className="text-[13px] font-bold text-primary">{t('home.see.all')}</button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {recentDeals.map(deal => <DealCard key={deal.deal_id} deal={deal} />)}
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <VoucherForm
