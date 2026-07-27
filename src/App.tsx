@@ -50,6 +50,14 @@ const BulkListPage     = lazy(() => import('./pages/BulkListPage'))
 const PrivacyPage      = lazy(() => import('./pages/PrivacyPage'))
 const TermsPage        = lazy(() => import('./pages/TermsPage'))
 const SharedVoucherPage = lazy(() => import('./pages/SharedVoucherPage'))
+const SettingsAccountPage       = lazy(() => import('./pages/settings/SettingsAccountPage'))
+const SettingsWalletPage        = lazy(() => import('./pages/settings/SettingsWalletPage'))
+const SettingsNotificationsPage = lazy(() => import('./pages/settings/SettingsNotificationsPage'))
+const SettingsPrivacyPage       = lazy(() => import('./pages/settings/SettingsPrivacyPage'))
+const SettingsAppearancePage    = lazy(() => import('./pages/settings/SettingsAppearancePage'))
+const SettingsBackupPage        = lazy(() => import('./pages/settings/SettingsBackupPage'))
+const SettingsAccessibilityPage = lazy(() => import('./pages/settings/SettingsAccessibilityPage'))
+const SettingsAboutPage         = lazy(() => import('./pages/settings/SettingsAboutPage'))
 const GiftPage         = lazy(() => import('./pages/GiftPage'))
 
 function LoadingDots({ size = 'md' }: { size?: 'sm' | 'md' }) {
@@ -423,6 +431,14 @@ function AppRoutes() {
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/stats" element={<StatsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/account" element={<SettingsAccountPage />} />
+              <Route path="/settings/wallet" element={<SettingsWalletPage />} />
+              <Route path="/settings/notifications" element={<SettingsNotificationsPage />} />
+              <Route path="/settings/privacy" element={<SettingsPrivacyPage />} />
+              <Route path="/settings/appearance" element={<SettingsAppearancePage />} />
+              <Route path="/settings/backup" element={<SettingsBackupPage />} />
+              <Route path="/settings/accessibility" element={<SettingsAccessibilityPage />} />
+              <Route path="/settings/about" element={<SettingsAboutPage />} />
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/accessibility" element={<AccessibilityPage />} />
               <Route path="/market" element={<MarketplacePage />} />
