@@ -139,8 +139,16 @@ export default function BottomNav() {
     return best
   }
 
+  // Guards onPointerMove so it only reacts while an actual press-and-drag is underway.
+  // Without this, plain mouse hover on desktop (pointermove fires continuously there even
+  // with no button held, unlike touch) was read as drag movement against whatever
+  // dragOrigin last held, dragging the pill toward the cursor and leaving it stuck there
+  // — nothing else ever fires to put it back since no real pointerup/cancel occurred.
+  const pointerActive = useRef(false)
+
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+    pointerActive.current = true
     isDragging.current = false
     didDrag.current    = false
     dragOrigin.current = { clientX: e.clientX, pillX: pillX.get() }
@@ -148,6 +156,7 @@ export default function BottomNav() {
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pointerActive.current) return
     const delta = e.clientX - dragOrigin.current.clientX
     if (!didDrag.current && Math.abs(delta) < 7) return   // dead zone
 
@@ -172,6 +181,7 @@ export default function BottomNav() {
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    pointerActive.current = false
     setDraggingVisual(false)
     isDragging.current = false
 
@@ -189,6 +199,7 @@ export default function BottomNav() {
   }
 
   function onPointerCancel() {
+    pointerActive.current = false
     setDraggingVisual(false)
     isDragging.current = false
     didDrag.current    = false
