@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -6,8 +6,6 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { usePageView } from '../hooks/usePageView'
-import { supabase } from '../lib/supabase'
-import toast from 'react-hot-toast'
 import { useT } from '../lib/i18n'
 import Icon from '../components/ui/Icon'
 import { MenuItem, SL } from '../components/settings/SettingsUI'
@@ -16,21 +14,31 @@ interface CategoryDef { key: string; icon: string; title: string; desc: string; 
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { user, profile, signOut } = useAuth()
+  const { user, profile } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { vouchers, archivedVouchers } = useVouchers()
   const { hasVault, isVaultUnlocked } = useE2EE()
-  const { theme } = useTheme()
+  const { theme, toggleTheme } = useTheme()
   const { t } = useT()
   usePageView('settings')
 
   const [search, setSearch] = useState('')
-  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const scrollRef = useRef(0)
+
+  useEffect(() => {
+    function onScroll() {
+      const y = window.scrollY
+      if (y > 40 && y > scrollRef.current) setSearchOpen(true)
+      scrollRef.current = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const totalBalance = useMemo(() => vouchers.reduce((sum, v) => sum + v.balance, 0), [vouchers])
 
   const categories: CategoryDef[] = [
-    { key: 'account',       icon: 'person',           title: 'חשבון',       desc: 'פרטי משתמש, אימייל, סיסמה',        path: '/settings/account' },
     { key: 'wallet',        icon: 'account_balance_wallet', title: 'הארנק שלי', desc: 'שיתוף, מועדונים, תצוגת ערך', path: '/settings/wallet' },
     { key: 'marketplace',   icon: 'storefront',       title: 'שוק',         desc: 'אמצעי תשלום, מכירות ורכישות',      path: '/market' },
     { key: 'notifications', icon: 'notifications',    title: 'התראות',      desc: 'תזכורות תוקף, ערוצי התראה, טלגרם', path: '/settings/notifications' },
@@ -45,40 +53,34 @@ export default function SettingsPage() {
     ? categories.filter(c => c.title.includes(search.trim()) || c.desc.includes(search.trim()))
     : categories
 
-  async function handleDeleteAccount() {
-    if (!confirm(t('settings.delete.account.confirm1'))) return
-    if (!confirm(t('settings.delete.account.confirm2'))) return
-    setDeletingAccount(true)
-    try {
-      const { error } = await supabase.from('support_messages').insert({
-        user_id: user!.id, user_email: user!.email, user_name: profile?.name || null,
-        subject: t('settings.delete.account.subject'), body: t('settings.delete.account.body'), category: 'general',
-      })
-      if (error) throw error
-      toast.success(t('settings.delete.account.sent'))
-    } catch (e: any) {
-      toast.error(e?.message || t('settings.delete.account.error'))
-    } finally {
-      setDeletingAccount(false)
-    }
-  }
-
   return (
     <div className="flex-1 bg-bg">
       <div className="pb-24 space-y-4">
-        <h1 className="text-center text-lg font-extrabold text-text pt-5">{t('settings.title')}</h1>
-
-        {/* Search */}
-        <div className="px-4">
-          <div className="relative">
-            <Icon name="search" size={18} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="חפש הגדרה..."
-              className="w-full pr-10 pl-3 py-2.5 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
+        <div className="relative flex items-center justify-center pt-5">
+          <h1 className="text-lg font-extrabold text-text">{t('settings.title')}</h1>
+          <button
+            onClick={() => setSearchOpen(v => !v)}
+            className="absolute left-4 w-8 h-8 rounded-full flex items-center justify-center bg-surface shadow-card"
+            aria-label="חיפוש הגדרות"
+          >
+            <Icon name="search" size={17} color="var(--c-text2)" />
+          </button>
         </div>
+
+        {/* Search — hidden until the user scrolls down or taps the search icon */}
+        {searchOpen && (
+          <div className="px-4">
+            <div className="relative">
+              <Icon name="search" size={18} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="חפש הגדרה..."
+                autoFocus
+                className="w-full pr-10 pl-3 py-2.5 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Profile hero card */}
         <div className="px-4">
@@ -142,7 +144,7 @@ export default function SettingsPage() {
           <QuickStatusTile icon="cloud" label="מסונכרן" active />
           <QuickStatusTile icon="lock" label={hasVault ? (isVaultUnlocked ? 'פתוחה' : 'מאובטח') : 'ללא כספת'} active={hasVault} />
           <QuickStatusTile icon="workspace_premium" label={isPro ? 'Premium' : 'רגיל'} active={isPro} />
-          <QuickStatusTile icon={theme === 'dark' ? 'dark_mode' : 'light_mode'} label={theme === 'dark' ? 'Dark' : 'Light'} active={theme === 'dark'} />
+          <QuickStatusTile icon={theme === 'dark' ? 'dark_mode' : 'light_mode'} label={theme === 'dark' ? 'Dark' : 'Light'} active={theme === 'dark'} onClick={toggleTheme} />
         </div>
 
         {/* Category cards */}
@@ -187,35 +189,22 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Danger zone — deliberately separated from everything else. */}
-        <SL>אזור מסוכן</SL>
-        <div className="px-4">
-          <div className="bg-error/5 border border-error/20 rounded-card overflow-hidden">
-            <div className="divide-y divide-error/20">
-              <MenuItem
-                icon="delete"
-                label={t('settings.delete.account')}
-                desc={t('settings.delete.account.desc')}
-                onClick={handleDeleteAccount}
-                danger
-                right={deletingAccount ? <Icon name="progress_activity" size={20} color="var(--c-error)" className="animate-spin" /> : undefined}
-              />
-              <MenuItem icon="logout" label={t('settings.logout')} desc="יציאה מהחשבון" onClick={() => { if (confirm('להתנתק?')) signOut() }} danger />
-            </div>
-          </div>
-        </div>
-
         <p className="text-center text-xs text-text3">GiftSmart v1.1.0</p>
       </div>
     </div>
   )
 }
 
-function QuickStatusTile({ icon, label, active }: { icon: string; label: string; active?: boolean }) {
+function QuickStatusTile({ icon, label, active, onClick }: { icon: string; label: string; active?: boolean; onClick?: () => void }) {
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <div className={`flex flex-col items-center justify-center gap-1 rounded-2xl py-3 ${active ? 'bg-primary-light' : 'bg-surface shadow-card'}`} style={{ minHeight: 72 }}>
+    <Tag
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center gap-1 rounded-2xl py-3 ${active ? 'bg-primary-light' : 'bg-surface shadow-card'} ${onClick ? 'active:scale-95 transition-transform' : ''}`}
+      style={{ minHeight: 72 }}
+    >
       <Icon name={icon} size={20} color={active ? 'var(--c-primary)' : 'var(--c-text3)'} filled={active} />
       <span className={`text-[10px] font-semibold ${active ? 'text-primary' : 'text-text3'}`}>{label}</span>
-    </div>
+    </Tag>
   )
 }

@@ -27,13 +27,14 @@ function getPasswordStrength(password: string, t: (k: string) => string): Passwo
 export default function SettingsAccountPage() {
   usePageView('settings_account')
   const { t } = useT()
-  const { user, profile, updateProfile } = useAuth()
+  const { user, profile, updateProfile, signOut } = useAuth()
   const { vouchers, archivedVouchers, logAction, updateVoucher } = useVouchers()
   const { isUnifiedVault, isVaultUnlocked, reDeriveVaultKeyFromPassword } = useE2EE()
 
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   const [editPass, setEditPass] = useState(false)
   const [currentPass, setCurrentPass] = useState('')
@@ -51,6 +52,24 @@ export default function SettingsAccountPage() {
     await updateProfile({ name, phone })
     setEditName(false)
     toast.success('פרופיל עודכן')
+  }
+
+  async function handleDeleteAccount() {
+    if (!confirm(t('settings.delete.account.confirm1'))) return
+    if (!confirm(t('settings.delete.account.confirm2'))) return
+    setDeletingAccount(true)
+    try {
+      const { error } = await supabase.from('support_messages').insert({
+        user_id: user!.id, user_email: user!.email, user_name: profile?.name || null,
+        subject: t('settings.delete.account.subject'), body: t('settings.delete.account.body'), category: 'general',
+      })
+      if (error) throw error
+      toast.success(t('settings.delete.account.sent'))
+    } catch (e: any) {
+      toast.error(e?.message || t('settings.delete.account.error'))
+    } finally {
+      setDeletingAccount(false)
+    }
   }
 
   async function changePassword() {
@@ -229,6 +248,21 @@ export default function SettingsAccountPage() {
             </div>
           )}
         </Card>
+
+        <SL>אזור מסוכן</SL>
+        <div className="bg-error/5 border border-error/20 rounded-card overflow-hidden">
+          <div className="divide-y divide-error/20">
+            <MenuItem
+              icon="delete"
+              label={t('settings.delete.account')}
+              desc={t('settings.delete.account.desc')}
+              onClick={handleDeleteAccount}
+              danger
+              right={deletingAccount ? <Icon name="progress_activity" size={20} color="var(--c-error)" className="animate-spin" /> : undefined}
+            />
+            <MenuItem icon="logout" label={t('settings.logout')} desc="יציאה מהחשבון" onClick={() => { if (confirm('להתנתק?')) signOut() }} danger />
+          </div>
+        </div>
       </div>
     </div>
   )
