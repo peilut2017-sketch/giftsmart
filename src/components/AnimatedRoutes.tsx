@@ -83,12 +83,16 @@ export default function AnimatedRoutes({ children }: Props) {
     },
   }
 
-  const transition = {
-    type: 'spring' as const,
-    stiffness: 380,
-    damping: 38,
-    mass: 0.9,
-  }
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  // The blanket `@media (prefers-reduced-motion: reduce)` rule in index.css only zeroes
+  // CSS transition/animation durations — this spring is driven by Framer Motion's own
+  // requestAnimationFrame loop, which that rule can't touch, so route transitions were
+  // still fully animated even with the OS preference set. A near-instant tween respects
+  // it instead of just skipping the slide/scale (still a hair of motion to avoid an
+  // outright content pop, per Framer Motion's own reduced-motion guidance).
+  const transition = reducedMotion
+    ? { type: 'tween' as const, duration: 0.01 }
+    : { type: 'spring' as const, stiffness: 380, damping: 38, mass: 0.9 }
 
   return (
     <AnimatePresence mode="popLayout" initial={false}>
