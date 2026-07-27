@@ -68,8 +68,6 @@ const translations: Record<string, string> = {
   'nav.stats.en': 'Statistics',
   'nav.settings': 'הגדרות',
   'nav.settings.en': 'Settings',
-  'nav.profile': 'פרופיל',
-  'nav.profile.en': 'Profile',
   'nav.admin': 'מנהל',
   'nav.admin.en': 'Admin',
 
@@ -115,6 +113,8 @@ const translations: Record<string, string> = {
   'home.see.all.en': 'See all',
   'home.recent': 'שוברים אחרונים',
   'home.recent.en': 'Recent vouchers',
+  'home.recent.discounts': 'הנחות אחרונות',
+  'home.recent.discounts.en': 'Recent discounts',
   'home.wallet.error': 'שגיאה בהגדרת הארנק',
   'home.wallet.error.en': 'Wallet setup error',
   'home.empty.hint': 'לחץ + כדי להוסיף שובר ראשון',

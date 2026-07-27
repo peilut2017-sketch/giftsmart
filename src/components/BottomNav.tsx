@@ -31,9 +31,9 @@ export default function BottomNav() {
 
   const items = [
     { icon: 'account_balance_wallet', label: t('nav.wallet'),  path: '/'         },
-    { icon: 'search',                 label: t('nav.search'),  path: '/search'   },
+    { icon: 'confirmation_number',    label: t('nav.search'),  path: '/search'   },
     { icon: 'bar_chart',              label: t('nav.stats'),   path: '/stats'    },
-    { icon: 'person',                 label: t('nav.profile'), path: '/settings' },
+    { icon: 'settings',               label: t('nav.settings'), path: '/settings' },
   ]
 
   const activeIdx = (() => {

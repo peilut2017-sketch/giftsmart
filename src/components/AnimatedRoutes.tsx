@@ -83,12 +83,22 @@ export default function AnimatedRoutes({ children }: Props) {
     },
   }
 
-  const transition = {
-    type: 'spring' as const,
-    stiffness: 380,
-    damping: 38,
-    mass: 0.9,
-  }
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  // The blanket `@media (prefers-reduced-motion: reduce)` rule in index.css only zeroes
+  // CSS transition/animation durations — this transition is driven by Framer Motion's own
+  // requestAnimationFrame loop, which that rule can't touch, so route transitions were
+  // still fully animated even with the OS preference set. A near-instant tween respects
+  // it instead of just skipping the slide/scale (still a hair of motion to avoid an
+  // outright content pop, per Framer Motion's own reduced-motion guidance).
+  //
+  // A spring here (rather than a fixed-duration tween) previously let the entering and
+  // exiting pages settle at slightly different times depending on how far each had to
+  // travel, which read as a stutter rather than one continuous motion. A single eased
+  // tween — the curve iOS/Android use for standard push transitions — keeps both pages
+  // moving in lockstep for a fixed, predictable duration instead.
+  const transition = reducedMotion
+    ? { type: 'tween' as const, duration: 0.01 }
+    : { type: 'tween' as const, duration: 0.32, ease: [0.32, 0.72, 0, 1] as const }
 
   return (
     <AnimatePresence mode="popLayout" initial={false}>

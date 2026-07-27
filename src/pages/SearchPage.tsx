@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useE2EE } from '../contexts/E2EEContext'
@@ -32,6 +32,7 @@ const EXPIRY_FILTER_DAYS = 30
  */
 export default function SearchPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { t } = useT()
   usePageView('search')
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, loading, updateVoucher, deleteVoucher, archiveVoucher } = useVouchers()
@@ -43,6 +44,18 @@ export default function SearchPage() {
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
   const [filterCats, setFilterCats] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
+
+  // A category tap on HomePage arrives here as router state so the list opens
+  // already filtered to that one category, instead of dumping the user into the
+  // unfiltered "all vouchers" view. Watches location.state (not just mount) so
+  // tapping a different category while already on this page re-applies too.
+  useEffect(() => {
+    const preset = (location.state as { presetCategory?: string } | null)?.presetCategory
+    if (preset) {
+      setFilterCats([preset])
+      setShowFilters(true)
+    }
+  }, [location.state])
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('hpViewMode') as ViewMode) || 'grid')
   const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('hpSortDir') as SortDir) || 'asc')
 

@@ -10,6 +10,7 @@ const CACHE_TTL_MS = 5 * 60_000 // 5 minutes
 interface DiscountsContextValue {
   // Data
   deals: DiscountDeal[]
+  recentDeals: DiscountDeal[]
   clubs: DiscountClub[]
   userClubIds: string[]
   likedDealIds: Set<string>
@@ -22,6 +23,7 @@ interface DiscountsContextValue {
 
   // Actions
   fetchDeals: (search?: string, tags?: string[], myOnly?: boolean) => Promise<void>
+  fetchRecentDeals: () => Promise<void>
   fetchClubs: () => Promise<void>
   setUserClubs: (clubIds: string[]) => Promise<void>
   setSearchQuery: (q: string) => void
@@ -44,6 +46,7 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
 
   const [deals, setDeals] = useState<DiscountDeal[]>([])
+  const [recentDeals, setRecentDeals] = useState<DiscountDeal[]>([])
   const [clubs, setClubs] = useState<DiscountClub[]>([])
   const [userClubIds, setUserClubIds] = useState<string[]>([])
   const [likedDealIds, setLikedDealIds] = useState<Set<string>>(new Set())
@@ -53,7 +56,7 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
   const [activeTags, setActiveTags] = useState<string[]>([])
   const [myOnly, setMyOnly] = useState(false)
 
-  const fetchedAt = useRef<{ deals: number; clubs: number; likes: number }>({ deals: 0, clubs: 0, likes: 0 })
+  const fetchedAt = useRef<{ deals: number; clubs: number; likes: number; recentDeals: number }>({ deals: 0, clubs: 0, likes: 0, recentDeals: 0 })
 
   const fetchLikedDeals = useCallback(async () => {
     if (!user) return
@@ -144,6 +147,24 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchLikedDeals])
 
+  // Home page "recent discounts" widget — newest-created deals, independent of the
+  // best-match ordering fetchDeals() uses for the full Discounts page.
+  const fetchRecentDeals = useCallback(async () => {
+    const now = Date.now()
+    if (fetchedAt.current.recentDeals && now - fetchedAt.current.recentDeals < CACHE_TTL_MS) return
+    try {
+      const [{ data, error }] = await Promise.all([
+        supabase.rpc('get_recent_deals', { p_limit: 3 }),
+        fetchLikedDeals(),
+      ])
+      if (error) throw error
+      setRecentDeals((data as DiscountDeal[]) || [])
+      fetchedAt.current.recentDeals = Date.now()
+    } catch (err) {
+      console.error('[discounts] fetchRecentDeals error', err)
+    }
+  }, [fetchLikedDeals])
+
   const setUserClubs = useCallback(async (clubIds: string[]) => {
     if (!user) return
     try {
@@ -199,6 +220,7 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
   return (
     <DiscountsContext.Provider value={{
       deals,
+      recentDeals,
       clubs,
       userClubIds,
       likedDealIds,
@@ -207,6 +229,7 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
       activeTags,
       myOnly,
       fetchDeals,
+      fetchRecentDeals,
       fetchClubs,
       setUserClubs,
       setSearchQuery,

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -761,25 +762,34 @@ export default function CheckoutPage() {
           containing-block resolution, so a sticky header here would just scroll away
           with the page instead of pinning. Fixed sidesteps that entirely. Hero needs no
           top margin to compensate since a fixed header takes no space in normal flow —
-          its own 64px top padding (below) already keeps its content clear of the header. */}
+          its own 64px top padding (below) already keeps its content clear of the header.
+          The header itself is portaled straight to <body> (see below) — AnimatedRoutes'
+          route-transition wrapper keeps a `transform` on itself the whole time (not just
+          mid-animation), which gives position:fixed descendants a containing block equal
+          to THAT element instead of the real viewport, so without the portal this header
+          visibly shrank/shifted during every transition into or out of this page instead
+          of staying pinned. */}
       <>
-        <div
-          className={`fixed top-0 inset-x-0 z-30 flex items-center justify-between px-3 transition-colors duration-200 ${headerScrolled ? 'bg-surface/95 backdrop-blur-xl shadow-sm border-b border-border' : ''}`}
-          style={{ height: 64 }}
-        >
-          <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl flex items-center justify-center transition" style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}>
-            <Icon name="arrow_forward" size={20} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
-          </button>
-          <div className={`text-base font-bold truncate max-w-[55%] transition-colors ${headerScrolled ? 'text-text' : 'text-white'}`}>{sv?.name || voucher.store_name}</div>
-          <button
-            onClick={() => setShowMoreMenu(true)}
-            aria-label={t('checkout.menu.title')}
-            className="w-9 h-9 rounded-xl flex items-center justify-center transition"
-            style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}
+        {createPortal(
+          <div
+            className={`fixed top-0 inset-x-0 z-30 flex items-center justify-between px-3 transition-colors duration-200 ${headerScrolled ? 'bg-surface/95 backdrop-blur-xl shadow-sm border-b border-border' : ''}`}
+            style={{ height: 64 }}
           >
-            <Icon name="more_horiz" size={22} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
-          </button>
-        </div>
+            <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl flex items-center justify-center transition" style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}>
+              <Icon name="arrow_forward" size={20} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
+            </button>
+            <div className={`text-base font-bold truncate max-w-[55%] transition-colors ${headerScrolled ? 'text-text' : 'text-white'}`}>{sv?.name || voucher.store_name}</div>
+            <button
+              onClick={() => setShowMoreMenu(true)}
+              aria-label={t('checkout.menu.title')}
+              className="w-9 h-9 rounded-xl flex items-center justify-center transition"
+              style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}
+            >
+              <Icon name="more_horiz" size={22} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
+            </button>
+          </div>,
+          document.body,
+        )}
 
         <div style={{
           background: isExpired
@@ -838,8 +848,9 @@ export default function CheckoutPage() {
           by the gate screen the user passed through to get here) — no separate banner. */}
 
       {/* Mini scan strip — pinned just under the header once the real barcode/QR scrolls
-          out of view, so the voucher stays scannable without scrolling back up. */}
-      {!barcodeVisible && effectiveCode && (!voucher.is_e2ee || isVaultUnlocked) && (
+          out of view, so the voucher stays scannable without scrolling back up. Portaled
+          for the same reason as the header above. */}
+      {!barcodeVisible && effectiveCode && (!voucher.is_e2ee || isVaultUnlocked) && createPortal(
         <button
           onClick={scrollToCard}
           aria-label={t('checkout.mini.scan.tap')}
@@ -847,7 +858,8 @@ export default function CheckoutPage() {
           style={{ top: 64, height: 40, zIndex: 25 }}
         >
           {isAlpha ? <canvas ref={miniQrRef} /> : <svg ref={miniBarcodeRef} style={{ height: 28 }} />}
-        </button>
+        </button>,
+        document.body,
       )}
 
       <div className="p-4 space-y-4" style={{ paddingBottom: fab ? 'calc(var(--nav-h) + 92px)' : 'calc(var(--nav-h) + 24px)' }}>
@@ -1429,8 +1441,8 @@ export default function CheckoutPage() {
         )}
       </div>
 
-      {/* ── Floating action (per-tab task CTA) ── */}
-      {fab && (
+      {/* ── Floating action (per-tab task CTA) ── portaled, same reason as the header */}
+      {fab && createPortal(
         <button
           onClick={fab.onClick}
           disabled={fab.disabled || fab.loading}
@@ -1438,7 +1450,8 @@ export default function CheckoutPage() {
         >
           {fab.loading ? <Spinner /> : <Icon name={fab.icon} size={20} />}
           {fab.label}
-        </button>
+        </button>,
+        document.body,
       )}
 
       {/* ── More actions sheet ── */}
