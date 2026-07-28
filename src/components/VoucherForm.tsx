@@ -74,6 +74,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
   const [showStoreDropdown, setShowStoreDropdown] = useState(false)
+  const storeFieldRef = useRef<HTMLDivElement>(null)
   const [amount, setAmount] = useState(voucher?.amount?.toString() || '')
   const [balance] = useState(voucher?.balance?.toString() || '')
   const [itemName, setItemName] = useState(() => {
@@ -207,6 +208,19 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     ...stores.filter(s => s.name.toLowerCase().includes(storeSearch.toLowerCase())),
     ...superVouchers.filter(sv => sv.name.toLowerCase().includes(storeSearch.toLowerCase())).map(sv => ({ id: sv.id, name: sv.name })),
   ].filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i)
+
+  // The dropdown opens directly below the input, inside the modal's own scrollable
+  // body — on a short modal (or with the on-screen keyboard eating vertical space)
+  // it can render past the visible fold with nothing to reveal it, so the list
+  // "disappears" until the user manually scrolls down to find it. Scroll it into
+  // view as soon as it opens instead of waiting on that.
+  useEffect(() => {
+    if (!showStoreDropdown || !storeSearch) return
+    const timer = setTimeout(() => {
+      storeFieldRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 60)
+    return () => clearTimeout(timer)
+  }, [showStoreDropdown, storeSearch])
 
   async function startScanner() {
     setShowScanner(true)
@@ -483,7 +497,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
             {/* Store */}
             {show(STEP_STORE) && (
-              <div>
+              <div ref={storeFieldRef}>
                 <label htmlFor="vf-store" className="text-sm font-medium text-text2 mb-1 block">{t('form.store')} *</label>
                 <div className="relative">
                   <input

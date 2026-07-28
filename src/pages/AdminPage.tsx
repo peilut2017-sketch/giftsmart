@@ -896,7 +896,7 @@ export default function AdminPage() {
         if (Notification.permission === 'granted') {
           new Notification(t('admin.new.message'), {
             body: `${msg.user_email || t('admin.user')}: ${msg.subject}`,
-            icon: '/logo.png',
+            icon: '/notification-icon.png',
           })
         }
       })

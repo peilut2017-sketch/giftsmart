@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -64,6 +64,16 @@ export default function AnimatedRoutes({ children }: Props) {
 
   // Update prev after determining direction
   if (currentIndex !== -1) prevIndexRef.current = currentIndex
+
+  // The document scroll position (pages scroll the window itself, not an inner
+  // container) otherwise carries over from whatever the previous page was scrolled
+  // to — e.g. leaving Search halfway down its list and landing on Home already
+  // scrolled past the header. That reads as broken/jumpy on top of the slide
+  // animation, not like a clean push to a fresh screen. Reset before paint so the
+  // entering page always starts at the top, the way native app navigation does.
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
 
   const variants = {
     enter: {

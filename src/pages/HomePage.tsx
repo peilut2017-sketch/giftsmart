@@ -232,7 +232,10 @@ export default function HomePage() {
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-5 pt-5 pb-1">
-        <Icon name="notifications" size={24} color="var(--c-text2)" />
+        <button onClick={() => navigate('/notifications')} className="relative w-10 h-10 rounded-full flex items-center justify-center" aria-label={t('notifications.title')}>
+          <Icon name="notifications" size={24} color="var(--c-text2)" />
+          {expiredCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-error" />}
+        </button>
         <div className="text-center">
           <div className="text-[19px] font-extrabold text-text">{walletName || t('wallet.main')}</div>
           <div className="text-[13px] text-text3 mt-0.5 flex items-center gap-1.5 justify-center">

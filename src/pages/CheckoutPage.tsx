@@ -1100,8 +1100,9 @@ export default function CheckoutPage() {
             <button
               onClick={() => { updateBalance(0, voucher.balance, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
               style={{ height: 48 }}
-              className="w-full bg-error/10 text-error rounded-xl text-sm font-semibold hover:bg-error/20 transition"
+              className="w-full flex items-center justify-center gap-2 bg-primary-light text-primary-dark border border-primary/25 rounded-xl text-sm font-bold hover:opacity-85 transition"
             >
+              <Icon name="check_circle" size={18} filled />
               {t('checkout.full')}
             </button>
 

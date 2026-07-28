@@ -37,6 +37,7 @@ import type { ReactNode } from 'react'
 
 const CheckoutPage     = lazy(() => import('./pages/CheckoutPage'))
 const SearchPage       = lazy(() => import('./pages/SearchPage'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const VoucherPage      = lazy(() => import('./pages/VoucherPage'))
 const ArchivePage      = lazy(() => import('./pages/ArchivePage'))
 const StatsPage        = lazy(() => import('./pages/StatsPage'))
@@ -183,7 +184,7 @@ function NotificationBridge() {
         if (Notification.permission === 'granted') {
           new Notification('📩 הודעת תמיכה חדשה', {
             body: `${msg.user_email || msg.user_name || 'משתמש'}: ${msg.subject}`,
-            icon: '/logo.png',
+            icon: '/notification-icon.png',
             tag: 'admin-support',
           })
         }
@@ -195,7 +196,7 @@ function NotificationBridge() {
         if (reply.sender === 'user' && Notification.permission === 'granted') {
           new Notification('💬 תשובה חדשה מהמשתמש', {
             body: 'משתמש השיב להודעת תמיכה',
-            icon: '/logo.png',
+            icon: '/notification-icon.png',
             tag: 'admin-support-reply',
           })
         }
@@ -219,7 +220,7 @@ function NotificationBridge() {
       seenIds.add(id)
       localStorage.setItem(SEEN_PUSH_KEY, JSON.stringify([...seenIds]))
       if (Notification.permission === 'granted') {
-        new Notification(title, { body, icon: '/logo.png' })
+        new Notification(title, { body, icon: '/notification-icon.png' })
       }
     }
 
@@ -426,6 +427,7 @@ function AppRoutes() {
             <AnimatedRoutes>
               <Route path="/" element={<HomePage />} />
               <Route path="/search" element={<SearchPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/voucher/:id" element={<VoucherPage />} />
               <Route path="/checkout/:id" element={<CheckoutPage />} />
               <Route path="/archive" element={<ArchivePage />} />

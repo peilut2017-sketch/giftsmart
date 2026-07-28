@@ -65,13 +65,12 @@ export function GiftSmartLogoFull({ iconSize = 72 }: { iconSize?: number }) {
   )
 }
 
-/** Splash variant: large icon + app name, used on loading / splash screen */
+/** Splash variant: full logo lockup (icon + wordmark + tagline are baked into logo.png
+    itself), used on loading / splash screen. */
 export function GiftSmartSplash() {
   return (
     <div className="flex flex-col items-center gap-2">
-      <img src="/logo.png" alt="GiftSmart" className="w-24 h-24 object-contain" style={{ mixBlendMode: 'screen' }} />
-      <p className="text-4xl font-extrabold text-gray-800 tracking-tight mt-2">GiftSmart</p>
-      <p className="text-sm text-gray-500">ניהול שוברים וכרטיסי מתנה</p>
+      <img src="/logo.png" alt="GiftSmart — ניהול שוברים וכרטיסי מתנה" className="w-48 h-48 object-contain" />
     </div>
   )
 }
