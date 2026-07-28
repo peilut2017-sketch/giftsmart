@@ -108,17 +108,12 @@ export default function SharedVoucherPage() {
         return
       }
 
-      // If the token has a decrypted code override (E2EE share), use it
-      const { data: tokenRow } = await supabase
-        .from('shared_voucher_tokens')
-        .select('code_override')
-        .eq('token', token)
-        .maybeSingle()
-      const effectiveRow: SharedVoucher = tokenRow?.code_override
-        ? { ...row, code: tokenRow.code_override }
-        : row
-
-      setVoucher(effectiveRow)
+      // The E2EE decrypted-code override is applied inside get_shared_voucher_live()
+      // itself. It used to be fetched here with a second, direct SELECT on
+      // shared_voucher_tokens, which only worked while that table had a public
+      // read-everything policy — the same policy that let anyone enumerate every
+      // share token, so it had to go (see supabase-fix-share-token-idor.sql).
+      setVoucher(row)
 
       // Increment view count atomically via RPC
       supabase.rpc('increment_share_view_count', { p_token: token }).then(() => {})
