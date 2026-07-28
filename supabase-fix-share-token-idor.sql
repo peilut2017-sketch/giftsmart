@@ -133,32 +133,41 @@ CREATE POLICY "gift_sender_insert" ON voucher_gifts
 -- encrypted ciphertext instead of the real code.
 --
 -- Resolving the override inside this SECURITY DEFINER function keeps the public
--- page working with no direct table access at all. The signature and return type
--- are unchanged, so CREATE OR REPLACE is sufficient and no client change is
--- required beyond dropping the now-redundant second query.
-CREATE OR REPLACE FUNCTION get_shared_voucher_live(p_token TEXT)
+-- page working with no direct table access at all.
+--
+-- The current definition of this function is the 9-column one from
+-- supabase-voucher-archive-reason.sql — it adds `link` and `balance_check_url`
+-- on top of the 7 columns created in supabase-security-hardening.sql, and the
+-- shared-voucher page renders both as external links. Adding a column to a
+-- RETURNS TABLE changes the function's result type, which CREATE OR REPLACE
+-- cannot do ("42P13: cannot change return type of existing function"), so the
+-- old one has to be dropped first. Both extra columns are reproduced below —
+-- dropping and recreating with only the original 7 would silently remove the
+-- "open link" and "check balance" buttons from every share page.
+DROP FUNCTION IF EXISTS get_shared_voucher_live(TEXT);
+
+CREATE FUNCTION get_shared_voucher_live(p_token TEXT)
 RETURNS TABLE (
-  store_name   TEXT,
-  balance      NUMERIC,
-  amount       NUMERIC,
-  code         TEXT,
-  expiry_date  DATE,
-  notes        TEXT,
-  is_expired   BOOLEAN
+  store_name        TEXT,
+  balance           NUMERIC,
+  amount            NUMERIC,
+  code              TEXT,
+  expiry_date       DATE,
+  notes             TEXT,
+  is_expired        BOOLEAN,
+  link              TEXT,
+  balance_check_url TEXT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_voucher_id    UUID;
-  v_expires_at    TIMESTAMPTZ;
-  v_code_override TEXT;
+  v_token_row RECORD;
 BEGIN
-  SELECT svt.voucher_id, svt.expires_at, svt.code_override
-  INTO   v_voucher_id, v_expires_at, v_code_override
-  FROM   shared_voucher_tokens svt
-  WHERE  svt.token = p_token;
+  SELECT * INTO v_token_row
+  FROM shared_voucher_tokens
+  WHERE token = p_token;
 
   -- Token not found → return empty (frontend shows "לינק לא תקין")
   IF NOT FOUND THEN
@@ -166,10 +175,10 @@ BEGIN
   END IF;
 
   -- Token expired → sentinel row (frontend shows "פג תוקף הלינק")
-  IF v_expires_at IS NOT NULL AND v_expires_at < NOW() THEN
+  IF v_token_row.expires_at IS NOT NULL AND v_token_row.expires_at < NOW() THEN
     RETURN QUERY SELECT
-      NULL::TEXT, NULL::NUMERIC, NULL::NUMERIC,
-      NULL::TEXT, NULL::DATE, NULL::TEXT, TRUE;
+      NULL::TEXT, NULL::NUMERIC, NULL::NUMERIC, NULL::TEXT,
+      NULL::DATE, NULL::TEXT, TRUE, NULL::TEXT, NULL::TEXT;
     RETURN;
   END IF;
 
@@ -181,12 +190,15 @@ BEGIN
       v.store_name,
       v.balance::NUMERIC,
       v.amount::NUMERIC,
-      COALESCE(v_code_override, v.code) AS code,
-      v.expiry_date,
+      COALESCE(v_token_row.code_override, v.code)::TEXT,
+      v.expiry_date::DATE,
       v.notes,
-      FALSE AS is_expired
+      FALSE,
+      v.link,
+      sv.balance_check_url
     FROM vouchers v
-    WHERE v.id = v_voucher_id;
+    LEFT JOIN super_vouchers sv ON sv.id = v.super_voucher_id
+    WHERE v.id = v_token_row.voucher_id;
 END;
 $$;
 
@@ -220,6 +232,18 @@ SELECT pg_notify('pgrst', 'reload schema');
 --     you own, share one from a shared family wallet, and re-share one that was
 --     shared with you. All three must still produce a working link.
 --
+-- (d) The shared-voucher page still gets all 9 columns — confirm the recreated
+--     function kept `link` and `balance_check_url` (their "open link" / "check
+--     balance" buttons depend on them), and that code_override resolution works:
+--
+--   SELECT pg_get_function_result(oid)
+--   FROM pg_proc
+--   WHERE proname = 'get_shared_voucher_live';
+--   -- expect 9 OUT columns ending in: is_expired boolean, link text, balance_check_url text
+--
+--   SELECT * FROM get_shared_voucher_live('<a real, unexpired token>');
+--   -- for an E2EE-shared voucher, `code` must be the readable code, not "e2ee:..."
+--
 -- =============================================================================
 -- ROLLBACK (restores the previous, VULNERABLE behaviour — emergency use only)
 -- =============================================================================
@@ -233,3 +257,11 @@ SELECT pg_notify('pgrst', 'reload schema');
 --   CREATE POLICY "gift_sender_insert" ON voucher_gifts
 --     FOR INSERT WITH CHECK (sender_user_id = auth.uid());
 --   SELECT pg_notify('pgrst', 'reload schema');
+--
+--   -- get_shared_voucher_live does NOT need rolling back: its column list is
+--   -- unchanged from the deployed 9-column version, and the only behavioural
+--   -- difference (resolving code_override server-side) is additive. Leaving it
+--   -- in place also keeps E2EE share links working. If you do revert it, re-run
+--   -- supabase-voucher-archive-reason.sql to restore the 9-column definition,
+--   -- and revert the SharedVoucherPage.tsx change in the same commit — the page
+--   -- no longer fetches code_override itself.
