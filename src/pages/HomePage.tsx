@@ -14,6 +14,7 @@ import { DEFAULT_CATEGORIES } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel, getStoreInitials, getCategoryColor } from '../utils/helpers'
 import toast from 'react-hot-toast'
 import { usePageView } from '../hooks/usePageView'
+import { useNotificationsFeed } from '../hooks/useNotificationsFeed'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 const RECENT_COUNT = 4
@@ -33,6 +34,7 @@ export default function HomePage() {
   const { limits, openUpgradeSheet } = useSubscription()
   const { hasVault, hint, isVaultUnlocked, unlockVault, lockVault } = useE2EE()
   const { recentDeals, fetchRecentDeals } = useDiscounts()
+  const { unseenCount } = useNotificationsFeed()
 
   useEffect(() => { fetchRecentDeals() }, [fetchRecentDeals])
 
@@ -234,7 +236,7 @@ export default function HomePage() {
       <div className="flex items-center justify-between px-5 pt-5 pb-1">
         <button onClick={() => navigate('/notifications')} className="relative w-10 h-10 rounded-full flex items-center justify-center" aria-label={t('notifications.title')}>
           <Icon name="notifications" size={24} color="var(--c-text2)" />
-          {expiredCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-error" />}
+          {unseenCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-error" />}
         </button>
         <div className="text-center">
           <div className="text-[19px] font-extrabold text-text">{walletName || t('wallet.main')}</div>

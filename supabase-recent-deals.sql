@@ -1,9 +1,15 @@
--- Recent deals for the Home page "הנחות אחרונות" widget.
+-- Recent deals for the Home page "הנחות אחרונות" widget and the Notifications
+-- page's "new discounts in your clubs" section (which needs created_at to place
+-- each deal correctly in the merged chronological feed).
 -- Same shape as get_my_deals() but ordered strictly by newest-created, since
 -- get_my_deals() ranks by is_my_club/discount_value first (best-match ordering),
 -- which isn't "recency".
 
-CREATE OR REPLACE FUNCTION get_recent_deals(
+-- DROP first: Postgres won't let CREATE OR REPLACE change a RETURNS TABLE's
+-- column list in place (adding created_at below).
+DROP FUNCTION IF EXISTS get_recent_deals(INT);
+
+CREATE FUNCTION get_recent_deals(
   p_limit INT DEFAULT 3
 )
 RETURNS TABLE (
@@ -26,7 +32,8 @@ RETURNS TABLE (
   start_date       DATE,
   expiration_date  DATE,
   is_my_club       BOOLEAN,
-  is_upcoming      BOOLEAN
+  is_upcoming      BOOLEAN,
+  created_at       TIMESTAMPTZ
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -52,7 +59,8 @@ AS $$
     d.start_date,
     d.expiration_date,
     (uc.user_id IS NOT NULL)           AS is_my_club,
-    (d.start_date > CURRENT_DATE)      AS is_upcoming
+    (d.start_date > CURRENT_DATE)      AS is_upcoming,
+    d.created_at
   FROM discount_deals d
   JOIN discount_clubs      cl ON cl.id = d.club_id
   JOIN discount_businesses b  ON b.id  = d.business_id
