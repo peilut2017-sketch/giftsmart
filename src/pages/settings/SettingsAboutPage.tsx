@@ -59,7 +59,7 @@ export default function SettingsAboutPage() {
         if (updated.status === 'replied' && updated.admin_reply) {
           setMyMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
           if (Notification.permission === 'granted') {
-            new Notification('תשובה מהמנהל', { body: updated.admin_reply, icon: '/logo.png' })
+            new Notification('תשובה מהמנהל', { body: updated.admin_reply, icon: '/notification-icon.png' })
           }
         }
       })
