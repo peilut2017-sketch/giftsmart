@@ -110,7 +110,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (voucher?.item_name || voucher?.notes?.startsWith('📦 ')) return 'פריט'
     return '₪'
   })
-  const [showUnitPicker, setShowUnitPicker] = useState(false)
 
   // E2EE vault
   const [e2eeEnabled, setE2eeEnabled] = useState(
@@ -126,14 +125,22 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [biometricLoading, setBiometricLoading] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const operatorPickerRef = useRef<HTMLDivElement>(null)
-  const hiddenDateRef = useRef<HTMLInputElement>(null)
-
-  function openDatePicker() {
-    if (hiddenDateRef.current) {
-      if (typeof hiddenDateRef.current.showPicker === 'function') hiddenDateRef.current.showPicker()
-      else hiddenDateRef.current.click()
-    }
+  /** Existing voucher sharing this code, or undefined. Locked-vault E2EE vouchers
+      can't be compared (their plaintext isn't in decryptedMap) and are skipped. */
+  function findDuplicate() {
+    const normalizedCode = code.toLowerCase().trim()
+    if (!normalizedCode) return undefined
+    const allVouchers = [...vouchers, ...archivedVouchers]
+    const notSelf = (v: Voucher) => !voucher || v.id !== voucher.id
+    return (
+      allVouchers.find(v => !v.is_e2ee && v.code.toLowerCase().trim() === normalizedCode && notSelf(v)) ??
+      allVouchers.find(v => v.is_e2ee && (decryptedMap.get(v.id)?.code ?? '').toLowerCase().trim() === normalizedCode && notSelf(v))
+    )
   }
+
+  // Surfaced inline on the code step so a duplicate is caught right after it's typed,
+  // instead of only via a confirm() at the very end of the wizard.
+  const duplicateVoucher = findDuplicate()
 
   function handleDateTextChange(val: string) {
     const digits = val.replace(/\D/g, '').slice(0, 8)
@@ -145,7 +152,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     const iso = parseDisplayToISO(display)
     if (iso) setExpiryDate(iso)
   }
-  const unitPickerRef = useRef<HTMLDivElement>(null)
 
   // Operator quick-fill
   const [operators, setOperators] = useState<{ id: string; name: string; url: string }[]>([])
@@ -161,16 +167,6 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     document.addEventListener('touchstart', onOutside)
     return () => { document.removeEventListener('mousedown', onOutside); document.removeEventListener('touchstart', onOutside) }
   }, [showOperatorPicker])
-
-  useEffect(() => {
-    if (!showUnitPicker) return
-    function onOutside(e: MouseEvent | TouchEvent) {
-      if (unitPickerRef.current && !unitPickerRef.current.contains(e.target as Node)) setShowUnitPicker(false)
-    }
-    document.addEventListener('mousedown', onOutside)
-    document.addEventListener('touchstart', onOutside)
-    return () => { document.removeEventListener('mousedown', onOutside); document.removeEventListener('touchstart', onOutside) }
-  }, [showUnitPicker])
 
   useEffect(() => () => { stopScanner() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -352,17 +348,16 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (!storeName) return toast.error('יש לבחור שם חנות')
     if (!code) return toast.error('יש להזין קוד שובר')
 
-    // Duplicate check — plain vouchers and E2EE vouchers (using decryptedMap)
-    if (!e2eeEnabled) {
-      const allVouchers = [...vouchers, ...archivedVouchers]
-      const normalizedCode = code.toLowerCase().trim()
-      const duplicate =
-        allVouchers.find(v => !v.is_e2ee && v.code.toLowerCase().trim() === normalizedCode && (!voucher || v.id !== voucher.id)) ??
-        allVouchers.find(v => v.is_e2ee && (decryptedMap.get(v.id)?.code ?? '').toLowerCase().trim() === normalizedCode && (!voucher || v.id !== voucher.id))
-      if (duplicate) {
-        const proceed = confirm(`קוד שובר זה כבר קיים (${duplicate.store_name}). האם להמשיך בכל זאת?`)
-        if (!proceed) return
-      }
+    // Duplicate check — plain vouchers and E2EE vouchers (using decryptedMap).
+    // This used to be wrapped in `if (!e2eeEnabled)`, which silently disabled it for
+    // almost everyone: e2eeEnabled defaults to true unless gs_e2ee_default is
+    // explicitly 'false', so the check practically never ran. Whether the NEW voucher
+    // will be encrypted has no bearing on the comparison — it compares the plaintext
+    // `code` state against existing codes either way — so the gate was simply wrong.
+    const duplicate = findDuplicate()
+    if (duplicate) {
+      const proceed = confirm(`קוד שובר זה כבר קיים (${duplicate.store_name}). האם להמשיך בכל זאת?`)
+      if (!proceed) return
     }
 
     if (e2eeEnabled && !isVaultUnlocked) {
@@ -542,7 +537,20 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     <Icon name="barcode_scanner" size={20} aria-hidden />
                   </button>
                 </div>
+                {duplicateVoucher && (
+                  <div className="mt-2 flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-2xl px-3 py-2.5">
+                    <Icon name="warning" size={16} color="var(--c-warning)" className="mt-0.5" />
+                    <p className="text-xs text-warning font-medium">
+                      קוד זה כבר קיים בשובר של <strong>{duplicateVoucher.store_name}</strong>
+                    </p>
+                  </div>
+                )}
               </div>
+            )}
+
+            {/* Kind + currency — chosen once, above the fields it reshapes */}
+            {show(STEP_BALANCE) && (
+              <VoucherKindPicker amountUnit={amountUnit} setAmountUnit={setAmountUnit} />
             )}
 
             {/* Amount/Item + Balance / Usage */}
@@ -551,22 +559,19 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 {amountUnit === 'פריט' ? (
                   <>
                     <div className="col-span-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <label htmlFor="vf-item-name" className="text-sm font-medium text-text2">שם פריט *</label>
-                        <UnitPicker unitPickerRef={unitPickerRef} amountUnit={amountUnit} showUnitPicker={showUnitPicker} setShowUnitPicker={setShowUnitPicker} setAmountUnit={setAmountUnit} />
-                      </div>
+                      <label htmlFor="vf-item-name" className="text-sm font-medium text-text2 mb-1 block">שם פריט *</label>
                       <input id="vf-item-name" type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="שם פריט / שירות..." className={inputCls} dir="rtl" />
                     </div>
                     <div>
                       <label className="text-sm font-medium text-text2 mb-1 block">ערך שובר <span className="text-text3 font-normal text-xs">(אופציונלי)</span></label>
                       <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
-                        <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
+                        <input type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                       </div>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-text2 mb-1 block">כמה עלה לי (₪)</label>
                       <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
-                        <input type="number" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
+                        <input type="number" inputMode="decimal" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                       </div>
                       {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
                         <p className="text-xs mt-1 text-text3">ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪</p>
@@ -576,16 +581,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 ) : (
                   <>
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label htmlFor="vf-amount" className="text-sm font-medium text-text2">{`שווי שובר (${amountUnit})`}</label>
-                        <UnitPicker unitPickerRef={unitPickerRef} amountUnit={amountUnit} showUnitPicker={showUnitPicker} setShowUnitPicker={setShowUnitPicker} setAmountUnit={setAmountUnit} />
-                      </div>
+                      <label htmlFor="vf-amount" className="text-sm font-medium text-text2 mb-1 block">{`שווי שובר (${amountUnit})`}</label>
                       <input id="vf-amount" type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} dir="ltr" />
                     </div>
                     {voucher ? (
                       <div>
                         <label htmlFor="vf-usage" className="text-sm font-medium text-text2 mb-1 block">סכום שימוש (₪)</label>
-                        <input id="vf-usage" type="number" value={usageAmount} onChange={e => setUsageAmount(e.target.value)} placeholder="0" min="0" max={voucher.balance} className={inputCls} dir="ltr" />
+                        <input id="vf-usage" type="number" inputMode="decimal" value={usageAmount} onChange={e => setUsageAmount(e.target.value)} placeholder="0" min="0" max={voucher.balance} className={inputCls} dir="ltr" />
                         {(() => {
                           const used = parseFloat(usageAmount) || 0
                           const newBal = Math.max(0, (voucher.balance ?? 0) - used)
@@ -603,7 +605,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                       <div>
                         <label className="text-sm font-medium text-text2 mb-1 block">כמה עלה לי (₪)</label>
                         <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
-                          <input type="number" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
+                          <input type="number" inputMode="decimal" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                         </div>
                         {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
                           <p className="text-xs mt-1 text-text3">ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪</p>
@@ -620,7 +622,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <div>
                 <label className="text-sm font-medium text-text2 mb-1 block">כמה עלה לי (₪)</label>
                 <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
-                  <input type="number" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
+                  <input type="number" inputMode="decimal" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                 </div>
                 {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
                   <p className="text-xs mt-1 text-text3">ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪</p>
@@ -631,20 +633,43 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             {/* Expiry */}
             {show(STEP_EXPIRY) && (
               <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <label htmlFor="vf-expiry" className="text-sm font-medium text-text2">{t('form.expiry')}</label>
-                  <button type="button" onClick={openDatePicker} className="text-text3 hover:text-primary" tabIndex={-1} aria-label="בחר תאריך"><Icon name="calendar_today" size={14} /></button>
-                  <input ref={hiddenDateRef} type="date" value={expiryDate} onChange={e => { setExpiryDate(e.target.value); setDisplayDate(isoToDisplay(e.target.value)) }} className="sr-only" tabIndex={-1} aria-hidden />
-                </div>
+                <label htmlFor="vf-expiry" className="text-sm font-medium text-text2 mb-1 block">{t('form.expiry')}</label>
                 <div className="flex gap-2 items-center">
-                  <input id="vf-expiry" type="text" value={displayDate} onChange={e => handleDateTextChange(e.target.value)} placeholder="DD.MM.YYYY" className="flex-1 min-w-0 px-3 py-3 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40" dir="ltr" />
-                  <div className="flex gap-1 shrink-0">
-                    {[{ label: '+1y', years: 1 }, { label: '+2y', years: 2 }, { label: '+5y', years: 5 }].map(({ label, years }) => (
-                      <button key={years} type="button" onClick={() => { const d = new Date(); d.setFullYear(d.getFullYear() + years); const iso = d.toISOString().split('T')[0]; setExpiryDate(iso); setDisplayDate(isoToDisplay(iso)) }} className="px-2 py-3 text-xs font-medium bg-bg text-text2 rounded-2xl hover:bg-primary-light hover:text-primary-dark transition">
-                        {label}
-                      </button>
-                    ))}
+                  {/* inputMode="numeric" so phones open the number pad for DD.MM.YYYY.
+                      type stays "text" — a real type="date" here would replace typing
+                      with the native picker entirely. */}
+                  <input
+                    id="vf-expiry" type="text" inputMode="numeric"
+                    value={displayDate} onChange={e => handleDateTextChange(e.target.value)}
+                    placeholder="DD.MM.YYYY"
+                    className="flex-1 min-w-0 px-3 py-3 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    dir="ltr"
+                  />
+                  {/* Calendar trigger: a REAL <input type="date"> laid transparently over
+                      the button, instead of an sr-only input fired via showPicker().
+                      iOS Safari implements neither reliably — showPicker() doesn't exist
+                      there, and .click() on a 1px-clipped input frequently no-ops, which
+                      is why the picker often refused to open. A full-size, hit-testable
+                      date input opens the native picker on every platform, and at 48px
+                      it's finally a real tap target (the old trigger was a 14px icon). */}
+                  <div className="relative shrink-0 w-12 h-12">
+                    <div aria-hidden className="w-12 h-12 flex items-center justify-center rounded-2xl border border-border bg-bg text-text2">
+                      <Icon name="calendar_today" size={20} />
+                    </div>
+                    <input
+                      type="date" value={expiryDate}
+                      onChange={e => { setExpiryDate(e.target.value); setDisplayDate(isoToDisplay(e.target.value)) }}
+                      aria-label="בחר תאריך מלוח שנה"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
                   </div>
+                </div>
+                <div className="flex gap-1.5 mt-2">
+                  {[{ label: '+שנה', years: 1 }, { label: '+שנתיים', years: 2 }, { label: '+5 שנים', years: 5 }].map(({ label, years }) => (
+                    <button key={years} type="button" onClick={() => { const d = new Date(); d.setFullYear(d.getFullYear() + years); const iso = d.toISOString().split('T')[0]; setExpiryDate(iso); setDisplayDate(isoToDisplay(iso)) }} className="flex-1 py-2.5 text-xs font-medium bg-bg text-text2 rounded-2xl hover:bg-primary-light hover:text-primary-dark transition">
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -903,26 +928,71 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   )
 }
 
-// Shared amount-unit picker (currency / item)
-function UnitPicker({ unitPickerRef, amountUnit, showUnitPicker, setShowUnitPicker, setAmountUnit }: {
-  unitPickerRef: React.RefObject<HTMLDivElement | null>
+/**
+ * Voucher-kind + currency selector.
+ *
+ * This replaces a single tiny dropdown chip that listed ['₪','$','€','אחר','פריט']
+ * together. That conflated two unrelated decisions — which currency the value is in,
+ * and whether the voucher is a money amount at all — behind one 12px control, so
+ * picking "פריט" silently rebuilt the whole step and there was no way to tell that
+ * was going to happen. Now the kind is an explicit two-way segmented control, and
+ * currency only appears when it's actually relevant.
+ */
+function VoucherKindPicker({ amountUnit, setAmountUnit }: {
   amountUnit: AmountUnit
-  showUnitPicker: boolean
-  setShowUnitPicker: (fn: (v: boolean) => boolean) => void
   setAmountUnit: (u: AmountUnit) => void
 }) {
+  const isItem = amountUnit === 'פריט'
+  // Remembers the currency across a round-trip through "item" mode.
+  const lastCurrency = useRef<AmountUnit>(isItem ? '₪' : amountUnit)
+  if (!isItem) lastCurrency.current = amountUnit
+
+  const KINDS = [
+    { key: 'amount' as const, label: 'סכום כספי', icon: 'payments',            active: !isItem },
+    { key: 'item'   as const, label: 'פריט / שירות', icon: 'inventory_2',      active: isItem  },
+  ]
+
   return (
-    <div className="relative" ref={unitPickerRef}>
-      <button type="button" onClick={() => setShowUnitPicker(v => !v)} className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-bg text-text2 hover:opacity-80 text-xs font-semibold">
-        {amountUnit} <Icon name="keyboard_arrow_down" size={12} />
-      </button>
-      {showUnitPicker && (
-        <div className="absolute top-full left-0 mt-1 bg-surface rounded-xl shadow-lg border border-border py-1 z-30 min-w-[70px]">
-          {(['₪', '$', '€', 'אחר', 'פריט'] as AmountUnit[]).map(u => (
-            <button key={u} type="button" onClick={() => { setAmountUnit(u); setShowUnitPicker(() => false) }} className={`w-full px-3 py-1.5 text-xs text-right hover:bg-bg ${amountUnit === u ? 'text-primary font-semibold' : 'text-text'}`}>
-              {u}
-            </button>
-          ))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        {KINDS.map(k => (
+          <button
+            key={k.key}
+            type="button"
+            onClick={() => setAmountUnit(k.key === 'item' ? 'פריט' : lastCurrency.current)}
+            aria-pressed={k.active}
+            className={`flex items-center justify-center gap-2 py-3 rounded-2xl border text-sm font-semibold transition ${
+              k.active
+                ? 'bg-primary-light border-primary text-primary-dark'
+                : 'bg-surface border-border text-text2 hover:bg-bg'
+            }`}
+          >
+            <Icon name={k.icon} size={18} color={k.active ? 'var(--c-primary-dark)' : 'var(--c-text3)'} />
+            {k.label}
+          </button>
+        ))}
+      </div>
+
+      {!isItem && (
+        <div>
+          <p className="text-xs text-text3 mb-1.5">מטבע</p>
+          <div className="grid grid-cols-4 gap-2">
+            {(['₪', '$', '€', 'אחר'] as AmountUnit[]).map(u => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => setAmountUnit(u)}
+                aria-pressed={amountUnit === u}
+                className={`py-2.5 rounded-2xl border text-sm font-semibold transition ${
+                  amountUnit === u
+                    ? 'bg-primary-light border-primary text-primary-dark'
+                    : 'bg-surface border-border text-text2 hover:bg-bg'
+                }`}
+              >
+                {u}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
