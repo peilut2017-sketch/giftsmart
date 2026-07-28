@@ -401,12 +401,20 @@ export default function CheckoutPage() {
       toast.error(t('checkout.gift.self.error'))
       return
     }
+    // E2EE vouchers: require the vault open so the recipient gets the real code.
+    // Same guard handleCreateShareLink already applies — without it the gift row
+    // carries no plaintext and the recipient receives unusable ciphertext.
+    if (voucher.is_e2ee && !isVaultUnlocked) {
+      toast.error(t('checkout.share.vault.locked'))
+      return
+    }
     const sendAt = giftScheduled && giftDate ? new Date(giftDate) : new Date()
     setGiftSending(true)
     setGiftLink(null)
     try {
       const email = giftMode === 'email' ? giftEmail.trim() : null
-      const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt)
+      const codeOverride = voucher.is_e2ee && effectiveCode ? effectiveCode : undefined
+      const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt, codeOverride)
       if (!token) { toast.error(t('checkout.gift.create.error')); return }
 
       const link = `${window.location.origin}/gift/${token}`
