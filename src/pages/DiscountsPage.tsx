@@ -127,9 +127,14 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
             />
           </div>
 
+          {/* min-w-0 on the flex/grid children throughout this form: form controls
+              (especially <select> and <input type="date">) have an intrinsic minimum
+              width larger than their container, and flex/grid items default to
+              min-width:auto — so without this they refuse to shrink and push the whole
+              sheet wider than the viewport. */}
           <div className="flex gap-2">
             <select
-              className="flex-1 border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="flex-1 min-w-0 border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
               value={form.discount_type}
               onChange={e => setForm(f => ({ ...f, discount_type: e.target.value as typeof form.discount_type }))}
             >
@@ -140,7 +145,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
             {(form.discount_type === 'percent' || form.discount_type === 'fixed') && (
               <input
                 type="number" min="0"
-                className="w-24 border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-24 shrink-0 border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder={form.discount_type === 'percent' ? '%' : '₪'}
                 value={form.discount_value}
                 onChange={e => setForm(f => ({ ...f, discount_value: e.target.value }))}
@@ -224,13 +229,13 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
                 onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
               />
               <div className="grid grid-cols-2 gap-2">
-                <div>
+                <div className="min-w-0">
                   <label className="text-xs text-text3 mb-1 block">תאריך התחלה</label>
-                  <input type="date" className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+                  <input type="date" className="w-full min-w-0 border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="text-xs text-text3 mb-1 block">תאריך תפוגה</label>
-                  <input type="date" className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text" value={form.expiration_date} onChange={e => setForm(f => ({ ...f, expiration_date: e.target.value }))} />
+                  <input type="date" className="w-full min-w-0 border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text" value={form.expiration_date} onChange={e => setForm(f => ({ ...f, expiration_date: e.target.value }))} />
                 </div>
               </div>
             </div>

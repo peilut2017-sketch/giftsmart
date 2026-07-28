@@ -419,7 +419,14 @@ export default function AdminPage() {
       setDealForm({ club_id: '', business_id: '', title: '', description: '', discount_type: 'percent', discount_value: '', promo_code: '', external_link: '', tags: '', start_date: '', expiration_date: '', is_active: true, image_url: '' })
       setDealImageFile(null); setDealImagePreview(null)
       await loadAdminDeals()
-    } catch (e: any) { toast.error(e.message || t('admin.save.error')) }
+    } catch (e: any) {
+      // Surface the Postgres/PostgREST detail, not just the one-line message — the
+      // failure modes here (missing RPC, ambiguous overload, not_admin) are
+      // indistinguishable from each other on the generic message alone.
+      const detail = [e?.code, e?.message, e?.details, e?.hint].filter(Boolean).join(' · ')
+      console.error('[admin] admin_upsert_deal failed', e)
+      toast.error(detail || t('admin.save.error'), { duration: 8000 })
+    }
     finally { setSavingDiscount(false) }
   }
 

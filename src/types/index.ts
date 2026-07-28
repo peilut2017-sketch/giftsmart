@@ -291,6 +291,7 @@ export interface DiscountDeal {
   view_count?: number
   is_liked?: boolean
   image_url?: string
+  created_at?: string
 }
 
 export interface DiscountSubmission {

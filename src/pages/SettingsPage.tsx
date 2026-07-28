@@ -14,7 +14,7 @@ interface CategoryDef { key: string; icon: string; title: string; desc: string; 
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { vouchers, archivedVouchers } = useVouchers()
   const { hasVault, isVaultUnlocked } = useE2EE()
@@ -99,6 +99,12 @@ export default function SettingsPage() {
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full text-white ${isPro ? 'bg-white/30' : 'bg-white/20'}`}>
                     {isPro ? 'Pro ★' : 'משתמש רגיל'}
                   </span>
+                  {isAdmin && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full text-white bg-white/30">
+                      <Icon name="verified_user" size={11} color="#fff" filled />
+                      מנהל
+                    </span>
+                  )}
                   {isPro && proExpiryDate && (
                     <span className="text-[10px] text-white/65 font-medium">
                       פעיל עד {new Date(proExpiryDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -114,6 +120,24 @@ export default function SettingsPage() {
               <span className="text-sm text-white/80">{vouchers.length} שוברים</span>
               <span className="text-lg font-black text-white">₪{totalBalance.toLocaleString('he-IL')}</span>
             </div>
+
+            {/* Admin panel entry — an identity-level capability, so it belongs on the
+                profile card rather than buried at the bottom of About/Support. */}
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="w-full flex items-center gap-3 mt-4 pt-4 border-t border-white/20 text-right active:opacity-80 transition-opacity"
+              >
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                  <Icon name="verified_user" size={18} color="#fff" filled />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-white">{t('settings.admin.link')}</div>
+                  <div className="text-[11px] text-white/70 mt-0.5 truncate">{t('settings.admin.link.desc')}</div>
+                </div>
+                <Icon name="chevron_left" size={18} color="rgba(255,255,255,0.7)" />
+              </button>
+            )}
           </div>
         </div>
 

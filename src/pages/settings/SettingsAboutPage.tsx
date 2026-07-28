@@ -25,7 +25,7 @@ export default function SettingsAboutPage() {
   usePageView('settings_about')
   const navigate = useNavigate()
   const { t } = useT()
-  const { user, profile, isAdmin } = useAuth()
+  const { user, profile } = useAuth()
   const { isPro } = useSubscription()
 
   const [supportSubject, setSupportSubject] = useState('')
@@ -269,9 +269,8 @@ export default function SettingsAboutPage() {
             />
             <MenuItem icon="description" label="תנאי שימוש" desc="הסכם השימוש בשירות GiftSmart" onClick={() => navigate('/terms')} />
             <MenuItem icon="shield" label="מדיניות פרטיות" desc="כיצד אנו מגינים על המידע שלך" onClick={() => navigate('/privacy')} />
-            {isAdmin && (
-              <MenuItem icon="verified_user" label={t('settings.admin.link')} desc={t('settings.admin.link.desc')} onClick={() => navigate('/admin')} />
-            )}
+            {/* The admin-panel entry point lives on the Settings hub's profile card now
+                (it's an identity-level capability, not an "about/support" item). */}
           </div>
         </Card>
 
