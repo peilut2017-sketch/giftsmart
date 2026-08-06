@@ -17,10 +17,13 @@ const ACTION_META: Record<ActivityLogEntry['action'], { labelKey: string; Icon: 
   delete:                       { labelKey: 'log.action.delete',                 Icon: Trash2,        color: 'text-red-600',    bg: 'bg-red-50'     },
   // Sharing
   share_link:                   { labelKey: 'log.action.share_link',             Icon: Link2,         color: 'text-cyan-600',   bg: 'bg-cyan-50'    },
+  share_link_deleted:           { labelKey: 'log.action.share_link_deleted',     Icon: Link2,         color: 'text-cyan-600',   bg: 'bg-cyan-50'    },
   share_email:                  { labelKey: 'log.action.share_email',            Icon: Share2,        color: 'text-cyan-600',   bg: 'bg-cyan-50'    },
+  unshare_email:                { labelKey: 'log.action.unshare_email',          Icon: Share2,        color: 'text-cyan-600',   bg: 'bg-cyan-50'    },
   // Gift
   gift_sent:                    { labelKey: 'log.action.gift_sent',              Icon: Mail,          color: 'text-pink-600',   bg: 'bg-pink-50'    },
   gift_link:                    { labelKey: 'log.action.gift_link',              Icon: Link2,         color: 'text-pink-600',   bg: 'bg-pink-50'    },
+  gift_cancelled:               { labelKey: 'log.action.gift_cancelled',         Icon: XCircle,       color: 'text-pink-600',   bg: 'bg-pink-50'    },
   gift_received:                { labelKey: 'log.action.gift_received',          Icon: Gift,          color: 'text-rose-600',   bg: 'bg-rose-50'    },
   gift_balance_update:          { labelKey: 'log.action.gift_balance_update',    Icon: CreditCard,    color: 'text-pink-600',   bg: 'bg-pink-50'    },
   // Marketplace
@@ -36,6 +39,10 @@ const ACTION_META: Record<ActivityLogEntry['action'], { labelKey: string; Icon: 
   system_voucher_purchase:      { labelKey: 'log.action.system_voucher_purchase', Icon: ShoppingCart, color: 'text-gray-600',   bg: 'bg-gray-100'   },
 }
 
+// Rows written by older versions / server RPCs may carry actions outside the
+// map — rendering must never crash on them (it used to blank the whole panel).
+const FALLBACK_META = { labelKey: '', Icon: History, color: 'text-gray-500', bg: 'bg-gray-100' }
+
 const UNDOABLE: ActivityLogEntry['action'][] = ['edit', 'balance_update', 'archive', 'unarchive']
 
 function timeAgo(iso: string, t: (key: string, vars?: Record<string, string | number>) => string): string {
@@ -50,15 +57,32 @@ function timeAgo(iso: string, t: (key: string, vars?: Record<string, string | nu
   return new Date(iso).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// Who performed the action — shared partners and share/gift links write a
+// source (and, for partners, an actor name) into details.
+function actorSuffix(d: ActivityLogEntry['details'], t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (d.source === 'shared_user') return d.actor_name ? ` · ${t('log.sub.by.partner')}: ${d.actor_name}` : ` · ${t('log.sub.by.partner')}`
+  if (d.source === 'shared_link') return ` · ${t('log.sub.by.link')}`
+  if (d.source === 'gift_link')   return ` · ${t('log.sub.by.gift.link')}`
+  return ''
+}
+
+function balanceLine(d: ActivityLogEntry['details'], t: (key: string, vars?: Record<string, string | number>) => string): string {
+  const parts: string[] = []
+  if (d.used != null && Number(d.used) > 0) parts.push(`${t('log.sub.used')}: ${formatCurrency(d.used)}`)
+  else if (d.from !== undefined && d.to !== undefined) parts.push(`${formatCurrency(d.from)} ← ${formatCurrency(d.to)}`)
+  if (d.to !== undefined && (d.used != null || d.from !== undefined)) parts.push(`${t('log.sub.balance')}: ${formatCurrency(d.to)}`)
+  if (d.store_used) parts.push(String(d.store_used))
+  return parts.join(' · ')
+}
+
 function buildSubtitle(entry: ActivityLogEntry, t: (key: string, vars?: Record<string, string | number>) => string): string {
   const d = entry.details || {}
   switch (entry.action) {
     case 'add':
       return d.amount ? `${t('log.sub.amount')}: ${formatCurrency(d.amount)}` : ''
     case 'balance_update': {
-      if (d.from === undefined || d.to === undefined) return ''
-      const base = `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}`
-      return d.store_used ? `${base} · ${d.store_used}` : base
+      const base = balanceLine(d, t)
+      return base ? base + actorSuffix(d, t) : actorSuffix(d, t).replace(/^ · /, '')
     }
     case 'edit': {
       const parts: string[] = []
@@ -78,13 +102,17 @@ function buildSubtitle(entry: ActivityLogEntry, t: (key: string, vars?: Record<s
     case 'gift_received':
       return d.sender ? `${t('log.sub.from')}: ${d.sender}` : ''
     case 'gift_balance_update': {
-      if (d.from === undefined || d.to === undefined) return ''
-      const base = `${formatCurrency(d.from)} ← ${formatCurrency(d.to)}`
-      return d.store_used ? `${base} · ${d.store_used}` : base
+      const base = balanceLine(d, t)
+      return base ? base + actorSuffix(d, t) : actorSuffix(d, t).replace(/^ · /, '')
     }
+    case 'gift_cancelled':
+      return d.recipient ? `${t('log.sub.to')}: ${d.recipient}` : ''
     case 'share_link':
       return d.expires_in_days ? `${t('log.sub.valid')}: ${d.expires_in_days} ${t('log.sub.days')}` : t('log.sub.no.expiry')
+    case 'share_link_deleted':
+      return ''
     case 'share_email':
+    case 'unshare_email':
       return d.recipient ? `${t('log.sub.to')}: ${d.recipient}` : ''
     case 'list_for_sale':
       return d.asking_price ? `${t('log.sub.price')}: ${formatCurrency(d.asking_price)}` : ''
@@ -258,7 +286,7 @@ CREATE POLICY "Users can manage own activity log"
                   return new Date(e.created_at).getTime() >= cutoff
                 })
                 .map(entry => {
-                  const meta = ACTION_META[entry.action]
+                  const meta = ACTION_META[entry.action] ?? FALLBACK_META
                   const subtitle = buildSubtitle(entry, t)
                   const canUndo = UNDOABLE.includes(entry.action) && !!entry.voucher_id
                   return (
@@ -272,7 +300,7 @@ CREATE POLICY "Users can manage own activity log"
                           <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{timeAgo(entry.created_at, t)}</span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                          <span className={`text-xs font-medium ${meta.color}`}>{t(meta.labelKey)}</span>
+                          <span className={`text-xs font-medium ${meta.color}`}>{meta.labelKey ? t(meta.labelKey) : entry.action}</span>
                           {subtitle && <span className="text-xs text-gray-400">· {subtitle}</span>}
                         </div>
                       </div>

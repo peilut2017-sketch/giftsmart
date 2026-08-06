@@ -19,6 +19,7 @@ import {
   saltFromB64,
 } from '../lib/e2ee'
 import { registerBiometricWithVault, hasBiometricWrappedVaultKey } from '../lib/passkey'
+import { saveDeviceVaultKey, loadDeviceVaultKey, clearDeviceVaultKey, isVaultPersistEnabled } from '../lib/vaultKeyStore'
 import { useAuth } from './AuthContext'
 import { supabase } from '../lib/supabase'
 
@@ -128,11 +129,16 @@ function isV2Vault(): boolean {
   return localStorage.getItem(VAULT_V2_FLAG) === 'true'
 }
 
-// Persist vault key to sessionStorage (key bytes, not passphrase)
-async function persistVaultKey(key: CryptoKey) {
+// Persist vault key: sessionStorage for this tab (raw bytes), plus — when the
+// "stay unlocked on this device" preference is on — a non-extractable copy in
+// IndexedDB so the vault reopens silently on the next visit/app launch.
+async function persistVaultKey(key: CryptoKey, userId?: string) {
   try {
     const exported = await exportVaultKey(key)
     sessionStorage.setItem(SESSION_KEY_V2, exported)
+    if (userId && isVaultPersistEnabled()) {
+      await saveDeviceVaultKey(userId, exported)
+    }
   } catch {}
 }
 
@@ -226,7 +232,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
             const dec = await decryptField(key, check!)
             if (dec === VERIFY_PLAINTEXT) {
               setVaultKey(key)
-              await persistVaultKey(key)
+              await persistVaultKey(key, userId)
               await tryStoreBiometricKey(key)
               syncVaultMetaIfNeeded()
             }
@@ -241,38 +247,68 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    // Path 3: migration password from a previous session (e.g. page refresh mid-migration)
-    const migratePw = sessionStorage.getItem(VAULT_MIGRATE_PW)
-    if (migratePw && hasVault && !isV2Vault()) {
-      setNeedsMigration(true)
+    // Later fallbacks, shared by the sync flow and the async device-key path below.
+    const tryLegacyPaths = () => {
+      // Path 3: migration password from a previous session (e.g. refresh mid-migration)
+      const migratePw = sessionStorage.getItem(VAULT_MIGRATE_PW)
+      if (migratePw && hasVault && !isV2Vault()) {
+        setNeedsMigration(true)
+        return
+      }
+
+      // Path 4: legacy passphrase in sessionStorage (old-format vault)
+      const legacyPass = sessionStorage.getItem(SESSION_PASS_KEY)
+      if (legacyPass) {
+        const saltB64 = localStorage.getItem(SALT_KEY)
+        const check   = localStorage.getItem(CHECK_KEY)
+        if (!saltB64 || !check) return
+        deriveKey(legacyPass, saltFromB64(saltB64))
+          .then(async key => {
+            const dec = await decryptField(key, check)
+            if (dec === VERIFY_PLAINTEXT) setVaultKey(key)
+          })
+          .catch(() => sessionStorage.removeItem(SESSION_PASS_KEY))
+        return
+      }
+
+      // Path 5: OAuth user (Google etc.) with no vault and no password — prompt manual setup
+      const provider = user?.app_metadata?.provider
+      const isOAuth = provider && provider !== 'email'
+      if (isOAuth && !localStorage.getItem(CHECK_KEY)) {
+        setNeedsOAuthVaultSetup(true)
+      }
+    }
+
+    // Path 2.5: device-persisted key (IndexedDB) — the "vault stays open on this
+    // device" path. Verified against the vault check before being trusted; a stale
+    // key (vault was re-keyed elsewhere) is discarded.
+    if (userId && isVaultPersistEnabled()) {
+      ;(async () => {
+        try {
+          const key = await loadDeviceVaultKey(userId)
+          if (key) {
+            const check = localStorage.getItem(CHECK_KEY)
+            if (check) {
+              const dec = await decryptField(key, check).catch(() => null)
+              if (dec === VERIFY_PLAINTEXT) {
+                setVaultKey(key)
+                syncVaultMetaIfNeeded()
+                return
+              }
+            }
+            await clearDeviceVaultKey(userId)
+          }
+        } catch { /* fall through to the legacy unlock paths below */ }
+        tryLegacyPaths()
+      })()
       return
     }
 
-    // Path 4: legacy passphrase in sessionStorage (old-format vault)
-    const legacyPass = sessionStorage.getItem(SESSION_PASS_KEY)
-    if (legacyPass) {
-      const saltB64 = localStorage.getItem(SALT_KEY)
-      const check   = localStorage.getItem(CHECK_KEY)
-      if (!saltB64 || !check) return
-      deriveKey(legacyPass, saltFromB64(saltB64))
-        .then(async key => {
-          const dec = await decryptField(key, check)
-          if (dec === VERIFY_PLAINTEXT) setVaultKey(key)
-        })
-        .catch(() => sessionStorage.removeItem(SESSION_PASS_KEY))
-      return
-    }
-
-    // Path 5: OAuth user (Google etc.) with no vault and no password — prompt manual setup
-    // Detect by checking if the Supabase user authenticated via OAuth provider (not email/password)
-    const provider = user?.app_metadata?.provider
-    const isOAuth = provider && provider !== 'email'
-    if (isOAuth && !localStorage.getItem(CHECK_KEY)) {
-      setNeedsOAuthVaultSetup(true)
-    }
+    tryLegacyPaths()
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clear vault key when user signs out
+  // Clear vault key when user signs out (including the device-persisted copy —
+  // signing out is an explicit "lock everything" action)
   useEffect(() => {
     if (!user) {
       setVaultKey(null)
@@ -280,6 +316,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem(SESSION_KEY_V2)
       sessionStorage.removeItem(SESSION_PASS_KEY)
       sessionStorage.removeItem(VAULT_MIGRATE_PW)
+      clearDeviceVaultKey()
     }
   }, [user])
 
@@ -303,7 +340,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
           setHasVault(true)
           setNeedsMigration(false)
           setVaultKey(existingKey)
-          await persistVaultKey(existingKey)
+          await persistVaultKey(existingKey, userId)
           await tryStoreBiometricKey(existingKey)
           track('vault_opened')
           phCapture('vault_opened')
@@ -340,7 +377,10 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     setHasVault(true)
     setNeedsMigration(false)
     setVaultKey(key)
-    await persistVaultKey(key)
+    await persistVaultKey(key, userId)
+    // Surface the recovery phrase once via RecoveryKeyModal — previously the
+    // returned phrase was dropped by every caller and users never saw it.
+    setPendingRecoveryPhrase(phrase)
 
     track('vault_opened')
     phCapture('vault_opened')
@@ -392,7 +432,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       const dec = await decryptField(key, check)
       if (dec !== VERIFY_PLAINTEXT) return false
       setVaultKey(key)
-      await persistVaultKey(key)
+      await persistVaultKey(key, userId)
       await tryStoreBiometricKey(key)
       track('vault_opened')
       phCapture('vault_opened')
@@ -422,12 +462,12 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
         if (dec !== VERIFY_PLAINTEXT) return false
       }
       setVaultKey(key)
-      await persistVaultKey(key)
+      await persistVaultKey(key, user?.id)
       return true
     } catch {
       return false
     }
-  }, [])
+  }, [user?.id])
 
   // ── Unlock: accepts the passphrase regardless of vault format ────────────
   // For v2 (unified) vaults, derives using deriveVaultKey (password+userId+salt).
@@ -446,7 +486,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       const dec = await decryptField(key, check)
       if (dec !== VERIFY_PLAINTEXT) return false
       if (isV2Vault()) {
-        await persistVaultKey(key)
+        await persistVaultKey(key, user?.id)
       } else {
         sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
       }
@@ -520,7 +560,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
 
     setVaultKey(newKey)
     setNeedsMigration(false)
-    await persistVaultKey(newKey)
+    await persistVaultKey(newKey, userId)
     setPendingRecoveryPhrase(phrase)
     return { ok: true, entries }
   }, [user?.id])
@@ -565,7 +605,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
 
     setVaultKey(newKey)
     setNeedsMigration(false)
-    await persistVaultKey(newKey)
+    await persistVaultKey(newKey, user?.id)
     setPendingRecoveryPhrase(phrase)
     return { ok: true, entries }
   }, [vaultKey, user?.id])
@@ -612,12 +652,12 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
         if (dec !== VERIFY_PLAINTEXT) return false
       }
       setVaultKey(result.vaultKey)
-      await persistVaultKey(result.vaultKey)
+      await persistVaultKey(result.vaultKey, user?.id)
       return true
     } catch {
       return false
     }
-  }, [])
+  }, [user?.id])
 
   const dismissRecoveryPhrase = useCallback(() => {
     setPendingRecoveryPhrase(null)
@@ -627,9 +667,10 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const lockVault = useCallback(() => {
     sessionStorage.removeItem(SESSION_PASS_KEY)
     sessionStorage.removeItem(SESSION_KEY_V2)
+    clearDeviceVaultKey(user?.id)
     setVaultKey(null)
     setDecryptedMap(new Map())
-  }, [])
+  }, [user?.id])
 
   const resetVault = useCallback(() => {
     localStorage.removeItem(SALT_KEY)
@@ -639,6 +680,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(RECOVERY_WRAPPED)
     sessionStorage.removeItem(SESSION_PASS_KEY)
     sessionStorage.removeItem(SESSION_KEY_V2)
+    clearDeviceVaultKey()
     setVaultKey(null)
     setHasVault(false)
     setHint(null)
@@ -730,7 +772,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
       setPendingRecoveryPhrase(phrase)
       sessionStorage.removeItem(SESSION_PASS_KEY)
-      await persistVaultKey(newKey)
+      await persistVaultKey(newKey, user?.id)
       await saveVaultMeta(saltToB64(newSalt), newCheck) // sync to Supabase
     } else {
       sessionStorage.setItem(SESSION_PASS_KEY, newPass)
@@ -790,6 +832,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('gs_e2ee_biometric_wrapped_v2')
     sessionStorage.removeItem(SESSION_PASS_KEY)
     sessionStorage.removeItem(SESSION_KEY_V2)
+    clearDeviceVaultKey()
     setVaultKey(null)
     setHasVault(false)
     setHint(null)

@@ -168,27 +168,25 @@ export default function VoucherPage() {
             </div>
           ) : displayCode ? (
             <>
-              {isAlphanumeric(displayCode) ? (
-                <div className="flex justify-center mb-4">
-                  <canvas ref={qrRef} className="rounded-xl" />
-                </div>
-              ) : (
-                <div className="flex justify-center mb-4 overflow-hidden rounded-xl bg-white">
-                  <svg ref={barcodeRef} className="max-w-full" />
-                </div>
-              )}
-              {/* Tap the code to copy */}
-              <button
-                onClick={copyCode}
-                className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 active:scale-[0.97] transition-transform"
-                aria-label="לחץ להעתקת הקוד"
-              >
-                {copied
-                  ? <Check className="w-4 h-4 text-green-500 shrink-0" />
-                  : null
-                }
-                <span className="font-mono text-base font-semibold tracking-widest text-gray-800 dark:text-white select-all">
-                  {displayCode}
+              {/* Tap the barcode/QR or the code itself to copy */}
+              <button type="button" onClick={copyCode} className="w-full" aria-label="לחץ להעתקת הקוד">
+                {isAlphanumeric(displayCode) ? (
+                  <div className="flex justify-center mb-4">
+                    <canvas ref={qrRef} className="rounded-xl" />
+                  </div>
+                ) : (
+                  <div className="flex justify-center mb-4 overflow-hidden rounded-xl bg-white">
+                    <svg ref={barcodeRef} className="max-w-full" />
+                  </div>
+                )}
+                <span className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 active:scale-[0.97] transition-transform">
+                  {copied
+                    ? <Check className="w-4 h-4 text-green-500 shrink-0" />
+                    : null
+                  }
+                  <span className="font-mono text-xl font-semibold tracking-widest text-gray-800 dark:text-white select-all break-all" dir="ltr">
+                    {displayCode}
+                  </span>
                 </span>
               </button>
               <p className="text-[10px] text-center text-gray-400 mt-1.5">

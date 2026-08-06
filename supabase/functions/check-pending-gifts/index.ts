@@ -7,6 +7,17 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Sender name and gift message are free text typed by the sender — they must be
+// HTML-escaped before interpolation (same esc() as send-email/index.ts).
+function esc(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
 // Called by Supabase cron (pg_cron or scheduled Edge Function trigger).
 // Finds voucher_gifts where send_at <= NOW() AND email_sent_at IS NULL
 // and sends the gift email, then marks email_sent_at.
@@ -24,15 +35,12 @@ serve(async (req) => {
 
   // Auth: service-role key only
   const authHeader = req.headers.get('Authorization') || ''
-  const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_KEY') || ''
+  const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_KEY') || ''
   if (!SERVICE_KEY || authHeader !== `Bearer ${SERVICE_KEY}`) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS })
   }
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_KEY')!
-  )
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, SERVICE_KEY)
 
   const { data: gifts, error } = await supabase
     .from('voucher_gifts')
@@ -50,7 +58,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ sent: 0 }), { status: 200, headers: CORS })
   }
 
-  const appUrl = Deno.env.get('APP_URL') || 'https://gifttest.vercel.app'
+  const appUrl = Deno.env.get('APP_URL') || 'https://giftsmart.site'
 
   // Try SES first; if it fails (e.g. still in sandbox) fall back to Gmail
   async function sendMail(mailOptions: Record<string, unknown>) {
@@ -66,7 +74,7 @@ serve(async (req) => {
         })
         await ses.sendMail({
           ...mailOptions,
-          from: `"ארנק שוברים" <${Deno.env.get('SES_FROM_EMAIL') ?? sesUser}>`,
+          from: `"GiftSmart" <${Deno.env.get('SES_FROM_EMAIL') ?? sesUser}>`,
         })
         return
       } catch (sesErr) {
@@ -83,7 +91,7 @@ serve(async (req) => {
     })
     await gmail.sendMail({
       ...mailOptions,
-      from: `"ארנק שוברים" <${Deno.env.get('GMAIL_USER')}>`,
+      from: `"GiftSmart" <${Deno.env.get('GMAIL_USER')}>`,
     })
   }
 
@@ -96,17 +104,17 @@ serve(async (req) => {
 
     const msgBlock = gift.message
       ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:14px 18px;margin:16px 0;direction:rtl;text-align:right">
-           <p style="color:#166534;font-style:italic;margin:0">"${gift.message}"</p>
+           <p style="color:#166534;font-style:italic;margin:0">"${esc(gift.message)}"</p>
          </div>`
       : ''
 
     const html = `<!DOCTYPE html><html dir="rtl" lang="he"><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;direction:rtl;text-align:right">
   <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08);direction:rtl;text-align:right">
     <h2 style="color:#16a34a;margin-top:0;text-align:right">🎁 קיבלת מתנה!</h2>
-    <p style="text-align:right"><strong>${senderName}</strong> שלח/ה לך שובר מתנה של <strong>${storeName}</strong>.</p>
+    <p style="text-align:right"><strong>${esc(senderName)}</strong> שלח/ה לך שובר מתנה של <strong>${esc(storeName)}</strong>.</p>
     <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:14px;padding:20px;margin:16px 0;text-align:center">
-      <p style="font-size:32px;font-weight:bold;color:#15803d;margin:0">₪${balance}</p>
-      <p style="color:#166534;margin:6px 0 0;font-size:14px">${storeName}</p>
+      <p style="font-size:32px;font-weight:bold;color:#15803d;margin:0">₪${Number(balance) || 0}</p>
+      <p style="color:#166534;margin:6px 0 0;font-size:14px">${esc(storeName)}</p>
     </div>
     ${msgBlock}
     <div style="text-align:center;margin-top:24px">

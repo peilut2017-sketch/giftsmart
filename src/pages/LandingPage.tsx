@@ -216,6 +216,7 @@ function InteractiveDemo() {
                   className="lp-dadd-input"
                   placeholder="לדוגמה: 250"
                   type="number"
+                  inputMode="decimal"
                   min="1"
                   value={amountVal}
                   onChange={e => setAmountVal(e.target.value)}

@@ -101,8 +101,8 @@ export function useExpiryNotifications(
         }
         if (permission === 'granted') {
           const baseOptions: NotificationOptions = {
-            icon: '/pwa-192x192.png',
-            badge: '/pwa-192x192.png',
+            icon: '/web-app-manifest-192x192.png',
+            badge: '/web-app-manifest-192x192.png',
             tag: 'expiry-warning',
             data: { url: '/' },
           }
@@ -186,8 +186,8 @@ export async function sendUsageNotification(
   if ('Notification' in window && Notification.permission === 'granted') {
     const options: NotificationOptions = {
       body,
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
+      icon: '/web-app-manifest-192x192.png',
+      badge: '/web-app-manifest-192x192.png',
       tag: 'voucher-usage',
     }
     try {

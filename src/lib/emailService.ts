@@ -9,6 +9,13 @@ async function invoke(type: string, params: Record<string, unknown>) {
   if (error) throw error
 }
 
+export async function sendWelcomeEmail(params: {
+  to_email: string
+  to_name: string
+}) {
+  await invoke('welcome', params)
+}
+
 export async function sendInviteEmail(params: {
   to_email: string
   to_name: string

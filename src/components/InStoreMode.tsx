@@ -332,11 +332,11 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
         </button>
       </div>
 
-      {/* Barcode panel */}
+      {/* Barcode panel — tapping the barcode copies the code too */}
       {barcodeOpen && !isLocked && (
-        <div className="border-t border-border bg-bg rounded-b-card overflow-hidden">
+        <button type="button" onClick={copyCode} className="w-full border-t border-border bg-bg rounded-b-card overflow-hidden">
           <BarcodeDisplay code={effectiveCode} />
-        </div>
+        </button>
       )}
     </div>
   )

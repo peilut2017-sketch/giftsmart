@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types'
 import { identifyUser, resetPostHog } from '../lib/posthog'
+import { sendWelcomeEmail } from '../lib/emailService'
 
 interface AuthContextType {
   user: User | null
@@ -53,6 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
+  const welcomeCheckedRef = useRef(false)
+
+  // Welcome email — sent exactly once per account. should_send_welcome_email()
+  // atomically flips a profile flag server-side and returns true only for
+  // recently-created accounts, so existing users never get it retroactively
+  // and multiple devices can't double-send.
+  useEffect(() => {
+    if (!user?.email || welcomeCheckedRef.current) return
+    welcomeCheckedRef.current = true
+    supabase.rpc('should_send_welcome_email').then(({ data }) => {
+      if (data === true) {
+        sendWelcomeEmail({
+          to_email: user.email!,
+          to_name: (user.user_metadata?.name as string) || user.email!.split('@')[0],
+        }).catch(() => {})
+      }
+    }, () => {})
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Safety timeout: if getSession() hangs (e.g. slow Supabase / token refresh),

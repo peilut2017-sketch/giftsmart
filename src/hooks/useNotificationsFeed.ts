@@ -9,7 +9,7 @@ import type { DiscountDeal } from '../types'
 const LOW_BALANCE_THRESHOLD = 0.15
 const CACHE_TTL_MS = 60_000
 
-export type NotificationType = 'system' | 'expiry' | 'utilization' | 'discount' | 'support'
+export type NotificationType = 'system' | 'expiry' | 'utilization' | 'discount' | 'support' | 'shared_update'
 
 export interface NotificationItem {
   id: string
@@ -41,11 +41,15 @@ function writeIdSet(key: string, ids: Set<string>) {
 }
 
 async function fetchRaw(): Promise<NotificationItem[]> {
-  const [pushRes, broadcastRes, supportRes, dealsRes] = await Promise.all([
+  const [pushRes, broadcastRes, supportRes, dealsRes, sharedRes] = await Promise.all([
     supabase.from('push_broadcasts').select('id, title, body, created_at').order('created_at', { ascending: false }).limit(20),
     supabase.from('admin_broadcasts').select('id, subject, body, created_at').order('created_at', { ascending: false }).limit(20),
     supabase.from('support_messages').select('id, subject, admin_reply, replied_at').not('admin_reply', 'is', null).order('replied_at', { ascending: false }).limit(20),
     supabase.rpc('get_recent_deals', { p_limit: 30 }),
+    // Balance updates made by share partners / shared links / gift links.
+    // Previously these existed only as a live realtime toast — anyone not in
+    // the app at that exact moment never saw them.
+    supabase.from('shared_balance_updates').select('id, voucher_id, store_name, old_balance, new_balance, store_used, created_at').order('created_at', { ascending: false }).limit(20),
   ])
 
   const items: NotificationItem[] = []
@@ -73,6 +77,17 @@ async function fetchRaw(): Promise<NotificationItem[]> {
     items.push({
       id: `deal-${deal.deal_id}`, type: 'discount', icon: 'percent', iconColor: '#a855f7', iconBg: 'rgba(168,85,247,0.1)',
       title: deal.business_name, desc: deal.title, timestamp: deal.created_at || new Date(0).toISOString(), deal,
+    })
+  }
+  type SharedUpdateRow = { id: string; voucher_id: string; store_name: string; old_balance: number; new_balance: number; store_used: string | null; created_at: string }
+  for (const u of (sharedRes.data || []) as SharedUpdateRow[]) {
+    const used = Math.max(0, Number(u.old_balance) - Number(u.new_balance))
+    const usedPart = used > 0 ? `₪${used.toLocaleString('he-IL')}` : `₪${Number(u.new_balance).toLocaleString('he-IL')}`
+    items.push({
+      id: `shared-${u.id}`, type: 'shared_update', icon: 'group', iconColor: '#0ea5e9', iconBg: 'rgba(14,165,233,0.1)',
+      title: u.store_name,
+      desc: `${used > 0 ? `שימוש של ${usedPart} ע"י שותף` : `יתרה עודכנה ל-${usedPart} ע"י שותף`}${u.store_used ? ` · ${u.store_used}` : ''} · יתרה: ₪${Number(u.new_balance).toLocaleString('he-IL')}`,
+      timestamp: u.created_at, path: `/checkout/${u.voucher_id}`,
     })
   }
 

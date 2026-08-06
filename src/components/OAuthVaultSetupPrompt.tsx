@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 // They have no login password we can derive a key from, so they choose a passphrase explicitly.
 // After setup they can enable biometric to avoid entering it every session.
 export default function OAuthVaultSetupPrompt() {
-  const { setupVault, dismissRecoveryPhrase } = useE2EE()
+  const { setupVaultFromPassword, dismissRecoveryPhrase } = useE2EE()
   const { user } = useAuth()
   const [passphrase, setPassphrase] = useState('')
   const [passphrase2, setPassphrase2] = useState('')
@@ -18,12 +18,14 @@ export default function OAuthVaultSetupPrompt() {
   async function handleSetup() {
     if (passphrase.length < 8) return toast.error('הסיסמה חייבת להיות לפחות 8 תווים')
     if (passphrase !== passphrase2) return toast.error('הסיסמאות אינן תואמות')
+    if (!user?.id) return
     setLoading(true)
     try {
-      await setupVault(passphrase)
+      // v2 vault: metadata synced to Supabase (works on any device), recovery
+      // phrase generated and shown once. The legacy setupVault path kept the
+      // passphrase in sessionStorage, never synced, and broke on a second device.
+      await setupVaultFromPassword(passphrase, user.id)
       toast.success('כספת הוגדרה בהצלחה!')
-      // setupVault uses the legacy path — no recovery key is generated here.
-      // Users can upgrade to v2 + biometric from Settings later.
     } catch {
       toast.error('שגיאה בהגדרת הכספת')
     } finally {

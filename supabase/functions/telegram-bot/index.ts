@@ -4,7 +4,12 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const APP_URL = Deno.env.get('APP_URL') || 'https://gifttest.vercel.app'
+const APP_URL = Deno.env.get('APP_URL') || 'https://giftsmart.site'
+// Set this secret AND register it with Telegram:
+//   https://api.telegram.org/bot<TOKEN>/setWebhook?url=<FN_URL>&secret_token=<SECRET>
+// Without it, anyone can POST forged updates to this endpoint (verify_jwt is
+// off for this function) and link/unlink arbitrary accounts.
+const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || ''
 
 function send(chatId: number, text: string, extra?: object) {
   return fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -16,6 +21,11 @@ function send(chatId: number, text: string, extra?: object) {
 
 serve(async (req) => {
   if (req.method !== 'POST') return new Response('ok')
+
+  // Reject requests that don't carry Telegram's secret token header.
+  if (WEBHOOK_SECRET && req.headers.get('X-Telegram-Bot-Api-Secret-Token') !== WEBHOOK_SECRET) {
+    return new Response('forbidden', { status: 403 })
+  }
 
   const update = await req.json()
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)

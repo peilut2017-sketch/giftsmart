@@ -21,6 +21,11 @@ import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { useT } from '../lib/i18n'
 
+// Share/gift links use the canonical app domain (VITE_APP_URL) rather than
+// window.location.origin — on a preview deploy the origin-based gift link failed
+// the send-email domain allowlist and the email 400'd.
+const APP_BASE = import.meta.env.VITE_APP_URL || window.location.origin
+
 function isSafeUrl(url: string | undefined): boolean {
   if (!url) return false
   try {
@@ -130,7 +135,6 @@ export default function CheckoutPage() {
   const miniQrRef = useRef<HTMLCanvasElement>(null)
   const [barcodeVisible, setBarcodeVisible] = useState(true)
   const [showCvv, setShowCvv] = useState(false)
-  const [showCode, setShowCode] = useState(false)
   const [customAmount, setCustomAmount] = useState('')
   const [customStore, setCustomStore] = useState('')
   const [copied, setCopied] = useState(false)
@@ -173,6 +177,13 @@ export default function CheckoutPage() {
   const [removingFromSale, setRemovingFromSale] = useState(false)
 
   const animatedBalance = useCountUp(voucher?.balance ?? 0)
+
+  // Shared-voucher "share" tab has no accordion trigger to lazy-load its tokens —
+  // load them when the tab opens. (Previously this was invoked as a side effect
+  // inside render, firing state updates and RPCs during the render pass.)
+  useEffect(() => {
+    if (activeTab === 'share' && isSharedVoucher) openShareModal()
+  }, [activeTab, isSharedVoucher]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load voucher activity log
   useEffect(() => {
@@ -228,14 +239,14 @@ export default function CheckoutPage() {
   // Effective code for display and barcode rendering
   const effectiveCode = voucher?.is_e2ee ? (plainCode ?? null) : (voucher?.code ?? null)
 
-  // Generate barcode or QR — the barcode's own printed digits (displayValue) follow the
-  // showCode mask toggle instead of always revealing the real code underneath the bars.
+  // Generate barcode or QR — the code itself is not a secret (only the CVV is), so the
+  // barcode always prints its digits and the code text is always visible.
   useEffect(() => {
     if (!effectiveCode) return
     const isAlpha = isAlphanumeric(effectiveCode)
     if (isAlpha) drawQr(qrRef.current, effectiveCode, 220)
-    else drawBarcode(barcodeRef.current, effectiveCode, { height: 80, displayValue: showCode })
-  }, [effectiveCode, lockConfirmed, showCode])
+    else drawBarcode(barcodeRef.current, effectiveCode, { height: 80, displayValue: true })
+  }, [effectiveCode, lockConfirmed])
 
   // Mini scan strip (pinned under the header once the real code scrolls out of view)
   useEffect(() => {
@@ -417,7 +428,7 @@ export default function CheckoutPage() {
       const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt, codeOverride)
       if (!token) { toast.error(t('checkout.gift.create.error')); return }
 
-      const link = `${window.location.origin}/gift/${token}`
+      const link = `${APP_BASE}/gift/${token}`
 
       if (giftMode === 'link') {
         setGiftLink(link)
@@ -486,7 +497,7 @@ export default function CheckoutPage() {
     try {
       const codeOverride = voucher.is_e2ee && effectiveCode ? effectiveCode : undefined
       const token = await createShareToken(voucher.id, days, codeOverride)
-      const url = `${window.location.origin}/s/${token}`
+      const url = `${APP_BASE}/s/${token}`
       // Clipboard write is best-effort — failure must not hide the success
       try {
         await navigator.clipboard.writeText(url)
@@ -699,24 +710,25 @@ export default function CheckoutPage() {
   if (currentTab === 'voucher' && !isArchived) {
     fab = { label: t('checkout.use.voucher'), icon: 'shopping_bag', onClick: () => setActiveTab('use') }
   } else if (currentTab === 'use') {
+    // No amount typed → the button is "שימוש מלא" (burn the whole balance).
+    // An amount typed → it becomes "עדכן יתרה" for a partial redemption.
     const amount = parseFloat(customAmount)
-    const valid = !isNaN(amount) && amount > 0 && amount <= voucher.balance
+    const hasAmount = customAmount.trim() !== '' && !isNaN(amount) && amount > 0
+    const valid = !hasAmount || amount <= voucher.balance
     fab = {
-      label: t('checkout.update.balance'), icon: 'check_circle', disabled: !valid,
+      label: hasAmount ? t('checkout.update.balance') : t('checkout.full'),
+      icon: 'check_circle',
+      disabled: !valid || voucher.balance <= 0,
       onClick: () => {
-        if (!valid) return
-        updateBalance(voucher.balance - amount, amount, customStore.trim() || null)
+        if (!valid || voucher.balance <= 0) return
+        const used = hasAmount ? amount : voucher.balance
+        updateBalance(voucher.balance - used, used, customStore.trim() || null)
         setCustomAmount(''); setCustomStore(''); setActiveTab('voucher')
       },
     }
   } else if (currentTab === 'sell' && !noPaymentMethod) {
     fab = { label: t('checkout.sell.publish'), icon: 'sell', disabled: !sellPrice, loading: sellLoading, onClick: handleListForSale }
   }
-
-  const codeForDisplay = effectiveCode ?? voucher.code
-  const maskedCode = codeForDisplay
-    ? (codeForDisplay.length <= 4 ? codeForDisplay : '•'.repeat(Math.max(4, codeForDisplay.length - 4)) + codeForDisplay.slice(-4))
-    : ''
 
   return (
     <div className="flex-1 bg-bg">
@@ -756,7 +768,11 @@ export default function CheckoutPage() {
         <VoucherForm
           voucher={voucher}
           onSave={async (vData) => {
-            await updateVoucher(voucher.id, vData)
+            // _storeUsed is a form-only field — it must be stripped from the row
+            // update and passed as the storeUsed arg, or the usage store is lost
+            // and a bogus _storeUsed column update is attempted.
+            const { _storeUsed, ...voucherData } = vData
+            await updateVoucher(voucher.id, voucherData, _storeUsed ?? null)
             toast.success(t('checkout.voucher.updated'))
             setShowEditForm(false)
           }}
@@ -941,24 +957,23 @@ export default function CheckoutPage() {
                 <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4">
                   {isAlpha ? <canvas ref={qrRef} className="rounded-xl" /> : <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />}
                 </div>
-                {/* A CODE128 barcode already prints its own digits under the bars (driven by
-                    showCode above) — showing them again here would just duplicate that. Only
-                    QR codes (which never print text themselves) need this line. */}
+                {/* A CODE128 barcode already prints its own digits under the bars — showing
+                    them again here would just duplicate that. Only QR codes (which never
+                    print text themselves) need this line. */}
                 {isAlpha && (
-                  <span className="font-mono text-lg font-bold tracking-widest text-text break-all" dir="ltr">
-                    {showCode ? (effectiveCode ?? voucher.code) : maskedCode}
+                  <span className="font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">
+                    {effectiveCode ?? voucher.code}
                   </span>
                 )}
               </button>
 
               <div className="mb-3 flex items-center justify-center gap-2">
-                <button onClick={() => setShowCode(s => !s)} className="text-text3 hover:text-text2" title={t(showCode ? 'checkout.hide.code' : 'checkout.reveal.code')}>
-                  <Icon name={showCode ? 'visibility_off' : 'visibility'} size={16} />
-                </button>
-                {copied && (
+                {copied ? (
                   <span className="text-xs font-medium text-primary flex items-center gap-1">
                     <Icon name="check" size={14} /> {t('checkout.copied')}
                   </span>
+                ) : (
+                  <span className="text-xs text-text3">{t('checkout.tap.to.copy')}</span>
                 )}
                 {/* Vault re-lock shortcut lives only while the vault is actually unlocked
                     and only where it's needed — here it was showing next to an already-
@@ -1044,7 +1059,7 @@ export default function CheckoutPage() {
                 <InfoRow label={t('checkout.link')} value={voucher.link!} onOpen={() => window.open(voucher.link, '_blank', 'noopener,noreferrer')} ltr />
               )}
               {voucher.categories?.length > 0 && (
-                <InfoRow label={t('checkout.categories')} value={voucher.categories.join('، ')} />
+                <InfoRow label={t('checkout.categories')} value={voucher.categories.join(', ')} />
               )}
               {voucher.source && <InfoRow label={t('checkout.source')} value={voucher.source} />}
               <InfoRow label={t('checkout.date.added')} value={formatDate(voucher.created_at)} />
@@ -1105,15 +1120,6 @@ export default function CheckoutPage() {
               />
             </div>
 
-            <button
-              onClick={() => { updateBalance(0, voucher.balance, customStore.trim() || null); setCustomStore(''); setActiveTab('voucher') }}
-              style={{ height: 48 }}
-              className="w-full flex items-center justify-center gap-2 bg-primary-light text-primary-dark border border-primary/25 rounded-xl text-sm font-bold hover:opacity-85 transition"
-            >
-              <Icon name="check_circle" size={18} filled />
-              {t('checkout.full')}
-            </button>
-
             <div>
               <p className="text-xs font-medium text-text2 mb-1.5">{t('checkout.usage.amount')}</p>
               <input
@@ -1128,6 +1134,9 @@ export default function CheckoutPage() {
                 const newBal = Math.max(0, voucher.balance - amount)
                 return <p className={`text-xs mt-2 font-medium ${newBal <= 0 ? 'text-error' : 'text-success'}`}>{t('checkout.new.balance.preview')}: {formatCurrency(newBal)}</p>
               })()}
+              {!customAmount.trim() && (
+                <p className="text-xs mt-2 text-text3">{t('checkout.full.hint')}</p>
+              )}
             </div>
           </div>
         )}
@@ -1166,7 +1175,7 @@ export default function CheckoutPage() {
                   {shareTokens.length > 0 && (
                     <div className="space-y-2">
                       {shareTokens.map(tok => {
-                        const url = `${window.location.origin}/s/${tok.token}`
+                        const url = `${APP_BASE}/s/${tok.token}`
                         const expired = tok.expires_at && new Date(tok.expires_at) < new Date()
                         return (
                           <div key={tok.token} className={`flex items-center gap-2 p-3 rounded-2xl border ${expired ? 'bg-bg border-border opacity-60' : 'bg-bg border-border'}`}>
@@ -1317,11 +1326,10 @@ export default function CheckoutPage() {
                 </button>
               ))}
             </div>
-            {shareTokens.length === 0 && !shareLoading && (() => { openShareModal(); return null })()}
             {shareTokens.length > 0 && (
               <div className="space-y-2 mt-3">
                 {shareTokens.map(tok => {
-                  const url = `${window.location.origin}/s/${tok.token}`
+                  const url = `${APP_BASE}/s/${tok.token}`
                   return (
                     <div key={tok.token} className="flex items-center gap-2 p-3 rounded-2xl border bg-bg border-border">
                       <p className="flex-1 min-w-0 text-xs font-mono text-text2 truncate">{url}</p>
@@ -1387,46 +1395,99 @@ export default function CheckoutPage() {
                     let label: string
                     let detail: string | null = null
 
+                    const fmtAmt = (n: unknown) => `₪${Number(n).toLocaleString('he-IL')}`
+                    // Shared detail line for any balance change: prefer the explicit
+                    // used amount + store, fall back to from←to when only that exists.
+                    const balanceDetail = (d: ActivityLogEntry['details'] | undefined): string | null => {
+                      if (!d) return null
+                      const parts: string[] = []
+                      if (d.used != null && Number(d.used) > 0) parts.push(`${t('checkout.log.used.amount')}: ${fmtAmt(d.used)}`)
+                      else if (d.from != null && d.to != null) parts.push(`${fmtAmt(d.from)} ← ${fmtAmt(d.to)}`)
+                      if (d.to != null && (d.used != null || d.from != null)) parts.push(`${t('checkout.log.balance.detail')}: ${fmtAmt(d.to)}`)
+                      if (d.store_used) parts.push(`${t('checkout.log.at.store')} ${d.store_used}`)
+                      return parts.length ? parts.join(' · ') : null
+                    }
+                    // Who performed the action (shared partners / share links)
+                    const actorDetail = (d: ActivityLogEntry['details'] | undefined): string | null => {
+                      if (!d) return null
+                      if (d.source === 'shared_user') return d.actor_name ? `${t('checkout.log.by.partner')}: ${d.actor_name}` : t('checkout.log.by.partner')
+                      if (d.source === 'shared_link') return t('checkout.log.by.link')
+                      if (d.source === 'gift_link') return t('checkout.log.by.gift.link')
+                      return null
+                    }
+
                     switch (entry.action) {
                       case 'add':
                         iconName = 'add_circle'; dotColor = 'bg-primary text-white'; label = t('checkout.log.added')
-                        if (entry.details?.amount != null) detail = `${t('checkout.log.amount')}: ₪${Number(entry.details.amount).toLocaleString('he-IL')}`
+                        if (entry.details?.amount != null) detail = `${t('checkout.log.amount')}: ${fmtAmt(entry.details.amount)}`
                         break
                       case 'balance_update':
                         iconName = 'do_not_disturb_on'; dotColor = 'bg-blue-500 text-white'; label = t('checkout.log.balance.update')
-                        if (entry.details?.from != null && entry.details?.to != null) {
-                          detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
-                          if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
-                        }
+                        detail = balanceDetail(entry.details)
                         break
                       case 'edit':
-                        iconName = 'edit'; dotColor = 'bg-indigo-500 text-white'; label = t('checkout.log.edited'); break
+                        iconName = 'edit'; dotColor = 'bg-indigo-500 text-white'; label = t('checkout.log.edited')
+                        if (entry.details && Object.keys(entry.details).some(k => k !== '_sensitive_updated')) {
+                          const fields = Object.keys(entry.details).filter(k => k !== '_sensitive_updated')
+                          detail = fields.slice(0, 3).map(f => t(`log.field.${f}`) === `log.field.${f}` ? f : t(`log.field.${f}`)).join(', ')
+                        }
+                        break
                       case 'archive':
                         iconName = 'inventory_2'; dotColor = 'bg-orange-400 text-white'; label = t('checkout.log.archived')
-                        if (entry.details?.balance != null) detail = `${t('checkout.log.balance.detail')}: ₪${Number(entry.details.balance).toLocaleString('he-IL')}`
+                        if (entry.details?.balance != null) detail = `${t('checkout.log.balance.detail')}: ${fmtAmt(entry.details.balance)}`
                         break
                       case 'unarchive':
                         iconName = 'undo'; dotColor = 'bg-teal-500 text-white'; label = t('checkout.log.unarchived'); break
+                      case 'delete':
+                        iconName = 'delete'; dotColor = 'bg-red-500 text-white'; label = t('log.action.delete')
+                        if (entry.details?.balance != null) detail = `${t('checkout.log.balance.detail')}: ${fmtAmt(entry.details.balance)}`
+                        break
                       case 'gift_sent':
                         iconName = 'mail'; dotColor = 'bg-pink-500 text-white'; label = t('checkout.log.gift.sent')
                         if (entry.details?.recipient) detail = `${t('checkout.log.to')}: ${entry.details.recipient}`
                         break
                       case 'gift_link':
                         iconName = 'link'; dotColor = 'bg-pink-400 text-white'; label = t('checkout.log.gift.link'); break
+                      case 'gift_cancelled':
+                        iconName = 'cancel'; dotColor = 'bg-pink-300 text-white'; label = t('log.action.gift_cancelled')
+                        if (entry.details?.recipient) detail = `${t('checkout.log.to')}: ${entry.details.recipient}`
+                        break
                       case 'gift_received':
                         iconName = 'redeem'; dotColor = 'bg-rose-500 text-white'; label = t('checkout.log.gift.received')
                         if (entry.details?.sender) detail = `${t('checkout.log.from')}: ${entry.details.sender}`
                         break
                       case 'gift_balance_update':
                         iconName = 'do_not_disturb_on'; dotColor = 'bg-pink-600 text-white'; label = t('checkout.log.gift.balance.update')
-                        if (entry.details?.from != null && entry.details?.to != null) {
-                          detail = `₪${Number(entry.details.from).toLocaleString('he-IL')} ← ₪${Number(entry.details.to).toLocaleString('he-IL')}`
-                          if (entry.details?.store_used) detail += ` · ${entry.details.store_used}`
-                        }
+                        detail = balanceDetail(entry.details)
                         break
-                      default:
-                        iconName = 'schedule'; dotColor = 'bg-text3 text-white'; label = entry.action
+                      case 'share_link':
+                        iconName = 'link'; dotColor = 'bg-cyan-500 text-white'; label = t('log.action.share_link'); break
+                      case 'share_link_deleted':
+                        iconName = 'link_off'; dotColor = 'bg-cyan-400 text-white'; label = t('log.action.share_link_deleted'); break
+                      case 'share_email':
+                        iconName = 'group'; dotColor = 'bg-sky-500 text-white'; label = t('log.action.share_email')
+                        if (entry.details?.recipient) detail = `${t('checkout.log.to')}: ${entry.details.recipient}`
+                        break
+                      case 'unshare_email':
+                        iconName = 'group_off'; dotColor = 'bg-sky-400 text-white'; label = t('log.action.unshare_email')
+                        if (entry.details?.recipient) detail = `${t('checkout.log.to')}: ${entry.details.recipient}`
+                        break
+                      case 'list_for_sale':
+                        iconName = 'sell'; dotColor = 'bg-amber-500 text-white'; label = t('log.action.list_for_sale'); break
+                      case 'cancel_sale':
+                        iconName = 'remove_shopping_cart'; dotColor = 'bg-amber-400 text-white'; label = t('log.action.cancel_sale'); break
+                      default: {
+                        // Unknown/system actions: reuse the global log's i18n keys
+                        // instead of leaking raw snake_case into the RTL timeline.
+                        const key = `log.action.${entry.action}`
+                        const translated = t(key)
+                        iconName = 'schedule'; dotColor = 'bg-text3 text-white'
+                        label = translated === key ? entry.action : translated
+                      }
                     }
+
+                    const actor = actorDetail(entry.details)
+                    if (actor) detail = detail ? `${detail} · ${actor}` : actor
 
                     return (
                       <div key={entry.id} className="flex items-start gap-3 relative">

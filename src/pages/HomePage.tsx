@@ -176,7 +176,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setCalendarModalDays(d => Math.max(1, d - 1))} className="w-7 h-7 rounded-full bg-border text-text font-bold text-sm">−</button>
                 <input
-                  type="number" min={1} max={365} value={calendarModalDays}
+                  type="number" inputMode="numeric" min={1} max={365} value={calendarModalDays}
                   onChange={e => setCalendarModalDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 1)))}
                   className="w-14 text-center text-sm font-semibold border border-border rounded-xl py-1 bg-surface text-text outline-none"
                 />
@@ -236,7 +236,11 @@ export default function HomePage() {
       <div className="flex items-center justify-between px-5 pt-5 pb-1">
         <button onClick={() => navigate('/notifications')} className="relative w-10 h-10 rounded-full flex items-center justify-center" aria-label={t('notifications.title')}>
           <Icon name="notifications" size={24} color="var(--c-text2)" />
-          {unseenCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-error" />}
+          {unseenCount > 0 && (
+            <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center leading-none">
+              {unseenCount > 99 ? '99+' : unseenCount}
+            </span>
+          )}
         </button>
         <div className="text-center">
           <div className="text-[19px] font-extrabold text-text">{walletName || t('wallet.main')}</div>

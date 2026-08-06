@@ -504,12 +504,18 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     className={inputCls}
                   />
                   {showStoreDropdown && storeSearch && (
-                    <div className="absolute z-20 w-full mt-1 bg-surface border border-border rounded-2xl shadow-lg max-h-48 overflow-y-auto">
-                      {filteredStores.slice(0, 6).map(s => (
+                    /* In normal flow (not absolutely positioned) so the modal card GROWS
+                       to fit several suggestion rows — an overlay list used to hide below
+                       the fold with no visual hint that it (or its scrollbar) exists. */
+                    <div className="w-full mt-2 bg-surface border border-border rounded-2xl shadow-lg max-h-60 overflow-y-auto overscroll-contain">
+                      {filteredStores.slice(0, 12).map(s => (
                         <button key={s.id} type="button" onClick={() => { setStoreName(s.name); setStoreSearch(s.name); setShowStoreDropdown(false) }} className="w-full text-right px-4 py-2.5 text-sm hover:bg-bg border-b border-border last:border-0 text-text">
                           {s.name}
                         </button>
                       ))}
+                      {filteredStores.length > 5 && (
+                        <div className="sticky bottom-0 pointer-events-none h-6 bg-gradient-to-t from-[var(--c-surface)] to-transparent" />
+                      )}
                       <button type="button" onClick={handleAddStore} className="w-full text-right px-4 py-2.5 text-sm text-primary hover:bg-primary-light flex items-center gap-2">
                         <Icon name="add" size={16} /> הוסף "{storeSearch}" כחנות חדשה
                       </button>
