@@ -410,7 +410,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
                 : msg.body
               const notification = new Notification(`${senderName} שלח הודעה`, {
                 body,
-                icon: '/pwa-192x192.png',
+                icon: '/web-app-manifest-192x192.png',
                 tag: `chat-${msg.listing_id}`,
               })
               notification.onclick = () => {

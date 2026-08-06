@@ -144,7 +144,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
             </select>
             {(form.discount_type === 'percent' || form.discount_type === 'fixed') && (
               <input
-                type="number" min="0"
+                type="number" inputMode="decimal" min="0"
                 className="w-24 shrink-0 border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder={form.discount_type === 'percent' ? '%' : '₪'}
                 value={form.discount_value}

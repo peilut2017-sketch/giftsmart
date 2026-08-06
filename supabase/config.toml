@@ -231,6 +231,22 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Hebrew RTL auth email templates.
+# NOTE: config.toml only applies to local/CLI-linked projects. For the hosted
+# project, paste the same HTML (supabase/templates/*.html) into
+# Dashboard → Authentication → Email Templates, with these subjects.
+[auth.email.template.confirmation]
+subject = "GiftSmart — אימות כתובת האימייל"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "GiftSmart — איפוס סיסמה"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "GiftSmart — קישור כניסה"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

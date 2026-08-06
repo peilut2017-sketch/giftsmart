@@ -39,11 +39,20 @@ export default function SearchPage() {
   const { listings } = useMarketplace()
   const { decryptedMap } = useE2EE()
 
-  const [search, setSearch] = useState('')
+  // Search/filter state survives navigation within the session (sessionStorage) —
+  // redeeming a voucher and coming back must not force the user to re-search the
+  // same store. Cleared naturally when the tab/PWA session ends.
+  const [search, setSearch] = useState(() => sessionStorage.getItem('searchQuery') || '')
   const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('hpSortKey') as SortKey) || 'store')
-  const [filterTab, setFilterTab] = useState<FilterTab>('all')
-  const [filterCats, setFilterCats] = useState<string[]>([])
+  const [filterTab, setFilterTab] = useState<FilterTab>(() => (sessionStorage.getItem('searchFilterTab') as FilterTab) || 'all')
+  const [filterCats, setFilterCats] = useState<string[]>(() => {
+    try { return JSON.parse(sessionStorage.getItem('searchFilterCats') || '[]') } catch { return [] }
+  })
   const [showFilters, setShowFilters] = useState(false)
+
+  useEffect(() => { sessionStorage.setItem('searchQuery', search) }, [search])
+  useEffect(() => { sessionStorage.setItem('searchFilterTab', filterTab) }, [filterTab])
+  useEffect(() => { sessionStorage.setItem('searchFilterCats', JSON.stringify(filterCats)) }, [filterCats])
 
   // A category tap on HomePage arrives here as router state so the list opens
   // already filtered to that one category, instead of dumping the user into the
@@ -364,7 +373,7 @@ export default function SearchPage() {
         <div className="flex items-center gap-2.5 bg-bg rounded-2xl px-3.5">
           <Icon name="search" size={20} color="var(--c-text3)" />
           <input
-            autoFocus
+            autoFocus={search === ''}
             type="search"
             value={search}
             onChange={e => setSearch(e.target.value)}

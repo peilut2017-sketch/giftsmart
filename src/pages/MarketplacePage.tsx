@@ -1368,7 +1368,7 @@ export default function MarketplacePage() {
                 <div className="flex items-center gap-2">
                   <label className="text-xs text-text2 shrink-0">{t('market.watch.min.discount')}:</label>
                   <input
-                    type="number" min={0} max={99} value={watchForm.min_discount_pct}
+                    type="number" inputMode="numeric" min={0} max={99} value={watchForm.min_discount_pct}
                     onChange={e => setWatchForm(f => ({ ...f, min_discount_pct: parseInt(e.target.value) || 0 }))}
                     className="w-20 border border-border rounded-xl px-3 py-1.5 text-sm text-center bg-surface text-text focus:outline-none"
                   />

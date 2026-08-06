@@ -270,7 +270,7 @@ function NotificationBridge() {
         if (Notification.permission === 'granted') {
           new Notification('יתרת שובר עודכנה', {
             body: `${store_name}: ₪${old_balance} → ₪${new_balance}${locationSuffix}`,
-            icon: '/pwa-192x192.png',
+            icon: '/web-app-manifest-192x192.png',
           })
         }
       })

@@ -15,7 +15,7 @@ export default function SettingsNotificationsPage() {
   usePageView('settings_notifications')
   const { t } = useT()
   const { user, profile } = useAuth()
-  const { vouchers } = useVouchers()
+  const { vouchers, logAction } = useVouchers()
 
   const reminderKey = `reminder_days_${user?.id}`
   const [reminderDays, setReminderDays] = useState(() => parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14'))
@@ -101,16 +101,32 @@ export default function SettingsNotificationsPage() {
       .then(({ data }) => setTelegramLinked(!!data))
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // While a link code is displayed, poll until the bot confirms the link — the
+  // user shouldn't have to leave and re-enter the page to see "connected".
+  useEffect(() => {
+    if (!telegramCode || telegramLinked || !user) return
+    const timer = setInterval(async () => {
+      const { data } = await supabase.from('telegram_users').select('id').eq('user_id', user.id).maybeSingle()
+      if (data) {
+        setTelegramLinked(true)
+        setTelegramCode(null)
+        logAction('system_telegram_link', 'מערכת', undefined, { type: 'enabled' })
+        toast.success('טלגרם חובר בהצלחה!')
+      }
+    }, 4000)
+    const stop = setTimeout(() => clearInterval(timer), 10 * 60 * 1000)
+    return () => { clearInterval(timer); clearTimeout(stop) }
+  }, [telegramCode, telegramLinked, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleGenerateTelegramCode() {
     if (!user) return
     setTelegramLoading(true)
     try {
-      const code = Math.floor(100000 + Math.random() * 900000).toString()
-      const { error } = await supabase.from('telegram_link_codes').insert({
-        code, user_id: user.id, expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      })
-      if (error) throw error
-      setTelegramCode(code)
+      // Server-side CSPRNG code (the old client-side Math.random 6-digit code
+      // was guessable and let attackers hijack the Telegram link).
+      const { data, error } = await supabase.rpc('create_telegram_link_code')
+      if (error || !data) throw error ?? new Error('no code')
+      setTelegramCode(data as string)
     } catch {
       toast.error('שגיאה ביצירת קוד')
     } finally {
@@ -124,6 +140,7 @@ export default function SettingsNotificationsPage() {
     await supabase.from('telegram_users').delete().eq('user_id', user.id)
     setTelegramLinked(false)
     setTelegramCode(null)
+    logAction('system_telegram_link', 'מערכת', undefined, { type: 'disabled' })
     toast.success('טלגרם נותק')
   }
 
@@ -166,7 +183,7 @@ export default function SettingsNotificationsPage() {
             <div className="flex items-center gap-3">
               <input type="range" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value))} className="flex-1 accent-primary" />
               <div className="flex items-center gap-1">
-                <input type="number" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value) || 1)} className="w-14 text-center px-2 py-1.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                <input type="number" inputMode="numeric" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value) || 1)} className="w-14 text-center px-2 py-1.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 <span className="text-sm text-text3">ימים</span>
               </div>
             </div>

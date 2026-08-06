@@ -4,6 +4,7 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } f
 import toast from 'react-hot-toast'
 import { isBiometricEnabled, getBiometricEmail, verifyBiometricForVaultUnlock } from '../lib/passkey'
 import { exportVaultKey } from '../lib/e2ee'
+import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
 
 const APP_VERSION = '1.0.0'
@@ -49,6 +50,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const [biometricLoading, setBiometricLoading] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null)
+  const [resendLoading, setResendLoading] = useState(false)
 
   const strength = useMemo(() => getPasswordStrength(password, t), [password, t])
   const isRegisterOrNew = mode === 'register' || mode === 'newPassword'
@@ -141,13 +143,14 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       // login – password step
       if (mode === 'login') {
         if (!password) return toast.error(t('auth.password.required'))
+        // Stash the password BEFORE signIn resolves: onAuthStateChange fires during
+        // the await and mounts E2EEProvider, whose one-shot auto-unlock effect must
+        // find gs_vault_pw_pending already present — stashing after the await raced
+        // it and randomly left the vault locked for the whole session.
+        sessionStorage.setItem('gs_vault_pw_pending', password)
         const { error } = await signIn(email, password)
-        if (!error) {
-          // Store password transiently so E2EEProvider can derive/unlock the vault
-          // without requiring a separate vault passphrase entry.
-          sessionStorage.setItem('gs_vault_pw_pending', password)
-        }
         if (error) {
+          sessionStorage.removeItem('gs_vault_pw_pending')
           const msg = error.message ?? ''
           if (msg.toLowerCase().includes('not confirmed') || msg.toLowerCase().includes('email_not_confirmed')) {
             setPendingConfirmEmail(email)
@@ -295,6 +298,27 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
           {mode === 'login' && pendingConfirmEmail && (
             <div className="mb-4 p-3 rounded-2xl bg-blue-50 border border-blue-200 text-sm text-blue-800 leading-relaxed">
               {t('auth.register.confirm.email')}
+              <button
+                type="button"
+                disabled={resendLoading}
+                onClick={async () => {
+                  setResendLoading(true)
+                  try {
+                    const { error } = await supabase.auth.resend({
+                      type: 'signup',
+                      email: pendingConfirmEmail,
+                      options: { emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin },
+                    })
+                    if (error) toast.error(t('auth.resend.error'))
+                    else toast.success(t('auth.resend.sent'))
+                  } finally {
+                    setResendLoading(false)
+                  }
+                }}
+                className="block mt-2 text-xs font-semibold text-blue-600 underline disabled:opacity-50"
+              >
+                {resendLoading ? '...' : t('auth.resend.confirm')}
+              </button>
             </div>
           )}
 

@@ -70,8 +70,8 @@ export interface PendingGift {
 export interface ActivityLogEntry {
   id: string
   action: 'add' | 'edit' | 'balance_update' | 'archive' | 'unarchive' | 'delete'
-    | 'gift_sent' | 'gift_link' | 'gift_received' | 'gift_balance_update'
-    | 'share_link' | 'share_email'
+    | 'gift_sent' | 'gift_link' | 'gift_received' | 'gift_balance_update' | 'gift_cancelled'
+    | 'share_link' | 'share_email' | 'share_link_deleted' | 'unshare_email'
     | 'list_for_sale' | 'cancel_sale'
     | 'system_password_change' | 'system_biometric_link' | 'system_telegram_link'
     | 'system_wallet_share' | 'system_payment_method_add' | 'system_payment_method_remove'
@@ -199,9 +199,15 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
           const details: Record<string, any> = {}
           if (op.type === 'update') {
             const keys = Object.keys(op.data).filter(k => k !== 'updated_at')
-            if (keys.length === 1 && keys[0] === 'balance') {
+            if (keys.includes('balance')) {
               action = 'balance_update'
-              details.from = op.previousBalance
+              // previousBalance can be unknown when the voucher wasn't in local
+              // state at enqueue time — record what we DO know instead of writing
+              // an entry the renderers show as empty.
+              if (op.previousBalance !== undefined) {
+                details.from = op.previousBalance
+                details.used = Math.max(0, (op.previousBalance ?? 0) - (op.data.balance ?? 0))
+              }
               details.to = op.data.balance
               if (op.storeUsed) details.store_used = op.storeUsed
             } else {
@@ -218,10 +224,10 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
             user_id: userId,
             wallet_id: walletIdRef.current,
             action,
-            voucher_id: op.id,
+            voucher_id: op.id.startsWith('local-') ? null : op.id,
             voucher_name: op.voucherName,
             details,
-          }))
+          })).then(() => {}).catch(() => {})
         }
       } catch {
         failed.push(op)
@@ -611,21 +617,31 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
     if (existing) {
       const keys = Object.keys(vData)
-      if (keys.length === 1 && keys[0] === 'balance') {
+      // A balance change ALWAYS gets its own balance_update entry (with the used
+      // amount and the store), even when other fields were edited in the same
+      // save — previously any multi-field save silently dropped the store and
+      // logged the usage as a generic "edit".
+      const balanceChanged = 'balance' in vData && vData.balance !== existing.balance
+      if (balanceChanged) {
+        const from = existing.balance
+        const to = vData.balance as number
         logAction('balance_update', existing.store_name, id, {
-          from: existing.balance, to: vData.balance,
+          from, to,
+          used: Math.max(0, from - to),
           ...(storeUsed ? { store_used: storeUsed } : {}),
         })
-      } else {
-        const SENSITIVE = new Set(['code', 'cvv'])
-        const changed: Record<string, unknown> = {}
-        keys
-          .filter(k => !SENSITIVE.has(k))
-          .forEach(k => { changed[k] = { from: (existing as any)[k], to: (vData as any)[k] } })
-        if (Object.keys(changed).length > 0 || keys.some(k => SENSITIVE.has(k))) {
-          if (keys.some(k => SENSITIVE.has(k))) changed['_sensitive_updated'] = true
-          logAction('edit', existing.store_name, id, changed)
-        }
+      }
+      const SENSITIVE = new Set(['code', 'cvv'])
+      const changed: Record<string, unknown> = {}
+      const exRec = existing as unknown as Record<string, unknown>
+      const vdRec = vData as unknown as Record<string, unknown>
+      keys
+        .filter(k => !SENSITIVE.has(k) && k !== 'balance' && k !== 'updated_at')
+        .filter(k => JSON.stringify(exRec[k]) !== JSON.stringify(vdRec[k]))
+        .forEach(k => { changed[k] = { from: exRec[k], to: vdRec[k] } })
+      if (Object.keys(changed).length > 0 || keys.some(k => SENSITIVE.has(k))) {
+        if (keys.some(k => SENSITIVE.has(k))) changed['_sensitive_updated'] = true
+        logAction('edit', existing.store_name, id, changed)
       }
     }
   }
@@ -789,6 +805,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   async function unshareVoucher(voucherId: string, email: string) {
     await supabase.rpc('unshare_voucher', { p_voucher_id: voucherId, p_email: email })
     setSharedWithMe(prev => prev.filter(v => v.id !== voucherId))
+    const voucher = vouchersRef.current.find(v => v.id === voucherId)
+    logAction('unshare_email', voucher?.store_name ?? 'שובר', voucherId, { recipient: email })
     // If no more shares remain, clear the is_shared flag
     const remaining = await getVoucherShares(voucherId)
     if (remaining.length === 0) {
@@ -798,7 +816,6 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateSharedVoucherBalance(voucherId: string, newBalance: number, storeUsed?: string | null) {
-    const target = sharedWithMe.find(v => v.id === voucherId)
     const { error } = await supabase.rpc('update_shared_voucher_balance', {
       p_voucher_id: voucherId,
       p_new_balance: newBalance,
@@ -806,13 +823,10 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     })
     if (error) throw error
     setSharedWithMe(prev => prev.map(v => v.id === voucherId ? { ...v, balance: newBalance } : v))
-    if (target) {
-      logAction('gift_balance_update', target.store_name, voucherId, {
-        from: target.balance,
-        to: newBalance,
-        ...(storeUsed ? { store_used: storeUsed } : {}),
-      })
-    }
+    // No client-side log entry: update_shared_voucher_balance now writes both the
+    // owner's and the partner's activity_log rows server-side, with actor
+    // attribution and the used amount. (The old client entry was also wrongly
+    // labelled gift_balance_update for what is a share, not a gift.)
   }
 
   async function updateWalletName(name: string) {
@@ -858,7 +872,14 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function deleteShareToken(token: string) {
+    const { data } = await supabase
+      .from('shared_voucher_tokens')
+      .select('voucher_id')
+      .eq('token', token)
+      .maybeSingle()
     await supabase.from('shared_voucher_tokens').delete().eq('token', token)
+    const voucher = vouchersRef.current.find(v => v.id === data?.voucher_id)
+    logAction('share_link_deleted', voucher?.store_name ?? 'שובר', data?.voucher_id ?? undefined)
   }
 
   async function getShareTokens(voucherId: string) {
@@ -877,12 +898,15 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     details: Record<string, any> = {}
   ) {
     if (!user) return
+    // voucher_id is a UUID column — offline "local-…" ids would make the whole
+    // insert silently fail, which is how entries used to go missing.
+    const safeVoucherId = voucherId && !voucherId.startsWith('local-') ? voucherId : null
     // Fire and forget — don't block the main operation on logging
     Promise.resolve(supabase.from('activity_log').insert({
       user_id: user.id,
       wallet_id: walletIdRef.current,
       action,
-      voucher_id: voucherId || null,
+      voucher_id: safeVoucherId,
       voucher_name: voucherName,
       details,
     })).then(() => {}).catch(() => {})
@@ -944,7 +968,16 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function cancelGift(giftId: string): Promise<void> {
+    const { data } = await supabase
+      .from('voucher_gifts')
+      .select('voucher_id, recipient_email')
+      .eq('id', giftId)
+      .maybeSingle()
     await supabase.from('voucher_gifts').delete().eq('id', giftId)
+    const voucher = vouchersRef.current.find(v => v.id === data?.voucher_id)
+    logAction('gift_cancelled', voucher?.store_name ?? 'שובר', data?.voucher_id ?? undefined, {
+      ...(data?.recipient_email ? { recipient: data.recipient_email } : {}),
+    })
   }
 
   async function getPendingGifts(voucherId: string): Promise<PendingGift[]> {

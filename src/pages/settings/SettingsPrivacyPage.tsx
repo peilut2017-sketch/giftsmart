@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useVouchers } from '../../contexts/VoucherContext'
 import { useE2EE } from '../../contexts/E2EEContext'
+import { isVaultPersistEnabled, setVaultPersistEnabled, saveDeviceVaultKey, clearDeviceVaultKey } from '../../lib/vaultKeyStore'
 import { isBiometricEnabled, isBiometricSupported, registerBiometric, disableBiometric } from '../../lib/passkey'
 import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
@@ -42,6 +43,23 @@ export default function SettingsPrivacyPage() {
   const [recoveryUnlocking, setRecoveryUnlocking] = useState(false)
 
   const [e2eeDefaultNew, setE2eeDefaultNew] = useState(() => localStorage.getItem('gs_e2ee_default') !== 'false')
+  const [vaultPersist, setVaultPersist] = useState(isVaultPersistEnabled)
+
+  function handleToggleVaultPersist() {
+    const next = !vaultPersist
+    setVaultPersist(next)
+    setVaultPersistEnabled(next)
+    if (!next) {
+      clearDeviceVaultKey()
+      toast.success('הכספת תינעל בסגירת האפליקציה')
+    } else {
+      // If the vault is open right now, persist it immediately (the raw key of a
+      // v2 vault sits in sessionStorage while unlocked).
+      const raw = sessionStorage.getItem('gs_e2ee_key_v2')
+      if (raw && user?.id) saveDeviceVaultKey(user.id, raw)
+      toast.success('הכספת תישאר פתוחה במכשיר זה')
+    }
+  }
   const [encryptAllConfirm, setEncryptAllConfirm] = useState(false)
   const [encryptAllPass, setEncryptAllPass] = useState('')
   const [encryptingAll, setEncryptingAll] = useState(false)
@@ -184,6 +202,22 @@ export default function SettingsPrivacyPage() {
           <>
             <SL>{t('settings.vault')}</SL>
             <Card>
+              <div className="flex items-center gap-3 p-4 border-b border-border">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                  <Icon name="lock_open" size={20} color="#6366f1" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-text">השאר כספת פתוחה במכשיר זה</p>
+                  <p className="text-xs text-text3 mt-0.5">המפתח נשמר מאובטח במכשיר — אין צורך להזין סיסמה בכל כניסה</p>
+                </div>
+                <button
+                  role="switch" aria-checked={vaultPersist}
+                  onClick={handleToggleVaultPersist}
+                  className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${vaultPersist ? 'bg-indigo-600' : 'bg-border'}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${vaultPersist ? 'translate-x-0.5' : 'right-0.5'}`} />
+                </button>
+              </div>
               <button onClick={() => setShowVaultSection(s => !s)} className="flex items-center gap-3 w-full p-4 text-right hover:bg-bg">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
                   <Icon name="shield" size={20} color="#6366f1" />
