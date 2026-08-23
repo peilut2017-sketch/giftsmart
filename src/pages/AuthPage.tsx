@@ -4,6 +4,7 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } f
 import toast from 'react-hot-toast'
 import { isBiometricEnabled, getBiometricEmail, verifyBiometricForVaultUnlock } from '../lib/passkey'
 import { exportVaultKey } from '../lib/e2ee'
+import { attemptVaultUnlockAtLogin } from '../lib/vaultBundle'
 import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
 
@@ -136,21 +137,34 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
         if (!validatePasswordStrong()) return
         const { error } = await updatePassword(password)
         if (error) toast.error(t('auth.update.password.error'))
-        else toast.success(t('auth.password.updated'))
+        else {
+          toast.success(t('auth.password.updated'))
+          // Try opening the vault with the new password right away. If the vault key
+          // predates this reset the attempt marks the password wrap stale, and the
+          // unlock sheet will explain that a passkey / recovery code is needed once
+          // to re-link it — instead of the silent lockout v2 produced.
+          const { data } = await supabase.auth.getSession()
+          const uid = data.session?.user?.id
+          if (uid) attemptVaultUnlockAtLogin(password, uid)
+        }
         return
       }
 
       // login – password step
       if (mode === 'login') {
         if (!password) return toast.error(t('auth.password.required'))
-        // Stash the password BEFORE signIn resolves: onAuthStateChange fires during
-        // the await and mounts E2EEProvider, whose one-shot auto-unlock effect must
-        // find gs_vault_pw_pending already present — stashing after the await raced
-        // it and randomly left the vault locked for the whole session.
-        sessionStorage.setItem('gs_vault_pw_pending', password)
         const { error } = await signIn(email, password)
+        if (!error) {
+          // Open the vault here, with the password still in a local variable — the
+          // plaintext is never parked in sessionStorage anymore (the old
+          // gs_vault_pw_pending handoff). Fire-and-forget: the provider picks up the
+          // session key via the gs-vault-unlocked event when this finishes.
+          supabase.auth.getSession().then(({ data }) => {
+            const uid = data.session?.user?.id
+            if (uid) attemptVaultUnlockAtLogin(password, uid)
+          })
+        }
         if (error) {
-          sessionStorage.removeItem('gs_vault_pw_pending')
           const msg = error.message ?? ''
           if (msg.toLowerCase().includes('not confirmed') || msg.toLowerCase().includes('email_not_confirmed')) {
             setPendingConfirmEmail(email)
@@ -271,6 +285,12 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   ? t('auth.reset.desc')
                   : t('auth.new.password.desc')}
               </p>
+              {mode === 'newPassword' && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl p-3 mt-3 text-right">
+                  <ShieldCheck className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 leading-relaxed">{t('auth.reset.vault.warning')}</p>
+                </div>
+              )}
             </div>
           ) : (
             /* Login / Register Tabs */

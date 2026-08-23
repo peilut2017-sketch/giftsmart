@@ -111,15 +111,27 @@ export async function unwrapVaultKey(wrappedB64: string, keyMaterial: Uint8Array
   )
 }
 
-// Generate a recovery secret: 18 random bytes → displayed as 6 groups of 4 chars
-// using an unambiguous alphabet (no 0/O, 1/I/L confusion).
+const RECOVERY_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+// Canonical phrase → KDF-input bytes. ONE function used by both generation and
+// recovery. (v2 had two divergent paths: setup fed the raw 18 random bytes to the
+// KDF while recovery fed 24 alphabet indexes — different length AND content, so
+// unwrapping failed 100% of the time and the recovery phrase never worked at all.)
+export function recoveryPhraseToBytes(phrase: string): Uint8Array {
+  const norm = phrase.replace(/[\s-]/g, '').toUpperCase()
+  const vals = Array.from(norm).map(c => RECOVERY_ALPHA.indexOf(c))
+  if (vals.length !== 24 || vals.some(v => v < 0)) throw new Error('invalid recovery phrase')
+  return new Uint8Array(vals)
+}
+
+// Generate a recovery phrase: 24 chars (5 bits each = 120 bits of entropy) from an
+// unambiguous alphabet (no 0/O, 1/I/L confusion), shown as 6 groups of 4.
 export function generateRecoverySecret(): { phrase: string; bytes: Uint8Array } {
-  const bytes = crypto.getRandomValues(new Uint8Array(18)) // 144 bits of entropy
-  const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const raw = Array.from(bytes).map(b => ALPHA[b % 32]).join('')
-  // Format: AAAA-BBBB-CCCC-DDDD-EEEE-FFFF  (24 chars + 5 dashes)
+  const rnd = crypto.getRandomValues(new Uint8Array(24))
+  const raw = Array.from(rnd).map(b => RECOVERY_ALPHA[b % 32]).join('')
   const phrase = raw.match(/.{1,4}/g)!.join('-')
-  return { phrase, bytes }
+  // bytes are derived FROM the phrase so setup and recovery share one code path
+  return { phrase, bytes: recoveryPhraseToBytes(phrase) }
 }
 
 // Derive a 32-byte wrapping key from recovery phrase bytes via PBKDF2
@@ -169,6 +181,47 @@ export async function decryptField(key: CryptoKey, encrypted: string): Promise<s
 
 export function generateSalt(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(16))
+}
+
+// ── Vault v3: envelope encryption ───────────────────────────────────────────
+// One random master key (MK) encrypts the data; the login password / recovery
+// phrase / passkey PRF each open a server-stored "wrap" of MK. Deriving keys
+// FROM the password (v2) meant password changes had to re-encrypt every voucher;
+// wrapping a random MK makes them a single small re-wrap instead.
+
+export const KEK_ITERATIONS = 600_000 // OWASP 2023+ for PBKDF2-SHA256
+
+// Random master key. Extractable so it can be AES-KW-wrapped per door.
+export async function generateMasterKey(): Promise<CryptoKey> {
+  return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'])
+}
+
+// Derive the password door's key-encryption-key. Salt is per-wrap (stored in the
+// wrap's kdf metadata), combined with userId for cross-account uniqueness.
+export async function deriveKek(
+  password: string,
+  userId: string,
+  salt: Uint8Array,
+  iterations: number = KEK_ITERATIONS,
+): Promise<Uint8Array> {
+  const userIdBytes = new TextEncoder().encode(userId)
+  const combinedSalt = new Uint8Array(userIdBytes.length + salt.length)
+  combinedSalt.set(userIdBytes)
+  combinedSalt.set(salt, userIdBytes.length)
+
+  const raw = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  )
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: combinedSalt.buffer as ArrayBuffer, iterations, hash: 'SHA-256' },
+    raw,
+    256,
+  )
+  return new Uint8Array(bits)
 }
 
 export function saltToB64(salt: Uint8Array): string { return b64(salt) }

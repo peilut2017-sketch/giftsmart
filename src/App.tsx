@@ -26,7 +26,7 @@ import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import RecoveryKeyModal from './components/RecoveryKeyModal'
 import VaultMigrationModal from './components/VaultMigrationModal'
-import OAuthVaultSetupPrompt from './components/OAuthVaultSetupPrompt'
+import VaultSetupSheet from './components/VaultSetupSheet'
 import { isBiometricEnabled, getBiometricEmail, syncBiometricFromSupabase } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
@@ -130,25 +130,30 @@ const SEEN_PUSH_KEY = 'seen_push_broadcast_ids'
 function VaultModals() {
   const { pendingRecoveryPhrase, dismissRecoveryPhrase, needsMigration, needsOAuthVaultSetup } = useE2EE()
   const [migrationDismissed, setMigrationDismissed] = useState(false)
+  const [oauthSetupDismissed, setOauthSetupDismissed] = useState(false)
 
   // Recovery key must be acknowledged before anything else
   if (pendingRecoveryPhrase) {
     return <RecoveryKeyModal phrase={pendingRecoveryPhrase} onDone={dismissRecoveryPhrase} />
   }
 
-  // Migration prompt for users who had a separate vault passphrase
+  // Migration prompt for users who had a separate vault passphrase.
+  // onDone intentionally does nothing: a successful migration sets
+  // pendingRecoveryPhrase and the branch above takes over. (It was previously
+  // wired to dismissRecoveryPhrase, which silently threw away the freshly
+  // minted recovery phrase before the user ever saw it.)
   if (needsMigration && !migrationDismissed) {
     return (
       <VaultMigrationModal
-        onDone={dismissRecoveryPhrase}
+        onDone={() => {}}
         onSkip={() => setMigrationDismissed(true)}
       />
     )
   }
 
   // OAuth users (Google etc.) who have no vault yet
-  if (needsOAuthVaultSetup) {
-    return <OAuthVaultSetupPrompt />
+  if (needsOAuthVaultSetup && !oauthSetupDismissed) {
+    return <VaultSetupSheet open blocking onClose={() => setOauthSetupDismissed(true)} />
   }
 
   return null

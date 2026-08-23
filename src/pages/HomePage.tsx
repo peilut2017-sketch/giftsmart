@@ -7,6 +7,7 @@ import { useE2EE } from '../contexts/E2EEContext'
 import { useDiscounts } from '../contexts/DiscountsContext'
 import { useT } from '../lib/i18n'
 import VoucherForm from '../components/VoucherForm'
+import VaultUnlockSheet from '../components/VaultUnlockSheet'
 import DealCard from '../components/DealCard'
 import Icon from '../components/ui/Icon'
 import type { Voucher } from '../types'
@@ -30,28 +31,15 @@ export default function HomePage() {
   const { t } = useT()
   usePageView('home')
   const { user } = useAuth()
-  const { vouchers, loading, walletError, isOnline, walletName, addVoucher, archiveExpired } = useVouchers()
+  const { vouchers, loading, walletError, isOnline, walletName, addVoucher, archiveExpired, refreshVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { hasVault, hint, isVaultUnlocked, unlockVault, lockVault } = useE2EE()
+  const { hasVault, isVaultUnlocked, lockVault } = useE2EE()
   const { recentDeals, fetchRecentDeals } = useDiscounts()
   const { unseenCount } = useNotificationsFeed()
 
   useEffect(() => { fetchRecentDeals() }, [fetchRecentDeals])
 
-  const [showVaultModal, setShowVaultModal] = useState(false)
-  const [vaultPassInput, setVaultPassInput] = useState('')
-  const [vaultUnlocking, setVaultUnlocking] = useState(false)
-  const [vaultError, setVaultError] = useState('')
-
-  async function handleVaultUnlock() {
-    if (!vaultPassInput) return
-    setVaultUnlocking(true)
-    setVaultError('')
-    const ok = await unlockVault(vaultPassInput)
-    setVaultUnlocking(false)
-    if (ok) { setShowVaultModal(false); setVaultPassInput('') }
-    else setVaultError(t('vault.wrong.password'))
-  }
+  const [showVaultSheet, setShowVaultSheet] = useState(false)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [showForm, setShowForm] = useState(false)
@@ -71,8 +59,18 @@ export default function HomePage() {
 
   // Google Calendar prompt state
   const [calendarVoucher, setCalendarVoucher] = useState<{ id: string; storeName: string; expiryDate: string } | null>(null)
+  // Held back while VoucherForm is still open — showing the calendar sheet on top of
+  // the form's success screen stacked two modals; it now waits its turn.
+  const [pendingCalendar, setPendingCalendar] = useState<{ id: string; storeName: string; expiryDate: string } | null>(null)
   const reminderDays = parseInt(localStorage.getItem(`reminder_days_${user?.id}`) || '14')
   const [calendarModalDays, setCalendarModalDays] = useState(reminderDays)
+
+  useEffect(() => {
+    if (!showForm && pendingCalendar) {
+      setCalendarVoucher(pendingCalendar)
+      setPendingCalendar(null)
+    }
+  }, [showForm, pendingCalendar])
 
   function openGoogleCalendar(id: string, storeName: string, expiryDate: string, days: number) {
     const expiry = new Date(expiryDate)
@@ -84,9 +82,14 @@ export default function HomePage() {
     const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
     const params = new URLSearchParams({
       action: 'TEMPLATE',
-      text: `תזכורת: שובר ${storeName} פג בקרוב`,
+      text: t('calendar.event.title', { store: storeName }),
       dates: `${start}/${end}`,
-      details: `שובר ${storeName} פג תוקפו ב-${expiry.toLocaleDateString('he-IL')} — עוד ${days} ימים!\n\nפתח את השובר: ${appUrl}/voucher/${id}`,
+      details: t('calendar.event.details', {
+        store: storeName,
+        date: expiry.toLocaleDateString('he-IL'),
+        days,
+        url: `${appUrl}/checkout/${id}`,
+      }),
     })
     window.open(`https://calendar.google.com/calendar/render?${params}`, '_blank', 'noopener,noreferrer')
     setCalendarVoucher(null)
@@ -99,8 +102,9 @@ export default function HomePage() {
       const calendarEnabled = localStorage.getItem(`calendar_reminder_enabled_${user?.id}`) !== 'false'
       if (calendarEnabled && vData.expiry_date && newVoucher) {
         setCalendarModalDays(reminderDays)
-        setCalendarVoucher({ id: newVoucher.id, storeName: vData.store_name, expiryDate: vData.expiry_date })
+        setPendingCalendar({ id: newVoucher.id, storeName: vData.store_name, expiryDate: vData.expiry_date })
       }
+      return newVoucher
     } catch (err: any) {
       toast.error(err?.message || t('voucher.save.error'))
       throw err
@@ -113,7 +117,7 @@ export default function HomePage() {
   function handleArchiveExpired() {
     setConfirm({
       title: t('confirm.archive.expired.title'),
-      message: `להעביר ${expiredCount} שוברים פגי תוקף לארכיון?`,
+      message: t('confirm.archive.expired.message', { count: expiredCount }),
       onConfirm: async () => { setConfirm(null); await archiveExpired(); toast.success(t('confirm.archive.expired.success')) },
     })
   }
@@ -147,11 +151,12 @@ export default function HomePage() {
     [vouchers]
   )
 
-  // Gauge arc geometry (matches the redesign's semi-circle gauge). The filled arc
-  // represents what's left, not what's spent — it starts full and shrinks as
-  // utilization climbs, like a depleting balance rather than a filling meter.
+  // Gauge: number, arc and label all encode the SAME thing — the % of total face
+  // value still available. (Previously the number showed % spent while the arc
+  // showed % remaining, two opposite readings of one control.)
+  const remainingPct = 100 - utilization
   const GAUGE_CIRC = 314 // ≈ π * r(100)
-  const gaugeDash = ((100 - utilization) / 100) * GAUGE_CIRC
+  const gaugeDash = (remainingPct / 100) * GAUGE_CIRC
 
   return (
     <div className="flex-1 bg-bg">
@@ -162,30 +167,32 @@ export default function HomePage() {
       {/* ── Google Calendar prompt ── */}
       {calendarVoucher && (
         <div className="fixed inset-0 bg-black/50 z-[90] flex items-end justify-center" onClick={() => setCalendarVoucher(null)}>
-          <div className="bg-surface rounded-t-3xl w-full max-w-2xl p-5 pb-8" onClick={e => e.stopPropagation()} dir="rtl">
+          <div className="bg-surface rounded-t-3xl w-full max-w-2xl p-5 pb-[max(2rem,env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()} dir="rtl">
             <div className="flex justify-center mb-3"><div className="w-10 h-1 bg-border rounded-full" /></div>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-xl">📅</div>
+              <div className="w-10 h-10 rounded-2xl bg-primary-light flex items-center justify-center">
+                <Icon name="calendar_month" size={22} color="var(--c-primary)" />
+              </div>
               <div>
                 <p className="font-bold text-text text-sm">{t('voucher.calendar.title')}</p>
-                <p className="text-xs text-text3 mt-0.5">שובר: <strong>{calendarVoucher.storeName}</strong></p>
+                <p className="text-xs text-text3 mt-0.5">{t('voucher.label')}: <strong>{calendarVoucher.storeName}</strong></p>
               </div>
             </div>
             <div className="flex items-center gap-3 mb-4 bg-bg rounded-2xl px-4 py-3">
               <span className="text-sm text-text2 flex-1">{t('voucher.calendar.days.label')}</span>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setCalendarModalDays(d => Math.max(1, d - 1))} className="w-7 h-7 rounded-full bg-border text-text font-bold text-sm">−</button>
+                <button type="button" aria-label="-" onClick={() => setCalendarModalDays(d => Math.max(1, d - 1))} className="w-10 h-10 rounded-full bg-border text-text font-bold text-base">−</button>
                 <input
                   type="number" inputMode="numeric" min={1} max={365} value={calendarModalDays}
                   onChange={e => setCalendarModalDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 1)))}
-                  className="w-14 text-center text-sm font-semibold border border-border rounded-xl py-1 bg-surface text-text outline-none"
+                  className="w-14 text-center text-base font-semibold border border-border rounded-xl py-1.5 bg-surface text-text outline-none"
                 />
-                <button type="button" onClick={() => setCalendarModalDays(d => Math.min(365, d + 1))} className="w-7 h-7 rounded-full bg-border text-text font-bold text-sm">+</button>
+                <button type="button" aria-label="+" onClick={() => setCalendarModalDays(d => Math.min(365, d + 1))} className="w-10 h-10 rounded-full bg-border text-text font-bold text-base">+</button>
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => openGoogleCalendar(calendarVoucher.id, calendarVoucher.storeName, calendarVoucher.expiryDate, calendarModalDays)} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2">
-                📅 {t('voucher.calendar.cta')}
+              <button onClick={() => openGoogleCalendar(calendarVoucher.id, calendarVoucher.storeName, calendarVoucher.expiryDate, calendarModalDays)} className="flex-1 py-3 bg-primary text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2">
+                <Icon name="calendar_month" size={18} /> {t('voucher.calendar.cta')}
               </button>
               <button onClick={() => setCalendarVoucher(null)} className="px-5 py-3 bg-bg text-text2 rounded-2xl font-medium text-sm">{t('voucher.calendar.skip')}</button>
             </div>
@@ -193,44 +200,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Vault unlock modal ── */}
-      {showVaultModal && (
-        <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-6" onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }}>
-          <div className="bg-surface rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center">
-                <Icon name="shield" size={20} color="#6366f1" />
-              </div>
-              <div>
-                <p className="font-bold text-text text-sm">{t('vault.open.title')}</p>
-                <p className="text-xs text-text3">{t('vault.open.subtitle')}</p>
-              </div>
-            </div>
-            {hint && (
-              <p className="text-xs text-indigo-500 mb-3 text-center flex items-center justify-center gap-1">
-                <Icon name="lightbulb" size={14} /> {t('vault.hint')}: <span className="font-medium">{hint}</span>
-              </p>
-            )}
-            <form onSubmit={e => { e.preventDefault(); handleVaultUnlock() }}>
-              <input
-                type="password" value={vaultPassInput} onChange={e => setVaultPassInput(e.target.value)}
-                placeholder={t('vault.password.placeholder')}
-                className="w-full px-4 py-3 border border-border rounded-2xl text-base mb-2 bg-surface text-text outline-none focus:ring-2 focus:ring-indigo-300"
-                dir="ltr" autoFocus autoComplete="current-password" name="vault-password"
-              />
-              {vaultError && <p className="text-xs text-error mb-2">{vaultError}</p>}
-              <div className="flex gap-2 mt-1">
-                <button type="submit" disabled={vaultUnlocking || !vaultPassInput} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-2xl text-sm font-semibold disabled:opacity-50">
-                  {vaultUnlocking ? '...' : t('vault.open.button')}
-                </button>
-                <button type="button" onClick={() => { setShowVaultModal(false); setVaultPassInput(''); setVaultError('') }} className="flex-1 py-2.5 bg-bg text-text2 rounded-2xl text-sm">
-                  {t('app.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* ── Vault unlock — the shared sheet (biometric + password + recovery) ── */}
+      <VaultUnlockSheet open={showVaultSheet} onClose={() => setShowVaultSheet(false)} />
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-5 pt-5 pb-1">
@@ -250,7 +221,7 @@ export default function HomePage() {
           </div>
         </div>
         <button
-          onClick={() => hasVault && (isVaultUnlocked ? lockVault() : setShowVaultModal(true))}
+          onClick={() => hasVault && (isVaultUnlocked ? lockVault() : setShowVaultSheet(true))}
           className={`w-10 h-10 rounded-full flex items-center justify-center ${!hasVault ? 'invisible' : ''}`}
           style={{ background: isVaultUnlocked ? 'var(--c-primary-light)' : 'var(--c-bg)' }}
           aria-label={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')}
@@ -282,8 +253,8 @@ export default function HomePage() {
           />
         </svg>
         <div className="absolute inset-x-0 bottom-3 text-center">
-          <div className="text-2xl font-extrabold text-text">{utilization}%</div>
-          <div className="text-[11px] text-text3 font-medium">{t('home.utilization')}</div>
+          <div className="text-2xl font-extrabold text-text">{remainingPct}%</div>
+          <div className="text-[11px] text-text3 font-medium">{t('home.gauge.left')}</div>
         </div>
       </div>
 
@@ -316,18 +287,28 @@ export default function HomePage() {
         </div>
 
         {walletError && (
-          <div className="mb-4 bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error">
-            <p className="font-semibold mb-1">{t('home.wallet.error')}</p>
+          <div className="mb-4 bg-error/10 border border-error/30 rounded-2xl p-4 text-sm">
+            <p className="font-semibold text-error mb-1">{t('home.wallet.error')}</p>
+            <p className="text-text2 text-xs mb-3">{t('home.wallet.error.hint')}</p>
+            <button onClick={() => refreshVouchers()} className="px-4 py-2 bg-error text-white rounded-xl text-xs font-semibold">
+              {t('app.retry')}
+            </button>
           </div>
         )}
 
         {loading ? (
           <div className="flex flex-col gap-3">{[1, 2].map(i => <div key={i} className="h-20 gs-skeleton rounded-card" />)}</div>
         ) : recent.length === 0 ? (
-          <div className="text-center py-16">
+          <div className="text-center py-12">
             <Icon name="redeem" size={56} color="var(--c-border)" />
-            <p className="text-text2 font-medium mt-4">{t('search.empty.default')}</p>
-            <p className="text-sm text-text3 mt-1">{t('home.empty.hint')}</p>
+            <p className="text-text2 font-medium mt-4">{t('home.empty.title')}</p>
+            <p className="text-sm text-text3 mt-1 mb-5">{t('home.empty.hint')}</p>
+            <button
+              onClick={() => setShowForm(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-br from-primary-mid to-primary-dark text-white font-bold text-sm shadow-fab active:scale-[0.98] transition-transform"
+            >
+              <Icon name="add" size={20} /> {t('home.empty.cta')}
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-3">

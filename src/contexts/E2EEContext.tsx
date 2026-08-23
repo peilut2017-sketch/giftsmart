@@ -8,9 +8,7 @@ import {
   exportVaultKey,
   importVaultKey,
   wrapVaultKey,
-  unwrapVaultKey,
-  deriveRecoveryWrapKey,
-  generateRecoverySecret,
+  generateMasterKey,
   encryptField,
   decryptField,
   isEncryptedField,
@@ -18,6 +16,22 @@ import {
   saltToB64,
   saltFromB64,
 } from '../lib/e2ee'
+import {
+  VERIFY_PLAINTEXT,
+  SESSION_KEY_V2,
+  PENDING_PHRASE_KEY,
+  PW_STALE_KEY,
+  fetchVaultBundle,
+  cacheBundleMeta,
+  buildPasswordWrap,
+  buildRecoveryWrap,
+  upsertWrap,
+  tryUnlockWithPassword,
+  tryUnlockWithRecovery,
+  tryUnlockWithPrfBytes,
+  ensureV3Wraps,
+} from '../lib/vaultBundle'
+import type { VaultWrap } from '../lib/vaultBundle'
 import { registerBiometricWithVault, hasBiometricWrappedVaultKey } from '../lib/passkey'
 import { saveDeviceVaultKey, loadDeviceVaultKey, clearDeviceVaultKey, isVaultPersistEnabled } from '../lib/vaultKeyStore'
 import { useAuth } from './AuthContext'
@@ -31,54 +45,45 @@ async function saveVaultMeta(saltB64: string, check: string) {
   } catch {}
 }
 
-async function fetchVaultMeta(): Promise<{ vault_salt: string; vault_check: string } | null> {
-  try {
-    const { data } = await supabase.rpc('get_vault_meta')
-    const row = Array.isArray(data) ? data[0] : data
-    if (row?.vault_salt && row?.vault_check) return row as { vault_salt: string; vault_check: string }
-  } catch {}
-  return null
-}
-
-// Push localStorage salt+check to Supabase if not already there (self-healing for existing users)
-async function syncVaultMetaIfNeeded() {
-  if (!isV2Vault()) return
-  const saltB64 = localStorage.getItem(SALT_KEY)
-  const check   = localStorage.getItem(CHECK_KEY)
-  if (!saltB64 || !check) return
-  try {
-    const meta = await fetchVaultMeta()
-    if (!meta) await saveVaultMeta(saltB64, check)
-  } catch {}
-}
-
 // ── Storage keys ────────────────────────────────────────────────────────────
 const SALT_KEY           = 'gs_e2ee_salt'
 const CHECK_KEY          = 'gs_e2ee_chk'
 const HINT_KEY           = 'gs_e2ee_hint'
-const SESSION_PASS_KEY   = 'gs_e2ee_session'      // legacy: plain passphrase
-const SESSION_KEY_V2     = 'gs_e2ee_key_v2'       // v2: exported vault key bytes (base64)
+const SESSION_PASS_KEY   = 'gs_e2ee_session'      // legacy: plain passphrase (old-format vaults only)
 const VAULT_V2_FLAG      = 'gs_e2ee_v2'           // marks unified-password vault
-const RECOVERY_WRAPPED   = 'gs_e2ee_recovery_wrapped' // vault key wrapped with recovery key
-const VAULT_PW_PENDING   = 'gs_vault_pw_pending'        // transient: login password for auto-unlock
-const VAULT_MIGRATE_PW   = 'gs_vault_migrate_pw'        // login password kept available for migration
+const VAULT_MIGRATE_PW   = 'gs_vault_migrate_pw'  // legacy-migration helper (read-only; no longer written)
 const PRF_PENDING_KEY    = 'gs_biometric_prf_pending'   // transient: raw PRF bytes from biometric assertion
-const VERIFY_PLAINTEXT   = 'GiftSmart-E2EE-OK'
+const BIOMETRIC_WRAPPED_LOCAL = 'gs_e2ee_biometric_wrapped_v2'
+const BIOMETRIC_CRED_LOCAL    = 'biometric_credential_id'
 
 export interface DecryptedEntry { code: string; cvv: string | null }
+
+export type UnlockStatus = 'ok' | 'wrong' | 'stale' | 'no-vault' | 'error'
+
+export interface VaultDoors {
+  password: boolean
+  recovery: boolean
+  prf: number       // number of registered passkey wraps
+  version: number
+}
 
 interface E2EEContextValue {
   hasVault: boolean
   isVaultUnlocked: boolean
-  isUnifiedVault: boolean              // true = vault key derived from login password (v2)
+  isUnifiedVault: boolean              // true = vault opens with the login password (v2/v3)
   hint: string | null
   needsMigration: boolean              // true = existing vault uses old separate passphrase
-  needsOAuthVaultSetup: boolean        // true = Google/OAuth user with no vault and no pending password
-  pendingRecoveryPhrase: string | null // set after first setup; shown once, then cleared
+  needsOAuthVaultSetup: boolean        // true = Google/OAuth user with no vault
+  pendingRecoveryPhrase: string | null // set after setup/rotation; shown once, then cleared
+  doors: VaultDoors | null             // which unlock methods exist server-side (vault health)
+  passwordWrapStale: boolean           // login password verified but no longer opens the vault
 
   setupVault: (passphrase: string, hint?: string) => Promise<void>
   setupVaultFromPassword: (password: string, userId: string, hint?: string) => Promise<string>
+  // OAuth/passkey path — no password door; optionally registers a passkey PRF door
+  setupVaultWithMasterKey: (opts?: { registerBiometric?: { userName: string; email?: string } }) => Promise<string>
   unlockVault: (passphrase: string) => Promise<boolean>
+  unlockWithPassword: (password: string) => Promise<UnlockStatus>
   unlockVaultFromPassword: (password: string, userId: string) => Promise<boolean>
   unlockVaultFromRecovery: (phrase: string) => Promise<boolean>
   lockVault: () => void
@@ -87,16 +92,17 @@ interface E2EEContextValue {
     oldPassphrase: string,
     loginPassword: string | undefined,
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
-  ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
+  ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>; failed?: number}>
   enableBiometricVaultUnlock: (userId: string, userName: string, email?: string) => Promise<boolean>
   unlockVaultWithBiometric: () => Promise<boolean>
-  // Re-keys the vault using the current in-memory vault key (no old passphrase needed).
-  // Call this when the login password changes so the vault stays in sync.
+  // v3: password changes re-wrap the master key — no data is re-encrypted.
   reDeriveVaultKeyFromPassword: (
     newPassword: string,
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
+  rewrapPassword: (newPassword: string) => Promise<boolean>
   regenerateRecoveryKey: () => Promise<string>
+  refreshDoors: () => Promise<void>
   dismissRecoveryPhrase: () => void
 
   encrypt: (plaintext: string) => Promise<string>
@@ -129,6 +135,15 @@ function isV2Vault(): boolean {
   return localStorage.getItem(VAULT_V2_FLAG) === 'true'
 }
 
+function doorsFromWraps(wraps: VaultWrap[], version: number): VaultDoors {
+  return {
+    password: wraps.some(w => w.method === 'password' && w.kdf?.v === 3),
+    recovery: wraps.some(w => w.method === 'recovery' && w.kdf?.v === 3),
+    prf: wraps.filter(w => w.method === 'prf').length,
+    version,
+  }
+}
+
 // Persist vault key: sessionStorage for this tab (raw bytes), plus — when the
 // "stay unlocked on this device" preference is on — a non-extractable copy in
 // IndexedDB so the vault reopens silently on the next visit/app launch.
@@ -142,23 +157,6 @@ async function persistVaultKey(key: CryptoKey, userId?: string) {
   } catch {}
 }
 
-// If PRF bytes from a biometric assertion are pending in sessionStorage, wrap the
-// vault key with them and store the result so future biometric logins can auto-open
-// the vault. Called after every successful vault unlock.
-async function tryStoreBiometricKey(key: CryptoKey) {
-  try {
-    const pendingB64 = sessionStorage.getItem(PRF_PENDING_KEY)
-    if (!pendingB64) return
-    sessionStorage.removeItem(PRF_PENDING_KEY)
-    const binary = atob(pendingB64)
-    const prfBytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) prfBytes[i] = binary.charCodeAt(i)
-    if (prfBytes.length < 32) return
-    const wrapped = await wrapVaultKey(key, prfBytes)
-    localStorage.setItem('gs_e2ee_biometric_wrapped_v2', wrapped)
-  } catch {}
-}
-
 export function E2EEProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [vaultKey, setVaultKey] = useState<CryptoKey | null>(null)
@@ -167,19 +165,82 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   const [decryptedMap, setDecryptedMap] = useState<Map<string, DecryptedEntry>>(new Map())
   const [needsMigration, setNeedsMigration] = useState(false)
   const [needsOAuthVaultSetup, setNeedsOAuthVaultSetup] = useState(false)
-  const [pendingRecoveryPhrase, setPendingRecoveryPhrase] = useState<string | null>(null)
+  const [pendingRecoveryPhrase, setPendingRecoveryPhrase] = useState<string | null>(
+    () => sessionStorage.getItem(PENDING_PHRASE_KEY),
+  )
+  const [doors, setDoors] = useState<VaultDoors | null>(null)
+  const [passwordWrapStale, setPasswordWrapStale] = useState(
+    () => sessionStorage.getItem(PW_STALE_KEY) === '1',
+  )
   const autoUnlockAttempted = useRef(false)
+  const vaultKeyRef = useRef<CryptoKey | null>(null)
+  useEffect(() => { vaultKeyRef.current = vaultKey }, [vaultKey])
+
+  // The login-time unlock (AuthPage/BiometricGate, outside this provider) can finish
+  // AFTER our one-shot auto-unlock effect already ran — it announces itself so the
+  // session key isn't missed for the rest of the session.
+  useEffect(() => {
+    const onUnlocked = () => {
+      const phrase = sessionStorage.getItem(PENDING_PHRASE_KEY)
+      if (phrase) setPendingRecoveryPhrase(phrase)
+      setPasswordWrapStale(sessionStorage.getItem(PW_STALE_KEY) === '1')
+      if (vaultKeyRef.current) return
+      const b64 = sessionStorage.getItem(SESSION_KEY_V2)
+      if (!b64) return
+      importVaultKey(b64)
+        .then(key => {
+          setVaultKey(key)
+          setHasVault(true)
+          refreshDoors()
+        })
+        .catch(() => sessionStorage.removeItem(SESSION_KEY_V2))
+    }
+    window.addEventListener('gs-vault-unlocked', onUnlocked)
+    return () => window.removeEventListener('gs-vault-unlocked', onUnlocked)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshDoors = useCallback(async () => {
+    const bundle = await fetchVaultBundle()
+    if (bundle) {
+      setDoors(doorsFromWraps(bundle.wraps, bundle.vault_version))
+      cacheBundleMeta(bundle)
+      setHasVault(true)
+    } else {
+      setDoors(null)
+    }
+  }, [])
+
+  // Wrap-migration + post-unlock bookkeeping shared by every successful unlock.
+  const afterUnlock = useCallback(async (key: CryptoKey, opts?: { password?: string }) => {
+    setVaultKey(key)
+    await persistVaultKey(key, user?.id)
+    if (opts?.password) {
+      sessionStorage.removeItem(PW_STALE_KEY)
+      setPasswordWrapStale(false)
+    }
+    try {
+      const bundle = await fetchVaultBundle()
+      if (bundle && user?.id) {
+        await ensureV3Wraps(key, user.id, bundle, opts?.password)
+        const fresh = await fetchVaultBundle()
+        if (fresh) setDoors(doorsFromWraps(fresh.wraps, fresh.vault_version))
+        const pendingPhrase = sessionStorage.getItem(PENDING_PHRASE_KEY)
+        if (pendingPhrase) setPendingRecoveryPhrase(pendingPhrase)
+      }
+    } catch {}
+    track('vault_opened')
+    phCapture('vault_opened')
+  }, [user?.id])
 
   // Restore vault metadata from Supabase when localStorage is empty (new/cleared device).
   // Runs before VoucherForm renders so it never shows "setup vault" when one already exists.
   useEffect(() => {
     if (!user?.id) return
-    if (localStorage.getItem(CHECK_KEY)) return
-    fetchVaultMeta().then(meta => {
-      if (meta) {
-        localStorage.setItem(SALT_KEY, meta.vault_salt)
-        localStorage.setItem(CHECK_KEY, meta.vault_check)
-        localStorage.setItem(VAULT_V2_FLAG, 'true')
+    if (localStorage.getItem(CHECK_KEY)) { refreshDoors(); return }
+    fetchVaultBundle().then(bundle => {
+      if (bundle) {
+        cacheBundleMeta(bundle)
+        setDoors(doorsFromWraps(bundle.wraps, bundle.vault_version))
         setHasVault(true)
       }
     })
@@ -192,71 +253,34 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
 
     const userId = user?.id
 
-    // Path 1: v2 key bytes already in sessionStorage (page refresh within same tab)
+    // A recovery phrase minted during login-time wrap migration waits here for display
+    const pendingPhrase = sessionStorage.getItem(PENDING_PHRASE_KEY)
+    if (pendingPhrase) setPendingRecoveryPhrase(pendingPhrase)
+
+    // Path 1: MK bytes already in sessionStorage (page refresh, or the login-time
+    // unlock in AuthPage/BiometricGate — which replaced the old plaintext-password
+    // handoff — already opened the vault).
     const savedKeyB64 = sessionStorage.getItem(SESSION_KEY_V2)
     if (savedKeyB64) {
       importVaultKey(savedKeyB64)
-        .then(key => { setVaultKey(key); syncVaultMetaIfNeeded() })
+        .then(async key => {
+          setVaultKey(key)
+          if (userId && isVaultPersistEnabled()) await persistVaultKey(key, userId)
+          refreshDoors()
+        })
         .catch(() => sessionStorage.removeItem(SESSION_KEY_V2))
-      return
-    }
-
-    // Path 2: pending login password for v2 vault auto-unlock
-    const pendingPw = sessionStorage.getItem(VAULT_PW_PENDING)
-    if (pendingPw && userId) {
-      sessionStorage.removeItem(VAULT_PW_PENDING)
-      ;(async () => {
-        let saltB64 = localStorage.getItem(SALT_KEY)
-        let check   = localStorage.getItem(CHECK_KEY)
-
-        if (!saltB64 || !check) {
-          // No local metadata — try to fetch from Supabase (new device or cleared storage)
-          const meta = await fetchVaultMeta()
-          if (meta) {
-            saltB64 = meta.vault_salt
-            check   = meta.vault_check
-            localStorage.setItem(SALT_KEY, saltB64)
-            localStorage.setItem(CHECK_KEY, check)
-            localStorage.setItem(VAULT_V2_FLAG, 'true')
-            setHasVault(true)
-          } else {
-            // Truly new user — save password for manual vault setup
-            sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
-            return
-          }
-        }
-
-        if (isV2Vault()) {
-          try {
-            const key = await deriveVaultKey(pendingPw, userId, saltFromB64(saltB64!))
-            const dec = await decryptField(key, check!)
-            if (dec === VERIFY_PLAINTEXT) {
-              setVaultKey(key)
-              await persistVaultKey(key, userId)
-              await tryStoreBiometricKey(key)
-              syncVaultMetaIfNeeded()
-            }
-          } catch {}
-          return
-        }
-
-        // Existing vault but old format → save login password for migration, then prompt
-        sessionStorage.setItem(VAULT_MIGRATE_PW, pendingPw)
-        setNeedsMigration(true)
-      })()
       return
     }
 
     // Later fallbacks, shared by the sync flow and the async device-key path below.
     const tryLegacyPaths = () => {
-      // Path 3: migration password from a previous session (e.g. refresh mid-migration)
-      const migratePw = sessionStorage.getItem(VAULT_MIGRATE_PW)
-      if (migratePw && hasVault && !isV2Vault()) {
+      // Legacy old-format vault (separate passphrase, pre-v2) → prompt migration
+      if (localStorage.getItem(CHECK_KEY) && !isV2Vault()) {
         setNeedsMigration(true)
         return
       }
 
-      // Path 4: legacy passphrase in sessionStorage (old-format vault)
+      // Legacy passphrase in sessionStorage (old-format vault)
       const legacyPass = sessionStorage.getItem(SESSION_PASS_KEY)
       if (legacyPass) {
         const saltB64 = localStorage.getItem(SALT_KEY)
@@ -271,7 +295,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // Path 5: OAuth user (Google etc.) with no vault and no password — prompt manual setup
+      // OAuth user (Google etc.) with no vault — prompt setup
       const provider = user?.app_metadata?.provider
       const isOAuth = provider && provider !== 'email'
       if (isOAuth && !localStorage.getItem(CHECK_KEY)) {
@@ -279,7 +303,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Path 2.5: device-persisted key (IndexedDB) — the "vault stays open on this
+    // Path 2: device-persisted key (IndexedDB) — the "vault stays open on this
     // device" path. Verified against the vault check before being trusted; a stale
     // key (vault was re-keyed elsewhere) is discarded.
     if (userId && isVaultPersistEnabled()) {
@@ -292,7 +316,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
               const dec = await decryptField(key, check).catch(() => null)
               if (dec === VERIFY_PLAINTEXT) {
                 setVaultKey(key)
-                syncVaultMetaIfNeeded()
+                afterUnlock(key)
                 return
               }
             }
@@ -316,55 +340,57 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem(SESSION_KEY_V2)
       sessionStorage.removeItem(SESSION_PASS_KEY)
       sessionStorage.removeItem(VAULT_MIGRATE_PW)
+      sessionStorage.removeItem(PENDING_PHRASE_KEY)
       clearDeviceVaultKey()
     }
   }, [user])
 
-  // ── Setup: v2 unified-password vault ────────────────────────────────────
+  // ── Setup: v3 vault opened by the login password ─────────────────────────
+  // The password should be pre-verified against Supabase auth by the caller
+  // (VaultSetupSheet re-authenticates) — deriving a vault door from a string
+  // that ISN'T the real login password silently locks the user out at the next
+  // login, which is exactly the v2 failure mode this replaces.
   const setupVaultFromPassword = useCallback(async (
     password: string,
     userId: string,
     hintText?: string,
   ): Promise<string> => {
-    // Check Supabase for an existing vault first — if the password matches, adopt it
-    // rather than overwriting it with a new salt (which would break other devices).
-    const remoteMeta = await fetchVaultMeta()
-    if (remoteMeta) {
-      try {
-        const existingKey = await deriveVaultKey(password, userId, saltFromB64(remoteMeta.vault_salt))
-        const dec = await decryptField(existingKey, remoteMeta.vault_check)
-        if (dec === VERIFY_PLAINTEXT) {
-          localStorage.setItem(SALT_KEY, remoteMeta.vault_salt)
-          localStorage.setItem(CHECK_KEY, remoteMeta.vault_check)
-          localStorage.setItem(VAULT_V2_FLAG, 'true')
-          setHasVault(true)
-          setNeedsMigration(false)
-          setVaultKey(existingKey)
-          await persistVaultKey(existingKey, userId)
-          await tryStoreBiometricKey(existingKey)
-          track('vault_opened')
-          phCapture('vault_opened')
-          return ''
-        }
-      } catch {}
-      // Password doesn't match remote vault — fall through and create a fresh vault
+    // Adopt an existing vault when one exists and the password opens it —
+    // overwriting it with a fresh key would orphan the other devices' data.
+    const existing = await fetchVaultBundle()
+    if (existing?.vault_check) {
+      const res = await tryUnlockWithPassword(existing, password, userId)
+      if (res) {
+        cacheBundleMeta(existing)
+        setHasVault(true)
+        setNeedsMigration(false)
+        setNeedsOAuthVaultSetup(false)
+        await afterUnlock(res.key, { password })
+        return ''
+      }
+      throw new Error('vault-exists-password-mismatch')
     }
 
+    // Fresh vault: random master key + password/recovery doors, server-first —
+    // local state only changes after the server writes succeed.
+    const mk    = await generateMasterKey()
     const salt  = generateSalt()
-    const key   = await deriveVaultKey(password, userId, salt)
-    const check = await encryptField(key, VERIFY_PLAINTEXT)
+    const check = await encryptField(mk, VERIFY_PLAINTEXT)
 
-    // Generate and store recovery-wrapped vault key
-    const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
-    const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
-    const wrappedForRecovery = await wrapVaultKey(key, wrapKeyBytes)
+    const pwWrap = await buildPasswordWrap(mk, password, userId)
+    const { wrap: recWrap, phrase } = await buildRecoveryWrap(mk)
+
+    await saveVaultMeta(saltToB64(salt), check)
+    const wroteP = await upsertWrap(pwWrap)
+    const wroteR = await upsertWrap(recWrap)
+    if (wroteP || wroteR) {
+      try { await supabase.rpc('set_vault_version', { p_version: 3 }) } catch {}
+    }
 
     localStorage.setItem(SALT_KEY, saltToB64(salt))
     localStorage.setItem(CHECK_KEY, check)
     localStorage.setItem(VAULT_V2_FLAG, 'true')
-    localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
     sessionStorage.removeItem(SESSION_PASS_KEY)
-    await saveVaultMeta(saltToB64(salt), check) // sync to Supabase for cross-device access
 
     if (hintText?.trim()) {
       localStorage.setItem(HINT_KEY, hintText.trim())
@@ -376,18 +402,66 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
 
     setHasVault(true)
     setNeedsMigration(false)
-    setVaultKey(key)
-    await persistVaultKey(key, userId)
-    // Surface the recovery phrase once via RecoveryKeyModal — previously the
-    // returned phrase was dropped by every caller and users never saw it.
+    setNeedsOAuthVaultSetup(false)
+    setVaultKey(mk)
+    await persistVaultKey(mk, userId)
+    setDoors({ password: wroteP, recovery: wroteR, prf: 0, version: 3 })
     setPendingRecoveryPhrase(phrase)
 
     track('vault_opened')
     phCapture('vault_opened')
     return phrase
-  }, [])
+  }, [afterUnlock])
 
-  // ── Legacy setup (separate passphrase) ──────────────────────────────────
+  // ── Setup: OAuth/passkey path — no password door, recovery (+PRF) only ───
+  const setupVaultWithMasterKey = useCallback(async (
+    opts?: { registerBiometric?: { userName: string; email?: string } },
+  ): Promise<string> => {
+    const mk    = await generateMasterKey()
+    const salt  = generateSalt()
+    const check = await encryptField(mk, VERIFY_PLAINTEXT)
+    const { wrap: recWrap, phrase } = await buildRecoveryWrap(mk)
+
+    await saveVaultMeta(saltToB64(salt), check)
+    const wroteR = await upsertWrap(recWrap)
+    if (wroteR) {
+      try { await supabase.rpc('set_vault_version', { p_version: 3 }) } catch {}
+    }
+
+    localStorage.setItem(SALT_KEY, saltToB64(salt))
+    localStorage.setItem(CHECK_KEY, check)
+    localStorage.setItem(VAULT_V2_FLAG, 'true')
+
+    setHasVault(true)
+    setNeedsOAuthVaultSetup(false)
+    setVaultKey(mk)
+    await persistVaultKey(mk, user?.id)
+
+    // Passkey door — registered here (with mk still in scope) rather than through
+    // enableBiometricVaultUnlock, whose vaultKey state hasn't updated yet.
+    let prfCount = 0
+    if (opts?.registerBiometric && user?.id) {
+      try {
+        const ok = await registerBiometricWithVault(user.id, opts.registerBiometric.userName, mk, opts.registerBiometric.email)
+        if (ok) {
+          const wrapped = localStorage.getItem(BIOMETRIC_WRAPPED_LOCAL)
+          const credId  = localStorage.getItem(BIOMETRIC_CRED_LOCAL) ?? ''
+          if (wrapped && await upsertWrap({ method: 'prf', slot_id: credId, wrapped_mk: wrapped, kdf: { v: 3 } })) {
+            prfCount = 1
+          }
+        }
+      } catch {}
+    }
+
+    setDoors({ password: false, recovery: wroteR, prf: prfCount, version: 3 })
+    setPendingRecoveryPhrase(phrase)
+
+    track('vault_opened')
+    phCapture('vault_opened')
+    return phrase
+  }, [user?.id])
+
+  // ── Legacy setup (separate passphrase) — dead path kept only for type compat
   const setupVault = useCallback(async (passphrase: string, hintText?: string) => {
     const salt  = generateSalt()
     const key   = await deriveKey(passphrase, salt)
@@ -406,114 +480,103 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     setVaultKey(key)
   }, [])
 
-  // ── Unlock: v2 via login password ────────────────────────────────────────
+  // ── Unlock: login password, with distinct outcomes ───────────────────────
+  const unlockWithPassword = useCallback(async (password: string): Promise<UnlockStatus> => {
+    const userId = user?.id
+    if (!userId) return 'error'
+    try {
+      const bundle = await fetchVaultBundle()
+      if (!bundle?.vault_check) return 'no-vault'
+      cacheBundleMeta(bundle)
+      setHasVault(true)
+
+      const res = await tryUnlockWithPassword(bundle, password, userId)
+      if (res) {
+        await afterUnlock(res.key, { password })
+        return 'ok'
+      }
+
+      // Distinguish "wrong password" from "right password, stale wrap" (post password
+      // reset): verify against Supabase auth without touching the UI session.
+      if (user.email) {
+        try {
+          const { error } = await supabase.auth.signInWithPassword({ email: user.email, password })
+          if (!error) {
+            sessionStorage.setItem(PW_STALE_KEY, '1')
+            setPasswordWrapStale(true)
+            return 'stale'
+          }
+        } catch {}
+      }
+      return 'wrong'
+    } catch {
+      return 'error'
+    }
+  }, [user?.id, user?.email, afterUnlock])
+
+  // Boolean wrapper for existing call sites
   const unlockVaultFromPassword = useCallback(async (
     password: string,
-    userId: string,
+    _userId: string,
   ): Promise<boolean> => {
-    let saltB64 = localStorage.getItem(SALT_KEY)
-    let check   = localStorage.getItem(CHECK_KEY)
-    if (!saltB64 || !check) {
-      // Try to restore from Supabase (new device or cleared localStorage)
-      const meta = await fetchVaultMeta()
-      if (meta) {
-        saltB64 = meta.vault_salt
-        check   = meta.vault_check
-        localStorage.setItem(SALT_KEY, saltB64)
-        localStorage.setItem(CHECK_KEY, check)
-        localStorage.setItem(VAULT_V2_FLAG, 'true')
-        setHasVault(true)
-      } else {
-        return false
-      }
-    }
-    try {
-      const key = await deriveVaultKey(password, userId, saltFromB64(saltB64))
-      const dec = await decryptField(key, check)
-      if (dec !== VERIFY_PLAINTEXT) return false
-      setVaultKey(key)
-      await persistVaultKey(key, userId)
-      await tryStoreBiometricKey(key)
-      track('vault_opened')
-      phCapture('vault_opened')
-      return true
-    } catch {
-      return false
-    }
-  }, [])
+    return (await unlockWithPassword(password)) === 'ok'
+  }, [unlockWithPassword])
 
-  // ── Unlock: recovery phrase ──────────────────────────────────────────────
+  // ── Unlock: recovery phrase (server-stored wrap → works on any device) ───
   const unlockVaultFromRecovery = useCallback(async (phrase: string): Promise<boolean> => {
-    const wrappedB64 = localStorage.getItem(RECOVERY_WRAPPED)
-    if (!wrappedB64) return false
     try {
-      const normalized = phrase.replace(/[\s-]/g, '').toUpperCase()
-      const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-      const bytes = new Uint8Array(
-        Array.from(normalized).map(c => ALPHA.indexOf(c)).filter(n => n >= 0)
-      )
-      if (bytes.length < 18) return false
-
-      const wrapKeyBytes = await deriveRecoveryWrapKey(bytes)
-      const key = await unwrapVaultKey(wrappedB64, wrapKeyBytes)
-      const check = localStorage.getItem(CHECK_KEY)
-      if (check) {
-        const dec = await decryptField(key, check)
-        if (dec !== VERIFY_PLAINTEXT) return false
-      }
-      setVaultKey(key)
-      await persistVaultKey(key, user?.id)
+      const bundle = await fetchVaultBundle()
+      if (!bundle) return false
+      const key = await tryUnlockWithRecovery(bundle, phrase)
+      if (!key) return false
+      cacheBundleMeta(bundle)
+      setHasVault(true)
+      await afterUnlock(key)
+      // The recovery door just proved itself; if the password wrap is stale this
+      // unlock is the moment the user can re-link it (VaultUnlockSheet offers it).
       return true
     } catch {
       return false
     }
-  }, [user?.id])
+  }, [afterUnlock])
 
   // ── Unlock: accepts the passphrase regardless of vault format ────────────
-  // For v2 (unified) vaults, derives using deriveVaultKey (password+userId+salt).
-  // For legacy vaults, falls back to the old deriveKey path.
   const unlockVault = useCallback(async (passphrase: string): Promise<boolean> => {
+    if (isV2Vault() && user?.id) {
+      return (await unlockWithPassword(passphrase)) === 'ok'
+    }
+    // Legacy vault (separate passphrase, local-only meta)
     const saltB64 = localStorage.getItem(SALT_KEY)
     const check   = localStorage.getItem(CHECK_KEY)
     if (!saltB64 || !check) return false
     try {
-      let key: CryptoKey
-      if (isV2Vault() && user?.id) {
-        key = await deriveVaultKey(passphrase, user.id, saltFromB64(saltB64))
-      } else {
-        key = await deriveKey(passphrase, saltFromB64(saltB64))
-      }
+      const key = await deriveKey(passphrase, saltFromB64(saltB64))
       const dec = await decryptField(key, check)
       if (dec !== VERIFY_PLAINTEXT) return false
-      if (isV2Vault()) {
-        await persistVaultKey(key, user?.id)
-      } else {
-        sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
-      }
+      sessionStorage.setItem(SESSION_PASS_KEY, passphrase)
       setVaultKey(key)
-      await tryStoreBiometricKey(key)
       track('vault_opened')
       phCapture('vault_opened')
       return true
     } catch {
       return false
     }
-  }, [user?.id])
+  }, [user?.id, unlockWithPassword])
 
-  // ── Migrate old-format vault to v2 ──────────────────────────────────────
-  // oldPassphrase: the current separate vault passphrase (for decryption verification)
-  // loginPassword: the Supabase login password — the new vault key is derived from it.
-  //   If omitted, falls back to gs_vault_migrate_pw in sessionStorage (set at login time).
+  // ── Migrate old-format vault (separate passphrase) → v3, atomically ──────
+  // Decrypts under the old key, re-encrypts under a fresh random master key, and
+  // commits meta + wraps + every voucher in ONE server transaction. A mid-flight
+  // failure leaves the old vault fully intact (v2 committed the new key first,
+  // which permanently lost any voucher not yet rewritten).
   const migrateVault = useCallback(async (
     oldPassphrase: string,
     loginPassword: string | undefined,
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
-  ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
+  ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>; failed?: number}> => {
     const saltB64 = localStorage.getItem(SALT_KEY)
     const check   = localStorage.getItem(CHECK_KEY)
     const userId  = user?.id
-    const loginPw = loginPassword ?? sessionStorage.getItem(VAULT_MIGRATE_PW)
-    if (!saltB64 || !check || !userId || !loginPw) return { ok: false, entries: [] }
+    if (!saltB64 || !check || !userId) return { ok: false, entries: [] }
 
     // Step 1: verify the old vault passphrase
     let oldKey: CryptoKey
@@ -525,101 +588,102 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       return { ok: false, entries: [] }
     }
 
-    // Step 2: derive new vault key from the LOGIN password
+    // Step 2: fresh random master key
+    const mk       = await generateMasterKey()
     const newSalt  = generateSalt()
-    const newKey   = await deriveVaultKey(loginPw, userId, newSalt)
-    const newCheck = await encryptField(newKey, VERIFY_PLAINTEXT)
+    const newCheck = await encryptField(mk, VERIFY_PLAINTEXT)
 
-    // Step 3: re-encrypt all vouchers under the new key
+    // Step 3: re-encrypt — failures are COUNTED and reported, never swallowed
     const entries: Array<{id: string; code: string; cvv: string|null}> = []
+    let failed = 0
     for (const v of e2eeVouchers) {
       try {
         const plainCode = v.code && isEncryptedField(v.code) ? await decryptField(oldKey, v.code) : (v.code ?? '')
         const plainCvv  = v.cvv  && isEncryptedField(v.cvv)  ? await decryptField(oldKey, v.cvv)  : (v.cvv  ?? null)
         entries.push({
           id: v.id,
-          code: await encryptField(newKey, plainCode),
-          cvv: plainCvv ? await encryptField(newKey, plainCvv) : null,
+          code: await encryptField(mk, plainCode),
+          cvv: plainCvv ? await encryptField(mk, plainCvv) : null,
         })
-      } catch {}
+      } catch {
+        failed++
+      }
+    }
+    if (failed > 0) {
+      // A voucher that can't be decrypted under the old key would become permanently
+      // unreadable once that key is gone — abort and tell the user instead.
+      return { ok: false, entries: [], failed }
     }
 
-    // Step 4: generate recovery key
-    const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
-    const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
-    const wrappedForRecovery = await wrapVaultKey(newKey, wrapKeyBytes)
+    // Step 4: doors for the new key
+    const wraps: VaultWrap[] = []
+    const { wrap: recWrap, phrase } = await buildRecoveryWrap(mk)
+    wraps.push(recWrap)
+    const loginPw = loginPassword ?? sessionStorage.getItem(VAULT_MIGRATE_PW) ?? undefined
+    if (loginPw) wraps.push(await buildPasswordWrap(mk, loginPw, userId))
 
-    // Step 5: commit — only after all re-encryption succeeded
+    // Step 5: one atomic transaction
+    const { error } = await supabase.rpc('commit_vault_rekey', {
+      p_salt: saltToB64(newSalt),
+      p_check: newCheck,
+      p_version: 3,
+      p_wraps: wraps,
+      p_entries: entries,
+    })
+    if (error) return { ok: false, entries: [] }
+
     localStorage.setItem(SALT_KEY, saltToB64(newSalt))
     localStorage.setItem(CHECK_KEY, newCheck)
     localStorage.setItem(VAULT_V2_FLAG, 'true')
-    localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
+    localStorage.removeItem(BIOMETRIC_WRAPPED_LOCAL) // wrapped the OLD key
     sessionStorage.removeItem(SESSION_PASS_KEY)
     sessionStorage.removeItem(VAULT_MIGRATE_PW)
-    await saveVaultMeta(saltToB64(newSalt), newCheck) // sync to Supabase
 
-    setVaultKey(newKey)
+    setVaultKey(mk)
     setNeedsMigration(false)
-    await persistVaultKey(newKey, userId)
+    await persistVaultKey(mk, userId)
+    setDoors({ password: !!loginPw, recovery: true, prf: 0, version: 3 })
     setPendingRecoveryPhrase(phrase)
     return { ok: true, entries }
   }, [user?.id])
 
-  // ── Re-key vault from new password (vault must be unlocked) ─────────────
-  // Re-encrypts all vouchers with a new key derived from `newPassword`.
-  // Does NOT require the old passphrase — the in-memory vault key is used directly.
+  // ── Password change → re-wrap only (vault must be unlocked) ──────────────
+  const rewrapPassword = useCallback(async (newPassword: string): Promise<boolean> => {
+    if (!vaultKey || !user?.id) return false
+    try {
+      const ok = await upsertWrap(await buildPasswordWrap(vaultKey, newPassword, user.id))
+      if (ok) {
+        sessionStorage.removeItem(PW_STALE_KEY)
+        setPasswordWrapStale(false)
+        try { await supabase.rpc('set_vault_version', { p_version: 3 }) } catch {}
+        await refreshDoors()
+      }
+      return ok
+    } catch {
+      return false
+    }
+  }, [vaultKey, user?.id, refreshDoors])
+
+  // v3: kept for existing call sites — the signature still accepts vouchers but no
+  // data is re-encrypted anymore; the master key stays, only its password door moves.
   const reDeriveVaultKeyFromPassword = useCallback(async (
     newPassword: string,
-    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
+    _e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
   ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
-    if (!vaultKey || !user?.id) return { ok: false, entries: [] }
-
-    const newSalt  = generateSalt()
-    const newKey   = await deriveVaultKey(newPassword, user.id, newSalt)
-    const newCheck = await encryptField(newKey, VERIFY_PLAINTEXT)
-
-    const entries: Array<{id: string; code: string; cvv: string|null}> = []
-    for (const v of e2eeVouchers) {
-      try {
-        const plainCode = v.code && isEncryptedField(v.code) ? await decryptField(vaultKey, v.code) : (v.code ?? '')
-        const plainCvv  = v.cvv  && isEncryptedField(v.cvv)  ? await decryptField(vaultKey, v.cvv)  : (v.cvv  ?? null)
-        entries.push({
-          id: v.id,
-          code: await encryptField(newKey, plainCode),
-          cvv: plainCvv ? await encryptField(newKey, plainCvv) : null,
-        })
-      } catch {}
-    }
-
-    const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
-    const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
-    const wrappedForRecovery = await wrapVaultKey(newKey, wrapKeyBytes)
-
-    localStorage.setItem(SALT_KEY, saltToB64(newSalt))
-    localStorage.setItem(CHECK_KEY, newCheck)
-    localStorage.setItem(VAULT_V2_FLAG, 'true')
-    localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
-    localStorage.removeItem('gs_e2ee_biometric_wrapped_v2')
-    sessionStorage.removeItem(SESSION_PASS_KEY)
-    await saveVaultMeta(saltToB64(newSalt), newCheck) // sync to Supabase
-
-    setVaultKey(newKey)
-    setNeedsMigration(false)
-    await persistVaultKey(newKey, user?.id)
-    setPendingRecoveryPhrase(phrase)
-    return { ok: true, entries }
-  }, [vaultKey, user?.id])
+    const ok = await rewrapPassword(newPassword)
+    return { ok, entries: [] }
+  }, [rewrapPassword])
 
   // ── Regenerate recovery key (vault must be unlocked) ────────────────────
   const regenerateRecoveryKey = useCallback(async (): Promise<string> => {
     if (!vaultKey) throw new Error('vault is locked')
-    const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
-    const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
-    const wrappedForRecovery = await wrapVaultKey(vaultKey, wrapKeyBytes)
-    localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
+    const { wrap, phrase } = await buildRecoveryWrap(vaultKey)
+    const ok = await upsertWrap(wrap)
+    if (!ok) throw new Error('recovery wrap sync failed')
     setPendingRecoveryPhrase(phrase)
+    await refreshDoors()
     return phrase
-  }, [vaultKey])
+  }, [vaultKey, refreshDoors])
 
   // ── Enable biometric vault unlock (registers PRF credential) ─────────────
   const enableBiometricVaultUnlock = useCallback(async (
@@ -628,39 +692,67 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     email?: string,
   ): Promise<boolean> => {
     if (!vaultKey) return false
-    return registerBiometricWithVault(userId, userName, vaultKey, email)
-  }, [vaultKey])
+    const ok = await registerBiometricWithVault(userId, userName, vaultKey, email)
+    if (ok) {
+      // Mirror the wrap into vault_wraps so PRF unlock works from the bundle
+      const wrapped = localStorage.getItem(BIOMETRIC_WRAPPED_LOCAL)
+      const credId  = localStorage.getItem(BIOMETRIC_CRED_LOCAL) ?? ''
+      if (wrapped) {
+        await upsertWrap({ method: 'prf', slot_id: credId, wrapped_mk: wrapped, kdf: { v: 3 } })
+        await refreshDoors()
+      }
+    }
+    return ok
+  }, [vaultKey, refreshDoors])
 
-  // ── Unlock vault via biometric (PRF-wrapped key) ────────────────────────────
+  // ── Unlock vault via biometric (PRF-wrapped key) ─────────────────────────
   const unlockVaultWithBiometric = useCallback(async (): Promise<boolean> => {
     try {
       const { verifyBiometricForVaultUnlock } = await import('../lib/passkey')
       const result = await verifyBiometricForVaultUnlock()
       if (!result.authenticated) return false
-      if (!result.vaultKey) {
-        // PRF not available or no wrapped key stored — store PRF bytes so next manual
-        // unlock can wrap and store the vault key automatically.
-        if (result.prfBytes) {
-          const b64 = btoa(String.fromCharCode(...result.prfBytes))
-          sessionStorage.setItem(PRF_PENDING_KEY, b64)
+
+      if (result.vaultKey) {
+        const check = localStorage.getItem(CHECK_KEY)
+        if (check) {
+          const dec = await decryptField(result.vaultKey, check).catch(() => null)
+          if (dec !== VERIFY_PLAINTEXT) return false
         }
-        return false
+        await afterUnlock(result.vaultKey)
+        return true
       }
-      const check = localStorage.getItem(CHECK_KEY)
-      if (check) {
-        const dec = await decryptField(result.vaultKey, check)
-        if (dec !== VERIFY_PLAINTEXT) return false
+
+      // No locally-stored wrapped key — try the server-side PRF wraps (synced
+      // passkey on a new device), then fall back to parking the PRF bytes for
+      // wrapping after the next manual unlock.
+      if (result.prfBytes) {
+        const bundle = await fetchVaultBundle()
+        if (bundle) {
+          const key = await tryUnlockWithPrfBytes(bundle, result.prfBytes)
+          if (key) {
+            cacheBundleMeta(bundle)
+            setHasVault(true)
+            // Store locally for fast unlock next time
+            try {
+              const wrapped = await wrapVaultKey(key, result.prfBytes)
+              localStorage.setItem(BIOMETRIC_WRAPPED_LOCAL, wrapped)
+            } catch {}
+            await afterUnlock(key)
+            return true
+          }
+        }
+        const b64 = btoa(String.fromCharCode(...result.prfBytes))
+        sessionStorage.setItem(PRF_PENDING_KEY, b64)
       }
-      setVaultKey(result.vaultKey)
-      await persistVaultKey(result.vaultKey, user?.id)
-      return true
+      return false
     } catch {
       return false
     }
-  }, [user?.id])
+  }, [afterUnlock])
 
   const dismissRecoveryPhrase = useCallback(() => {
     setPendingRecoveryPhrase(null)
+    sessionStorage.removeItem(PENDING_PHRASE_KEY)
     setNeedsOAuthVaultSetup(false)
   }, [])
 
@@ -677,14 +769,16 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(CHECK_KEY)
     localStorage.removeItem(HINT_KEY)
     localStorage.removeItem(VAULT_V2_FLAG)
-    localStorage.removeItem(RECOVERY_WRAPPED)
+    localStorage.removeItem(BIOMETRIC_WRAPPED_LOCAL)
     sessionStorage.removeItem(SESSION_PASS_KEY)
     sessionStorage.removeItem(SESSION_KEY_V2)
+    sessionStorage.removeItem(PENDING_PHRASE_KEY)
     clearDeviceVaultKey()
     setVaultKey(null)
     setHasVault(false)
     setHint(null)
     setNeedsMigration(false)
+    setDoors(null)
     setDecryptedMap(new Map())
   }, [])
 
@@ -720,6 +814,8 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     setDecryptedMap(map)
   }, [vaultKey])
 
+  // Legacy-vault passphrase change (separate-passphrase vaults only — v2/v3 users
+  // change their LOGIN password, which re-wraps via rewrapPassword instead).
   const changePassphrase = useCallback(async (
     oldPass: string,
     newPass: string,
@@ -732,7 +828,6 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
 
     let oldKey: CryptoKey
     try {
-      // Try v2 derivation first, fall back to legacy
       if (isV2Vault() && user?.id) {
         oldKey = await deriveVaultKey(oldPass, user.id, saltFromB64(saltB64))
       } else {
@@ -754,26 +849,31 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     const newCheck = await encryptField(newKey, VERIFY_PLAINTEXT)
 
     const entries: Array<{id: string; code: string; cvv: string|null}> = []
+    let failed = 0
     for (const v of e2eeVouchers) {
       try {
         const plainCode = v.code && isEncryptedField(v.code) ? await decryptField(oldKey, v.code) : (v.code ?? '')
         const plainCvv  = v.cvv  && isEncryptedField(v.cvv)  ? await decryptField(oldKey, v.cvv)  : (v.cvv  ?? null)
         entries.push({ id: v.id, code: await encryptField(newKey, plainCode), cvv: plainCvv ? await encryptField(newKey, plainCvv) : null })
-      } catch {}
+      } catch { failed++ }
     }
+    if (failed > 0) return { ok: false, entries: [] }
+
+    // Atomic server commit; falls back gracefully only for local-only legacy vaults
+    const { error } = await supabase.rpc('commit_vault_rekey', {
+      p_salt: saltToB64(newSalt),
+      p_check: newCheck,
+      p_version: isV2Vault() ? 3 : 2,
+      p_wraps: [],
+      p_entries: entries,
+    })
+    if (error && isV2Vault()) return { ok: false, entries: [] }
 
     localStorage.setItem(SALT_KEY, saltToB64(newSalt))
     localStorage.setItem(CHECK_KEY, newCheck)
     if (isV2Vault()) {
-      // Re-generate recovery key for new password
-      const { phrase, bytes: recoveryBytes } = generateRecoverySecret()
-      const wrapKeyBytes = await deriveRecoveryWrapKey(recoveryBytes)
-      const wrappedForRecovery = await wrapVaultKey(newKey, wrapKeyBytes)
-      localStorage.setItem(RECOVERY_WRAPPED, wrappedForRecovery)
-      setPendingRecoveryPhrase(phrase)
       sessionStorage.removeItem(SESSION_PASS_KEY)
       await persistVaultKey(newKey, user?.id)
-      await saveVaultMeta(saltToB64(newSalt), newCheck) // sync to Supabase
     } else {
       sessionStorage.setItem(SESSION_PASS_KEY, newPass)
     }
@@ -789,47 +889,64 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     setVaultKey(newKey)
 
     // Invalidate biometric wrapped key since the vault key changed
-    localStorage.removeItem('gs_e2ee_biometric_wrapped_v2')
+    localStorage.removeItem(BIOMETRIC_WRAPPED_LOCAL)
 
-    return { ok: true, entries }
+    return { ok: true, entries: error ? entries : [] }
   }, [user?.id])
 
   const disableVault = useCallback(async (
     passphrase: string,
     e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
-    const saltB64 = localStorage.getItem(SALT_KEY)
-    const check   = localStorage.getItem(CHECK_KEY)
-    if (!saltB64 || !check) return { ok: false, entries: [] }
+    const check = localStorage.getItem(CHECK_KEY)
+    if (!check) return { ok: false, entries: [] }
 
-    let key: CryptoKey
-    try {
-      if (isV2Vault() && user?.id) {
-        key = await deriveVaultKey(passphrase, user.id, saltFromB64(saltB64))
-      } else {
-        key = await deriveKey(passphrase, saltFromB64(saltB64))
+    // Verify with the password (v3 wrap → v2 derive → legacy), reusing the ladder
+    let key: CryptoKey | null = null
+    if (isV2Vault() && user?.id) {
+      const bundle = await fetchVaultBundle()
+      if (bundle) {
+        const res = await tryUnlockWithPassword(bundle, passphrase, user.id)
+        if (res) key = res.key
       }
-      const dec = await decryptField(key, check)
-      if (dec !== VERIFY_PLAINTEXT) return { ok: false, entries: [] }
-    } catch {
-      return { ok: false, entries: [] }
     }
+    if (!key) {
+      const saltB64 = localStorage.getItem(SALT_KEY)
+      if (!saltB64) return { ok: false, entries: [] }
+      try {
+        const legacyKey = await deriveKey(passphrase, saltFromB64(saltB64))
+        const dec = await decryptField(legacyKey, check)
+        if (dec === VERIFY_PLAINTEXT) key = legacyKey
+      } catch {}
+    }
+    if (!key) return { ok: false, entries: [] }
 
     const entries: Array<{id: string; code: string; cvv: string|null}> = []
+    let failed = 0
     for (const v of e2eeVouchers) {
       try {
         const code = v.code && isEncryptedField(v.code) ? await decryptField(key, v.code) : (v.code ?? '')
         const cvv  = v.cvv  && isEncryptedField(v.cvv)  ? await decryptField(key, v.cvv)  : (v.cvv  ?? null)
         entries.push({ id: v.id, code, cvv })
-      } catch {}
+      } catch { failed++ }
     }
+    if (failed > 0) return { ok: false, entries: [] }
+
+    // Atomic: plaintext rows + cleared meta + all wraps deleted in one transaction
+    const { error } = await supabase.rpc('commit_vault_rekey', {
+      p_salt: null,
+      p_check: null,
+      p_version: 2,
+      p_wraps: [],
+      p_entries: entries.map(e => ({ ...e, is_e2ee: false })),
+    })
+    if (error && isV2Vault()) return { ok: false, entries: [] }
 
     localStorage.removeItem(SALT_KEY)
     localStorage.removeItem(CHECK_KEY)
     localStorage.removeItem(HINT_KEY)
     localStorage.removeItem(VAULT_V2_FLAG)
-    localStorage.removeItem(RECOVERY_WRAPPED)
-    localStorage.removeItem('gs_e2ee_biometric_wrapped_v2')
+    localStorage.removeItem(BIOMETRIC_WRAPPED_LOCAL)
     sessionStorage.removeItem(SESSION_PASS_KEY)
     sessionStorage.removeItem(SESSION_KEY_V2)
     clearDeviceVaultKey()
@@ -837,9 +954,10 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     setHasVault(false)
     setHint(null)
     setNeedsMigration(false)
+    setDoors(null)
     setDecryptedMap(new Map())
 
-    return { ok: true, entries }
+    return { ok: true, entries: error ? entries : [] }
   }, [user?.id])
 
   return (
@@ -851,9 +969,13 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       needsMigration,
       needsOAuthVaultSetup,
       pendingRecoveryPhrase,
+      doors,
+      passwordWrapStale,
       setupVault,
       setupVaultFromPassword,
+      setupVaultWithMasterKey,
       unlockVault,
+      unlockWithPassword,
       unlockVaultFromPassword,
       unlockVaultFromRecovery,
       lockVault,
@@ -862,7 +984,9 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
       enableBiometricVaultUnlock,
       unlockVaultWithBiometric,
       reDeriveVaultKeyFromPassword,
+      rewrapPassword,
       regenerateRecoveryKey,
+      refreshDoors,
       dismissRecoveryPhrase,
       encrypt,
       decrypt,
