@@ -48,20 +48,28 @@ export function Spinner({ color = 'var(--c-primary)', size = 20 }: { color?: str
   return <Icon name="progress_activity" size={size} color={color} className="animate-spin" />
 }
 
-export function Switch({ checked, onChange, size = 'md', ariaLabel }: { checked: boolean; onChange: (v: boolean) => void; size?: 'sm' | 'md'; ariaLabel?: string }) {
+export function Switch({ checked, onChange, size = 'md', ariaLabel, disabled = false }: { checked: boolean; onChange: (v: boolean) => void; size?: 'sm' | 'md'; ariaLabel?: string; disabled?: boolean }) {
   const track = size === 'md' ? 'w-12 h-6' : 'w-10 h-5'
   const thumb = size === 'md' ? 'w-5 h-5' : 'w-4 h-4'
-  const onPos = size === 'md' ? 'translate-x-0.5' : 'translate-x-5'
-  const offPos = size === 'md' ? 'right-0.5' : 'translate-x-0.5'
+  // Thumb rests at the inline-start edge; "on" slides it the full track length minus
+  // thumb + padding. Logical start-* plus dir-aware translate keeps it correct in both
+  // RTL (Hebrew, default) and LTR (English) instead of the physical right-0.5/translate-x
+  // mix that left the thumb visually frozen in RTL.
+  const travel = size === 'md' ? 'ltr:translate-x-6 rtl:-translate-x-6' : 'ltr:translate-x-5 rtl:-translate-x-5'
   return (
     <button
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
-      onClick={() => onChange(!checked)}
-      className={`relative ${track} rounded-full transition-colors flex-shrink-0 ${checked ? 'bg-primary' : 'bg-border'}`}
+      disabled={disabled}
+      onClick={() => { if (!disabled) onChange(!checked) }}
+      className={`relative ${track} rounded-full transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${checked ? 'bg-primary' : 'bg-border'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
-      <span className={`absolute top-0.5 ${thumb} bg-white rounded-full shadow transition-transform ${checked ? onPos : offPos}`} />
+      {/* Inline #fff so the dark-mode .bg-white override never turns the thumb dark */}
+      <span
+        className={`absolute top-0.5 start-0.5 ${thumb} rounded-full shadow transition-transform ${checked ? travel : ''}`}
+        style={{ background: '#fff' }}
+      />
     </button>
   )
 }
