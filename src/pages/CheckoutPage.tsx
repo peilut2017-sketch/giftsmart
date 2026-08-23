@@ -114,7 +114,7 @@ export default function CheckoutPage() {
   const { user, profile } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts, refreshVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { listForSale, removeFromSale } = useMarketplace()
+  const { listForSale, removeFromSale, canUseMarketplace } = useMarketplace()
 
   const voucher = [...vouchers, ...archivedVouchers, ...sharedWithMe].find(v => v.id === id)
   const isSharedVoucher = sharedWithMe.some(v => v.id === id)
@@ -571,6 +571,9 @@ export default function CheckoutPage() {
   }
 
   async function handleListForSale() {
+    // The tab is hidden when the marketplace is closed/unapproved, but guard the
+    // action too — the mode can change while this screen is open
+    if (!canUseMarketplace) { toast.error(t('market.closed.toast')); return }
     const price = parseFloat(sellPrice)
     if (!price || price <= 0) { toast.error(t('checkout.sell.invalid.price')); return }
     // Check payment methods
@@ -591,6 +594,7 @@ export default function CheckoutPage() {
     } catch (err: any) {
       const msg = err?.message || ''
       if (msg.includes('already_listed')) toast.error(t('checkout.sell.already.listed'))
+      else if (msg.includes('marketplace_closed')) toast.error(t('market.closed.toast'))
       else toast.error(t('checkout.sell.error'))
     } finally {
       setSellLoading(false)
@@ -715,7 +719,7 @@ export default function CheckoutPage() {
     { key: 'voucher', icon: 'confirmation_number', label: t('checkout.tab.voucher') },
     ...(!isArchived ? [{ key: 'use' as const, icon: 'shopping_bag', label: t('checkout.tab.use') }] : []),
     ...(!isArchived ? [{ key: 'share' as const, icon: 'ios_share', label: t('checkout.tab.share') }] : []),
-    ...(!isSharedVoucher && !isArchived && !voucher.is_locked ? [{ key: 'sell' as const, icon: 'sell', label: t('checkout.tab.sell') }] : []),
+    ...(!isSharedVoucher && !isArchived && !voucher.is_locked && canUseMarketplace ? [{ key: 'sell' as const, icon: 'sell', label: t('checkout.tab.sell') }] : []),
     { key: 'activity', icon: 'history', label: t('checkout.tab.activity') },
   ]
   const currentTab: TabKey = tabs.some(x => x.key === activeTab) ? activeTab : 'voucher'

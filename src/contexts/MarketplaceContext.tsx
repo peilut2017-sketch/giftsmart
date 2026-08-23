@@ -54,6 +54,10 @@ interface MarketplaceContextValue {
   // Access control
   marketplaceMode: MarketplaceMode
   myAccessStatus: MarketplaceAccessStatus
+  /** Single truth for "may this user use the marketplace right now" — enabled
+   *  for all, disabled → admins only, selective → admins + approved users.
+   *  Mirrors the server-side marketplace_access_ok() check. */
+  canUseMarketplace: boolean
   requestMarketplaceAccess: (message?: string) => Promise<void>
 }
 
@@ -68,7 +72,7 @@ export function useMarketplace() {
 const CACHE_TTL_MS = 60_000
 
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [listings, setListings] = useState<MarketplaceListing[]>([])
   const [myListings, setMyListings] = useState<MarketplaceListing[]>([])
   const [myPurchases, setMyPurchases] = useState<MarketplacePurchase[]>([])
@@ -89,20 +93,32 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   )
   const [myAccessStatus, setMyAccessStatus] = useState<MarketplaceAccessStatus>('none')
 
+  // Fetch on mount AND on window focus — an admin changing the mode must reach
+  // sessions that are already open, not only the next cold start
   useEffect(() => {
-    supabase.rpc('get_marketplace_mode').then(({ data }) => {
-      if (data) {
-        setMarketplaceMode(data as MarketplaceMode)
-        try { localStorage.setItem('gs_marketplace_mode', data) } catch {}
-      }
-    })
+    const fetchMode = () => {
+      supabase.rpc('get_marketplace_mode').then(({ data }) => {
+        if (data) {
+          setMarketplaceMode(data as MarketplaceMode)
+          try { localStorage.setItem('gs_marketplace_mode', data) } catch {}
+        }
+      })
+    }
+    fetchMode()
+    window.addEventListener('focus', fetchMode)
+    return () => window.removeEventListener('focus', fetchMode)
   }, [])
 
   useEffect(() => {
     if (!user) { setMyAccessStatus('none'); return }
-    supabase.rpc('get_my_marketplace_access').then(({ data }) => {
-      setMyAccessStatus((data as MarketplaceAccessStatus) || 'none')
-    })
+    const fetchAccess = () => {
+      supabase.rpc('get_my_marketplace_access').then(({ data }) => {
+        setMyAccessStatus((data as MarketplaceAccessStatus) || 'none')
+      })
+    }
+    fetchAccess()
+    window.addEventListener('focus', fetchAccess)
+    return () => window.removeEventListener('focus', fetchAccess)
   }, [user])
 
   const requestMarketplaceAccess = useCallback(async (message?: string) => {
@@ -550,6 +566,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         unregisterActiveChat,
         marketplaceMode,
         myAccessStatus,
+        canUseMarketplace:
+          isAdmin ||
+          marketplaceMode === 'enabled' ||
+          (marketplaceMode === 'selective' && myAccessStatus === 'approved'),
         requestMarketplaceAccess,
       }}
     >

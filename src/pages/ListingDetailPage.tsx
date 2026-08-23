@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -175,6 +175,7 @@ function BuyModal({
       const msg = err?.message || ''
       if (msg.includes('already_purchased')) toast.error(t('listing.buy.already_purchased'))
       else if (msg.includes('cannot_buy_own_listing')) toast.error(t('listing.buy.own_listing'))
+      else if (msg.includes('marketplace_closed')) toast.error(t('market.closed.toast'))
       else toast.error(t('listing.buy.error'))
     } finally {
       setSending(false)
@@ -385,7 +386,7 @@ export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { listings, fetchListings } = useMarketplace()
+  const { listings, fetchListings, canUseMarketplace } = useMarketplace()
   const { t } = useT()
 
   const [listing, setListing] = useState<MarketplaceListing | null>(null)
@@ -435,6 +436,13 @@ export default function ListingDetailPage() {
       setCurrentPrice(p => p ?? (found.asking_price ?? null))
     }
   }, [listings, id, loading])
+
+  // A deep link must not bypass the marketplace gate — closed market or
+  // unapproved user (selective mode) lands back on the market page, which
+  // shows the appropriate gate/redirect
+  if (!canUseMarketplace) {
+    return <Navigate to="/market" replace />
+  }
 
   if (loading) {
     return (

@@ -45,6 +45,21 @@ interface SubscriptionContextType {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined)
 
+/**
+ * Robustly interpret get_premium_enabled()'s result. The canonical function
+ * returns a boolean, but a legacy deployment can return the TEXT 'false' or a
+ * single-row array — and `'false' !== false`, so the old strict check kept the
+ * premium system "on" (limits enforced) even after the admin disabled it.
+ */
+export function parsePremiumFlag(data: unknown): boolean {
+  let v: unknown = data
+  if (Array.isArray(v)) {
+    const row = v[0]
+    v = row && typeof row === 'object' ? (row as Record<string, unknown>).get_premium_enabled ?? row : row
+  }
+  return !(v === false || v === 'false' || v === 'f' || v === 0 || v === '0')
+}
+
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [plan, setPlan] = useState<Plan>('free')
@@ -55,13 +70,21 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [upgradeSheetOpen, setUpgradeSheetOpen] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState('')
 
-  // Fetch the admin-controlled premium flag once on mount; persist to localStorage
+  // Fetch the admin-controlled premium flag on mount and whenever the app
+  // regains focus, so an admin toggle reaches already-open sessions without a
+  // full reload; persist to localStorage for the next cold start
   useEffect(() => {
-    Promise.resolve(supabase.rpc('get_premium_enabled')).then(({ data }) => {
-      const enabled = data !== false
-      setPremiumEnabled(enabled)
-      try { localStorage.setItem('gs_premium_enabled', String(enabled)) } catch {}
-    }).catch(() => {})
+    const fetchFlag = () => {
+      Promise.resolve(supabase.rpc('get_premium_enabled')).then(({ data, error }) => {
+        if (error) return // keep last known value
+        const enabled = parsePremiumFlag(data)
+        setPremiumEnabled(enabled)
+        try { localStorage.setItem('gs_premium_enabled', String(enabled)) } catch {}
+      }).catch(() => {})
+    }
+    fetchFlag()
+    window.addEventListener('focus', fetchFlag)
+    return () => window.removeEventListener('focus', fetchFlag)
   }, [])
 
   useEffect(() => {
@@ -102,8 +125,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   async function refreshPlan() {
     try {
-      const { data: premData } = await supabase.rpc('get_premium_enabled')
-      setPremiumEnabled(premData !== false)
+      const { data: premData, error: premErr } = await supabase.rpc('get_premium_enabled')
+      if (!premErr) setPremiumEnabled(parsePremiumFlag(premData))
     } catch {}
     if (!user) { setPlan('free'); return }
     try {

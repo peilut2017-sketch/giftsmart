@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useT } from '../lib/i18n'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
+import MarketplaceAccessGate from '../components/marketplace/MarketplaceAccessGate'
 import type { Voucher } from '../types'
 import toast from 'react-hot-toast'
 
@@ -21,7 +22,7 @@ export default function BulkListPage() {
   const location = useLocation()
   const { profile } = useAuth()
   const { vouchers, loading } = useVouchers()
-  const { listForSale } = useMarketplace()
+  const { listForSale, canUseMarketplace, marketplaceMode } = useMarketplace()
   const { t } = useT()
 
   const listable = vouchers.filter(v => !v.is_archived && !v.is_locked && v.balance > 0)
@@ -59,6 +60,7 @@ export default function BulkListPage() {
     if (msg.includes('already_listed')) return t('bulk.error.already_listed')
     if (msg.includes('seller_not_verified') || msg.includes('not_verified')) return t('bulk.error.not_verified')
     if (msg.includes('pro_required')) return t('bulk.error.pro_required')
+    if (msg.includes('marketplace_closed')) return t('market.closed.toast')
     if (msg.includes('payment')) return t('bulk.no.payment.title')
     return t('bulk.result.error')
   }
@@ -109,6 +111,32 @@ export default function BulkListPage() {
     setSubmitting(false)
     const okCount = res.filter(r => r.ok).length
     if (okCount > 0) toast.success(`${okCount} ${t('bulk.published.success')}`)
+  }
+
+  // Marketplace closed / approval pending — bulk listing was a direct route that
+  // bypassed the market page's gate entirely
+  if (!canUseMarketplace) {
+    return (
+      <div className="flex-1 bg-bg" dir="rtl">
+        <div className="bg-surface border-b border-border sticky top-0 z-20">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-bg text-text2">
+              <Icon name="arrow_forward" size={20} />
+            </button>
+            <h1 className="font-bold text-lg flex-1 text-text">{t('bulk.title')}</h1>
+          </div>
+        </div>
+        {marketplaceMode === 'selective' ? (
+          <MarketplaceAccessGate />
+        ) : (
+          <div className="text-center py-20 px-6">
+            <Icon name="storefront" size={48} color="var(--c-border)" />
+            <p className="text-text font-bold mt-4">{t('market.closed.title')}</p>
+            <p className="text-sm text-text2 mt-1">{t('market.closed.desc')}</p>
+          </div>
+        )}
+      </div>
+    )
   }
 
   if (done) {

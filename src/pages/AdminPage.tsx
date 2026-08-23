@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useT } from '../lib/i18n'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
+import { parsePremiumFlag } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, getExpiryStatus, formatDate } from '../utils/helpers'
 import { Shield, Users, Star, Download, Edit2, Trash2, Plus, Globe, BarChart2, Zap, ChevronDown, ChevronUp, Crown, Ticket, MessageSquare, Send, CheckCheck, Eye, Bell, ToggleLeft, ToggleRight, Image, GripVertical, Link, Flag, ShoppingBag, BadgeCheck, Percent, CreditCard, Tag, Building2, X, UserCheck, Activity } from 'lucide-react'
@@ -644,11 +645,16 @@ export default function AdminPage() {
   async function handleSetMarketplaceMode(mode: 'enabled' | 'disabled' | 'selective') {
     setSettingMktMode(true)
     try {
-      await supabase.rpc('admin_set_marketplace_mode', { p_mode: mode })
+      // supabase.rpc resolves {error} instead of throwing — without this check a
+      // failed save (e.g. missing RPC) showed a success toast while nothing was
+      // stored, and users kept the old mode
+      const { error } = await supabase.rpc('admin_set_marketplace_mode', { p_mode: mode })
+      if (error) throw error
       setMarketplaceMode(mode)
+      try { localStorage.setItem('gs_marketplace_mode', mode) } catch { /* private mode */ }
       toast.success(t('admin.market.mode.updated'))
-    } catch {
-      toast.error(t('admin.save.error'))
+    } catch (err: any) {
+      toast.error(t('admin.save.error') + (err?.message ? `: ${err.message}` : ''))
     } finally {
       setSettingMktMode(false)
     }
@@ -657,11 +663,12 @@ export default function AdminPage() {
   async function handleAccessDecision(userId: string, status: 'approved' | 'rejected') {
     setHandlingAccess(userId)
     try {
-      await supabase.rpc('admin_set_marketplace_access', { p_user_id: userId, p_status: status })
+      const { error } = await supabase.rpc('admin_set_marketplace_access', { p_user_id: userId, p_status: status })
+      if (error) throw error
       setAccessRequests(prev => prev.map(r => r.user_id === userId ? { ...r, status } : r))
       toast.success(status === 'approved' ? t('admin.access.approved') : t('admin.access.rejected'))
-    } catch {
-      toast.error(t('admin.error'))
+    } catch (err: any) {
+      toast.error(t('admin.error') + (err?.message ? `: ${err.message}` : ''))
     } finally {
       setHandlingAccess(null)
     }
@@ -781,7 +788,7 @@ export default function AdminPage() {
     supabase.rpc('get_system_stats').then(({ data }) => { if (data) setSystemStats(data) })
     loadUsers()
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
-    supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(data !== false) })
+    supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(parsePremiumFlag(data)) })
     supabase.rpc('get_marketplace_mode').then(({ data }) => { if (data) setMarketplaceMode(data as 'enabled' | 'disabled' | 'selective') })
   }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -18,6 +19,10 @@ export default function SettingsPage() {
   const { user, profile, isAdmin } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { vouchers, archivedVouchers, isOnline, pendingOpsCount } = useVouchers()
+  const { marketplaceMode } = useMarketplace()
+  // 'disabled' hides marketplace entry points entirely (admins keep them);
+  // 'selective' keeps them visible — the market page itself shows the request-access gate
+  const showMarketEntries = isAdmin || marketplaceMode !== 'disabled'
   const { hasVault, isVaultUnlocked } = useE2EE()
   const { theme, toggleTheme } = useTheme()
   const { t } = useT()
@@ -34,7 +39,7 @@ export default function SettingsPage() {
   // eight visible titles/descs)
   const categories: CategoryDef[] = [
     { key: 'wallet',        icon: 'account_balance_wallet', title: t('hub.cat.wallet'), desc: t('hub.cat.wallet.desc'), path: '/settings/wallet', keywords: 'חברים הזמנה משפחה מועדון אשראי ערך שוק' },
-    { key: 'marketplace',   icon: 'storefront',       title: t('nav.market'),         desc: t('hub.cat.market.desc'),      path: '/market', keywords: 'ביט פייבוקס פייפאל מכירה קנייה מודעה' },
+    ...(showMarketEntries ? [{ key: 'marketplace',   icon: 'storefront',       title: t('nav.market'),         desc: t('hub.cat.market.desc'),      path: '/market', keywords: 'ביט פייבוקס פייפאל מכירה קנייה מודעה' }] : []),
     { key: 'notifications', icon: 'notifications',    title: t('settings.notifications'),      desc: t('hub.cat.notifications.desc'), path: '/settings/notifications', keywords: 'טלגרם פוש מייל אימייל תזכורת ימים תוקף' },
     { key: 'privacy',       icon: 'lock',             title: t('privacy.title'),      desc: t('hub.cat.privacy.desc'),             path: '/settings/privacy', keywords: 'ביומטריה טביעת אצבע כספת הצפנה סיסמה קוד שחזור נעילה' },
     { key: 'appearance',    icon: 'palette',          title: t('settings.appearance'),        desc: t('hub.cat.appearance.desc'),       path: '/settings/appearance', keywords: 'כהה בהיר שפה אנגלית עברית שקיפות ערכת נושא' },
@@ -213,7 +218,9 @@ export default function SettingsPage() {
                 onClick={() => navigate('/archive')}
                 right={archivedVouchers.length > 0 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-bg text-text3">{archivedVouchers.length}</span> : undefined}
               />
-              <MenuItem icon="storefront" label={t('market.marketplace')} desc={t('settings.quick.market.desc')} onClick={() => navigate('/market')} />
+              {showMarketEntries && (
+                <MenuItem icon="storefront" label={t('market.marketplace')} desc={t('settings.quick.market.desc')} onClick={() => navigate('/market')} />
+              )}
               <MenuItem icon="percent" label={t('nav.discounts')} desc={t('settings.quick.discounts.desc')} onClick={() => navigate('/discounts')} />
             </div>
           </div>
