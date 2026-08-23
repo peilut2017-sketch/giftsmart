@@ -120,9 +120,11 @@ export default function GiftPage() {
 
   async function handleClaim() {
     if (!user) {
-      // Save return URL and redirect to auth
+      // Save return URL and go to the real auth route (/auth doesn't exist — it used
+      // to fall through to the marketing landing page, stranding gift recipients).
+      // ?mode=register: a recipient claiming a gift almost never has an account yet.
       sessionStorage.setItem('gift_return', window.location.pathname)
-      navigate('/auth')
+      navigate('/login?mode=register')
       return
     }
     setClaiming(true)

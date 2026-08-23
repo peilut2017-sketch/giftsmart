@@ -140,6 +140,9 @@ export default function CheckoutPage() {
   const [copied, setCopied] = useState(false)
   const wakeLockRef = useRef<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  // Generic confirmation for the destructive share/gift actions (unshare, delete
+  // link, cancel gift) and for full redemption — all previously one silent tap
+  const [confirmAction, setConfirmAction] = useState<{ title: string; message?: string; confirmLabel?: string; onConfirm: () => void } | null>(null)
   const [archiveReason, setArchiveReason] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -473,17 +476,31 @@ export default function CheckoutPage() {
     }
   }
 
-  async function handleCancelGift(giftId: string) {
-    await cancelGift(giftId)
-    setPendingGifts(prev => prev.filter(g => g.id !== giftId))
-    toast.success(t('checkout.gift.cancelled'))
+  function handleCancelGift(giftId: string) {
+    setConfirmAction({
+      title: t('checkout.gift.cancel.confirm.title'),
+      message: t('checkout.gift.cancel.confirm.msg'),
+      onConfirm: async () => {
+        setConfirmAction(null)
+        await cancelGift(giftId)
+        setPendingGifts(prev => prev.filter(g => g.id !== giftId))
+        toast.success(t('checkout.gift.cancelled'))
+      },
+    })
   }
 
-  async function handleUnshare(email: string) {
+  function handleUnshare(email: string) {
     if (!voucher) return
-    await unshareVoucher(voucher.id, email)
-    setVoucherShares(prev => prev.filter(s => s.shared_with_email !== email))
-    toast.success(t('checkout.unshared'))
+    setConfirmAction({
+      title: t('checkout.unshare.confirm.title'),
+      message: t('checkout.unshare.confirm.msg', { email }),
+      onConfirm: async () => {
+        setConfirmAction(null)
+        await unshareVoucher(voucher.id, email)
+        setVoucherShares(prev => prev.filter(s => s.shared_with_email !== email))
+        toast.success(t('checkout.unshared'))
+      },
+    })
   }
 
   async function handleCreateShareLink(days?: number) {
@@ -518,10 +535,17 @@ export default function CheckoutPage() {
     }
   }
 
-  async function handleDeleteShareToken(token: string) {
-    await deleteShareToken(token)
-    setShareTokens(prev => prev.filter(tk => tk.token !== token))
-    toast.success(t('checkout.share.link.deleted'))
+  function handleDeleteShareToken(token: string) {
+    setConfirmAction({
+      title: t('checkout.sharelink.delete.confirm.title'),
+      message: t('checkout.sharelink.delete.confirm.msg'),
+      onConfirm: async () => {
+        setConfirmAction(null)
+        await deleteShareToken(token)
+        setShareTokens(prev => prev.filter(tk => tk.token !== token))
+        toast.success(t('checkout.share.link.deleted'))
+      },
+    })
   }
 
   function openArchiveConfirm(isFullRedemption?: boolean) {
@@ -722,8 +746,22 @@ export default function CheckoutPage() {
       onClick: () => {
         if (!valid || voucher.balance <= 0) return
         const used = hasAmount ? amount : voucher.balance
-        updateBalance(voucher.balance - used, used, customStore.trim() || null)
-        setCustomAmount(''); setCustomStore(''); setActiveTab('voucher')
+        const commit = () => {
+          updateBalance(voucher.balance - used, used, customStore.trim() || null)
+          setCustomAmount(''); setCustomStore(''); setActiveTab('voucher')
+        }
+        if (!hasAmount) {
+          // Full redemption zeroes the voucher — one FAB tap on an empty form used
+          // to do it with no confirmation at all.
+          setConfirmAction({
+            title: t('checkout.full.confirm.title'),
+            message: t('checkout.full.confirm.msg', { balance: voucher.balance.toLocaleString('he-IL') }),
+            confirmLabel: t('checkout.full'),
+            onConfirm: () => { setConfirmAction(null); commit() },
+          })
+        } else {
+          commit()
+        }
       },
     }
   } else if (currentTab === 'sell' && !noPaymentMethod) {
@@ -733,6 +771,16 @@ export default function CheckoutPage() {
   return (
     <div className="flex-1 bg-bg">
       {/* Confirm dialogs */}
+      {confirmAction && (
+        <ConfirmDialog
+          title={confirmAction.title}
+          message={confirmAction.message}
+          confirmLabel={confirmAction.confirmLabel}
+          danger
+          onConfirm={confirmAction.onConfirm}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
       {confirmArchive && (
         <ConfirmDialog
           title={t('checkout.archive.confirm.title')}
@@ -995,11 +1043,11 @@ export default function CheckoutPage() {
                           return showCvv ? display : '•'.repeat(display?.length ?? 3)
                         })()}
                       </span>
-                      <button onClick={() => setShowCvv(!showCvv)} className="text-text3 hover:text-text2">
-                        <Icon name={showCvv ? 'visibility_off' : 'visibility'} size={14} />
+                      <button onClick={() => setShowCvv(!showCvv)} aria-label={showCvv ? t('checkout.cvv.hide') : t('checkout.cvv.show')} className="text-text3 hover:text-text2 p-2.5 -m-1">
+                        <Icon name={showCvv ? 'visibility_off' : 'visibility'} size={16} />
                       </button>
-                      <button onClick={copyCvv} className="text-text3 hover:text-text2">
-                        <Icon name="content_copy" size={14} />
+                      <button onClick={copyCvv} aria-label={t('checkout.cvv.copy')} className="text-text3 hover:text-text2 p-2.5 -m-1">
+                        <Icon name="content_copy" size={16} />
                       </button>
                     </>
                   )}

@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { formatCurrency, getExpiryStatus } from '../utils/helpers'
 import Icon from '../components/ui/Icon'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import ConfirmDialog from '../components/ConfirmDialog'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -19,6 +21,7 @@ export default function StatsPage() {
   const { t } = useT()
   usePageView('stats')
   const [showSavingsInfo, setShowSavingsInfo] = useState(false)
+  const [showCsvConfirm, setShowCsvConfirm] = useState(false)
 
   const stats = useMemo(() => {
     const active = vouchers.filter(v => !v.is_archived)
@@ -174,9 +177,10 @@ export default function StatsPage() {
 
       rows.push([t('stats.export.vouchers'), '', '', '', ''])
       rows.push([t('stats.export.col.store'), t('stats.export.col.code'), t('stats.export.col.balance'), t('stats.export.col.amount'), t('stats.export.col.expiry')])
+      let omitted = 0
       activeVouchers.forEach(v => {
         const isEncrypted = v.is_e2ee && isEncryptedField(v.code)
-        if (isEncrypted && !isVaultUnlocked) return
+        if (isEncrypted && !isVaultUnlocked) { omitted++; return }
         const decrypted = isEncrypted ? decryptedMap.get(v.id) : null
         const code = decrypted ? decrypted.code : v.code
         rows.push([
@@ -184,6 +188,8 @@ export default function StatsPage() {
           v.expiry_date ? new Date(v.expiry_date).toLocaleDateString('he-IL') : '',
         ])
       })
+      // The file must say rows are missing — a silent skip reads as a complete export
+      if (omitted > 0) rows.push([t('stats.export.omitted', { count: omitted }), '', '', '', ''])
 
       const csvContent = '﻿' + rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -292,7 +298,7 @@ export default function StatsPage() {
             <div className="text-[13px] text-text3 mt-0.5">{t('stats.subtitle')}</div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={exportCSV} className="flex items-center gap-1.5 text-sm bg-primary-light text-primary-dark px-3 py-2 rounded-xl font-medium hover:opacity-90">
+            <button onClick={() => setShowCsvConfirm(true)} className="flex items-center gap-1.5 text-sm bg-primary-light text-primary-dark px-3 py-2 rounded-xl font-medium hover:opacity-90">
               <Icon name="download" size={16} /> CSV
             </button>
             {limits.canExport ? (
@@ -308,6 +314,16 @@ export default function StatsPage() {
         </div>
       </div>
 
+      {vouchers.length === 0 && archivedVouchers.length === 0 ? (
+        <div className="text-center py-20 px-6">
+          <Icon name="monitoring" size={48} color="var(--c-border)" />
+          <p className="text-text font-bold mt-4">{t('stats.empty.title')}</p>
+          <p className="text-sm text-text2 mt-1">{t('stats.empty.hint')}</p>
+          <Link to="/" className="inline-block mt-5 px-6 py-3 rounded-2xl bg-primary text-white text-sm font-semibold">
+            {t('stats.empty.cta')}
+          </Link>
+        </div>
+      ) : (
       <div className="p-4 pb-28 space-y-4">
         {/* Total balance */}
         <div className="rounded-[20px] p-6 text-white" style={{ background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary) 60%, #1a9e90 100%)' }}>
@@ -376,7 +392,7 @@ export default function StatsPage() {
           <StatCard icon="account_balance_wallet" label={t('stats.avg.voucher')} value={formatCurrency(stats.avgBalance)} color="var(--c-primary)" />
           <StatCard icon="warning" label={t('stats.expiring.14')} value={stats.expiringSoon} color={stats.expiringSoon > 0 ? 'var(--c-warning)' : 'var(--c-text3)'} />
           <StatCard icon="archive" label={t('stats.archived.count')} value={stats.archivedCount} color="var(--c-text3)" />
-          <StatCard icon="trending_up" label={t('stats.expired.active')} value={stats.expired} color={stats.expired > 0 ? 'var(--c-error)' : 'var(--c-text3)'} />
+          <StatCard icon="event_busy" label={t('stats.expired.active')} value={stats.expired} color={stats.expired > 0 ? 'var(--c-error)' : 'var(--c-text3)'} />
           <StatCard icon="group" label={t('stats.shared.count')} value={stats.shared} color="#3b82f6" />
           <StatCard icon="shopping_bag" label={t('stats.near.empty')} value={stats.nearZero} color={stats.nearZero > 0 ? 'var(--c-gold)' : 'var(--c-text3)'} sub={stats.nearZero > 0 ? t('stats.near.empty.hint') : undefined} />
           {stats.giftVouchers > 0 && <StatCard icon="redeem" label={t('stats.gift.count')} value={stats.giftVouchers} color="#ec4899" />}
@@ -424,7 +440,6 @@ export default function StatsPage() {
                   {stats.categoryData.map((_entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                <Legend formatter={(value) => <span className="text-xs">{value}</span>} />
               </PieChart>
             </ResponsiveContainer>
             <div className="mt-2 space-y-2">
@@ -442,6 +457,17 @@ export default function StatsPage() {
           </div>
         )}
       </div>
+      )}
+
+      {showCsvConfirm && (
+        <ConfirmDialog
+          title={t('stats.export.csv.confirm.title')}
+          message={t('stats.export.csv.confirm.message')}
+          confirmLabel={t('stats.export.csv.confirm.cta')}
+          onConfirm={() => { setShowCsvConfirm(false); exportCSV() }}
+          onCancel={() => setShowCsvConfirm(false)}
+        />
+      )}
     </div>
   )
 }

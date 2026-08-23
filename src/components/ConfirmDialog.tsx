@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { useT } from '../lib/i18n'
 
 interface Props {
   title: string
@@ -15,13 +16,14 @@ interface Props {
 export default function ConfirmDialog({
   title,
   message,
-  confirmLabel = 'אישור',
-  cancelLabel = 'ביטול',
+  confirmLabel,
+  cancelLabel,
   danger = false,
   onConfirm,
   onCancel,
   children,
 }: Props) {
+  const { t } = useT()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -60,8 +62,9 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4"
-      aria-hidden="true"
+      // Topmost layer: a confirmation must never render UNDER the sheet (z-100) or
+      // vault modals (z-110) that opened it
+      className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4"
       onClick={onCancel}
     >
       <div
@@ -70,30 +73,30 @@ export default function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-title"
         aria-describedby={message ? 'confirm-desc' : undefined}
-        className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-slide-up"
+        className="bg-surface rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
-        <h2 id="confirm-title" className="text-lg font-bold text-gray-900 mb-1">{title}</h2>
-        {message && <p id="confirm-desc" className="text-sm text-gray-500 mb-3">{message}</p>}
+        <h2 id="confirm-title" className="text-lg font-bold text-text mb-1">{title}</h2>
+        {message && <p id="confirm-desc" className="text-sm text-text2 mb-3">{message}</p>}
         {children && <div className="mb-4">{children}</div>}
         {!message && !children && <div className="mb-4" />}
         <div className="flex gap-3">
           <button
             ref={cancelRef}
             onClick={onCancel}
-            className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl font-medium text-sm hover:bg-gray-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+            className="flex-1 py-3 bg-bg text-text2 rounded-2xl font-medium text-sm hover:bg-border/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
-            {cancelLabel}
+            {cancelLabel ?? t('app.cancel')}
           </button>
           <button
             onClick={onConfirm}
             className={`flex-1 py-3 rounded-2xl font-medium text-sm text-white transition-colors focus-visible:outline-none focus-visible:ring-2 ${
               danger
-                ? 'bg-red-500 hover:bg-red-600 focus-visible:ring-red-400'
-                : 'bg-green-500 hover:bg-green-600 focus-visible:ring-green-400'
+                ? 'bg-error hover:brightness-110 focus-visible:ring-error/50'
+                : 'bg-primary hover:brightness-110 focus-visible:ring-primary/50'
             }`}
           >
-            {confirmLabel}
+            {confirmLabel ?? t('app.confirm')}
           </button>
         </div>
       </div>

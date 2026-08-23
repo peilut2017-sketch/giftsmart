@@ -9,11 +9,26 @@ import type { MarketplaceListing, MarketplacePurchase, ListingConversation, Watc
 import { PAYMENT_METHOD_LABELS } from '../types'
 import { supabase } from '../lib/supabase'
 import ChatModal from '../components/ChatModal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
 import BottomSheet from '../components/ui/BottomSheet'
 import toast from 'react-hot-toast'
 import { usePageView } from '../hooks/usePageView'
+
+// A failed fetch must not masquerade as "no listings" — render a retry instead
+function ErrorRetry({ onRetry }: { onRetry: () => void }) {
+  const { t } = useT()
+  return (
+    <div className="text-center py-12 space-y-3">
+      <Icon name="wifi_off" size={40} color="var(--c-border)" />
+      <p className="font-medium text-text2">{t('market.load.error')}</p>
+      <button onClick={onRetry} className="px-5 py-2.5 rounded-2xl bg-primary-light text-primary-dark text-sm font-bold">
+        {t('app.retry')}
+      </button>
+    </div>
+  )
+}
 
 // ─── Rating Stars ────────────────────────────────────────────────────────────
 function StarRating({ value, max = 5, onChange }: { value: number; max?: number; onChange?: (v: number) => void }) {
@@ -843,15 +858,29 @@ export default function MarketplacePage() {
   const {
     listings, myListings, myPurchases,
     loadingListings, loadingMyListings, loadingMyPurchases,
+    listingsError, myListingsError, myPurchasesError, invalidateAndRefetch,
     fetchListings, fetchMyListings, fetchMyPurchases,
     removeFromSale, confirmPaymentReceived, cancelPurchase,
     unreadByListing, updateListingPrice,
     marketplaceMode, myAccessStatus,
   } = useMarketplace()
 
-  const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>(
-    (location.state as { initialTab?: string } | null)?.initialTab as 'purchases' | undefined ?? 'all'
-  )
+  // Promise-based confirmation so row components' own busy spinners keep working:
+  // the returned promise resolves after the user decides AND the action finishes.
+  const [confirmState, setConfirmState] = useState<{
+    title: string; message?: string; confirmLabel?: string
+    action: () => Promise<void> | void; resolve: () => void
+  } | null>(null)
+  function withConfirm(title: string, message: string | undefined, action: () => Promise<void> | void, confirmLabel?: string): Promise<void> {
+    return new Promise(resolve => setConfirmState({ title, message, confirmLabel, action, resolve }))
+  }
+
+  const [tab, setTab] = useState<'all' | 'mine' | 'purchases' | 'watchlist'>(() => {
+    // Validate router state instead of blind-casting — an unexpected value used to
+    // select a tab that matches none of the four render branches (blank screen)
+    const raw = (location.state as { initialTab?: string } | null)?.initialTab
+    return raw === 'mine' || raw === 'purchases' || raw === 'watchlist' ? raw : 'all'
+  })
   const [search, setSearch] = useState('')
   type MarketSortKey = 'discount' | 'balance' | 'expiry' | 'newest'
   const [sortKey, setSortKey] = useState<MarketSortKey>('newest')
@@ -968,7 +997,9 @@ export default function MarketplacePage() {
         })
       }
     }
-    else fetchMyPurchases()
+    // Only the purchases tab needs purchases (the bare `else` used to fire this
+    // unrelated fetch when opening the WATCHLIST tab too)
+    else if (tab === 'purchases') fetchMyPurchases()
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -1037,6 +1068,20 @@ export default function MarketplacePage() {
 
   return (
     <div className="flex-1 bg-bg" dir="rtl">
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          danger
+          onConfirm={async () => {
+            const c = confirmState
+            setConfirmState(null)
+            try { await c.action() } finally { c.resolve() }
+          }}
+          onCancel={() => { confirmState.resolve(); setConfirmState(null) }}
+        />
+      )}
       {/* Header */}
       <div className="sticky top-0 z-20 bg-surface border-b border-border">
         <div className="px-5 pt-4">
@@ -1147,6 +1192,8 @@ export default function MarketplacePage() {
                 <div className="flex justify-center py-12">
                   <Icon name="progress_activity" size={24} color="var(--c-primary)" className="animate-spin" />
                 </div>
+              ) : listingsError && listings.length === 0 ? (
+                <ErrorRetry onRetry={() => invalidateAndRefetch('listings')} />
               ) : sorted.length === 0 ? (
                 <div className="text-center py-12 text-text3 space-y-2">
                   <Icon name="sell" size={40} color="var(--c-border)" />
@@ -1244,11 +1291,11 @@ export default function MarketplacePage() {
                         <p className="text-xs text-text3 truncate">{m.value}</p>
                       </div>
                       <button
-                        onClick={() => removePaymentMethod(i)}
-                        className="p-1.5 rounded-lg text-text3 hover:text-error"
+                        onClick={() => withConfirm(t('market.payment.remove.confirm.title'), undefined, () => removePaymentMethod(i))}
+                        className="p-2.5 rounded-lg text-text3 hover:text-error"
                         aria-label={t('market.payment.remove.aria')}
                       >
-                        <Icon name="delete" size={16} />
+                        <Icon name="delete" size={18} />
                       </button>
                     </div>
                   ))}
@@ -1299,6 +1346,8 @@ export default function MarketplacePage() {
               <div className="flex justify-center py-12">
                 <Icon name="progress_activity" size={24} color="var(--c-primary)" className="animate-spin" />
               </div>
+            ) : myListingsError && myListings.length === 0 ? (
+              <ErrorRetry onRetry={() => invalidateAndRefetch('myListings')} />
             ) : myListings.length === 0 ? (
               <div className="text-center py-12 text-text3 space-y-2">
                 <Icon name="shopping_bag" size={40} color="var(--c-border)" />
@@ -1311,14 +1360,23 @@ export default function MarketplacePage() {
                   key={l.id}
                   listing={l}
                   unreadCount={unreadByListing[l.id] ?? 0}
-                  onRemove={async () => {
-                    try { await removeFromSale(l.id); toast.success(t('market.listing.removed')) }
-                    catch { toast.error(t('market.listing.remove.error')) }
-                  }}
-                  onConfirm={async () => {
-                    try { await confirmPaymentReceived(l.purchase_id!); toast.success(t('market.listing.confirmed')) }
-                    catch { toast.error(t('market.listing.confirm.error')) }
-                  }}
+                  onRemove={() => withConfirm(
+                    t('market.remove.confirm.title'),
+                    t('market.remove.confirm.msg'),
+                    async () => {
+                      try { await removeFromSale(l.id); toast.success(t('market.listing.removed')) }
+                      catch { toast.error(t('market.listing.remove.error')) }
+                    },
+                  )}
+                  onConfirm={() => withConfirm(
+                    t('market.confirm.received.confirm.title'),
+                    t('market.confirm.received.confirm.msg'),
+                    async () => {
+                      try { await confirmPaymentReceived(l.purchase_id!); toast.success(t('market.listing.confirmed')) }
+                      catch { toast.error(t('market.listing.confirm.error')) }
+                    },
+                    t('market.confirm.received'),
+                  )}
                   onReport={() => setReportTarget({
                     userId: l.buyer_id || '',
                     name: l.buyer_name || l.buyer_email || t('market.buyer'),
@@ -1424,8 +1482,9 @@ export default function MarketplacePage() {
                 </div>
                 <button
                   disabled={deletingWatch === w.id}
-                  onClick={() => deleteWatchItem(w.id)}
-                  className="p-2 rounded-xl border border-error/30 text-error disabled:opacity-50"
+                  onClick={() => withConfirm(t('market.watch.delete.confirm.title'), undefined, () => deleteWatchItem(w.id))}
+                  aria-label={t('app.delete')}
+                  className="p-2.5 rounded-xl border border-error/30 text-error disabled:opacity-50"
                 >
                   {deletingWatch === w.id ? <Icon name="progress_activity" size={16} className="animate-spin" /> : <Icon name="delete" size={16} />}
                 </button>
@@ -1441,6 +1500,8 @@ export default function MarketplacePage() {
               <div className="flex justify-center py-12">
                 <Icon name="progress_activity" size={24} color="var(--c-primary)" className="animate-spin" />
               </div>
+            ) : myPurchasesError && myPurchases.length === 0 ? (
+              <ErrorRetry onRetry={() => invalidateAndRefetch('myPurchases')} />
             ) : myPurchases.length === 0 ? (
               <div className="text-center py-12 text-text3 space-y-2">
                 <Icon name="shopping_bag" size={40} color="var(--c-border)" />
@@ -1458,10 +1519,14 @@ export default function MarketplacePage() {
                     name: p.seller_name || p.seller_email || t('market.seller'),
                     purchaseId: p.purchase_id,
                   })}
-                  onCancel={async () => {
-                    try { await cancelPurchase(p.purchase_id); toast.success(t('market.purchase.cancelled')) }
-                    catch { toast.error(t('market.purchase.cancel.error')) }
-                  }}
+                  onCancel={() => withConfirm(
+                    t('market.purchase.cancel.confirm.title'),
+                    t('market.purchase.cancel.confirm.msg'),
+                    async () => {
+                      try { await cancelPurchase(p.purchase_id); toast.success(t('market.purchase.cancelled')) }
+                      catch { toast.error(t('market.purchase.cancel.error')) }
+                    },
+                  )}
                   onChat={() => {
                     if (!p.seller_id) return
                     setChatTarget({

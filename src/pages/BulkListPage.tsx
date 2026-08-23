@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
@@ -20,7 +20,7 @@ export default function BulkListPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { profile } = useAuth()
-  const { vouchers } = useVouchers()
+  const { vouchers, loading } = useVouchers()
   const { listForSale } = useMarketplace()
   const { t } = useT()
 
@@ -30,15 +30,38 @@ export default function BulkListPage() {
     (location.state as { voucherIds?: string[] } | null)?.voucherIds ?? []
   )
 
-  const [entries, setEntries] = useState<VoucherEntry[]>(
-    listable.map(v => ({ voucher: v, selected: preselectedIds.has(v.id), price: '', description: '' }))
-  )
+  const [entries, setEntries] = useState<VoucherEntry[]>([])
+  // Keep entries in sync with the async voucher load — the old one-shot useState
+  // snapshot froze whatever was loaded at first render, so a cold load / refresh /
+  // deep link rendered "no vouchers to list" forever. User-typed prices survive.
+  useEffect(() => {
+    setEntries(prev => {
+      const prevById = new Map(prev.map(e => [e.voucher.id, e]))
+      return listable.map(v => {
+        const existing = prevById.get(v.id)
+        return existing
+          ? { ...existing, voucher: v }
+          : { voucher: v, selected: preselectedIds.has(v.id), price: '', description: '' }
+      })
+    })
+  }, [vouchers]) // eslint-disable-line react-hooks/exhaustive-deps
   const [submitting, setSubmitting] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<{ id: string; store: string; ok: boolean; error?: string }[]>([])
   const [done, setDone] = useState(false)
 
   const hasPaymentMethod = (profile?.marketplace_payment_methods?.length ?? 0) > 0
   const selected = entries.filter(e => e.selected)
+
+  // Raw Postgres exception text is not a user-facing message
+  function friendlyError(raw?: string): string {
+    const msg = (raw || '').toLowerCase()
+    if (msg.includes('already_listed')) return t('bulk.error.already_listed')
+    if (msg.includes('seller_not_verified') || msg.includes('not_verified')) return t('bulk.error.not_verified')
+    if (msg.includes('pro_required')) return t('bulk.error.pro_required')
+    if (msg.includes('payment')) return t('bulk.no.payment.title')
+    return t('bulk.result.error')
+  }
 
   function toggleAll() {
     const allSelected = entries.every(e => e.selected)
@@ -61,21 +84,25 @@ export default function BulkListPage() {
     if (selected.length === 0) { toast.error(t('bulk.select.required')); return }
     const invalid = selected.filter(e => !e.price || parseFloat(e.price) <= 0)
     if (invalid.length > 0) { toast.error(t('bulk.price.required')); return }
+    // max= on the input doesn't block pasted/typed values — enforce here too
+    const overpriced = selected.filter(e => parseFloat(e.price) > e.voucher.balance)
+    if (overpriced.length > 0) { toast.error(t('bulk.price.exceeds', { store: overpriced[0].voucher.store_name })); return }
     if (!hasPaymentMethod) {
       toast.error(t('bulk.payment.required'))
-      navigate('/settings')
       return
     }
 
     setSubmitting(true)
+    setProgress(0)
     const res: typeof results = []
     for (const entry of selected) {
       try {
         await listForSale(entry.voucher.id, parseFloat(entry.price), entry.description || undefined)
         res.push({ id: entry.voucher.id, store: entry.voucher.store_name, ok: true })
       } catch (e: unknown) {
-        res.push({ id: entry.voucher.id, store: entry.voucher.store_name, ok: false, error: (e as Error)?.message })
+        res.push({ id: entry.voucher.id, store: entry.voucher.store_name, ok: false, error: friendlyError((e as Error)?.message) })
       }
+      setProgress(res.length)
     }
     setResults(res)
     setDone(true)
@@ -105,7 +132,9 @@ export default function BulkListPage() {
               </div>
             </div>
           ))}
-          <Button onClick={() => navigate('/market/mine')} fullWidth className="mt-2">
+          {/* /market/mine was never a registered route — it fell through the catch-all
+              straight to the home wallet. Route to /market with the mine tab instead. */}
+          <Button onClick={() => navigate('/market', { state: { initialTab: 'mine' } })} fullWidth className="mt-2">
             {t('bulk.view.my.listings')}
           </Button>
         </div>
@@ -138,8 +167,10 @@ export default function BulkListPage() {
         </div>
       )}
 
-      <div className="p-4 pb-32 space-y-3">
-        {listable.length === 0 ? (
+      <div className="p-4 pb-40 space-y-3">
+        {loading && listable.length === 0 ? (
+          <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-24 gs-skeleton rounded-card" />)}</div>
+        ) : listable.length === 0 ? (
           <div className="text-center py-12 text-text3 space-y-2">
             <Icon name="shopping_bag" size={40} color="var(--c-border)" />
             <p className="font-medium">{t('bulk.no.vouchers')}</p>
@@ -167,8 +198,8 @@ export default function BulkListPage() {
                 >
                   {/* Voucher header with checkbox */}
                   <div className="flex items-start gap-3">
-                    <button onClick={() => toggle(v.id)} className="mt-0.5 shrink-0">
-                      <Icon name={entry.selected ? 'check_box' : 'check_box_outline_blank'} size={20} color={entry.selected ? 'var(--c-primary)' : 'var(--c-text3)'} />
+                    <button onClick={() => toggle(v.id)} role="checkbox" aria-checked={entry.selected} aria-label={v.store_name} className="shrink-0 p-2 -m-1.5">
+                      <Icon name={entry.selected ? 'check_box' : 'check_box_outline_blank'} size={22} color={entry.selected ? 'var(--c-primary)' : 'var(--c-text3)'} />
                     </button>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-text truncate">{v.store_name}</p>
@@ -189,7 +220,7 @@ export default function BulkListPage() {
                           value={entry.price}
                           onChange={e => setPrice(v.id, e.target.value)}
                           placeholder={`${t('bulk.price.up.to')} ₪${v.balance}`}
-                          className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          className="w-full border border-border rounded-xl px-3 py-2.5 text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                       </div>
                       <div>
@@ -199,7 +230,7 @@ export default function BulkListPage() {
                           value={entry.description}
                           onChange={e => setDescription(v.id, e.target.value)}
                           placeholder={t('bulk.description.placeholder')}
-                          className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          className="w-full border border-border rounded-xl px-3 py-2.5 text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                       </div>
                     </div>
@@ -214,8 +245,13 @@ export default function BulkListPage() {
       {/* Fixed bottom submit */}
       {selected.length > 0 && (
         <div className="fixed left-0 right-0 px-4 pb-2 pt-3" style={{ bottom: 'var(--nav-h)', background: 'linear-gradient(to top, var(--c-bg), transparent)' }}>
-          <Button onClick={submit} disabled={submitting} loading={submitting} fullWidth size="lg">
-            {submitting ? `${t('bulk.publishing')}...` : (
+          <Button onClick={submit} disabled={submitting} fullWidth size="lg">
+            {submitting ? (
+              <span className="inline-flex items-center gap-2">
+                <Icon name="progress_activity" size={20} className="animate-spin" />
+                {t('bulk.publishing.progress', { done: progress, total: selected.length })}
+              </span>
+            ) : (
               <>
                 <Icon name="shopping_bag" size={20} />
                 {t('bulk.publish')} {selected.length} {t('bulk.vouchers')}

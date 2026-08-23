@@ -15,6 +15,13 @@ interface MarketplaceContextValue {
   loadingListings: boolean
   loadingMyListings: boolean
   loadingMyPurchases: boolean
+  // A failed fetch is distinguishable from a genuinely empty marketplace — pages
+  // render a retry state instead of "אין מודעות" on a network drop.
+  listingsError: boolean
+  myListingsError: boolean
+  myPurchasesError: boolean
+  // Force-refresh past the 60s TTL (pull-to-refresh / retry buttons)
+  invalidateAndRefetch: (what: 'listings' | 'myListings' | 'myPurchases') => Promise<void>
 
   // Actions
   fetchListings: (search?: string, minBalance?: number, maxPrice?: number) => Promise<void>
@@ -68,6 +75,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [loadingListings, setLoadingListings] = useState(false)
   const [loadingMyListings, setLoadingMyListings] = useState(false)
   const [loadingMyPurchases, setLoadingMyPurchases] = useState(false)
+  const [listingsError, setListingsError] = useState(false)
+  const [myListingsError, setMyListingsError] = useState(false)
+  const [myPurchasesError, setMyPurchasesError] = useState(false)
 
   const fetchedAt = useRef<{ listings: number; myListings: number; myPurchases: number }>({
     listings: 0, myListings: 0, myPurchases: 0,
@@ -131,9 +141,11 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       })
       if (error) throw error
       setListings((data as MarketplaceListing[]) || [])
+      setListingsError(false)
       if (isDefaultQuery) fetchedAt.current.listings = Date.now()
     } catch (err) {
       console.error('[marketplace] fetchListings error', err)
+      setListingsError(true)
     } finally {
       setLoadingListings(false)
     }
@@ -148,9 +160,11 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.rpc('get_my_listings')
       if (error) throw error
       setMyListings((data as MarketplaceListing[]) || [])
+      setMyListingsError(false)
       fetchedAt.current.myListings = Date.now()
     } catch (err) {
       console.error('[marketplace] fetchMyListings error', err)
+      setMyListingsError(true)
     } finally {
       setLoadingMyListings(false)
     }
@@ -165,13 +179,22 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.rpc('get_my_purchases')
       if (error) throw error
       setMyPurchases((data as MarketplacePurchase[]) || [])
+      setMyPurchasesError(false)
       fetchedAt.current.myPurchases = Date.now()
     } catch (err) {
       console.error('[marketplace] fetchMyPurchases error', err)
+      setMyPurchasesError(true)
     } finally {
       setLoadingMyPurchases(false)
     }
   }, [user])
+
+  const invalidateAndRefetch = useCallback(async (what: 'listings' | 'myListings' | 'myPurchases') => {
+    fetchedAt.current[what] = 0
+    if (what === 'listings') await fetchListings()
+    else if (what === 'myListings') await fetchMyListings()
+    else await fetchMyPurchases()
+  }, [fetchListings, fetchMyListings, fetchMyPurchases])
 
   const listForSale = useCallback(async (voucherId: string, askingPrice: number, description?: string) => {
     const { data, error } = await supabase.rpc('list_voucher_for_sale', {
@@ -254,6 +277,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       p_comment: comment || null,
     })
     if (error) throw error
+    // Invalidate first — a rating is almost always submitted seconds after the
+    // purchases tab loaded, so without this the TTL cache made the refetch a no-op
+    // and the "rate seller" button stayed un-flipped for up to a minute.
+    fetchedAt.current.myPurchases = 0
     await fetchMyPurchases()
   }, [fetchMyPurchases])
 
@@ -495,6 +522,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         loadingListings,
         loadingMyListings,
         loadingMyPurchases,
+        listingsError,
+        myListingsError,
+        myPurchasesError,
+        invalidateAndRefetch,
         fetchListings,
         fetchMyListings,
         fetchMyPurchases,

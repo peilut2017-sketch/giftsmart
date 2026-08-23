@@ -143,6 +143,19 @@ export default function ActivityLog() {
   const [expanded, setExpanded] = useState(false)
   const [undoingId, setUndoingId] = useState<string | null>(null)
 
+  // The plan window filters what's shown — every count and pagination decision
+  // must use the filtered list, or the header advertises rows the user can't see.
+  const cutoffMs = limits.historyDays === Infinity
+    ? -Infinity
+    : Date.now() - limits.historyDays * 24 * 60 * 60 * 1000
+  const visibleEntries = entries.filter(e => new Date(e.created_at).getTime() >= cutoffMs)
+  const oldestLoadedMs = entries.length > 0
+    ? new Date(entries[entries.length - 1].created_at).getTime()
+    : Infinity
+  // More rows may exist server-side, and (for free plans) the ones we'd fetch
+  // can still fall inside the visible window as long as the oldest loaded row does.
+  const canLoadMore = entries.length >= limit && oldestLoadedMs >= cutoffMs
+
   async function load(l = limit) {
     setLoading(true)
     setTableError(false)
@@ -215,7 +228,7 @@ export default function ActivityLog() {
         <div className="flex-1 text-right">
           <p className="text-sm font-medium text-gray-800">{t('log.title')}</p>
           <p className="text-xs text-gray-400">
-            {expanded && entries.length > 0 ? `${entries.length} ${t('log.records')}` : t('log.subtitle')}
+            {expanded && visibleEntries.length > 0 ? `${visibleEntries.length} ${t('log.records')}` : t('log.subtitle')}
           </p>
         </div>
         {expanded
@@ -248,29 +261,17 @@ export default function ActivityLog() {
               <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5 text-orange-500" />
               </div>
-              <p className="text-sm font-medium text-gray-700">{t('log.table.missing')}</p>
-              <p className="text-xs text-gray-400">{t('log.table.run.sql')}</p>
-              <pre className="w-full text-left bg-gray-50 rounded-xl p-3 text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
-{`CREATE TABLE activity_log (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  wallet_id UUID REFERENCES wallets(id) ON DELETE SET NULL,
-  action TEXT NOT NULL,
-  voucher_id UUID,
-  voucher_name TEXT NOT NULL,
-  details JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX activity_log_user_idx
-  ON activity_log(user_id, created_at DESC);
-ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage own activity log"
-  ON activity_log FOR ALL
-  USING (user_id = auth.uid());`}
-              </pre>
+              <p className="text-sm font-medium text-gray-700">{t('log.unavailable')}</p>
+              <p className="text-xs text-gray-400">{t('log.unavailable.hint')}</p>
+              <button
+                onClick={() => load(limit)}
+                className="px-4 py-2 rounded-xl bg-gray-100 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                {t('app.retry')}
+              </button>
             </div>
 
-          ) : entries.length === 0 ? (
+          ) : visibleEntries.length === 0 ? (
             <div className="py-10 flex flex-col items-center gap-2 text-center">
               <History className="w-8 h-8 text-gray-300" />
               <p className="text-sm text-gray-500">{t('log.empty')}</p>
@@ -279,12 +280,7 @@ CREATE POLICY "Users can manage own activity log"
 
           ) : (
             <div className="divide-y divide-gray-50">
-              {entries
-                .filter(e => {
-                  if (limits.historyDays === Infinity) return true
-                  const cutoff = Date.now() - limits.historyDays * 24 * 60 * 60 * 1000
-                  return new Date(e.created_at).getTime() >= cutoff
-                })
+              {visibleEntries
                 .map(entry => {
                   const meta = ACTION_META[entry.action] ?? FALLBACK_META
                   const subtitle = buildSubtitle(entry, t)
@@ -309,32 +305,33 @@ CREATE POLICY "Users can manage own activity log"
                           onClick={() => handleUndo(entry)}
                           disabled={undoingId === entry.id}
                           className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-green-700 disabled:opacity-40 transition-colors"
-                          aria-label={`שחזר פעולה: ${t(meta.labelKey)}`}
+                          aria-label={t('log.undo.aria', { action: meta.labelKey ? t(meta.labelKey) : entry.action })}
                         >
                           <Undo2 className={`w-3.5 h-3.5 ${undoingId === entry.id ? 'animate-spin' : ''}`} />
-                          שחזר
+                          {t('log.undo.button')}
                         </button>
                       )}
                     </div>
                   )
                 })}
 
-              {limits.historyDays < Infinity && (
+              {canLoadMore && (
                 <button
-                  onClick={() => openUpgradeSheet('שדרג לPro לצפייה בכל ההיסטוריה')}
-                  className="w-full flex items-center justify-center gap-2 py-3 text-xs text-amber-600 hover:bg-amber-50 transition-colors"
+                  onClick={() => { const next = limit + PAGE; setLimit(next); load(next) }}
+                  disabled={loading}
+                  className="w-full py-3 text-xs text-green-600 hover:bg-green-50 disabled:opacity-40 transition-colors"
                 >
-                  <Zap className="w-3.5 h-3.5" />
-                  מציג {limits.historyDays} ימים אחרונים בלבד — שדרג לצפייה בכל ההיסטוריה
+                  {t('log.load.more')}
                 </button>
               )}
 
-              {limits.historyDays === Infinity && entries.length >= limit && (
+              {limits.historyDays < Infinity && (
                 <button
-                  onClick={() => { const next = limit + PAGE; setLimit(next); load(next) }}
-                  className="w-full py-3 text-xs text-green-600 hover:bg-green-50 transition-colors"
+                  onClick={() => openUpgradeSheet(t('log.upgrade.reason'))}
+                  className="w-full flex items-center justify-center gap-2 py-3 text-xs text-amber-600 hover:bg-amber-50 transition-colors"
                 >
-                  טען עוד
+                  <Zap className="w-3.5 h-3.5" />
+                  {t('log.window.notice', { days: limits.historyDays })}
                 </button>
               )}
             </div>

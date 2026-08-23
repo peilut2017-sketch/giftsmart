@@ -101,6 +101,8 @@ export function useNotificationsFeed() {
 
   const [rawItems, setRawItems] = useState<NotificationItem[]>(rawCache?.items ?? [])
   const [loading, setLoading] = useState(!rawCache)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [dismissed, setDismissed] = useState<Set<string>>(() => user ? readIdSet(dismissedKey(user.id)) : new Set())
   // Captured once on load — which ids were unseen *before* this visit. Kept stable
   // for the lifetime of this hook instance so highlighted items don't un-highlight
@@ -121,14 +123,23 @@ export function useNotificationsFeed() {
         const items = await inflight
         rawCache = { items, at: Date.now() }
         setRawItems(items)
+        setLoadError(false)
       } catch (err) {
         console.error('[notifications] fetch error', err)
+        setLoadError(true)
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refresh = useCallback(() => {
+    rawCache = null
+    setLoading(true)
+    setLoadError(false)
+    setReloadKey(k => k + 1)
+  }, [])
 
   const computedItems = useMemo(() => {
     const now = Date.now()
@@ -177,6 +188,18 @@ export function useNotificationsFeed() {
     writeIdSet(seenKey(user.id), seen)
   }, [user, computedItems])
 
+  // Manual "mark all as read": persists like markAllSeen but also clears the
+  // stable unseen snapshot so highlights drop immediately, not on next visit.
+  const [, bumpUnseen] = useState(0)
+  const markAllRead = useCallback(() => {
+    if (!user) return
+    const seen = readIdSet(seenKey(user.id))
+    computedItems.forEach(i => seen.add(i.id))
+    writeIdSet(seenKey(user.id), seen)
+    initialUnseenRef.current = new Set()
+    bumpUnseen(n => n + 1)
+  }, [user, computedItems])
+
   const dismiss = useCallback((id: string) => {
     if (!user) return
     setDismissed(prev => {
@@ -187,5 +210,15 @@ export function useNotificationsFeed() {
     })
   }, [user])
 
-  return { items, loading, unseenCount, markAllSeen, dismiss }
+  const undoDismiss = useCallback((id: string) => {
+    if (!user) return
+    setDismissed(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      writeIdSet(dismissedKey(user.id), next)
+      return next
+    })
+  }, [user])
+
+  return { items, loading, loadError, refresh, unseenCount, markAllSeen, markAllRead, dismiss, undoDismiss }
 }

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Check, AlertCircle, Info } from 'lucide-react'
 
-const LAST_UPDATED = 'אפריל 2026'
+const LAST_UPDATED = 'אוגוסט 2026'
 
 export default function AccessibilityPage() {
   const navigate = useNavigate()
@@ -33,7 +33,7 @@ export default function AccessibilityPage() {
             הבינלאומיות <strong>WCAG 2.1 ברמת AA</strong>.
           </p>
           <p className="text-sm text-gray-500 mt-2">
-            הצהרה זו עודכנה לאחרונה: <time dateTime="2026-04">{LAST_UPDATED}</time>
+            הצהרה זו עודכנה לאחרונה: <time dateTime="2026-08">{LAST_UPDATED}</time>
           </p>
         </div>
 
@@ -123,13 +123,9 @@ export default function AccessibilityPage() {
                 accessibility@giftsmart.co.il
               </a>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 w-12">טלפון:</span>
-              <span className="text-gray-400 text-sm">ראו פרטים באתר</span>
-            </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3">
-            * יש לעדכן את פרטי רכז הנגישות בהתאם לפרטי הארגון בפועל.
+          <p className="text-xs text-gray-500 mt-3">
+            נשתדל להשיב לכל פנייה בתוך 48 שעות.
           </p>
         </div>
 

@@ -244,12 +244,18 @@ function BuyModal({
               <div className="flex items-center gap-2">
                 <p className="font-mono text-base text-text flex-1 break-all">{selectedMethod.value}</p>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(selectedMethod.value)
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 2000)
+                  onClick={async () => {
+                    // Guarded: an unhandled clipboard rejection used to show the
+                    // success checkmark anyway
+                    try {
+                      await navigator.clipboard.writeText(selectedMethod.value)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    } catch {
+                      toast.error(t('app.error'))
+                    }
                   }}
-                  className="p-1.5 rounded-lg bg-surface text-primary shrink-0"
+                  className="p-2.5 rounded-lg bg-surface text-primary shrink-0"
                   aria-label={t('listing.buy.copy_aria')}
                 >
                   <Icon name={copied ? 'check_circle' : 'content_copy'} size={16} filled={copied} />

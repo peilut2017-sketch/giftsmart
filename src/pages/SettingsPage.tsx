@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -8,15 +8,16 @@ import { useTheme } from '../contexts/ThemeContext'
 import { usePageView } from '../hooks/usePageView'
 import { useT } from '../lib/i18n'
 import Icon from '../components/ui/Icon'
+import VaultSetupSheet from '../components/VaultSetupSheet'
 import { MenuItem, SL } from '../components/settings/SettingsUI'
 
-interface CategoryDef { key: string; icon: string; title: string; desc: string; path: string }
+interface CategoryDef { key: string; icon: string; title: string; desc: string; path: string; keywords: string }
 
 export default function SettingsPage() {
   const navigate = useNavigate()
   const { user, profile, isAdmin } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
-  const { vouchers, archivedVouchers } = useVouchers()
+  const { vouchers, archivedVouchers, isOnline, pendingOpsCount } = useVouchers()
   const { hasVault, isVaultUnlocked } = useE2EE()
   const { theme, toggleTheme } = useTheme()
   const { t } = useT()
@@ -24,34 +25,32 @@ export default function SettingsPage() {
 
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
-  const scrollRef = useRef(0)
-
-  useEffect(() => {
-    function onScroll() {
-      const y = window.scrollY
-      if (y > 40 && y > scrollRef.current) setSearchOpen(true)
-      scrollRef.current = y
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  const [showVaultSetup, setShowVaultSetup] = useState(false)
 
   const totalBalance = useMemo(() => vouchers.reduce((sum, v) => sum + v.balance, 0), [vouchers])
 
+  // keywords index the ACTUAL settings inside each sub-page, so searching
+  // "ביומטריה" or "טלגרם" finds the right card (the old search matched only the
+  // eight visible titles/descs)
   const categories: CategoryDef[] = [
-    { key: 'wallet',        icon: 'account_balance_wallet', title: 'הארנק שלי', desc: 'שיתוף, מועדונים, תצוגת ערך', path: '/settings/wallet' },
-    { key: 'marketplace',   icon: 'storefront',       title: 'שוק',         desc: 'אמצעי תשלום, מכירות ורכישות',      path: '/market' },
-    { key: 'notifications', icon: 'notifications',    title: 'התראות',      desc: 'תזכורות תוקף, ערוצי התראה, טלגרם', path: '/settings/notifications' },
-    { key: 'privacy',       icon: 'lock',             title: 'פרטיות',      desc: 'ביומטריה וכספת הצפנה',             path: '/settings/privacy' },
-    { key: 'appearance',    icon: 'palette',          title: 'מראה',        desc: 'מצב כהה, שפה, שקיפות ניווט',       path: '/settings/appearance' },
-    { key: 'backup',        icon: 'cloud',            title: 'גיבוי',       desc: 'סנכרון לענן, בדיקת חיבור',         path: '/settings/backup' },
-    { key: 'accessibility', icon: 'accessibility_new', title: 'נגישות',     desc: 'כפתור נגישות והצהרת נגישות',       path: '/settings/accessibility' },
-    { key: 'about',         icon: 'info',             title: 'אודות ותמיכה', desc: 'תמיכה, יומן פעילות, תנאים',      path: '/settings/about' },
+    { key: 'wallet',        icon: 'account_balance_wallet', title: 'הארנק שלי', desc: 'שיתוף, מועדונים, תצוגת ערך', path: '/settings/wallet', keywords: 'חברים הזמנה משפחה מועדון אשראי ערך שוק' },
+    { key: 'marketplace',   icon: 'storefront',       title: 'שוק',         desc: 'אמצעי תשלום, מכירות ורכישות',      path: '/market', keywords: 'ביט פייבוקס פייפאל מכירה קנייה מודעה' },
+    { key: 'notifications', icon: 'notifications',    title: 'התראות',      desc: 'תזכורות תוקף, ערוצי התראה, טלגרם', path: '/settings/notifications', keywords: 'טלגרם פוש מייל אימייל תזכורת ימים תוקף' },
+    { key: 'privacy',       icon: 'lock',             title: 'פרטיות',      desc: 'ביומטריה וכספת הצפנה',             path: '/settings/privacy', keywords: 'ביומטריה טביעת אצבע כספת הצפנה סיסמה קוד שחזור נעילה' },
+    { key: 'appearance',    icon: 'palette',          title: 'מראה',        desc: 'מצב כהה, שפה, שקיפות ניווט',       path: '/settings/appearance', keywords: 'כהה בהיר שפה אנגלית עברית שקיפות ערכת נושא' },
+    { key: 'backup',        icon: 'cloud',            title: 'גיבוי',       desc: 'סנכרון לענן, בדיקת חיבור',         path: '/settings/backup', keywords: 'סנכרון ענן חיבור אופליין' },
+    { key: 'accessibility', icon: 'accessibility_new', title: 'נגישות',     desc: 'כפתור נגישות והצהרת נגישות',       path: '/settings/accessibility', keywords: 'טקסט גדול ניגודיות אנימציה הצהרה' },
+    { key: 'about',         icon: 'info',             title: 'אודות ותמיכה', desc: 'תמיכה, יומן פעילות, תנאים',      path: '/settings/about', keywords: 'תמיכה פנייה יומן היסטוריה תנאים פרטיות מדריך גרסה' },
   ]
 
   const filteredCategories = search.trim()
-    ? categories.filter(c => c.title.includes(search.trim()) || c.desc.includes(search.trim()))
+    ? categories.filter(c => {
+        const q = search.trim()
+        return c.title.includes(q) || c.desc.includes(q) || c.keywords.includes(q)
+      })
     : categories
+
+  const syncLabel = !isOnline ? 'לא מקוון' : pendingOpsCount > 0 ? `מסנכרן (${pendingOpsCount})` : 'מסונכרן'
 
   return (
     <div className="flex-1 bg-bg">
@@ -60,10 +59,11 @@ export default function SettingsPage() {
           <h1 className="text-lg font-extrabold text-text">{t('settings.title')}</h1>
           <button
             onClick={() => setSearchOpen(v => !v)}
-            className="absolute left-4 w-8 h-8 rounded-full flex items-center justify-center bg-surface shadow-card"
+            className="absolute start-4 w-11 h-11 rounded-full flex items-center justify-center bg-surface shadow-card"
             aria-label="חיפוש הגדרות"
+            aria-expanded={searchOpen}
           >
-            <Icon name="search" size={17} color="var(--c-text2)" />
+            <Icon name="search" size={19} color="var(--c-text2)" />
           </button>
         </div>
 
@@ -76,7 +76,7 @@ export default function SettingsPage() {
                 type="text" value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="חפש הגדרה..."
                 autoFocus
-                className="w-full pr-10 pl-3 py-2.5 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full ps-10 pe-3 py-2.5 border border-border rounded-2xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
           </div>
@@ -112,8 +112,8 @@ export default function SettingsPage() {
                   )}
                 </div>
               </div>
-              <button onClick={() => navigate('/settings/account')} className="bg-white/15 border-none rounded-[10px] w-9 h-9 flex items-center justify-center shrink-0">
-                <Icon name="edit" size={16} color="#fff" />
+              <button onClick={() => navigate('/settings/account')} aria-label={t('settings.edit.profile.aria')} className="bg-white/15 border-none rounded-xl w-11 h-11 flex items-center justify-center shrink-0">
+                <Icon name="edit" size={18} color="#fff" />
               </button>
             </div>
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/20">
@@ -163,10 +163,16 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Quick status */}
+        {/* Quick status — sync now reflects REALITY (the old tile was hardcoded
+            green even fully offline) */}
         <div className="px-4 grid grid-cols-4 gap-2">
-          <QuickStatusTile icon="cloud" label="מסונכרן" active />
-          <QuickStatusTile icon="lock" label={hasVault ? (isVaultUnlocked ? 'פתוחה' : 'מאובטח') : 'ללא כספת'} active={hasVault} />
+          <QuickStatusTile icon={isOnline ? 'cloud' : 'wifi_off'} label={syncLabel} active={isOnline && pendingOpsCount === 0} />
+          <QuickStatusTile
+            icon="lock"
+            label={hasVault ? (isVaultUnlocked ? 'פתוחה' : 'מאובטח') : 'הפעל הצפנה'}
+            active={hasVault}
+            onClick={hasVault ? () => navigate('/settings/privacy') : () => setShowVaultSetup(true)}
+          />
           <QuickStatusTile icon="workspace_premium" label={isPro ? 'Premium' : 'רגיל'} active={isPro} />
           <QuickStatusTile icon={theme === 'dark' ? 'dark_mode' : 'light_mode'} label={theme === 'dark' ? 'Dark' : 'Light'} active={theme === 'dark'} onClick={toggleTheme} />
         </div>
@@ -215,6 +221,8 @@ export default function SettingsPage() {
 
         <p className="text-center text-xs text-text3">GiftSmart v1.1.0</p>
       </div>
+
+      <VaultSetupSheet open={showVaultSetup} onClose={() => setShowVaultSetup(false)} />
     </div>
   )
 }

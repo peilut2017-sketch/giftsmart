@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
@@ -12,6 +12,7 @@ import InStoreMode from '../components/InStoreMode'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Icon from '../components/ui/Icon'
 import { usePageView } from '../hooks/usePageView'
+import { useUndoableDelete } from '../hooks/useUndoableDelete'
 import type { Voucher, DiscountDeal } from '../types'
 import toast from 'react-hot-toast'
 
@@ -72,9 +73,15 @@ export default function SearchPage() {
   const [showForm, setShowForm] = useState(false)
   const [showInStoreMode, setShowInStoreMode] = useState(false)
 
-  // Undo delete
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
-  const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  // Undo delete — shared hook whose pending deletes COMPLETE even after unmount.
+  // (The old local timers were cleared on unmount, so deleting a voucher and
+  // switching tabs within 5s silently resurrected it.)
+  const { hiddenIds, requestDelete: scheduleDelete, requestDeleteMany } = useUndoableDelete(deleteVoucher, {
+    message: t('voucher.deleted'),
+    undo: t('app.cancel'),
+    failed: t('app.error'),
+    manyMessage: count => `${count} ${t('vouchers.deleted')}`,
+  })
 
   // Bulk select
   const [isSelectMode, setIsSelectMode] = useState(false)
@@ -85,7 +92,6 @@ export default function SearchPage() {
   const [archiveTarget, setArchiveTarget] = useState<string | null>(null)
   const [archiveReason, setArchiveReason] = useState('')
 
-  useEffect(() => () => { pendingDeletesRef.current.forEach(clearTimeout) }, [])
   useEffect(() => { localStorage.setItem('hpViewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('hpSortKey', sortKey) }, [sortKey])
   useEffect(() => { localStorage.setItem('hpSortDir', sortDir) }, [sortDir])
@@ -209,41 +215,11 @@ export default function SearchPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  function handleDelete(id: string) {
-    setHiddenIds(prev => new Set([...prev, id]))
-    const timer = setTimeout(async () => {
-      await deleteVoucher(id)
-      setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
-      pendingDeletesRef.current.delete(id)
-    }, 5000)
-    pendingDeletesRef.current.set(id, timer)
-
-    toast(
-      (toastItem) => (
-        <span>
-          {t('voucher.deleted')}{' '}
-          <button
-            onClick={() => {
-              clearTimeout(pendingDeletesRef.current.get(id))
-              pendingDeletesRef.current.delete(id)
-              setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
-              toast.dismiss(toastItem.id)
-            }}
-            className="underline font-semibold text-primary mr-1"
-          >
-            {t('app.cancel')}
-          </button>
-        </span>
-      ),
-      { duration: 5000, icon: '🗑️' }
-    )
-  }
-
   function requestDelete(id: string) {
     setConfirm({
       title: t('confirm.delete.title'),
       message: t('confirm.delete.message'),
-      onConfirm: () => { setConfirm(null); handleDelete(id) },
+      onConfirm: () => { setConfirm(null); scheduleDelete(id) },
     })
   }
 
@@ -271,7 +247,7 @@ export default function SearchPage() {
     const count = selectedIds.size
     setConfirm({
       title: t('confirm.bulk.archive.title'),
-      message: `להעביר ${count} שוברים לארכיון?`,
+      message: t('confirm.bulk.archive.message', { count }),
       onConfirm: async () => {
         setConfirm(null)
         for (const id of selectedIds) await archiveVoucher(id)
@@ -286,49 +262,14 @@ export default function SearchPage() {
     setConfirm({
       title: t('confirm.bulk.delete.title'),
       message: `${count} ${t('search.bulk.delete.confirm')}`,
-      onConfirm: () => { setConfirm(null); executeBulkDelete() },
+      onConfirm: () => {
+        setConfirm(null)
+        const ids = [...selectedIds]
+        setIsSelectMode(false)
+        setSelectedIds(new Set())
+        requestDeleteMany(ids)
+      },
     })
-  }
-
-  function executeBulkDelete() {
-    const count = selectedIds.size
-    setIsSelectMode(false)
-    const ids = [...selectedIds]
-    setSelectedIds(new Set())
-    ids.forEach(id => setHiddenIds(prev => new Set([...prev, id])))
-
-    const timers = ids.map(id => {
-      const timer = setTimeout(async () => {
-        await deleteVoucher(id)
-        setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
-        pendingDeletesRef.current.delete(id)
-      }, 5000)
-      pendingDeletesRef.current.set(id, timer)
-      return timer
-    })
-
-    toast(
-      (toastItem) => (
-        <span>
-          {count} {t('vouchers.deleted')}{' '}
-          <button
-            onClick={() => {
-              timers.forEach((_, i) => {
-                const id = ids[i]
-                clearTimeout(pendingDeletesRef.current.get(id))
-                pendingDeletesRef.current.delete(id)
-                setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
-              })
-              toast.dismiss(toastItem.id)
-            }}
-            className="underline font-semibold text-primary mr-1"
-          >
-            {t('app.cancel')}
-          </button>
-        </span>
-      ),
-      { duration: 5000, icon: '🗑️' }
-    )
   }
 
   function exitSelectMode() {
@@ -367,30 +308,34 @@ export default function SearchPage() {
         </ConfirmDialog>
       )}
 
-      {/* Header + search bar */}
-      <div className="px-5 pt-5 pb-3 bg-surface border-b border-border">
-        <h1 className="text-lg font-extrabold text-text text-center mb-3">{t('search.page.title')}</h1>
-        <div className="flex items-center gap-2.5 bg-bg rounded-2xl px-3.5">
-          <Icon name="search" size={20} color="var(--c-text3)" />
-          <input
-            autoFocus={search === ''}
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={t('search.placeholder')}
-            className="flex-1 h-11 border-none bg-transparent text-[15px] text-text outline-none"
-            dir="rtl"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} aria-label={t('app.cancel')}>
-              <Icon name="close" size={18} color="var(--c-text3)" />
-            </button>
-          )}
-        </div>
+      {/* Page title (scrolls away) */}
+      <div className="px-5 pt-5 pb-2 bg-surface">
+        <h1 className="text-lg font-extrabold text-text text-center">{t('search.page.title')}</h1>
       </div>
 
-      {/* Toolbar */}
+      {/* Search + toolbar — ONE sticky unit, so the query stays editable while the
+          filter chips are pinned (previously only the toolbar stuck and the field
+          scrolled away). No autoFocus: opening the tab to browse shouldn't pop the
+          keyboard every time. */}
       <div className="sticky top-0 z-30 bg-surface border-b border-border">
+        <div className="px-5 pt-2 pb-2">
+          <div className="flex items-center gap-2.5 bg-bg rounded-2xl px-3.5">
+            <Icon name="search" size={20} color="var(--c-text3)" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={t('search.placeholder')}
+              className="flex-1 h-11 border-none bg-transparent text-base text-text outline-none"
+              dir="rtl"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} aria-label={t('search.clear')} className="p-2 -m-1">
+                <Icon name="close" size={18} color="var(--c-text3)" />
+              </button>
+            )}
+          </div>
+        </div>
         {!isSelectMode ? (
           <div className="flex items-center px-4 py-2 gap-2 overflow-x-auto no-scrollbar">
             {([
@@ -412,23 +357,26 @@ export default function SearchPage() {
             <div className="flex-1" />
             <button
               onClick={() => setShowInStoreMode(true)}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full font-medium bg-bg text-text2 flex-shrink-0"
+              className="flex items-center gap-1 text-xs px-2.5 py-2 rounded-full font-medium bg-bg text-text2 flex-shrink-0"
+              aria-label={t('instore.title')}
               title={t('instore.title')}
             >
-              <Icon name="storefront" size={15} />
+              <Icon name="storefront" size={17} />
             </button>
             <button
               onClick={() => setIsSelectMode(true)}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full font-medium bg-bg text-text2 flex-shrink-0"
+              className="flex items-center gap-1 text-xs px-2.5 py-2 rounded-full font-medium bg-bg text-text2 flex-shrink-0"
+              aria-label={t('home.select.all')}
               title={t('home.select.all')}
             >
-              <Icon name="checklist" size={15} />
+              <Icon name="checklist" size={17} />
             </button>
             <button
               onClick={() => setViewMode(v => v === 'grid' ? 'rows' : 'grid')}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full font-medium bg-bg text-text2 flex-shrink-0"
+              className="flex items-center gap-1 text-xs px-2.5 py-2 rounded-full font-medium bg-bg text-text2 flex-shrink-0"
+              aria-label={viewMode === 'grid' ? t('search.view.rows') : t('search.view.grid')}
             >
-              <Icon name={viewMode === 'grid' ? 'view_list' : 'grid_view'} size={15} />
+              <Icon name={viewMode === 'grid' ? 'view_list' : 'grid_view'} size={17} />
             </button>
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -532,6 +480,14 @@ export default function SearchPage() {
           <div className="text-center py-16">
             <Icon name="redeem" size={56} color="var(--c-border)" />
             <p className="text-text2 font-medium mt-4">{isFiltered ? t('search.empty.filtered') : t('search.empty.default')}</p>
+            {isFiltered && (
+              <button
+                onClick={() => { setSearch(''); setFilterTab('all'); setFilterCats([]) }}
+                className="mt-4 px-5 py-2.5 rounded-2xl bg-primary-light text-primary-dark text-sm font-bold"
+              >
+                {t('search.clear.filters')}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -645,16 +601,18 @@ export default function SearchPage() {
       </div>
 
       {isSelectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-24 left-0 right-0 z-40 px-4">
-          <div className="bg-gray-900 text-white rounded-2xl p-3 flex items-center gap-2 shadow-xl">
+        // Anchored above the floating nav via --nav-h (a fixed bottom-24 collided
+        // with the nav capsule on notched phones where --nav-h grows past 96px)
+        <div className="fixed left-0 right-0 z-40 px-4" style={{ bottom: 'calc(var(--nav-h) + 8px)' }}>
+          <div className="rounded-2xl p-3 flex items-center gap-2 shadow-xl" style={{ background: 'var(--c-text)', color: 'var(--c-surface)' }} role="toolbar" aria-label={t('home.selected')}>
             <span className="text-sm font-medium flex-1">{selectedIds.size} {t('home.selected')}</span>
-            <button onClick={() => navigate('/market/bulk', { state: { voucherIds: [...selectedIds] } })} className="flex items-center gap-1.5 px-3 py-2 bg-primary rounded-xl text-sm font-medium">
+            <button onClick={() => navigate('/market/bulk', { state: { voucherIds: [...selectedIds] } })} className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-sm font-medium">
               <Icon name="sell" size={16} /> {t('checkout.sell')}
             </button>
-            <button onClick={bulkArchive} className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 rounded-xl text-sm font-medium">
+            <button onClick={bulkArchive} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-white/15 text-inherit">
               <Icon name="archive" size={16} /> {t('nav.archive')}
             </button>
-            <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-2 bg-error rounded-xl text-sm font-medium">
+            <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-2 bg-error text-white rounded-xl text-sm font-medium">
               <Icon name="delete" size={16} /> {t('app.delete')}
             </button>
           </div>

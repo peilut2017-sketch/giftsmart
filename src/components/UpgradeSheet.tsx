@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
@@ -6,7 +6,9 @@ import toast from 'react-hot-toast'
 import Icon from './ui/Icon'
 import { SHEET_Z_INDEX } from './ui/BottomSheet'
 
-const STRIPE_PAYMENT_LINK = import.meta.env.VITE_STRIPE_PAYMENT_LINK || '#'
+// Empty (not '#') when unconfigured — the CTA then explains instead of opening a
+// blank tab and silently closing the sheet (invisible revenue loss).
+const STRIPE_PAYMENT_LINK = import.meta.env.VITE_STRIPE_PAYMENT_LINK || ''
 
 const FEATURES: { icon: string; text: string; sub: string }[] = [
   { icon: 'all_inclusive', text: 'שוברים ללא הגבלה', sub: 'חינמי: עד 25' },
@@ -37,6 +39,19 @@ export default function UpgradeSheet() {
   const [couponLoading, setCouponLoading] = useState(false)
   const [timeSuccess, setTimeSuccess] = useState<TimeSuccess | null>(null)
   const [discountApplied, setDiscountApplied] = useState<DiscountApplied | null>(null)
+  const openedStripe = useRef(false)
+
+  // Close the post-payment loop: after the Stripe tab was opened, refresh the plan
+  // whenever the user returns to this tab — the UI used to keep saying "free" until
+  // a manual reload even after a successful payment.
+  useEffect(() => {
+    function onFocus() {
+      if (!openedStripe.current) return
+      refreshPlan()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refreshPlan])
 
   if (!upgradeSheetOpen) return null
 
@@ -185,15 +200,21 @@ export default function UpgradeSheet() {
 
           {/* CTA */}
           <div className="px-6 pb-4 pt-2 space-y-3">
-            <a
-              href={stripeLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full bg-gradient-to-r from-gold-mid to-gold text-white text-center font-bold text-lg py-4 rounded-2xl shadow-fab active:scale-95 transition-transform"
-              onClick={closeUpgradeSheet}
-            >
-              {ctaLabel}
-            </a>
+            {STRIPE_PAYMENT_LINK ? (
+              <a
+                href={stripeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full bg-gradient-to-r from-gold-mid to-gold text-white text-center font-bold text-lg py-4 rounded-2xl shadow-fab active:scale-95 transition-transform"
+                onClick={() => { openedStripe.current = true; closeUpgradeSheet() }}
+              >
+                {ctaLabel}
+              </a>
+            ) : (
+              <div className="w-full bg-bg text-text2 text-center font-medium text-sm py-4 rounded-2xl border border-border">
+                התשלום אינו זמין כרגע — נסה שוב מאוחר יותר או השתמש בקוד קופון
+              </div>
+            )}
 
             {/* Coupon code */}
             {!discountApplied && (

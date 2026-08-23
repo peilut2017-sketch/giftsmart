@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { useT } from '../../lib/i18n'
 import Icon from '../../components/ui/Icon'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { SettingsSubHeader, Card, SL, Spinner, Switch } from '../../components/settings/SettingsUI'
 import { usePageView } from '../../hooks/usePageView'
 
@@ -28,9 +29,13 @@ export default function SettingsWalletPage() {
   const [localClubIds, setLocalClubIds] = useState<string[]>([])
   const [savingClubs, setSavingClubs] = useState(false)
   const [clubsOpen, setClubsOpen] = useState(false)
+  const [clubsLoaded, setClubsLoaded] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<WalletMemberRow | null>(null)
 
-  useEffect(() => { fetchClubs() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchClubs().finally(() => setClubsLoaded(true)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setLocalClubIds(userClubIds) }, [userClubIds])
+
+  const clubsDirty = JSON.stringify([...localClubIds].sort()) !== JSON.stringify([...userClubIds].sort())
 
   useEffect(() => {
     if (!walletId) return
@@ -79,11 +84,16 @@ export default function SettingsWalletPage() {
     }
   }
 
-  async function handleRemoveMember(userId: string, email: string) {
-    if (!confirm(`להסיר את ${email} מהארנק?`)) return
-    await removeMember(userId)
-    setMembers(prev => prev.filter(m => m.user_id !== userId))
-    toast.success('חבר הוסר מהארנק')
+  // No longer optimistic: the row only disappears after the server confirmed —
+  // a failed removal used to vanish from the UI while staying in the wallet
+  async function doRemoveMember(userId: string) {
+    try {
+      await removeMember(userId)
+      setMembers(prev => prev.filter(m => m.user_id !== userId))
+      toast.success('חבר הוסר מהארנק')
+    } catch {
+      toast.error('הסרת החבר נכשלה — נסה שוב')
+    }
   }
 
   async function handleSaveClubs() {
@@ -105,6 +115,12 @@ export default function SettingsWalletPage() {
         <SL>שיתוף וחברים</SL>
         <Card>
           <div className="p-4 space-y-3">
+            {/* The privacy consequence is stated BEFORE the invite input — it used
+                to appear only after the user had already typed and submitted */}
+            <div className="flex items-start gap-2 bg-warning/10 border border-warning/25 rounded-xl p-2.5">
+              <Icon name="group" size={15} color="var(--c-warning)" className="mt-0.5 shrink-0" />
+              <p className="text-xs text-warning">חברים בארנק רואים את <strong>כל</strong> השוברים שלך ויכולים לעדכן יתרות.</p>
+            </div>
             {members.length > 0 && (
               <div className="space-y-1 mb-2">
                 {members.map(m => (
@@ -114,8 +130,8 @@ export default function SettingsWalletPage() {
                       <p className="text-xs text-text3">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
                     </div>
                     {m.role !== 'owner' && (
-                      <button onClick={() => handleRemoveMember(m.user_id, m.email)} className="p-1.5 text-error rounded-lg">
-                        <Icon name="delete" size={16} />
+                      <button onClick={() => setRemoveTarget(m)} aria-label={t('settings.wallet.remove.aria', { email: m.email })} className="p-2.5 text-error rounded-lg bg-error/5">
+                        <Icon name="delete" size={17} />
                       </button>
                     )}
                   </div>
@@ -153,7 +169,6 @@ export default function SettingsWalletPage() {
                 </button>
               </div>
             )}
-            <p className="text-xs text-text3">חברים בארנק רואים את כל השוברים שלך ויכולים לעדכן יתרות.</p>
           </div>
         </Card>
 
@@ -178,7 +193,10 @@ export default function SettingsWalletPage() {
               <p className="text-sm font-semibold text-text">{t('settings.my_clubs')}</p>
               <p className="text-xs mt-0.5 text-text3">{t('settings.my_clubs.sub')}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0 mr-2">
+            <div className="flex items-center gap-2 shrink-0 me-2">
+              {clubsDirty && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-warning/15 text-warning">לא נשמר</span>
+              )}
               {localClubIds.length > 0 && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary text-white">
                   {localClubIds.length}
@@ -190,8 +208,12 @@ export default function SettingsWalletPage() {
 
           {clubsOpen && (
             <div className="px-4 pb-4 space-y-4 border-t border-border">
-              {clubs.length === 0 ? (
+              {/* Loading and "no clubs configured" are separate states now — a failed
+                  or empty fetch used to show "טוען..." forever */}
+              {!clubsLoaded ? (
                 <p className="text-sm text-center py-4 text-text3">{t('app.loading')}</p>
+              ) : clubs.length === 0 ? (
+                <p className="text-sm text-center py-4 text-text3">אין מועדונים מוגדרים עדיין</p>
               ) : (
                 <>
                   {clubs.filter(c => c.type === 'credit_card').length > 0 && (
@@ -256,6 +278,16 @@ export default function SettingsWalletPage() {
           )}
         </Card>
       </div>
+
+      {removeTarget && (
+        <ConfirmDialog
+          title={t('settings.wallet.remove.confirm.title', { email: removeTarget.email })}
+          message={t('settings.wallet.remove.confirm.message')}
+          danger
+          onConfirm={() => { const m = removeTarget; setRemoveTarget(null); doRemoveMember(m.user_id) }}
+          onCancel={() => setRemoveTarget(null)}
+        />
+      )}
     </div>
   )
 }

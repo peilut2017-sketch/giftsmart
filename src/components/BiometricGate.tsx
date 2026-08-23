@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { verifyBiometricForVaultUnlock, disableBiometric, disableBiometricLocally, isBiometricNative, getBiometricEmail } from '../lib/passkey'
 import { exportVaultKey } from '../lib/e2ee'
+import { attemptVaultUnlockAtLogin } from '../lib/vaultBundle'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import Icon from './ui/Icon'
 import Button from './ui/Button'
 
 const SESSION_KEY_V2    = 'gs_e2ee_key_v2'
-const VAULT_PW_PENDING  = 'gs_vault_pw_pending'
 const CHECK_KEY         = 'gs_e2ee_chk'
 const VAULT_V2_FLAG     = 'gs_e2ee_v2'
 
@@ -31,12 +32,14 @@ function GateShell({ children }: { children: React.ReactNode }) {
 }
 
 export default function BiometricGate({ onUnlock, onSignOut }: Props) {
-  const { signIn } = useAuth()
+  const { signIn, user } = useAuth()
   const [step, setStep] = useState<'biometric' | 'vault'>('biometric')
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
   const [vaultPass, setVaultPass] = useState('')
   const [showVaultPass, setShowVaultPass] = useState(false)
+  const [vaultUnlocking, setVaultUnlocking] = useState(false)
+  const [vaultError, setVaultError] = useState('')
   // Password fallback (when biometric credential is missing/broken)
   const [showPasswordFallback, setShowPasswordFallback] = useState(false)
   const [fallbackEmail, setFallbackEmail] = useState(() => getBiometricEmail() ?? '')
@@ -98,11 +101,44 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     }
   }
 
-  function handleVaultUnlock() {
-    if (!vaultPass) return
-    // E2EEProvider reads this on mount (Path 2 in auto-unlock)
-    sessionStorage.setItem(VAULT_PW_PENDING, vaultPass)
-    onUnlock()
+  // Verifies the password actually opens the vault BEFORE letting the user in —
+  // v2 stored it unverified and a typo produced a session with a silently locked
+  // vault and zero feedback.
+  async function handleVaultUnlock() {
+    if (!vaultPass || vaultUnlocking) return
+    const uid = user?.id
+    if (!uid) { onUnlock(); return }
+    setVaultUnlocking(true)
+    setVaultError('')
+    try {
+      const result = await attemptVaultUnlockAtLogin(vaultPass, uid)
+      if (result === 'unlocked' || result === 'no-vault') {
+        onUnlock()
+        return
+      }
+      if (result === 'stale') {
+        // The password may simply be wrong — check it against auth before claiming
+        // the wrap is stale.
+        let authOk = false
+        if (user?.email) {
+          try {
+            const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: vaultPass })
+            authOk = !error
+          } catch {}
+        }
+        if (!authOk) {
+          // Just a wrong password — don't leave the "stale wrap" flag set
+          sessionStorage.removeItem('gs_vault_pw_stale')
+          setVaultError('סיסמה שגויה — נסה שוב')
+        } else {
+          setVaultError('הסיסמה שלך התחדשה לאחרונה. פתח פעם אחת עם קוד השחזור בתוך האפליקציה כדי לחבר אותה מחדש — או דלג בינתיים.')
+        }
+        return
+      }
+      setVaultError('שגיאת רשת — נסה שוב')
+    } finally {
+      setVaultUnlocking(false)
+    }
   }
 
   async function handlePasswordFallback() {
@@ -114,8 +150,11 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         setFallbackError('אימייל או סיסמה שגויים')
         return
       }
-      // Store password so E2EEProvider can derive/unlock the vault
-      sessionStorage.setItem(VAULT_PW_PENDING, fallbackPassword)
+      // Open the vault right here (password stays in this local variable — the old
+      // flow parked the plaintext in sessionStorage for the provider to consume)
+      const { data } = await supabase.auth.getSession()
+      const uid = data.session?.user?.id
+      if (uid) await attemptVaultUnlockAtLogin(fallbackPassword, uid)
       // If the credential was registered natively on this device but is now broken →
       // disable globally (Supabase included). If it was only synced here from Supabase
       // (no private key on this device), clear only local storage so the credential
@@ -166,7 +205,9 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
           </button>
         </div>
 
-        <Button onClick={handleVaultUnlock} disabled={!vaultPass} fullWidth className="mb-3">
+        {vaultError && <p className="text-xs text-error mb-3 text-right leading-relaxed">{vaultError}</p>}
+
+        <Button onClick={handleVaultUnlock} disabled={!vaultPass || vaultUnlocking} loading={vaultUnlocking} fullWidth className="mb-3">
           פתח כספת
         </Button>
         <button onClick={onUnlock} className="w-full text-sm text-text3 py-2">

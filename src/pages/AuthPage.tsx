@@ -4,10 +4,13 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } f
 import toast from 'react-hot-toast'
 import { isBiometricEnabled, getBiometricEmail, verifyBiometricForVaultUnlock } from '../lib/passkey'
 import { exportVaultKey } from '../lib/e2ee'
+import { attemptVaultUnlockAtLogin } from '../lib/vaultBundle'
 import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
 
 const APP_VERSION = '1.0.0'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type Mode = 'login' | 'register' | 'forgot' | 'newPassword'
 type LoginStep = 'email' | 'biometric' | 'password'
@@ -59,6 +62,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   function handleEmailContinue(e: React.FormEvent) {
     e.preventDefault()
     if (!email) return toast.error(t('auth.email.required'))
+    if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
     const biometricEmail = getBiometricEmail()
     if (
       isBiometricEnabled() &&
@@ -119,6 +123,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
     try {
       if (mode === 'forgot') {
         if (!email) return toast.error(t('auth.email.required'))
+        if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
         const { error } = await resetPassword(email)
         if (error) toast.error(t('auth.reset.email.error'))
         else {
@@ -136,21 +141,34 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
         if (!validatePasswordStrong()) return
         const { error } = await updatePassword(password)
         if (error) toast.error(t('auth.update.password.error'))
-        else toast.success(t('auth.password.updated'))
+        else {
+          toast.success(t('auth.password.updated'))
+          // Try opening the vault with the new password right away. If the vault key
+          // predates this reset the attempt marks the password wrap stale, and the
+          // unlock sheet will explain that a passkey / recovery code is needed once
+          // to re-link it — instead of the silent lockout v2 produced.
+          const { data } = await supabase.auth.getSession()
+          const uid = data.session?.user?.id
+          if (uid) attemptVaultUnlockAtLogin(password, uid)
+        }
         return
       }
 
       // login – password step
       if (mode === 'login') {
         if (!password) return toast.error(t('auth.password.required'))
-        // Stash the password BEFORE signIn resolves: onAuthStateChange fires during
-        // the await and mounts E2EEProvider, whose one-shot auto-unlock effect must
-        // find gs_vault_pw_pending already present — stashing after the await raced
-        // it and randomly left the vault locked for the whole session.
-        sessionStorage.setItem('gs_vault_pw_pending', password)
         const { error } = await signIn(email, password)
+        if (!error) {
+          // Open the vault here, with the password still in a local variable — the
+          // plaintext is never parked in sessionStorage anymore (the old
+          // gs_vault_pw_pending handoff). Fire-and-forget: the provider picks up the
+          // session key via the gs-vault-unlocked event when this finishes.
+          supabase.auth.getSession().then(({ data }) => {
+            const uid = data.session?.user?.id
+            if (uid) attemptVaultUnlockAtLogin(password, uid)
+          })
+        }
         if (error) {
-          sessionStorage.removeItem('gs_vault_pw_pending')
           const msg = error.message ?? ''
           if (msg.toLowerCase().includes('not confirmed') || msg.toLowerCase().includes('email_not_confirmed')) {
             setPendingConfirmEmail(email)
@@ -167,6 +185,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       // register
       if (!privacyAccepted) return toast.error(t('auth.privacy.required'))
       if (!email || !password) return toast.error(t('auth.email.password.required'))
+      if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
       if (password !== password2) return toast.error(t('auth.passwords.mismatch'))
       if (!validatePasswordStrong()) return
       const { error } = await signUp(email, password, name)
@@ -191,10 +210,10 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   // ── Biometric step (full-screen style within the card) ──────────────────────
   if (mode === 'login' && loginStep === 'biometric') {
     return (
-      <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-dvh auth-bg flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+            <img src="/logo.png" alt="GiftSmart" className="w-24 h-24 object-contain mx-auto" />
           </div>
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
             <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5 shadow-lg bg-gradient-to-br from-green-400 to-emerald-600`}>
@@ -240,11 +259,11 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-dvh auth-bg flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+          <img src="/logo.png" alt="GiftSmart" className="w-24 h-24 object-contain mx-auto" />
           <span className="text-xs text-gray-400 mt-1 block">{t('auth.version')} {APP_VERSION}</span>
         </div>
 
@@ -271,6 +290,12 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   ? t('auth.reset.desc')
                   : t('auth.new.password.desc')}
               </p>
+              {mode === 'newPassword' && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl p-3 mt-3 text-right">
+                  <ShieldCheck className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 leading-relaxed">{t('auth.reset.vault.warning')}</p>
+                </div>
+              )}
             </div>
           ) : (
             /* Login / Register Tabs */

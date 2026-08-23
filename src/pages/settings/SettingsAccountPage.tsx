@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { useT } from '../../lib/i18n'
 import Icon from '../../components/ui/Icon'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { SettingsSubHeader, Card, Spinner, MenuItem, SL } from '../../components/settings/SettingsUI'
 import { usePageView } from '../../hooks/usePageView'
 
@@ -34,7 +35,9 @@ export default function SettingsAccountPage() {
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
+  const [savingProfile, setSavingProfile] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message?: string; confirmLabel?: string; onConfirm: () => void } | null>(null)
 
   const [editPass, setEditPass] = useState(false)
   const [currentPass, setCurrentPass] = useState('')
@@ -49,27 +52,43 @@ export default function SettingsAccountPage() {
   const pwStrength = useMemo(() => getPasswordStrength(newPass, t), [newPass]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveProfile() {
-    await updateProfile({ name, phone })
-    setEditName(false)
-    toast.success('פרופיל עודכן')
+    if (savingProfile) return
+    setSavingProfile(true)
+    try {
+      await updateProfile({ name, phone })
+      setEditName(false)
+      toast.success(t('settings.profile.updated'))
+    } catch {
+      toast.error(t('app.error'))
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
-  async function handleDeleteAccount() {
-    if (!confirm(t('settings.delete.account.confirm1'))) return
-    if (!confirm(t('settings.delete.account.confirm2'))) return
-    setDeletingAccount(true)
-    try {
-      const { error } = await supabase.from('support_messages').insert({
-        user_id: user!.id, user_email: user!.email, user_name: profile?.name || null,
-        subject: t('settings.delete.account.subject'), body: t('settings.delete.account.body'), category: 'general',
-      })
-      if (error) throw error
-      toast.success(t('settings.delete.account.sent'))
-    } catch (e: any) {
-      toast.error(e?.message || t('settings.delete.account.error'))
-    } finally {
-      setDeletingAccount(false)
-    }
+  function handleDeleteAccount() {
+    // A styled dialog with honest copy — the old flow stacked two native confirm()
+    // popups and labeled a support-ticket submission as an immediate deletion
+    setConfirmDialog({
+      title: t('settings.delete.account'),
+      message: t('settings.delete.account.confirm1'),
+      confirmLabel: t('settings.delete.account.cta'),
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        setDeletingAccount(true)
+        try {
+          const { error } = await supabase.from('support_messages').insert({
+            user_id: user!.id, user_email: user!.email, user_name: profile?.name || null,
+            subject: t('settings.delete.account.subject'), body: t('settings.delete.account.body'), category: 'general',
+          })
+          if (error) throw error
+          toast.success(t('settings.delete.account.sent'), { duration: 6000 })
+        } catch (e: any) {
+          toast.error(e?.message || t('settings.delete.account.error'))
+        } finally {
+          setDeletingAccount(false)
+        }
+      },
+    })
   }
 
   async function changePassword() {
@@ -94,13 +113,15 @@ export default function SettingsAccountPage() {
       const { error } = await supabase.auth.updateUser({ password: newPass })
       if (error) { toast.error('שגיאה בשינוי סיסמה: ' + error.message); return }
 
+      // v3: reDeriveVaultKeyFromPassword only re-wraps the master key — no voucher
+      // is re-encrypted, so entries is empty and this loop is a legacy no-op
       if (vaultEntries.length > 0) {
         await Promise.all(vaultEntries.map(({ id, code, cvv }) =>
           updateVoucher(id, { code, ...(cvv != null ? { cvv } : {}) })
         ))
       }
 
-      toast.success(isUnifiedVault ? `סיסמה שונתה — ${vaultEntries.length} שוברים הוצפנו מחדש` : 'סיסמה שונתה!')
+      toast.success(isUnifiedVault ? 'הסיסמה שונתה והכספת עודכנה' : 'סיסמה שונתה!')
       setEditPass(false)
       setCurrentPass(''); setNewPass(''); setNewPass2('')
       setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
@@ -135,8 +156,11 @@ export default function SettingsAccountPage() {
                 <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="שם מלא" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="טלפון" dir="ltr" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
                 <div className="flex gap-2">
-                  <button onClick={saveProfile} className="flex-1 h-10 rounded-xl bg-primary text-white text-sm font-semibold">{t('app.save')}</button>
-                  <button onClick={() => setEditName(false)} className="flex-1 h-10 rounded-xl bg-bg text-text2 text-sm font-semibold">{t('app.cancel')}</button>
+                  <button onClick={saveProfile} disabled={savingProfile} className="flex-1 h-11 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                    {savingProfile && <Spinner size={15} color="#fff" />}
+                    {t('app.save')}
+                  </button>
+                  <button onClick={() => setEditName(false)} className="flex-1 h-11 rounded-xl bg-bg text-text2 text-sm font-semibold">{t('app.cancel')}</button>
                 </div>
               </div>
             )}
@@ -150,9 +174,9 @@ export default function SettingsAccountPage() {
           ) : (
             <div className="p-4 space-y-3">
               {isUnifiedVault && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800 flex items-start gap-2">
-                  <Icon name="shield" size={14} className="flex-shrink-0 mt-0.5" />
-                  <p>הכספת מוגנת בסיסמת הכניסה — <strong>הסיסמה החדשה תהיה גם מפתח הכספת</strong> ותצפין מחדש את כל השוברים.</p>
+                <div className="bg-primary-light/50 border border-primary/15 rounded-xl p-3 text-xs text-text2 flex items-start gap-2">
+                  <Icon name="shield" size={14} color="var(--c-primary)" className="flex-shrink-0 mt-0.5" />
+                  <p>הכספת נפתחת עם סיסמת הכניסה — <strong>הסיסמה החדשה תחליף אותה גם בכספת</strong>, בלי לגעת בשוברים עצמם.</p>
                 </div>
               )}
 
@@ -249,21 +273,43 @@ export default function SettingsAccountPage() {
           )}
         </Card>
 
+        {/* Logout is a routine action — it no longer sits 1px away from account
+            deletion inside a red "danger zone" */}
+        <Card>
+          <MenuItem
+            icon="logout"
+            label={t('settings.logout')}
+            desc="יציאה מהחשבון במכשיר זה"
+            onClick={() => setConfirmDialog({
+              title: t('settings.logout.confirm.title'),
+              onConfirm: () => { setConfirmDialog(null); signOut() },
+            })}
+          />
+        </Card>
+
         <SL>אזור מסוכן</SL>
         <div className="bg-error/5 border border-error/20 rounded-card overflow-hidden">
-          <div className="divide-y divide-error/20">
-            <MenuItem
-              icon="delete"
-              label={t('settings.delete.account')}
-              desc={t('settings.delete.account.desc')}
-              onClick={handleDeleteAccount}
-              danger
-              right={deletingAccount ? <Icon name="progress_activity" size={20} color="var(--c-error)" className="animate-spin" /> : undefined}
-            />
-            <MenuItem icon="logout" label={t('settings.logout')} desc="יציאה מהחשבון" onClick={() => { if (confirm('להתנתק?')) signOut() }} danger />
-          </div>
+          <MenuItem
+            icon="delete"
+            label={t('settings.delete.account')}
+            desc={t('settings.delete.account.desc')}
+            onClick={deletingAccount ? undefined : handleDeleteAccount}
+            danger
+            right={deletingAccount ? <Icon name="progress_activity" size={20} color="var(--c-error)" className="animate-spin" /> : undefined}
+          />
         </div>
       </div>
+
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          danger
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import type { Voucher, SuperVoucher } from '../types'
 import toast from 'react-hot-toast'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
+import { getDaysUntilExpiry } from '../utils/helpers'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
 
@@ -71,10 +72,18 @@ function BarcodeDisplay({ code }: { code: string }) {
 export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavigate, onClose }: Props) {
   const { t } = useT()
   const [search, setSearch] = useState('')
+  const [storeUsed, setStoreUsed] = useState('')
   const [payments, setPayments] = useState<Record<string, string>>({})
   const [transactionTotal, setTransactionTotal] = useState(0)
   const [updating, setUpdating] = useState<string | null>(null)
   const [expandedBarcode, setExpandedBarcode] = useState<string | null>(null)
+
+  // Escape closes; the overlay is a real dialog now
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -92,8 +101,12 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
   const directVouchers = sortGroup(filtered.filter(v => !v.super_voucher_id))
   const superGroupVouchers = sortGroup(filtered.filter(v => !!v.super_voucher_id))
 
-  const directTotal = directVouchers.filter(v => v.balance > 0).reduce((s, v) => s + v.balance, 0)
-  const superTotal = superGroupVouchers.filter(v => v.balance > 0).reduce((s, v) => s + v.balance, 0)
+  const notExpired = (v: Voucher) => {
+    const days = getDaysUntilExpiry(v.expiry_date)
+    return days === null || days >= 0
+  }
+  const directTotal = directVouchers.filter(v => v.balance > 0 && notExpired(v)).reduce((s, v) => s + v.balance, 0)
+  const superTotal = superGroupVouchers.filter(v => v.balance > 0 && notExpired(v)).reduce((s, v) => s + v.balance, 0)
 
   async function handleUpdate(v: Voucher) {
     const amt = parseFloat(payments[v.id] || '0')
@@ -103,7 +116,9 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
     try {
       const newBal = Math.max(0, v.balance - amt)
       const storeName = v.store_name
-      await onUpdate(v.id, newBal, search.trim() || null)
+      // The store recorded in history is the explicit "which store" field — the old
+      // code silently logged whatever the SEARCH query happened to be.
+      await onUpdate(v.id, newBal, storeUsed.trim() || null)
       setTransactionTotal(prev => prev + amt)
       setPayments(p => ({ ...p, [v.id]: '' }))
       toast.success(t('instore.balance.updated', { store: storeName }))
@@ -118,20 +133,29 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
     setExpandedBarcode(prev => prev === id ? null : id)
   }
 
+  // Leaving the flow shows what the whole visit cost — the running total used to
+  // simply evaporate on close.
+  function handleClose() {
+    if (transactionTotal > 0) {
+      toast.success(t('instore.transaction.summary', { total: transactionTotal.toLocaleString('he-IL') }), { duration: 5000 })
+    }
+    onClose()
+  }
+
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-bg" dir="rtl">
-      {/* Header */}
+    <div className="fixed inset-0 z-[70] flex flex-col bg-bg" dir="rtl" role="dialog" aria-modal="true" aria-label={t('instore.title')}>
+      {/* Header — padded past the notch/status bar on standalone PWA */}
       <div
-        style={{ background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary-mid) 60%, var(--c-primary) 100%)' }}
-        className="px-4 pt-5 pb-4 shrink-0"
+        style={{ background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary-mid) 60%, var(--c-primary) 100%)', paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
+        className="px-4 pb-4 shrink-0"
       >
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-bold text-white">{t('instore.title')}</h2>
             <p className="text-xs text-white/70">{t('instore.subtitle')}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full bg-white/10">
-            <Icon name="close" size={20} color="#fff" />
+          <button onClick={handleClose} aria-label={t('app.close')} className="p-2.5 rounded-full bg-white/10">
+            <Icon name="close" size={22} color="#fff" />
           </button>
         </div>
 
@@ -151,27 +175,40 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
           </div>
         </div>
 
-        {/* Search */}
-        <div className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.15)' }}>
-          <Icon name="search" size={16} color="rgba(255,255,255,0.6)" className="shrink-0" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={t('instore.search')}
-            className="flex-1 bg-transparent text-sm focus:outline-none"
-            style={{ color: '#fff' }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')}>
-              <Icon name="close" size={14} color="rgba(255,255,255,0.6)" />
-            </button>
-          )}
+        {/* Search + which-store (recorded in the activity log) */}
+        <div className="flex gap-2">
+          <div className="flex-1 flex items-center gap-2 rounded-2xl px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.15)' }}>
+            <Icon name="search" size={16} color="rgba(255,255,255,0.7)" className="shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={t('instore.search')}
+              className="flex-1 min-w-0 bg-transparent text-base focus:outline-none placeholder:text-white/60"
+              style={{ color: '#fff' }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} aria-label={t('search.clear')} className="p-1.5 -m-1">
+                <Icon name="close" size={16} color="rgba(255,255,255,0.7)" />
+              </button>
+            )}
+          </div>
+          <div className="flex-1 flex items-center gap-2 rounded-2xl px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.15)' }}>
+            <Icon name="storefront" size={16} color="rgba(255,255,255,0.7)" className="shrink-0" />
+            <input
+              type="text"
+              value={storeUsed}
+              onChange={e => setStoreUsed(e.target.value)}
+              placeholder={t('instore.store.used.placeholder')}
+              className="flex-1 min-w-0 bg-transparent text-base focus:outline-none placeholder:text-white/60"
+              style={{ color: '#fff' }}
+            />
+          </div>
         </div>
       </div>
 
       {/* Voucher list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-8">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-[max(2rem,env(safe-area-inset-bottom))]">
         {directVouchers.length === 0 && superGroupVouchers.length === 0 ? (
           <div className="text-center py-12 text-text3">
             <Icon name="shopping_cart" size={40} color="var(--c-border)" className="mb-2" />
@@ -243,25 +280,35 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
     : v.cvv
   const isLocked = v.is_e2ee && isEncryptedField(effectiveCode)
   const isEmpty = v.balance <= 0
+  const expiryDays = getDaysUntilExpiry(v.expiry_date)
+  // An expired voucher used to be presented as valid payment, full balance and all
+  const isExpired = expiryDays !== null && expiryDays < 0
+  const disabled = isEmpty || isExpired
 
   async function copyCode() {
     if (isLocked) return
-    await navigator.clipboard.writeText(effectiveCode).catch(() => {})
-    toast.success(t('instore.code.copied'))
+    try {
+      await navigator.clipboard.writeText(effectiveCode)
+      toast.success(t('instore.code.copied'))
+    } catch {
+      toast.error(t('app.error'))
+    }
   }
 
   return (
-    <div className={`bg-surface rounded-card border border-border shadow-card transition-opacity ${isEmpty ? 'opacity-50' : ''}`}>
+    <div className={`bg-surface rounded-card border shadow-card transition-opacity ${isExpired ? 'border-error/40 opacity-60' : 'border-border'} ${isEmpty && !isExpired ? 'opacity-50' : ''}`}>
       {/* Top row: store info + payment controls */}
       <div className="p-3 flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-text text-sm truncate">{v.store_name}</p>
-          <p className={`text-xs font-bold ${isEmpty ? 'text-text3' : 'text-primary'}`}>
+          <p className={`text-xs font-bold ${disabled ? 'text-text3' : 'text-primary'}`}>
             ₪{v.balance.toLocaleString('he-IL')}
           </p>
-          {v.expiry_date && (
+          {isExpired ? (
+            <p className="text-xs font-bold text-error">{t('instore.expired')}</p>
+          ) : v.expiry_date ? (
             <p className="text-xs text-text3">{v.expiry_date.slice(0, 10)}</p>
-          )}
+          ) : null}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <input
@@ -270,27 +317,29 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
             value={payment}
             onChange={e => onPaymentChange(e.target.value)}
             placeholder="₪"
-            disabled={isEmpty}
+            disabled={disabled}
             min={0}
             max={v.balance}
-            className="w-16 px-2 py-1.5 border border-border rounded-xl text-sm text-center bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40"
+            aria-label={t('instore.amount.aria')}
+            className="w-20 px-2 py-2.5 border border-border rounded-xl text-base text-center bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40"
             dir="ltr"
           />
           <button
             type="button"
             onClick={onFill}
-            disabled={isEmpty}
-            className="px-2.5 py-1.5 text-xs bg-bg text-text2 rounded-xl disabled:opacity-40 font-medium"
+            disabled={disabled}
+            className="px-3 py-2.5 text-xs bg-bg text-text2 rounded-xl disabled:opacity-40 font-medium"
           >
             {t('instore.full')}
           </button>
           <button
             type="button"
             onClick={onUpdate}
-            disabled={isEmpty || updating || !payment}
-            className="px-2.5 py-1.5 text-xs bg-primary text-white rounded-xl disabled:opacity-40 font-medium flex items-center justify-center"
+            disabled={disabled || updating || !payment}
+            aria-label={t('instore.confirm.aria')}
+            className="px-3 py-2.5 text-xs bg-primary text-white rounded-xl disabled:opacity-40 font-medium flex items-center justify-center"
           >
-            {updating ? <Icon name="progress_activity" size={14} className="animate-spin" /> : <Icon name="check" size={14} />}
+            {updating ? <Icon name="progress_activity" size={16} className="animate-spin" /> : <Icon name="check" size={16} />}
           </button>
         </div>
       </div>
@@ -313,22 +362,25 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
             </span>
           )}
         </button>
-        {v.cvv && !isLocked && (
+        {/* Guard against rendering CVV ciphertext: the lock check keys off the CODE,
+            so a decrypted code + undecryptable CVV used to leak raw ciphertext here */}
+        {effectiveCvv && !isLocked && !isEncryptedField(effectiveCvv) && (
           <span className="text-xs text-text3 shrink-0">CVV: <span className="font-mono font-semibold text-text2">{effectiveCvv}</span></span>
         )}
         <button
           onClick={onToggleBarcode}
-          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium shrink-0 transition-colors ${barcodeOpen ? 'bg-primary-light text-primary' : 'bg-bg text-text3'}`}
+          className={`flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium shrink-0 transition-colors ${barcodeOpen ? 'bg-primary-light text-primary' : 'bg-bg text-text3'}`}
         >
-          <Icon name="qr_code_2" size={12} />
+          <Icon name="qr_code_2" size={14} />
           {barcodeOpen ? t('app.close') : t('instore.barcode')}
         </button>
         <button
           onClick={onNavigate}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-bg text-text3 shrink-0"
+          className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium bg-bg text-text3 shrink-0"
+          aria-label={t('instore.go.voucher')}
           title={t('instore.go.voucher')}
         >
-          <Icon name="north_east" size={12} />
+          <Icon name="north_east" size={14} />
         </button>
       </div>
 

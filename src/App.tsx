@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import AnimatedRoutes from './components/AnimatedRoutes'
@@ -26,7 +26,7 @@ import BiometricGate from './components/BiometricGate'
 import AccessibilityWidget from './components/AccessibilityWidget'
 import RecoveryKeyModal from './components/RecoveryKeyModal'
 import VaultMigrationModal from './components/VaultMigrationModal'
-import OAuthVaultSetupPrompt from './components/OAuthVaultSetupPrompt'
+import VaultSetupSheet from './components/VaultSetupSheet'
 import { isBiometricEnabled, getBiometricEmail, syncBiometricFromSupabase } from './lib/passkey'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
@@ -38,7 +38,6 @@ import type { ReactNode } from 'react'
 const CheckoutPage     = lazy(() => import('./pages/CheckoutPage'))
 const SearchPage       = lazy(() => import('./pages/SearchPage'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
-const VoucherPage      = lazy(() => import('./pages/VoucherPage'))
 const ArchivePage      = lazy(() => import('./pages/ArchivePage'))
 const StatsPage        = lazy(() => import('./pages/StatsPage'))
 const SettingsPage     = lazy(() => import('./pages/SettingsPage'))
@@ -74,6 +73,13 @@ function LoadingDots({ size = 'md' }: { size?: 'sm' | 'md' }) {
       ))}
     </div>
   )
+}
+
+// Legacy voucher-detail URL (kept alive by old Google-Calendar reminder links) —
+// everything in-app navigates to /checkout/:id, which supersedes the old page.
+function VoucherRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/checkout/${id}`} replace />
 }
 
 function PageSpinner() {
@@ -124,25 +130,30 @@ const SEEN_PUSH_KEY = 'seen_push_broadcast_ids'
 function VaultModals() {
   const { pendingRecoveryPhrase, dismissRecoveryPhrase, needsMigration, needsOAuthVaultSetup } = useE2EE()
   const [migrationDismissed, setMigrationDismissed] = useState(false)
+  const [oauthSetupDismissed, setOauthSetupDismissed] = useState(false)
 
   // Recovery key must be acknowledged before anything else
   if (pendingRecoveryPhrase) {
     return <RecoveryKeyModal phrase={pendingRecoveryPhrase} onDone={dismissRecoveryPhrase} />
   }
 
-  // Migration prompt for users who had a separate vault passphrase
+  // Migration prompt for users who had a separate vault passphrase.
+  // onDone intentionally does nothing: a successful migration sets
+  // pendingRecoveryPhrase and the branch above takes over. (It was previously
+  // wired to dismissRecoveryPhrase, which silently threw away the freshly
+  // minted recovery phrase before the user ever saw it.)
   if (needsMigration && !migrationDismissed) {
     return (
       <VaultMigrationModal
-        onDone={dismissRecoveryPhrase}
+        onDone={() => {}}
         onSkip={() => setMigrationDismissed(true)}
       />
     )
   }
 
   // OAuth users (Google etc.) who have no vault yet
-  if (needsOAuthVaultSetup) {
-    return <OAuthVaultSetupPrompt />
+  if (needsOAuthVaultSetup && !oauthSetupDismissed) {
+    return <VaultSetupSheet open blocking onClose={() => setOauthSetupDismissed(true)} />
   }
 
   return null
@@ -379,7 +390,12 @@ function AppRoutes() {
     const isPWA =
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true
-    if (isPWA || path === '/login') return <AuthPage />
+    if (isPWA || path === '/login') {
+      // /login?mode=register lands on the register tab — used by gift links and
+      // marketing CTAs whose audience doesn't have an account yet.
+      const mode = new URLSearchParams(window.location.search).get('mode')
+      return <AuthPage initialMode={mode === 'register' ? 'register' : undefined} />
+    }
     return <LandingPage />
   }
 
@@ -428,7 +444,7 @@ function AppRoutes() {
               <Route path="/" element={<HomePage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/voucher/:id" element={<VoucherPage />} />
+              <Route path="/voucher/:id" element={<VoucherRedirect />} />
               <Route path="/checkout/:id" element={<CheckoutPage />} />
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/stats" element={<StatsPage />} />
