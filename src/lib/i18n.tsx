@@ -2736,6 +2736,8 @@ const translations: Record<string, string> = {
   'shared.signup.pitch.en': 'Want to manage your own vouchers in one place?',
   'shared.signup.cta': 'פתח חשבון חינם',
   'shared.signup.cta.en': 'Create a free account',
+  'listing.buy.manual_instruction': 'העתק את המספר, פתח את אפליקציית {method} והעבר את הסכום ידנית.',
+  'listing.buy.manual_instruction.en': 'Copy the number, open the {method} app and send the amount manually.',
 }
 
 // ── Context & Hook ──────────────────────────────────────────────────────

@@ -18,9 +18,6 @@ function buildPaymentLink(method: PaymentMethod, amount: number, description: st
   const encodedDesc = encodeURIComponent(description)
 
   switch (method.type) {
-    case 'bit':
-      // Bit (Bank Hapoalim) — deep link to payment page
-      return `https://bitpay.page.link/?phone=${cleanPhone}&amount=${amount}&description=${encodedDesc}`
     case 'paypal': {
       // PayPal.me — use email prefix or full handle
       const handle = method.value.includes('@')
@@ -28,10 +25,14 @@ function buildPaymentLink(method: PaymentMethod, amount: number, description: st
         : method.value
       return `https://www.paypal.com/paypalme/${encodeURIComponent(handle)}/${amount}`
     }
-    case 'paybox':
-      return `https://payboxapp.page.link/pay?action=charge&phone=${cleanPhone}&amount=${amount}&description=${encodedDesc}`
     case 'cashcash':
       return `https://link.cashcash.co.il/?phone=${cleanPhone}&amount=${amount}&description=${encodedDesc}`
+    // Bit and PayBox have no public web payment URL — their old deep links were
+    // built on Firebase Dynamic Links (*.page.link), shut down in August 2025,
+    // so a button would land the buyer on an error page. The copy-number flow
+    // (always rendered above the link) is the working path for both.
+    case 'bit':
+    case 'paybox':
     default:
       return null
   }
@@ -263,7 +264,7 @@ function BuyModal({
               </div>
             </div>
 
-            {paymentLink && (
+            {paymentLink ? (
               <a
                 href={paymentLink}
                 target="_blank"
@@ -273,6 +274,10 @@ function BuyModal({
                 <Icon name="open_in_new" size={16} />
                 {t('listing.buy.open_app', { method: PAYMENT_METHOD_LABELS[selectedMethod.type], amount: listing.asking_price! })}
               </a>
+            ) : (
+              <p className="text-xs text-text2">
+                {t('listing.buy.manual_instruction', { method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
+              </p>
             )}
           </div>
         )}

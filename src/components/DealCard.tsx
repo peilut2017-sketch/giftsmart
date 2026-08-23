@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import { useDiscounts } from '../contexts/DiscountsContext'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
@@ -104,7 +105,7 @@ function DealDetailSheet({ deal, onClose }: { deal: DiscountDeal; onClose: () =>
       if (error) throw error
       setReportSent(true)
     } catch {
-      alert(t('app.error'))
+      toast.error(t('app.error'))
     } finally {
       setReportLoading(false)
     }

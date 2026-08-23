@@ -947,8 +947,15 @@ export default function MarketplacePage() {
   async function savePaymentMethods(methods: PaymentMethod[]) {
     setSavingPayments(true)
     try {
-      const { error } = await supabase.from('profiles').update({ marketplace_payment_methods: methods }).eq('id', user!.id)
-      if (error) throw error
+      // Mutations go through SECURITY DEFINER RPCs (project rule). The direct
+      // table update stays only as a fallback for the window before
+      // supabase-payment-methods-rpc.sql has been applied.
+      const { error } = await supabase.rpc('set_payment_methods', { p_methods: methods })
+      if (error) {
+        if (!/function|schema cache/i.test(error.message || '')) throw error
+        const { error: directErr } = await supabase.from('profiles').update({ marketplace_payment_methods: methods }).eq('id', user!.id)
+        if (directErr) throw directErr
+      }
       setPaymentMethods(methods)
       toast.success(t('market.payment.updated'))
     } catch {

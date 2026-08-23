@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { useSubscription } from '../../contexts/SubscriptionContext'
 import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
@@ -26,7 +25,6 @@ export default function SettingsAboutPage() {
   const navigate = useNavigate()
   const { t } = useT()
   const { user, profile } = useAuth()
-  const { isPro } = useSubscription()
 
   const [supportSubject, setSupportSubject] = useState('')
   const [supportBody, setSupportBody] = useState('')
@@ -111,8 +109,9 @@ export default function SettingsAboutPage() {
     <div className="flex-1 bg-bg">
       <SettingsSubHeader title="אודות ותמיכה" />
       <div className="p-4 space-y-4 pb-10">
-        {isPro && (
-          <>
+        {/* Support is open to every user — it's the only contact channel, and the
+            privacy policy and terms both point here as the way to reach us. */}
+        <>
             <SL>תמיכה</SL>
             <Card>
               <div className="px-4 py-2.5 border-b border-border flex items-center justify-end">
@@ -212,8 +211,7 @@ export default function SettingsAboutPage() {
                 </div>
               )}
             </Card>
-          </>
-        )}
+        </>
 
         {adminBroadcasts.length > 0 && (
           <Card>

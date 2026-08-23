@@ -27,12 +27,14 @@ export default function WelcomeModal({ userId }: Props) {
   function dismiss() {
     localStorage.setItem(storageKey, '1')
     setVisible(false)
+    // The onboarding guide waits for this so the two never stack (see OnboardingGuide)
+    window.dispatchEvent(new Event('gs-welcome-dismissed'))
   }
 
   if (!visible) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div data-welcome-modal className="fixed inset-0 bg-black/60 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] flex flex-col animate-slide-up">
         {/* Header */}
         <div className="relative p-6 pb-4 text-center bg-gradient-to-br from-green-50 to-emerald-50 rounded-t-3xl sm:rounded-t-3xl">
