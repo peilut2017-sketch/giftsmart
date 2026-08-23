@@ -37,6 +37,8 @@ export default function SettingsAccountPage() {
   const [phone, setPhone] = useState(profile?.phone || '')
   const [savingProfile, setSavingProfile] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message?: string; confirmLabel?: string; onConfirm: () => void } | null>(null)
 
   const [editPass, setEditPass] = useState(false)
@@ -65,30 +67,43 @@ export default function SettingsAccountPage() {
     }
   }
 
+  // Real self-serve deletion — both app stores require deleting the account
+  // (and its data) from inside the app, not filing a support request.
   function handleDeleteAccount() {
-    // A styled dialog with honest copy — the old flow stacked two native confirm()
-    // popups and labeled a support-ticket submission as an immediate deletion
-    setConfirmDialog({
-      title: t('settings.delete.account'),
-      message: t('settings.delete.account.confirm1'),
-      confirmLabel: t('settings.delete.account.cta'),
-      onConfirm: async () => {
-        setConfirmDialog(null)
-        setDeletingAccount(true)
-        try {
-          const { error } = await supabase.from('support_messages').insert({
+    setDeleteConfirmText('')
+    setShowDeleteDialog(true)
+  }
+
+  async function doDeleteAccount() {
+    setShowDeleteDialog(false)
+    setDeletingAccount(true)
+    try {
+      const { error } = await supabase.rpc('delete_own_account')
+      if (error) {
+        if (/admin_cannot_self_delete/.test(error.message || '')) {
+          toast.error(t('account.delete.admin.blocked'), { duration: 6000 })
+          return
+        }
+        // RPC not applied yet (supabase-delete-account.sql) — fall back to the
+        // old support-request path so the button never dead-ends
+        if (/function|schema cache/i.test(error.message || '')) {
+          const { error: reqErr } = await supabase.from('support_messages').insert({
             user_id: user!.id, user_email: user!.email, user_name: profile?.name || null,
             subject: t('settings.delete.account.subject'), body: t('settings.delete.account.body'), category: 'general',
           })
-          if (error) throw error
+          if (reqErr) throw reqErr
           toast.success(t('settings.delete.account.sent'), { duration: 6000 })
-        } catch (e: any) {
-          toast.error(e?.message || t('settings.delete.account.error'))
-        } finally {
-          setDeletingAccount(false)
+          return
         }
-      },
-    })
+        throw error
+      }
+      toast.success(t('account.delete.done'), { duration: 6000 })
+      await signOut()
+    } catch (e: any) {
+      toast.error(e?.message || t('settings.delete.account.error'))
+    } finally {
+      setDeletingAccount(false)
+    }
   }
 
   async function changePassword() {
@@ -309,6 +324,31 @@ export default function SettingsAccountPage() {
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
         />
+      )}
+
+      {showDeleteDialog && (
+        <ConfirmDialog
+          title={t('settings.delete.account')}
+          message={t('account.delete.confirm.message')}
+          confirmLabel={t('account.delete.confirm.cta')}
+          danger
+          onConfirm={() => {
+            if (deleteConfirmText.trim() !== 'מחק') {
+              toast.error(t('account.delete.type.required'))
+              return
+            }
+            doDeleteAccount()
+          }}
+          onCancel={() => setShowDeleteDialog(false)}
+        >
+          <input
+            value={deleteConfirmText}
+            onChange={e => setDeleteConfirmText(e.target.value)}
+            placeholder={t('privacy.reset.placeholder')}
+            className="w-full border border-border rounded-xl px-3 py-2.5 text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-error/40"
+            dir="rtl"
+          />
+        </ConfirmDialog>
       )}
     </div>
   )

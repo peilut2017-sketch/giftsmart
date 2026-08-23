@@ -1,14 +1,19 @@
 {
+  "id": "/",
   "name": "GiftSmart – ניהול שוברי מתנה וגיפט קארד",
   "short_name": "GiftSmart",
   "description": "אפליקציה לניהול שוברי מתנה, גיפט קארד וכרטיסי מתנה. שמור, עקוב אחר יתרות ושתף שוברי קניה.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "launch_handler": { "client_mode": "navigate-existing" },
   "orientation": "portrait",
   "background_color": "#f8fafc",
   "theme_color": "#22c55e",
   "lang": "he",
   "dir": "rtl",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/favicon.svg",

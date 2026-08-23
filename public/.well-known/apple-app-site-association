@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["REPLACE_TEAMID.site.giftsmart.app"],
+        "components": [
+          { "/": "/gift/*", "comment": "Gift links open in the app" },
+          { "/": "/s/*", "comment": "Shared voucher links open in the app" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["REPLACE_TEAMID.site.giftsmart.app"]
+  }
+}
