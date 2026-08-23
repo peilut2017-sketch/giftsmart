@@ -12,6 +12,7 @@ import { E2EEProvider } from './contexts/E2EEContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { LocaleProvider, useLocale } from './lib/i18n'
 import { useExpiryNotifications } from './hooks/useNotifications'
+import { refreshPushSubscription } from './lib/push'
 import { supabase } from './lib/supabase'
 import UpgradeSheet from './components/UpgradeSheet'
 import AuthPage from './pages/AuthPage'
@@ -182,6 +183,14 @@ function NotificationBridge() {
   const { user, profile, isAdmin } = useAuth()
   const { isPro } = useSubscription()
   useExpiryNotifications(vouchers, isPro, user?.id, user?.email ?? undefined, profile?.name ?? undefined)
+
+  // Keep this device's Web Push subscription registered server-side (heals a
+  // rotated endpoint and refreshes last_seen_at) — no-op unless the user already
+  // granted notification permission and subscribed.
+  useEffect(() => {
+    if (!user) return
+    refreshPushSubscription()
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Admin: receive push notification for new support messages from any page
   useEffect(() => {

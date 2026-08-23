@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../../utils/helpers'
 import { sendExpiryReminderEmail } from '../../lib/emailService'
 import { getNotifChannels, saveNotifChannels, type NotifChannels } from '../../hooks/useNotifications'
+import { subscribeToPush, unsubscribeFromPush } from '../../lib/push'
 import toast from 'react-hot-toast'
 import { useT } from '../../lib/i18n'
 import Icon from '../../components/ui/Icon'
@@ -128,7 +129,12 @@ export default function SettingsNotificationsPage() {
   // preference bit while the OS permission stayed "default", so the switch showed
   // green and nothing ever arrived
   async function handleTogglePush(value: boolean) {
-    if (!value) { updateNotifChannel('push', false); return }
+    if (!value) {
+      updateNotifChannel('push', false)
+      // Also drop this device's server-side push subscription
+      unsubscribeFromPush()
+      return
+    }
     if (typeof Notification === 'undefined') {
       toast.error('הדפדפן הזה אינו תומך בהתראות')
       return
@@ -145,6 +151,13 @@ export default function SettingsNotificationsPage() {
       }
     }
     updateNotifChannel('push', true)
+    // Register this device for real server push (expiry reminders while the app
+    // is closed). 'unconfigured' = no VAPID key set yet — local notifications
+    // still work, so the toggle stays on.
+    const result = await subscribeToPush()
+    if (result === 'error') {
+      toast.error('הרשמה להתראות מהשרת נכשלה — יגיעו התראות רק כשהאפליקציה פתוחה')
+    }
   }
 
   useEffect(() => {
