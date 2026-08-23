@@ -3,6 +3,7 @@ import { ShieldCheck, Lock, Eye, EyeOff, Info } from 'lucide-react'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import toast from 'react-hot-toast'
+import { useT } from '../lib/i18n'
 
 interface Props {
   onDone: () => void
@@ -15,6 +16,7 @@ interface Props {
 // The login password is no longer needed here: its door is added automatically on
 // the next login.
 export default function VaultMigrationModal({ onDone, onSkip }: Props) {
+  const { t } = useT()
   const { migrateVault } = useE2EE()
   const { vouchers, archivedVouchers, refreshVouchers } = useVouchers()
   const [passphrase, setPassphrase] = useState('')
@@ -31,18 +33,18 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
       const { ok, failed } = await migrateVault(passphrase, undefined, e2eeVouchers)
       if (!ok) {
         if (failed && failed > 0) {
-          setError(`${failed} שוברים לא ניתנים לפענוח עם הסיסמה הזו — השדרוג בוטל כדי לא לאבד אותם. פנה לתמיכה.`)
+          setError(t('vault.migrate.failed.count', { n: failed }))
         } else {
-          setError('סיסמת הכספת שגויה — נסה שוב')
+          setError(t('vault.migrate.wrong.password'))
         }
         return
       }
       // Voucher rows were rewritten atomically on the server — refresh local state
       await refreshVouchers()
-      toast.success('הכספת שודרגה! מוצג עכשיו קוד שחזור חדש — שמור אותו')
+      toast.success(t('vault.migrate.success'))
       onDone()
     } catch {
-      setError('שגיאה בשדרוג הכספת — בדוק את החיבור ונסה שוב')
+      setError(t('vault.migrate.error'))
     } finally {
       setLoading(false)
     }
@@ -56,18 +58,18 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
           <ShieldCheck className="w-8 h-8 text-white" />
         </div>
 
-        <h2 className="text-lg font-bold text-text mb-2">שדרוג אבטחת הכספת</h2>
+        <h2 className="text-lg font-bold text-text mb-2">{t('vault.migrate.title')}</h2>
 
         <p className="text-sm text-text2 mb-4 leading-relaxed">
-          הכספת שלך עדיין משתמשת בסיסמה נפרדת.
+          {t('vault.migrate.desc1')}
           <br />
-          הזן אותה פעם אחרונה — מכאן והלאה <strong>סיסמת הכניסה שלך</strong> תפתח את הכספת אוטומטית, ותקבל קוד שחזור חדש.
+          {t('vault.migrate.desc2.pre')} <strong>{t('vault.migrate.desc2.bold')}</strong> {t('vault.migrate.desc2.post')}
         </p>
 
         <div className="flex items-start gap-2 bg-primary-light/50 border border-primary/15 rounded-2xl p-3 mb-4 text-right">
           <Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
           <p className="text-xs text-text2 leading-relaxed">
-            השוברים המוצפנים יוצפנו מחדש בפעולה אחת בטוחה — אם משהו נכשל באמצע, שום דבר לא משתנה. הסיסמה הנוכחית לא נשמרת בשום מקום.
+            {t('vault.migrate.info')}
           </p>
         </div>
 
@@ -75,7 +77,7 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
           <Lock className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text3" />
           <input
             type={showPass ? 'text' : 'password'}
-            placeholder="סיסמת כספת נוכחית"
+            placeholder={t('vault.migrate.placeholder')}
             value={passphrase}
             onChange={e => { setPassphrase(e.target.value); setError('') }}
             onKeyDown={e => e.key === 'Enter' && handleMigrate()}
@@ -86,7 +88,7 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
           <button
             type="button"
             onClick={() => setShowPass(!showPass)}
-            aria-label={showPass ? 'הסתר סיסמה' : 'הצג סיסמה'}
+            aria-label={showPass ? t('auth.hide.password') : t('auth.show.password')}
             className="absolute start-3 top-1/2 -translate-y-1/2 text-text3 p-1"
           >
             {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -100,14 +102,14 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
           disabled={loading || !passphrase}
           className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md mb-3 disabled:opacity-50"
         >
-          {loading ? 'מצפין מחדש…' : 'שדרג את הכספת'}
+          {loading ? t('vault.migrate.encrypting') : t('vault.migrate.button')}
         </button>
 
         <button
           onClick={onSkip}
           className="w-full text-sm text-text3 hover:text-text2 py-2"
         >
-          לא עכשיו — המשך עם סיסמה נפרדת
+          {t('vault.migrate.not.now')}
         </button>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { useE2EE } from '../contexts/E2EEContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { isBiometricSupported } from '../lib/passkey'
+import { useT } from '../lib/i18n'
 
 interface Props {
   open: boolean
@@ -27,6 +28,7 @@ interface Props {
  * OAuth users:  passkey (PRF) is the primary door; recovery code is the safety net.
  */
 export default function VaultSetupSheet({ open, onClose, onDone, blocking = false }: Props) {
+  const { t } = useT()
   const { setupVaultFromPassword, setupVaultWithMasterKey } = useE2EE()
   const { user, profile } = useAuth()
   const [password, setPassword] = useState('')
@@ -53,16 +55,16 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
     try {
       const { error: authErr } = await supabase.auth.signInWithPassword({ email: user.email, password })
       if (authErr) {
-        setError('זו אינה סיסמת הכניסה שלך — הכספת חייבת להיפתח עם אותה סיסמה שאיתה אתה מתחבר')
+        setError(t('vault.setup.not.login.password'))
         return
       }
       await setupVaultFromPassword(password, user.id)
       succeed()
     } catch (err) {
       if (err instanceof Error && err.message === 'vault-exists-password-mismatch') {
-        setError('כבר קיימת כספת לחשבון הזה אך הסיסמה אינה פותחת אותה — נסה קוד שחזור מהגדרות ← פרטיות')
+        setError(t('vault.setup.exists.mismatch'))
       } else {
-        setError('שגיאה ביצירת הכספת — נסה שוב')
+        setError(t('vault.setup.error'))
       }
     } finally {
       setBusy(false)
@@ -81,10 +83,10 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
       succeed()
     } catch {
       if (withPasskey) {
-        setError('הרשמת טביעת האצבע לא הושלמה — אפשר לנסות שוב או להמשיך עם קוד שחזור בלבד')
+        setError(t('vault.setup.passkey.failed'))
         setOauthNoPasskey(true)
       } else {
-        setError('שגיאה ביצירת הכספת — נסה שוב')
+        setError(t('vault.setup.error'))
       }
     } finally {
       setBusy(false)
@@ -92,13 +94,13 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="הצפנת הקודים שלך" dismissible={!blocking}>
+    <BottomSheet open={open} onClose={onClose} title={t('vault.setup.title')} dismissible={!blocking}>
       <div className="space-y-4">
         <div className="flex items-start gap-3 bg-primary-light/50 border border-primary/15 rounded-2xl p-3.5">
           <Icon name="lock" size={20} color="var(--c-primary)" />
           <p className="text-sm text-text2 leading-relaxed">
-            קודי השוברים יוצפנו כך שרק אתה יכול לקרוא אותם — גם אנחנו לא.
-            {' '}תקבל <b>קוד שחזור</b> שפותח את הכספת מכל מכשיר.
+            {t('vault.setup.intro')}
+            {' '}{t('vault.setup.intro.receive')} <b>{t('vault.setup.intro.recovery')}</b> {t('vault.setup.intro.opens')}
           </p>
         </div>
 
@@ -106,7 +108,7 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
           <form onSubmit={handleEmailSetup} className="space-y-3">
             <div>
               <label htmlFor="setup-pass" className="block text-sm font-medium text-text2 mb-1.5">
-                סיסמת הכניסה שלך (בלי סיסמה נוספת לזכור)
+                {t('vault.setup.password.label')}
               </label>
               <div className="relative">
                 <input
@@ -122,7 +124,7 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
                 <button
                   type="button"
                   onClick={() => setShowPass(v => !v)}
-                  aria-label={showPass ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                  aria-label={showPass ? t('auth.hide.password') : t('auth.show.password')}
                   className="absolute end-3 top-1/2 -translate-y-1/2 text-text3 p-1"
                 >
                   <Icon name={showPass ? 'visibility_off' : 'visibility'} size={18} />
@@ -133,7 +135,7 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
             {error && <p className="text-sm text-error leading-relaxed" role="alert">{error}</p>}
 
             <Button type="submit" fullWidth disabled={!password || busy} loading={busy}>
-              הפעל הצפנה
+              {t('vault.setup.enable')}
             </Button>
           </form>
         ) : (
@@ -141,17 +143,17 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
             {canPasskey && !oauthNoPasskey ? (
               <>
                 <p className="text-sm text-text2">
-                  נכנסת דרך {provider === 'google' ? 'Google' : provider} — הכספת שלך תיפתח עם <b>טביעת אצבע או זיהוי פנים</b>, בלי שום סיסמה.
+                  {t('vault.setup.oauth.intro', { provider: provider === 'google' ? 'Google' : String(provider) })} <b>{t('vault.setup.oauth.bio')}</b>{t('vault.setup.oauth.nopass')}
                 </p>
                 {error && <p className="text-sm text-error leading-relaxed" role="alert">{error}</p>}
                 <Button onClick={() => handleOAuthSetup(true)} fullWidth disabled={busy} loading={busy}>
-                  <span className="inline-flex items-center gap-2"><Icon name="fingerprint" size={20} /> צור כספת עם טביעת אצבע</span>
+                  <span className="inline-flex items-center gap-2"><Icon name="fingerprint" size={20} /> {t('vault.setup.create.bio')}</span>
                 </Button>
                 <button
                   onClick={() => setOauthNoPasskey(true)}
                   className="w-full text-sm text-text3 py-2"
                 >
-                  אין לי אפשרות ביומטרית במכשיר הזה
+                  {t('vault.setup.no.bio')}
                 </button>
               </>
             ) : (
@@ -159,17 +161,16 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-right">
                   <Icon name="warning" size={18} color="var(--c-warning)" />
                   <p className="text-xs text-amber-800 leading-relaxed">
-                    ללא טביעת אצבע, <b>קוד השחזור יהיה הדרך היחידה</b> לפתוח את הכספת.
-                    אם יאבד — הקודים המוצפנים יאבדו לצמיתות. שמור אותו היטב.
+                    {t('vault.setup.warn.pre')} <b>{t('vault.setup.warn.bold')}</b> {t('vault.setup.warn.post')}
                   </p>
                 </div>
                 {error && <p className="text-sm text-error leading-relaxed" role="alert">{error}</p>}
                 <Button onClick={() => handleOAuthSetup(false)} fullWidth disabled={busy} loading={busy}>
-                  צור כספת עם קוד שחזור בלבד
+                  {t('vault.setup.create.recovery')}
                 </Button>
                 {canPasskey && (
                   <button onClick={() => { setOauthNoPasskey(false); setError('') }} className="w-full text-sm text-primary font-medium py-2">
-                    בעצם — נסה טביעת אצבע
+                    {t('vault.setup.try.bio')}
                   </button>
                 )}
               </>
@@ -179,7 +180,7 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
 
         {blocking && (
           <button onClick={onClose} className="w-full text-sm text-text3 py-1">
-            לא עכשיו — אפשר להפעיל בכל רגע מהגדרות ← פרטיות
+            {t('vault.setup.not.now')}
           </button>
         )}
       </div>

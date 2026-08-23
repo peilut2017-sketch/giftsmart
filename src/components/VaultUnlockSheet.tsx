@@ -5,6 +5,7 @@ import Icon from './ui/Icon'
 import { useE2EE } from '../contexts/E2EEContext'
 import { hasBiometricWrappedVaultKey, isBiometricSupported, isBiometricEnabled } from '../lib/passkey'
 import { isVaultPersistEnabled, setVaultPersistEnabled } from '../lib/vaultKeyStore'
+import { useT } from '../lib/i18n'
 
 interface Props {
   open: boolean
@@ -22,6 +23,7 @@ interface Props {
  * which each supported a different subset of unlock methods.
  */
 export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLabel }: Props) {
+  const { t } = useT()
   const { unlockWithPassword, unlockVaultFromRecovery, unlockVaultWithBiometric, hint, passwordWrapStale } = useE2EE()
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -60,7 +62,7 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
     try {
       const ok = await unlockVaultWithBiometric()
       if (ok) succeed()
-      else setError('הזיהוי הביומטרי לא הצליח — נסה סיסמה')
+      else setError(t('vault.unlock.bio.failed'))
     } finally {
       setBioBusy(false)
     }
@@ -74,11 +76,11 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
     try {
       const status = await unlockWithPassword(password)
       if (status === 'ok' || status === 'no-vault') { succeed(); return }
-      if (status === 'wrong') setError('הסיסמה שגויה — נסה שוב')
+      if (status === 'wrong') setError(t('vault.unlock.wrong.password'))
       else if (status === 'stale') {
-        setError('הסיסמה שלך התחדשה לאחרונה ולכן אינה פותחת עדיין את הכספת. פתח פעם אחת עם טביעת אצבע או קוד שחזור — והיא תתחבר מחדש אוטומטית.')
+        setError(t('vault.unlock.stale'))
         setShowRecovery(true)
-      } else setError('שגיאת רשת — בדוק את החיבור ונסה שוב')
+      } else setError(t('vault.unlock.network.error'))
     } finally {
       setBusy(false)
     }
@@ -92,14 +94,14 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
     try {
       const ok = await unlockVaultFromRecovery(phrase.trim())
       if (ok) succeed()
-      else setError('קוד השחזור אינו תקין — בדוק שהקלדת את כל 24 התווים')
+      else setError(t('vault.unlock.recovery.invalid'))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="פתיחת הכספת">
+    <BottomSheet open={open} onClose={onClose} title={t('vault.unlock.title')}>
       <div className="space-y-4">
         {contextLabel && <p className="text-sm text-text2 -mt-1">{contextLabel}</p>}
 
@@ -110,7 +112,7 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-br from-primary-mid to-primary-dark text-white font-bold text-[15px] shadow-fab active:scale-[0.98] transition-transform disabled:opacity-60"
           >
             <Icon name="fingerprint" size={22} />
-            {bioBusy ? 'ממתין לאימות…' : 'פתח עם טביעת אצבע'}
+            {bioBusy ? t('vault.unlock.bio.waiting') : t('vault.unlock.bio.button')}
           </button>
         )}
 
@@ -118,7 +120,7 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
           <form onSubmit={handlePassword} className="space-y-3">
             <div>
               <label htmlFor="vault-pass" className="block text-sm font-medium text-text2 mb-1.5">
-                סיסמת הכניסה שלך
+                {t('vault.unlock.password.label')}
               </label>
               <div className="relative">
                 <input
@@ -134,26 +136,26 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
                 <button
                   type="button"
                   onClick={() => setShowPass(v => !v)}
-                  aria-label={showPass ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                  aria-label={showPass ? t('auth.hide.password') : t('auth.show.password')}
                   className="absolute end-3 top-1/2 -translate-y-1/2 text-text3 p-1"
                 >
                   <Icon name={showPass ? 'visibility_off' : 'visibility'} size={18} />
                 </button>
               </div>
-              {hint && <p className="text-xs text-text3 mt-1.5">רמז: {hint}</p>}
+              {hint && <p className="text-xs text-text3 mt-1.5">{t('vault.hint')}: {hint}</p>}
             </div>
 
             {error && <p className="text-sm text-error leading-relaxed" role="alert">{error}</p>}
 
             <Button type="submit" fullWidth disabled={!password || busy} loading={busy}>
-              פתח כספת
+              {t('e2ee.unlock')}
             </Button>
           </form>
         ) : (
           <form onSubmit={handleRecovery} className="space-y-3">
             <div>
               <label htmlFor="vault-recovery" className="block text-sm font-medium text-text2 mb-1.5">
-                קוד שחזור (XXXX-XXXX-…)
+                {t('vault.unlock.recovery.label')}
               </label>
               <input
                 id="vault-recovery"
@@ -171,7 +173,7 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
             {error && <p className="text-sm text-error leading-relaxed" role="alert">{error}</p>}
 
             <Button type="submit" fullWidth disabled={!phrase.trim() || busy} loading={busy}>
-              פתח עם קוד שחזור
+              {t('vault.unlock.recovery.button')}
             </Button>
           </form>
         )}
@@ -182,7 +184,7 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
             onClick={() => { setShowRecovery(v => !v); setError('') }}
             className="text-sm text-primary font-medium py-2"
           >
-            {showRecovery ? 'חזרה לפתיחה עם סיסמה' : 'יש לי קוד שחזור'}
+            {showRecovery ? t('vault.unlock.back.password') : t('vault.unlock.have.recovery')}
           </button>
 
           <label className="flex items-center gap-2 text-sm text-text2 py-2 cursor-pointer">
@@ -192,7 +194,7 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
               onChange={e => persistPref(e.target.checked)}
               className="w-4 h-4 accent-[var(--c-primary)]"
             />
-            השאר פתוח במכשיר זה
+            {t('vault.unlock.stay')}
           </label>
         </div>
       </div>

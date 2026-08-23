@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
+import { useT } from '../lib/i18n'
 import toast from 'react-hot-toast'
 import Icon from './ui/Icon'
 import { SHEET_Z_INDEX } from './ui/BottomSheet'
@@ -11,21 +12,21 @@ import { SHEET_Z_INDEX } from './ui/BottomSheet'
 const STRIPE_PAYMENT_LINK = import.meta.env.VITE_STRIPE_PAYMENT_LINK || ''
 
 const FEATURES: { icon: string; text: string; sub: string }[] = [
-  { icon: 'all_inclusive', text: 'שוברים ללא הגבלה', sub: 'חינמי: עד 25' },
-  { icon: 'share', text: 'שיתוף ללא הגבלה', sub: 'חינמי: עד 5 שוברים' },
-  { icon: 'all_inclusive', text: 'סריקות תמונה ללא הגבלה', sub: 'חינמי: 3 לחודש' },
-  { icon: 'download', text: 'ייצוא Excel / PDF', sub: 'חינמי: לא זמין' },
-  { icon: 'history', text: 'היסטוריית פעילות מלאה', sub: 'חינמי: 7 ימים' },
-  { icon: 'notifications_active', text: 'התראות פקיעת תוקף', sub: 'חינמי: לא זמין' },
+  { icon: 'all_inclusive', text: 'upgrade.feat.vouchers', sub: 'upgrade.feat.vouchers.sub' },
+  { icon: 'share', text: 'upgrade.feat.share', sub: 'upgrade.feat.share.sub' },
+  { icon: 'all_inclusive', text: 'upgrade.feat.scans', sub: 'upgrade.feat.scans.sub' },
+  { icon: 'download', text: 'upgrade.feat.export', sub: 'upgrade.feat.sub.unavailable' },
+  { icon: 'history', text: 'upgrade.feat.history', sub: 'upgrade.feat.history.sub' },
+  { icon: 'notifications_active', text: 'upgrade.feat.alerts', sub: 'upgrade.feat.sub.unavailable' },
 ]
 
 const COUPON_ERRORS: Record<string, string> = {
-  INVALID_CODE:   'קוד הקופון אינו קיים או אינו פעיל',
-  EXPIRED:        'הקופון פג תוקף',
-  EXHAUSTED:      'הקופון מוצה (הגיע למגבלת שימושים)',
-  ALREADY_USED:   'כבר השתמשת בקופון זה',
-  NOT_ELIGIBLE:   'קופון זה מיועד למשתמש אחר',
-  NOT_FIRST_TIME: 'קופון זה מיועד למשתמשים חדשים בלבד',
+  INVALID_CODE:   'upgrade.coupon.invalid',
+  EXPIRED:        'upgrade.coupon.expired',
+  EXHAUSTED:      'upgrade.coupon.exhausted',
+  ALREADY_USED:   'upgrade.coupon.used',
+  NOT_ELIGIBLE:   'upgrade.coupon.not_eligible',
+  NOT_FIRST_TIME: 'upgrade.coupon.not_first_time',
 }
 
 const BASE_PRICE = 9
@@ -34,6 +35,7 @@ type TimeSuccess = { kind: 'time'; label: string; until: string }
 type DiscountApplied = { kind: 'discount'; discount_type: 'percent' | 'fixed'; value: number; discountedPrice: number; stripeCode: string | null }
 
 export default function UpgradeSheet() {
+  const { t } = useT()
   const { upgradeSheetOpen, closeUpgradeSheet, upgradeReason, refreshPlan } = useSubscription()
   const [couponCode, setCouponCode] = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
@@ -60,9 +62,9 @@ export default function UpgradeSheet() {
     setCouponLoading(true)
     const { data, error } = await supabase.rpc('redeem_coupon', { p_code: couponCode.trim().toUpperCase() })
     setCouponLoading(false)
-    if (error) return toast.error('שגיאה: ' + error.message)
+    if (error) return toast.error(t('app.error') + ': ' + error.message)
     if (!data?.success) {
-      return toast.error(COUPON_ERRORS[data?.error] || 'קוד לא תקף')
+      return toast.error(COUPON_ERRORS[data?.error] ? t(COUPON_ERRORS[data?.error]) : t('upgrade.coupon.generic'))
     }
 
     if (data.grant_type === 'discount') {
@@ -71,13 +73,13 @@ export default function UpgradeSheet() {
         ? Math.max(0, parseFloat((BASE_PRICE * (1 - value / 100)).toFixed(2)))
         : Math.max(0, BASE_PRICE - value)
       setDiscountApplied({ kind: 'discount', discount_type: data.discount_type, value, discountedPrice, stripeCode: data.stripe_coupon_code || null })
-      toast.success('קוד הנחה הוחל!')
+      toast.success(t('upgrade.coupon.discount.applied'))
     } else {
       // grant_type === 'time' (months_free or days_free)
       const until = data.valid_until ? new Date(data.valid_until).toLocaleDateString('he-IL') : ''
       const label = data.days_added
-        ? `${data.days_added} יום${data.days_added > 1 ? 'ים' : ''} Pro הופעלו בהצלחה`
-        : `${data.months_added} חודש${data.months_added > 1 ? 'ים' : ''} Pro הופעלו בהצלחה`
+        ? t(data.days_added > 1 ? 'upgrade.success.days.many' : 'upgrade.success.days.one', { n: data.days_added })
+        : t(data.months_added > 1 ? 'upgrade.success.months.many' : 'upgrade.success.months.one', { n: data.months_added })
       setTimeSuccess({ kind: 'time', label, until })
       await refreshPlan()
     }
@@ -104,17 +106,17 @@ export default function UpgradeSheet() {
                 <Icon name="check_circle" size={32} filled color="var(--c-primary)" />
               </div>
               <div>
-                <p className="text-xl font-extrabold text-text">ברוך הבא ל-Pro! 🎉</p>
+                <p className="text-xl font-extrabold text-text">{t('upgrade.success.title')}</p>
                 <p className="text-sm text-text3 mt-1">{timeSuccess.label}</p>
                 {timeSuccess.until && (
-                  <p className="text-xs text-text3 mt-0.5">תוקף עד {timeSuccess.until}</p>
+                  <p className="text-xs text-text3 mt-0.5">{t('listing.valid_until')} {timeSuccess.until}</p>
                 )}
               </div>
               <button
                 onClick={() => { setTimeSuccess(null); closeUpgradeSheet() }}
                 className="w-full bg-primary text-white py-3 rounded-2xl font-bold text-base"
               >
-                מצוין!
+                {t('upgrade.success.cta')}
               </button>
             </div>
           </motion.div>
@@ -127,9 +129,7 @@ export default function UpgradeSheet() {
     ? `${STRIPE_PAYMENT_LINK}?prefilled_promo_code=${discountApplied.stripeCode}`
     : STRIPE_PAYMENT_LINK
 
-  const ctaLabel = discountApplied
-    ? `שדרג עכשיו — ₪${discountApplied.discountedPrice}/חודש`
-    : 'שדרג עכשיו — ₪9/חודש'
+  const ctaLabel = t('upgrade.cta', { price: discountApplied ? discountApplied.discountedPrice : BASE_PRICE })
 
   return (
     <AnimatePresence>
@@ -150,7 +150,7 @@ export default function UpgradeSheet() {
             <button
               onClick={closeUpgradeSheet}
               className="absolute top-4 left-4 p-1.5 rounded-full bg-white/20"
-              aria-label="סגור"
+              aria-label={t('app.close')}
             >
               <Icon name="close" size={16} color="#fff" />
             </button>
@@ -167,20 +167,20 @@ export default function UpgradeSheet() {
                   <span className="text-2xl font-black line-through opacity-60">₪{BASE_PRICE}</span>
                   <span className="text-4xl font-black">₪{discountApplied.discountedPrice}</span>
                 </div>
-                <span className="text-white/80 text-sm"> / חודש</span>
+                <span className="text-white/80 text-sm"> {t('upgrade.per.month')}</span>
                 <div className="mt-1 inline-block bg-white/25 rounded-full px-3 py-0.5 text-xs font-bold">
                   {discountApplied.discount_type === 'percent'
-                    ? `✓ קוד הנחה — ${discountApplied.value}% הנחה`
-                    : `✓ קוד הנחה — ₪${discountApplied.value} הנחה`}
+                    ? t('upgrade.discount.percent', { value: discountApplied.value })
+                    : t('upgrade.discount.fixed', { value: discountApplied.value })}
                 </div>
               </div>
             ) : (
               <div className="mt-3">
                 <span className="text-4xl font-black">₪9</span>
-                <span className="text-white/80 text-sm"> / חודש</span>
+                <span className="text-white/80 text-sm"> {t('upgrade.per.month')}</span>
               </div>
             )}
-            <p className="text-xs text-white/70 mt-1">ביטול בכל עת • ללא התחייבות</p>
+            <p className="text-xs text-white/70 mt-1">{t('upgrade.cancel.anytime')}</p>
           </div>
 
           {/* Features */}
@@ -191,8 +191,8 @@ export default function UpgradeSheet() {
                   <Icon name={f.icon} size={18} color="var(--c-gold)" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-text">{f.text}</p>
-                  <p className="text-xs text-text3">{f.sub}</p>
+                  <p className="text-sm font-semibold text-text">{t(f.text)}</p>
+                  <p className="text-xs text-text3">{t(f.sub)}</p>
                 </div>
               </div>
             ))}
@@ -212,7 +212,7 @@ export default function UpgradeSheet() {
               </a>
             ) : (
               <div className="w-full bg-bg text-text2 text-center font-medium text-sm py-4 rounded-2xl border border-border">
-                התשלום אינו זמין כרגע — נסה שוב מאוחר יותר או השתמש בקוד קופון
+                {t('upgrade.payment.unavailable')}
               </div>
             )}
 
@@ -220,13 +220,13 @@ export default function UpgradeSheet() {
             {!discountApplied && (
               <div className="border border-border rounded-2xl p-3 space-y-2">
                 <p className="text-xs font-medium text-text3 flex items-center gap-1.5">
-                  <Icon name="sell" size={14} /> יש לך קוד קופון?
+                  <Icon name="sell" size={14} /> {t('upgrade.coupon.have')}
                 </p>
                 <div className="flex gap-2">
                   <input
                     value={couponCode}
                     onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                    placeholder="הזן קוד..."
+                    placeholder={t('upgrade.coupon.placeholder')}
                     className="flex-1 px-3 py-2 border border-border rounded-xl text-sm font-mono bg-surface text-text focus:outline-none focus:ring-2 focus:ring-gold/40 text-left"
                     dir="ltr"
                     onKeyDown={e => e.key === 'Enter' && handleRedeemCoupon()}
@@ -236,7 +236,7 @@ export default function UpgradeSheet() {
                     disabled={couponLoading || !couponCode.trim()}
                     className="px-4 py-2 bg-gold text-white rounded-xl text-sm font-medium disabled:opacity-40 active:scale-95 transition-transform"
                   >
-                    {couponLoading ? '...' : 'מימוש'}
+                    {couponLoading ? '...' : t('upgrade.coupon.redeem')}
                   </button>
                 </div>
               </div>
@@ -247,7 +247,7 @@ export default function UpgradeSheet() {
                 onClick={() => setDiscountApplied(null)}
                 className="block w-full text-center text-xs text-text3 py-1"
               >
-                הסר קוד הנחה
+                {t('upgrade.discount.remove')}
               </button>
             )}
 
@@ -255,7 +255,7 @@ export default function UpgradeSheet() {
               onClick={closeUpgradeSheet}
               className="block w-full text-center text-sm text-text3 py-2"
             >
-              אולי אחר כך
+              {t('upgrade.later')}
             </button>
           </div>
         </motion.div>

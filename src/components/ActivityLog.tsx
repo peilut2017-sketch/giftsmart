@@ -216,34 +216,34 @@ export default function ActivityLog() {
   }
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+    <div className="bg-surface rounded-3xl shadow-sm overflow-hidden">
       {/* Collapsible header */}
       <button
-        className="w-full flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-4 hover:bg-bg transition-colors"
         onClick={() => setExpanded(v => !v)}
       >
-        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-          <History className="w-5 h-5 text-gray-600" />
+        <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center">
+          <History className="w-5 h-5 text-text2" />
         </div>
         <div className="flex-1 text-right">
-          <p className="text-sm font-medium text-gray-800">{t('log.title')}</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-sm font-medium text-text">{t('log.title')}</p>
+          <p className="text-xs text-text3">
             {expanded && visibleEntries.length > 0 ? `${visibleEntries.length} ${t('log.records')}` : t('log.subtitle')}
           </p>
         </div>
         {expanded
-          ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          ? <ChevronUp className="w-4 h-4 text-text3 flex-shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-text3 flex-shrink-0" />
         }
       </button>
 
       {expanded && (
-        <div className="border-t">
+        <div className="border-t border-border">
           <div className="flex justify-end px-4 pt-2 pb-1">
             <button
               onClick={() => load(limit)}
               disabled={loading}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 disabled:opacity-40"
+              className="flex items-center gap-1 text-xs text-text3 hover:text-primary disabled:opacity-40"
             >
               <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
               {t('log.refresh')}
@@ -252,8 +252,8 @@ export default function ActivityLog() {
 
           {loading ? (
             <div className="py-10 flex flex-col items-center justify-center gap-2">
-              <div className="w-7 h-7 border-2 border-green-200 border-t-green-500 rounded-full animate-spin" />
-              <p className="text-xs text-gray-400">{t('log.loading')}</p>
+              <div className="w-7 h-7 border-2 border-primary-light border-t-primary rounded-full animate-spin" />
+              <p className="text-xs text-text3">{t('log.loading')}</p>
             </div>
 
           ) : tableError ? (
@@ -261,11 +261,11 @@ export default function ActivityLog() {
               <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5 text-orange-500" />
               </div>
-              <p className="text-sm font-medium text-gray-700">{t('log.unavailable')}</p>
-              <p className="text-xs text-gray-400">{t('log.unavailable.hint')}</p>
+              <p className="text-sm font-medium text-text">{t('log.unavailable')}</p>
+              <p className="text-xs text-text3">{t('log.unavailable.hint')}</p>
               <button
                 onClick={() => load(limit)}
-                className="px-4 py-2 rounded-xl bg-gray-100 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 rounded-xl bg-bg text-xs font-semibold text-text2 hover:bg-border/60 transition-colors"
               >
                 {t('app.retry')}
               </button>
@@ -273,13 +273,13 @@ export default function ActivityLog() {
 
           ) : visibleEntries.length === 0 ? (
             <div className="py-10 flex flex-col items-center gap-2 text-center">
-              <History className="w-8 h-8 text-gray-300" />
-              <p className="text-sm text-gray-500">{t('log.empty')}</p>
-              <p className="text-xs text-gray-400">{t('log.empty.hint')}</p>
+              <History className="w-8 h-8 text-border" />
+              <p className="text-sm text-text2">{t('log.empty')}</p>
+              <p className="text-xs text-text3">{t('log.empty.hint')}</p>
             </div>
 
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-border/50">
               {visibleEntries
                 .map(entry => {
                   const meta = ACTION_META[entry.action] ?? FALLBACK_META
@@ -292,19 +292,19 @@ export default function ActivityLog() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-sm font-medium text-gray-800 truncate">{entry.voucher_name}</span>
-                          <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{timeAgo(entry.created_at, t)}</span>
+                          <span className="text-sm font-medium text-text truncate">{entry.voucher_name}</span>
+                          <span className="text-xs text-text3 flex-shrink-0 whitespace-nowrap">{timeAgo(entry.created_at, t)}</span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className={`text-xs font-medium ${meta.color}`}>{meta.labelKey ? t(meta.labelKey) : entry.action}</span>
-                          {subtitle && <span className="text-xs text-gray-400">· {subtitle}</span>}
+                          {subtitle && <span className="text-xs text-text3">· {subtitle}</span>}
                         </div>
                       </div>
                       {canUndo && (
                         <button
                           onClick={() => handleUndo(entry)}
                           disabled={undoingId === entry.id}
-                          className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-green-700 disabled:opacity-40 transition-colors"
+                          className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-text3 hover:bg-bg hover:text-primary disabled:opacity-40 transition-colors"
                           aria-label={t('log.undo.aria', { action: meta.labelKey ? t(meta.labelKey) : entry.action })}
                         >
                           <Undo2 className={`w-3.5 h-3.5 ${undoingId === entry.id ? 'animate-spin' : ''}`} />
@@ -319,7 +319,7 @@ export default function ActivityLog() {
                 <button
                   onClick={() => { const next = limit + PAGE; setLimit(next); load(next) }}
                   disabled={loading}
-                  className="w-full py-3 text-xs text-green-600 hover:bg-green-50 disabled:opacity-40 transition-colors"
+                  className="w-full py-3 text-xs text-primary hover:bg-primary-light/50 disabled:opacity-40 transition-colors"
                 >
                   {t('log.load.more')}
                 </button>
@@ -328,7 +328,7 @@ export default function ActivityLog() {
               {limits.historyDays < Infinity && (
                 <button
                   onClick={() => openUpgradeSheet(t('log.upgrade.reason'))}
-                  className="w-full flex items-center justify-center gap-2 py-3 text-xs text-amber-600 hover:bg-amber-50 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 text-xs text-gold hover:bg-gold-light/60 transition-colors"
                 >
                   <Zap className="w-3.5 h-3.5" />
                   {t('log.window.notice', { days: limits.historyDays })}

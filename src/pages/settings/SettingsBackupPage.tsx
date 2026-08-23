@@ -20,7 +20,7 @@ export default function SettingsBackupPage() {
   })
 
   async function handleSync() {
-    if (!isOnline) return toast.error('אין חיבור לאינטרנט')
+    if (!isOnline) return toast.error(t('backup.no.connection'))
     setSyncing(true)
     try {
       await syncToCloud()
@@ -28,9 +28,9 @@ export default function SettingsBackupPage() {
       const now = new Date().toISOString()
       try { localStorage.setItem(LAST_SYNC_KEY, now) } catch { /* storage unavailable */ }
       setLastSyncedAt(now)
-      toast.success('שוברים סונכרנו לענן!')
+      toast.success(t('backup.sync.success'))
     } catch {
-      toast.error('שגיאה בסנכרון')
+      toast.error(t('backup.sync.error'))
     } finally {
       setSyncing(false)
     }
@@ -41,12 +41,12 @@ export default function SettingsBackupPage() {
     try {
       const { error } = await supabase.from('profiles').select('id').limit(1)
       if (error) throw error
-      toast.success('חיבור לבסיס הנתונים תקין')
+      toast.success(t('backup.check.ok'))
     } catch (err: any) {
-      const msg = err?.message || 'שגיאה לא ידועה'
-      if (msg.includes('JWT')) toast.error('בעיית אימות — נסה להתחבר מחדש')
-      else if (msg.includes('network')) toast.error('בעיית רשת — בדוק את החיבור שלך לאינטרנט')
-      else toast.error(`שגיאה: ${msg}`)
+      const msg = err?.message || t('backup.unknown.error')
+      if (msg.includes('JWT')) toast.error(t('backup.auth.error'))
+      else if (msg.includes('network')) toast.error(t('backup.network.error'))
+      else toast.error(t('backup.error.msg', { msg }))
     } finally {
       setChecking(false)
     }
@@ -60,11 +60,11 @@ export default function SettingsBackupPage() {
 
   return (
     <div className="flex-1 bg-bg">
-      <SettingsSubHeader title="גיבוי" />
+      <SettingsSubHeader title={t('backup.title')} />
       <div className="p-4 space-y-4 pb-10">
         <div className="flex items-center gap-2 px-1 text-xs text-text3">
           <Icon name={isOnline ? 'cloud' : 'cloud_off'} size={14} color={isOnline ? 'var(--c-primary)' : 'var(--c-text3)'} />
-          {isOnline ? 'מקוון — הנתונים נשמרים בענן' : 'לא מקוון — שינויים יסונכרנו כשהחיבור יחזור'}
+          {isOnline ? t('backup.online.status') : t('backup.offline.status')}
         </div>
         <Card>
           <div className="divide-y divide-border">
@@ -79,7 +79,7 @@ export default function SettingsBackupPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text">{t('settings.backup.sync.title')}</p>
                 <p className="text-xs text-text3">
-                  {isOnline ? t('settings.backup.sync.desc') : 'אין חיבור לאינטרנט'}
+                  {isOnline ? t('settings.backup.sync.desc') : t('backup.no.connection')}
                 </p>
                 {lastSyncedLabel && <p className="text-xs text-text3 mt-0.5">{lastSyncedLabel}</p>}
               </div>

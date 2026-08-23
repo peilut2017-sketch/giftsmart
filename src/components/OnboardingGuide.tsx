@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { X, ChevronRight, ChevronLeft, Archive, Trash2, Edit2, Shield } from 'lucide-react'
+import { useModalHistory } from '../hooks/useModalHistory'
 
 const STORAGE_KEY = 'onboarding_seen_v2'
 const TOOLTIP_W = 310
@@ -233,6 +234,9 @@ export default function OnboardingGuide() {
     localStorage.setItem(STORAGE_KEY, '1')
     setVisible(false)
   }
+
+  // Android/browser Back dismisses the guide instead of leaving the app
+  useModalHistory(visible, dismiss)
 
   function next() {
     if (step < STEPS.length - 1) setStep(s => s + 1)

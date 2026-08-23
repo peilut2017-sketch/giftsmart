@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
 import { formatDate } from '../utils/helpers'
 import type { MarketplaceListing, PaymentMethod } from '../types'
@@ -124,7 +125,12 @@ function ReportModal({
   )
 }
 
-// ─── Buy Modal ────────────────────────────────────────────────────────────────
+// ─── Buy Modal — three explicit steps ─────────────────────────────────────────
+// 1·Review (price + seller reputation + protection statement) → 2·Payment
+// (method, copy number, working link; the confirm CTA unlocks only after the
+// buyer actually copied the number or opened the payment app) → 3·"Did you
+// send ₪X to Y?" with what-happens-next. Real money goes to a stranger here —
+// the old single screen let "שלחתי תשלום" be tapped before anything was copied.
 function BuyModal({
   listing,
   onClose,
@@ -138,12 +144,16 @@ function BuyModal({
 }) {
   const { confirmPaymentSent } = useMarketplace()
   const { t } = useT()
+  const [step, setStep] = useState<1 | 2 | 3>(1)
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
+  // The buyer must have copied the number or opened the payment app before
+  // "I sent the payment" unlocks
+  const [interacted, setInteracted] = useState(false)
 
-  // Reset copied state when payment method changes
-  useEffect(() => { setCopied(false) }, [selectedMethod])
+  // Reset interaction state when payment method changes
+  useEffect(() => { setCopied(false); setInteracted(false) }, [selectedMethod])
 
   const methods: PaymentMethod[] = listing.seller_payment_methods || []
   const paymentLink = selectedMethod
@@ -171,6 +181,26 @@ function BuyModal({
     }
   }
 
+  const stepFooter =
+    step === 1 ? (
+      <Button onClick={() => setStep(2)} disabled={methods.length === 0} fullWidth>
+        {t('listing.buy3.continue_payment')}
+      </Button>
+    ) : step === 2 ? (
+      <Button onClick={() => setStep(3)} disabled={!selectedMethod || !interacted} fullWidth>
+        {t('listing.buy.confirm_button')}
+      </Button>
+    ) : (
+      <div className="flex gap-2">
+        <Button onClick={() => setStep(2)} variant="secondary" className="flex-1">
+          {t('listing.buy3.back')}
+        </Button>
+        <Button onClick={handleConfirm} disabled={sending} loading={sending} className="flex-[2]">
+          {t('listing.buy3.yes_sent')}
+        </Button>
+      </div>
+    )
+
   return (
     <BottomSheet
       open
@@ -178,42 +208,83 @@ function BuyModal({
       title={t('listing.buy.title')}
       className="max-h-[90dvh]"
       footer={
-        <Button onClick={handleConfirm} disabled={sending || !selectedMethod || methods.length === 0} loading={sending} fullWidth>
-          {t('listing.buy.confirm_button')}
-        </Button>
+        <div className="space-y-3">
+          {/* Step dots */}
+          <div className="flex items-center justify-center gap-1.5" aria-hidden="true">
+            {[1, 2, 3].map(s => (
+              <span
+                key={s}
+                className="rounded-full transition-all"
+                style={{
+                  width: s === step ? 18 : 6,
+                  height: 6,
+                  background: s <= step ? 'var(--c-primary)' : 'var(--c-border)',
+                }}
+              />
+            ))}
+          </div>
+          {stepFooter}
+        </div>
       }
     >
-      <div className="space-y-4">
-        {/* Voucher summary */}
-        <div className="bg-bg rounded-2xl p-4 space-y-1">
-          <p className="font-semibold text-text">{listing.store_name}</p>
-          <p className="text-sm text-text3">
-            {t('listing.buy.balance_label')}: ₪{listing.balance} · {t('listing.buy.price_label')}:{' '}
-            <span className="text-primary font-bold">₪{listing.asking_price}</span>
-          </p>
-        </div>
+      {step === 1 && (
+        <div className="space-y-4">
+          {/* Voucher + deal summary */}
+          <div className="bg-bg rounded-2xl p-4 space-y-2">
+            <p className="font-semibold text-text">{listing.store_name}</p>
+            <p className="text-sm text-text3">
+              {t('listing.buy.balance_label')}: ₪{listing.balance} · {t('listing.buy.price_label')}:{' '}
+              <span className="text-primary font-bold">₪{listing.asking_price}</span>
+            </p>
+            {listing.expiry_date && (
+              <p className="text-xs text-text3">{t('listing.buy3.expiry')}: {new Date(listing.expiry_date).toLocaleDateString('he-IL')}</p>
+            )}
+            {/* Seller reputation — what the buyer is really deciding on */}
+            <div className="flex items-center gap-2 pt-1 border-t border-border/60">
+              <span className="text-sm text-text2">{listing.seller_name || t('listing.buy3.seller')}</span>
+              {listing.is_verified_seller && (
+                <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                  <Icon name="verified" size={13} filled /> {t('listing.buy3.verified')}
+                </span>
+              )}
+              {(listing.rating_count ?? 0) > 0 && (
+                <span className="text-xs text-text3">
+                  ★ {listing.avg_rating?.toFixed(1)} ({listing.rating_count})
+                </span>
+              )}
+            </div>
+          </div>
 
-        {/* Chat link */}
-        <button
-          onClick={() => { onClose(); onChat() }}
-          className="w-full flex items-center gap-2 p-3 rounded-xl border border-border text-sm text-text2"
-        >
-          <Icon name="chat" size={16} color="var(--c-primary)" />
-          <span>{t('listing.buy.chat_prompt')}</span>
-        </button>
+          {/* Buyer-protection statement — explicit, before any money moves */}
+          <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-sm text-warning space-y-1.5">
+            <p className="flex gap-2 font-semibold">
+              <Icon name="warning" size={16} className="shrink-0 mt-0.5" />
+              <span>{t('listing.buy.warning')}</span>
+            </p>
+            <p className="text-xs leading-relaxed">{t('listing.buy3.protection')}</p>
+          </div>
 
-        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 text-sm text-warning flex gap-2">
-          <Icon name="warning" size={16} className="shrink-0 mt-0.5" />
-          <span>{t('listing.buy.warning')}</span>
-        </div>
+          {/* Chat link */}
+          <button
+            onClick={() => { onClose(); onChat() }}
+            className="w-full flex items-center gap-2 p-3 rounded-xl border border-border text-sm text-text2"
+          >
+            <Icon name="chat" size={16} color="var(--c-primary)" />
+            <span>{t('listing.buy.chat_prompt')}</span>
+          </button>
 
-        {/* Payment methods */}
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-text2">{t('listing.buy.methods_label')}</p>
-          {methods.length === 0 ? (
+          {methods.length === 0 && (
             <p className="text-sm text-text3">{t('listing.buy.no_methods')}</p>
-          ) : (
-            methods.map((m, i) => (
+          )}
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          {/* Payment methods */}
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-text2">{t('listing.buy.methods_label')}</p>
+            {methods.map((m, i) => (
               <button
                 key={i}
                 onClick={() => setSelectedMethod(m)}
@@ -231,57 +302,80 @@ function BuyModal({
                 <Icon name={m.type === 'paypal' ? 'mail' : 'call'} size={16} color="var(--c-text3)" />
                 {selectedMethod === m && <Icon name="check_circle" size={20} filled color="var(--c-primary)" />}
               </button>
-            ))
+            ))}
+          </div>
+
+          {/* Selected method details + payment link */}
+          {selectedMethod && (
+            <div className="bg-primary-light border border-primary/20 rounded-xl p-4 space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-primary">
+                  {t('listing.buy.send_instruction', { amount: listing.asking_price!, method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
+                </p>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-base text-text flex-1 break-all">{selectedMethod.value}</p>
+                  <button
+                    onClick={async () => {
+                      // Guarded: an unhandled clipboard rejection used to show the
+                      // success checkmark anyway
+                      try {
+                        await navigator.clipboard.writeText(selectedMethod.value)
+                        setCopied(true)
+                        setInteracted(true)
+                        setTimeout(() => setCopied(false), 2000)
+                      } catch {
+                        toast.error(t('app.error'))
+                      }
+                    }}
+                    className="p-2.5 rounded-lg bg-surface text-primary shrink-0"
+                    aria-label={t('listing.buy.copy_aria')}
+                  >
+                    <Icon name={copied ? 'check_circle' : 'content_copy'} size={16} filled={copied} />
+                  </button>
+                </div>
+              </div>
+
+              {paymentLink ? (
+                <a
+                  href={paymentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setInteracted(true)}
+                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 ${METHOD_COLORS[selectedMethod.type]}`}
+                >
+                  <Icon name="open_in_new" size={16} />
+                  {t('listing.buy.open_app', { method: PAYMENT_METHOD_LABELS[selectedMethod.type], amount: listing.asking_price! })}
+                </a>
+              ) : (
+                <p className="text-xs text-text2">
+                  {t('listing.buy.manual_instruction', { method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
+                </p>
+              )}
+
+              {!interacted && (
+                <p className="text-xs text-text3">{t('listing.buy3.copy_first')}</p>
+              )}
+            </div>
           )}
         </div>
+      )}
 
-        {/* Selected method details + payment link */}
-        {selectedMethod && (
-          <div className="bg-primary-light border border-primary/20 rounded-xl p-4 space-y-3">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-primary">
-                {t('listing.buy.send_instruction', { amount: listing.asking_price!, method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
-              </p>
-              <div className="flex items-center gap-2">
-                <p className="font-mono text-base text-text flex-1 break-all">{selectedMethod.value}</p>
-                <button
-                  onClick={async () => {
-                    // Guarded: an unhandled clipboard rejection used to show the
-                    // success checkmark anyway
-                    try {
-                      await navigator.clipboard.writeText(selectedMethod.value)
-                      setCopied(true)
-                      setTimeout(() => setCopied(false), 2000)
-                    } catch {
-                      toast.error(t('app.error'))
-                    }
-                  }}
-                  className="p-2.5 rounded-lg bg-surface text-primary shrink-0"
-                  aria-label={t('listing.buy.copy_aria')}
-                >
-                  <Icon name={copied ? 'check_circle' : 'content_copy'} size={16} filled={copied} />
-                </button>
-              </div>
-            </div>
-
-            {paymentLink ? (
-              <a
-                href={paymentLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 ${METHOD_COLORS[selectedMethod.type]}`}
-              >
-                <Icon name="open_in_new" size={16} />
-                {t('listing.buy.open_app', { method: PAYMENT_METHOD_LABELS[selectedMethod.type], amount: listing.asking_price! })}
-              </a>
-            ) : (
-              <p className="text-xs text-text2">
-                {t('listing.buy.manual_instruction', { method: PAYMENT_METHOD_LABELS[selectedMethod.type] })}
-              </p>
-            )}
+      {step === 3 && selectedMethod && (
+        <div className="space-y-4">
+          <div className="bg-bg rounded-2xl p-5 text-center space-y-2">
+            <Icon name="payments" size={36} color="var(--c-primary)" className="mx-auto" />
+            <p className="font-bold text-text text-lg">
+              {t('listing.buy3.did_you_send', { amount: listing.asking_price! })}
+            </p>
+            <p className="text-sm text-text2 font-mono break-all" dir="ltr">{selectedMethod.value}</p>
+            <p className="text-xs text-text3">{PAYMENT_METHOD_LABELS[selectedMethod.type]}</p>
           </div>
-        )}
-      </div>
+          <div className="bg-primary-light/60 rounded-xl p-4 text-sm text-text2 space-y-1.5">
+            <p className="font-semibold text-text">{t('listing.buy3.next_title')}</p>
+            <p className="text-xs leading-relaxed">{t('listing.buy3.next_body')}</p>
+          </div>
+        </div>
+      )}
     </BottomSheet>
   )
 }
@@ -302,7 +396,9 @@ export default function ListingDetailPage() {
   const [purchased, setPurchased] = useState(false)
   const [currentPrice, setCurrentPrice] = useState<number | null>(null)
 
-  // Try to find in context first, otherwise fetch directly
+  // Try the context cache first, then the active-listings fetch, and finally
+  // get_listing_by_id — the only path that returns non-active listings, so a
+  // buyer's in-progress purchase no longer renders "מודעה לא נמצאה"
   useEffect(() => {
     if (!id) return
 
@@ -315,8 +411,19 @@ export default function ListingDetailPage() {
     }
 
     setLoading(true)
-    fetchListings().then(() => {
-      setLoading(false)
+    fetchListings().then(async () => {
+      try {
+        const { data } = await supabase.rpc('get_listing_by_id', { p_id: id })
+        const row = Array.isArray(data) ? data[0] : data
+        if (row) {
+          setListing(row as MarketplaceListing)
+          setCurrentPrice(p => p ?? ((row as MarketplaceListing).asking_price ?? null))
+        }
+      } catch {
+        // RPC not applied yet (supabase-listing-by-id.sql) — active listings still work
+      } finally {
+        setLoading(false)
+      }
     })
   }, [id])
 

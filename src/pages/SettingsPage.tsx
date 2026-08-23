@@ -33,14 +33,14 @@ export default function SettingsPage() {
   // "ביומטריה" or "טלגרם" finds the right card (the old search matched only the
   // eight visible titles/descs)
   const categories: CategoryDef[] = [
-    { key: 'wallet',        icon: 'account_balance_wallet', title: 'הארנק שלי', desc: 'שיתוף, מועדונים, תצוגת ערך', path: '/settings/wallet', keywords: 'חברים הזמנה משפחה מועדון אשראי ערך שוק' },
-    { key: 'marketplace',   icon: 'storefront',       title: 'שוק',         desc: 'אמצעי תשלום, מכירות ורכישות',      path: '/market', keywords: 'ביט פייבוקס פייפאל מכירה קנייה מודעה' },
-    { key: 'notifications', icon: 'notifications',    title: 'התראות',      desc: 'תזכורות תוקף, ערוצי התראה, טלגרם', path: '/settings/notifications', keywords: 'טלגרם פוש מייל אימייל תזכורת ימים תוקף' },
-    { key: 'privacy',       icon: 'lock',             title: 'פרטיות',      desc: 'ביומטריה וכספת הצפנה',             path: '/settings/privacy', keywords: 'ביומטריה טביעת אצבע כספת הצפנה סיסמה קוד שחזור נעילה' },
-    { key: 'appearance',    icon: 'palette',          title: 'מראה',        desc: 'מצב כהה, שפה, שקיפות ניווט',       path: '/settings/appearance', keywords: 'כהה בהיר שפה אנגלית עברית שקיפות ערכת נושא' },
-    { key: 'backup',        icon: 'cloud',            title: 'גיבוי',       desc: 'סנכרון לענן, בדיקת חיבור',         path: '/settings/backup', keywords: 'סנכרון ענן חיבור אופליין' },
-    { key: 'accessibility', icon: 'accessibility_new', title: 'נגישות',     desc: 'כפתור נגישות והצהרת נגישות',       path: '/settings/accessibility', keywords: 'טקסט גדול ניגודיות אנימציה הצהרה' },
-    { key: 'about',         icon: 'info',             title: 'אודות ותמיכה', desc: 'תמיכה, יומן פעילות, תנאים',      path: '/settings/about', keywords: 'תמיכה פנייה יומן היסטוריה תנאים פרטיות מדריך גרסה' },
+    { key: 'wallet',        icon: 'account_balance_wallet', title: t('hub.cat.wallet'), desc: t('hub.cat.wallet.desc'), path: '/settings/wallet', keywords: 'חברים הזמנה משפחה מועדון אשראי ערך שוק' },
+    { key: 'marketplace',   icon: 'storefront',       title: t('nav.market'),         desc: t('hub.cat.market.desc'),      path: '/market', keywords: 'ביט פייבוקס פייפאל מכירה קנייה מודעה' },
+    { key: 'notifications', icon: 'notifications',    title: t('settings.notifications'),      desc: t('hub.cat.notifications.desc'), path: '/settings/notifications', keywords: 'טלגרם פוש מייל אימייל תזכורת ימים תוקף' },
+    { key: 'privacy',       icon: 'lock',             title: t('privacy.title'),      desc: t('hub.cat.privacy.desc'),             path: '/settings/privacy', keywords: 'ביומטריה טביעת אצבע כספת הצפנה סיסמה קוד שחזור נעילה' },
+    { key: 'appearance',    icon: 'palette',          title: t('settings.appearance'),        desc: t('hub.cat.appearance.desc'),       path: '/settings/appearance', keywords: 'כהה בהיר שפה אנגלית עברית שקיפות ערכת נושא' },
+    { key: 'backup',        icon: 'cloud',            title: t('backup.title'),       desc: t('hub.cat.backup.desc'),         path: '/settings/backup', keywords: 'סנכרון ענן חיבור אופליין' },
+    { key: 'accessibility', icon: 'accessibility_new', title: t('settings.accessibility'),     desc: t('hub.cat.accessibility.desc'),       path: '/settings/accessibility', keywords: 'טקסט גדול ניגודיות אנימציה הצהרה' },
+    { key: 'about',         icon: 'info',             title: t('about.title'), desc: t('hub.cat.about.desc'),      path: '/settings/about', keywords: 'תמיכה פנייה יומן היסטוריה תנאים פרטיות מדריך גרסה' },
   ]
 
   const filteredCategories = search.trim()
@@ -50,7 +50,7 @@ export default function SettingsPage() {
       })
     : categories
 
-  const syncLabel = !isOnline ? 'לא מקוון' : pendingOpsCount > 0 ? `מסנכרן (${pendingOpsCount})` : 'מסונכרן'
+  const syncLabel = !isOnline ? t('hub.sync.offline') : pendingOpsCount > 0 ? t('hub.sync.syncing', { count: pendingOpsCount }) : t('hub.sync.synced')
 
   return (
     <div className="flex-1 bg-bg">
@@ -60,7 +60,7 @@ export default function SettingsPage() {
           <button
             onClick={() => setSearchOpen(v => !v)}
             className="absolute start-4 w-11 h-11 rounded-full flex items-center justify-center bg-surface shadow-card"
-            aria-label="חיפוש הגדרות"
+            aria-label={t('hub.search.aria')}
             aria-expanded={searchOpen}
           >
             <Icon name="search" size={19} color="var(--c-text2)" />
@@ -74,7 +74,7 @@ export default function SettingsPage() {
               <Icon name="search" size={18} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text" value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="חפש הגדרה..."
+                placeholder={t('hub.search.placeholder')}
                 autoFocus
                 className="w-full ps-10 pe-3 py-2.5 border border-border rounded-2xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
@@ -93,21 +93,21 @@ export default function SettingsPage() {
                 {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xl font-extrabold text-white">{profile?.name || 'ללא שם'}</div>
+                <div className="text-xl font-extrabold text-white">{profile?.name || t('hub.no.name')}</div>
                 <div className="text-[13px] text-white/70 mt-0.5 truncate">{user?.email}</div>
                 <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full text-white ${isPro ? 'bg-white/30' : 'bg-white/20'}`}>
-                    {isPro ? 'Pro ★' : 'משתמש רגיל'}
+                    {isPro ? 'Pro ★' : t('hub.plan.free')}
                   </span>
                   {isAdmin && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full text-white bg-white/30">
                       <Icon name="verified_user" size={11} color="#fff" filled />
-                      מנהל
+                      {t('nav.admin')}
                     </span>
                   )}
                   {isPro && proExpiryDate && (
                     <span className="text-[10px] text-white/65 font-medium">
-                      פעיל עד {new Date(proExpiryDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      {t('hub.pro.active.until', { date: new Date(proExpiryDate).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) })}
                     </span>
                   )}
                 </div>
@@ -117,7 +117,7 @@ export default function SettingsPage() {
               </button>
             </div>
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/20">
-              <span className="text-sm text-white/80">{vouchers.length} שוברים</span>
+              <span className="text-sm text-white/80">{t('hub.vouchers.count', { count: vouchers.length })}</span>
               <span className="text-lg font-black text-white">₪{totalBalance.toLocaleString('he-IL')}</span>
             </div>
 
@@ -145,7 +145,7 @@ export default function SettingsPage() {
         {!isPro && (
           <div className="px-4">
             <div
-              onClick={() => openUpgradeSheet('שדרג לחוויה מלאה')}
+              onClick={() => openUpgradeSheet(t('hub.upgrade.reason'))}
               className="gs-tap rounded-[18px] px-[18px] py-4 cursor-pointer relative overflow-hidden"
               style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', boxShadow: '0 4px 24px rgba(0,0,0,0.2)' }}
             >
@@ -154,8 +154,8 @@ export default function SettingsPage() {
                   <Icon name="workspace_premium" size={20} filled color="#fff" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-[15px] font-extrabold text-white">שדרג ל-GiftSmart Pro</div>
-                  <div className="text-xs text-white/60 mt-0.5">שוברים ללא הגבלה · ₪9 לחודש</div>
+                  <div className="text-[15px] font-extrabold text-white">{t('hub.upgrade.title')}</div>
+                  <div className="text-xs text-white/60 mt-0.5">{t('hub.upgrade.desc')}</div>
                 </div>
                 <Icon name="chevron_left" size={16} color="rgba(255,255,255,0.5)" />
               </div>
@@ -169,11 +169,11 @@ export default function SettingsPage() {
           <QuickStatusTile icon={isOnline ? 'cloud' : 'wifi_off'} label={syncLabel} active={isOnline && pendingOpsCount === 0} />
           <QuickStatusTile
             icon="lock"
-            label={hasVault ? (isVaultUnlocked ? 'פתוחה' : 'מאובטח') : 'הפעל הצפנה'}
+            label={hasVault ? (isVaultUnlocked ? t('hub.tile.vault.open') : t('hub.tile.vault.secure')) : t('privacy.vault.enable')}
             active={hasVault}
             onClick={hasVault ? () => navigate('/settings/privacy') : () => setShowVaultSetup(true)}
           />
-          <QuickStatusTile icon="workspace_premium" label={isPro ? 'Premium' : 'רגיל'} active={isPro} />
+          <QuickStatusTile icon="workspace_premium" label={isPro ? 'Premium' : t('hub.tile.standard')} active={isPro} />
           <QuickStatusTile icon={theme === 'dark' ? 'dark_mode' : 'light_mode'} label={theme === 'dark' ? 'Dark' : 'Light'} active={theme === 'dark'} onClick={toggleTheme} />
         </div>
 
@@ -196,7 +196,7 @@ export default function SettingsPage() {
             </button>
           ))}
           {filteredCategories.length === 0 && (
-            <p className="text-center text-sm text-text3 py-6">לא נמצאו הגדרות תואמות</p>
+            <p className="text-center text-sm text-text3 py-6">{t('hub.no.results')}</p>
           )}
         </div>
 
