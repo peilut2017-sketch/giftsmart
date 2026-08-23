@@ -8,6 +8,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import toast from 'react-hot-toast'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
+import ConfirmDialog from './ConfirmDialog'
 import { SHEET_Z_INDEX } from './ui/BottomSheet'
 
 interface ChatModalProps {
@@ -29,6 +30,7 @@ export default function ChatModal({
   currentAskingPrice,
   storeName,
   onClose,
+  onPriceUpdated,
 }: ChatModalProps) {
   const { t } = useT()
   const { user } = useAuth()
@@ -39,6 +41,7 @@ export default function ChatModal({
   const [messages, setMessages] = useState<MarketplaceMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
   const [sending, setSending] = useState(false)
   const [showOfferInput, setShowOfferInput] = useState(false)
   const [offerAmount, setOfferAmount] = useState('')
@@ -48,11 +51,7 @@ export default function ChatModal({
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Register this chat as active so the global inbox listener skips counting/pushing.
-  // Also request notification permission — best moment since user is actively chatting.
   useEffect(() => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
     const key = `${listingId}:${otherUserId}`
     registerActiveChat(key)
     return () => unregisterActiveChat(key)
@@ -204,6 +203,9 @@ export default function ChatModal({
             ? `${t('chat.offer.accepted.seller')}: ₪${offerMsg?.offer_amount}`
             : `${t('chat.offer.accepted.buyer')}: ₪${offerMsg?.offer_amount}`,
         )
+        // Tell the host page the negotiated price — this prop existed but was never
+        // called, so the listing kept showing the OLD price until a manual reload.
+        if (offerMsg?.offer_amount != null) onPriceUpdated?.(offerMsg.offer_amount)
       } else {
         toast(t('chat.offer.rejected'), { icon: '✋' })
       }
@@ -233,10 +235,14 @@ export default function ChatModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
-        onClick={onClose}
+        onClick={() => {
+          // A typed-but-unsent message shouldn't be destroyed by a stray backdrop tap
+          if (text.trim()) { setShowDiscardConfirm(true); return }
+          onClose()
+        }}
       >
         <motion.div
-          className="bg-surface rounded-t-[28px] w-full max-w-2xl flex flex-col"
+          className="bg-surface rounded-t-[28px] w-full max-w-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
           style={{ height: '85dvh' }}
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
@@ -254,7 +260,11 @@ export default function ChatModal({
               <p className="font-semibold text-text truncate">{otherDisplayName}</p>
               <p className="text-xs text-text3 truncate">{storeName} · {t('chat.current.price')}: ₪{currentAskingPrice}</p>
             </div>
-            <button onClick={onClose} className="p-2 rounded-full bg-bg text-text2 shrink-0">
+            <button
+              onClick={() => { if (text.trim()) setShowDiscardConfirm(true); else onClose() }}
+              aria-label={t('app.close')}
+              className="p-2.5 rounded-full bg-bg text-text2 shrink-0"
+            >
               <Icon name="close" size={20} />
             </button>
           </div>
@@ -340,19 +350,30 @@ export default function ChatModal({
                 onKeyDown={handleKeyDown}
                 placeholder={t('chat.input.placeholder')}
                 rows={1}
-                className="flex-1 border border-border rounded-2xl px-4 py-2.5 text-sm bg-bg text-text resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-24 overflow-y-auto leading-5"
-                style={{ minHeight: '40px' }}
+                className="flex-1 border border-border rounded-2xl px-4 py-2.5 text-base bg-bg text-text resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-24 overflow-y-auto leading-6"
+                style={{ minHeight: '44px' }}
               />
               <button
                 onClick={handleSend}
                 disabled={sending || !text.trim()}
-                className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center disabled:opacity-40 shrink-0"
+                aria-label={t('chat.send.aria')}
+                className="w-11 h-11 bg-primary text-white rounded-full flex items-center justify-center disabled:opacity-40 shrink-0"
               >
                 {sending ? <Icon name="progress_activity" size={16} className="animate-spin" /> : <Icon name="send" size={16} />}
               </button>
             </div>
           </div>
         </motion.div>
+
+        {showDiscardConfirm && (
+          <ConfirmDialog
+            title={t('chat.discard.confirm.title')}
+            message={t('chat.discard.confirm.msg')}
+            danger
+            onConfirm={() => { setShowDiscardConfirm(false); onClose() }}
+            onCancel={() => setShowDiscardConfirm(false)}
+          />
+        )}
       </motion.div>
     </AnimatePresence>
   )

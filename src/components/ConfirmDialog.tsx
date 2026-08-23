@@ -62,7 +62,9 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4"
+      // Topmost layer: a confirmation must never render UNDER the sheet (z-100) or
+      // vault modals (z-110) that opened it
+      className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4"
       onClick={onCancel}
     >
       <div
