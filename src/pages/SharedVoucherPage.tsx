@@ -7,6 +7,7 @@ import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { useT } from '../lib/i18n'
 import Icon from '../components/ui/Icon'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 function isSafeUrl(url: string | undefined | null): boolean {
   if (!url) return false
@@ -42,6 +43,7 @@ export default function SharedVoucherPage() {
   const [usedAmount, setUsedAmount] = useState('')
   const [storeUsed, setStoreUsed] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [confirmUpdate, setConfirmUpdate] = useState(false)
 
   const barcodeRef = useRef<SVGSVGElement>(null)
   const qrRef = useRef<HTMLCanvasElement>(null)
@@ -326,11 +328,11 @@ export default function SharedVoucherPage() {
                   className="w-full flex items-center justify-center gap-2 px-6 py-4 text-sm font-semibold text-primary"
                 >
                   <Icon name="keyboard_arrow_down" size={16} />
-                  עדכן יתרה לאחר שימוש
+                  {t('shared.update.open')}
                 </button>
               ) : (
                 <div className="p-4 space-y-3 bg-primary-light">
-                  <p className="text-sm font-semibold text-text2 text-center">עדכון יתרה</p>
+                  <p className="text-sm font-semibold text-text2 text-center">{t('shared.update.title')}</p>
                   <div className="flex gap-2">
                     <input
                       ref={usedInputRef}
@@ -338,20 +340,20 @@ export default function SharedVoucherPage() {
                       inputMode="decimal"
                       value={usedAmount}
                       onChange={e => setUsedAmount(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
-                      placeholder="סכום שימוש"
+                      onKeyDown={e => e.key === 'Enter' && setConfirmUpdate(true)}
+                      placeholder={t('shared.update.amount.placeholder')}
                       className="flex-1 text-center text-lg font-bold border border-border rounded-2xl px-4 py-2.5 bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                       dir="ltr"
                     />
                     <button
-                      onClick={handleUpdateBalance}
+                      onClick={() => setConfirmUpdate(true)}
                       disabled={updating || !usedAmount || isNaN(parseFloat(usedAmount)) || parseFloat(usedAmount) <= 0}
                       className="px-5 py-2.5 bg-primary text-white rounded-2xl font-semibold text-sm disabled:opacity-50 flex items-center gap-1.5"
                     >
                       {updating
                         ? <Icon name="progress_activity" size={16} className="animate-spin" />
                         : <Icon name="check" size={16} />}
-                      אשר
+                      {t('shared.update.confirm.cta')}
                     </button>
                   </div>
                   {parseFloat(usedAmount) > 0 && parseFloat(usedAmount) <= voucher.balance && (
@@ -359,8 +361,8 @@ export default function SharedVoucherPage() {
                       type="text"
                       value={storeUsed}
                       onChange={e => setStoreUsed(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleUpdateBalance()}
-                      placeholder="באיזה חנות? (אופציונלי)"
+                      onKeyDown={e => e.key === 'Enter' && setConfirmUpdate(true)}
+                      placeholder={t('shared.update.store.placeholder')}
                       className="w-full text-sm border border-border rounded-2xl px-4 py-2.5 bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                       dir="rtl"
                     />
@@ -370,7 +372,7 @@ export default function SharedVoucherPage() {
                     if (isNaN(amount) || amount <= 0 || amount > voucher.balance) return null
                     return (
                       <p className="text-xs text-center text-text3">
-                        יתרה חדשה: <strong className="text-primary">{formatCurrency(Math.max(0, voucher.balance - amount))}</strong>
+                        {t('shared.update.new.balance')} <strong className="text-primary">{formatCurrency(Math.max(0, voucher.balance - amount))}</strong>
                       </p>
                     )
                   })()}
@@ -378,18 +380,38 @@ export default function SharedVoucherPage() {
                     onClick={() => { setShowUpdateForm(false); setUsedAmount(''); setStoreUsed('') }}
                     className="w-full text-xs text-text3 py-1"
                   >
-                    ביטול
+                    {t('shared.btn.cancel')}
                   </button>
                 </div>
               )}
             </div>
 
-            <div className="bg-bg px-6 py-3 text-center border-t border-border">
-              <p className="text-xs text-text3">שותף דרך GiftSmart</p>
+            <div className="bg-bg px-6 py-4 text-center border-t border-border">
+              <p className="text-xs text-text3 mb-2">{t('shared.footer.branding')}</p>
+              <p className="text-xs text-text2 mb-2">{t('shared.signup.pitch')}</p>
+              <a
+                href="/login?mode=register"
+                className="inline-block px-5 py-2 rounded-xl bg-primary text-white text-xs font-semibold"
+              >
+                {t('shared.signup.cta')}
+              </a>
             </div>
           </div>
         )}
       </div>
+
+      {confirmUpdate && voucher && (
+        <ConfirmDialog
+          title={t('shared.update.confirm.title')}
+          message={t('shared.update.confirm.message', {
+            from: formatCurrency(voucher.balance),
+            to: formatCurrency(Math.max(0, voucher.balance - (parseFloat(usedAmount) || 0))),
+          })}
+          confirmLabel={t('shared.update.confirm.cta')}
+          onConfirm={() => { setConfirmUpdate(false); handleUpdateBalance() }}
+          onCancel={() => setConfirmUpdate(false)}
+        />
+      )}
     </div>
   )
 }

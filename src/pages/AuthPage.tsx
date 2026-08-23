@@ -10,6 +10,8 @@ import { useT } from '../lib/i18n'
 
 const APP_VERSION = '1.0.0'
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 type Mode = 'login' | 'register' | 'forgot' | 'newPassword'
 type LoginStep = 'email' | 'biometric' | 'password'
 
@@ -60,6 +62,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   function handleEmailContinue(e: React.FormEvent) {
     e.preventDefault()
     if (!email) return toast.error(t('auth.email.required'))
+    if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
     const biometricEmail = getBiometricEmail()
     if (
       isBiometricEnabled() &&
@@ -120,6 +123,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
     try {
       if (mode === 'forgot') {
         if (!email) return toast.error(t('auth.email.required'))
+        if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
         const { error } = await resetPassword(email)
         if (error) toast.error(t('auth.reset.email.error'))
         else {
@@ -181,6 +185,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       // register
       if (!privacyAccepted) return toast.error(t('auth.privacy.required'))
       if (!email || !password) return toast.error(t('auth.email.password.required'))
+      if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
       if (password !== password2) return toast.error(t('auth.passwords.mismatch'))
       if (!validatePasswordStrong()) return
       const { error } = await signUp(email, password, name)
@@ -205,10 +210,10 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   // ── Biometric step (full-screen style within the card) ──────────────────────
   if (mode === 'login' && loginStep === 'biometric') {
     return (
-      <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-dvh auth-bg flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+            <img src="/logo.png" alt="GiftSmart" className="w-24 h-24 object-contain mx-auto" />
           </div>
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
             <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5 shadow-lg bg-gradient-to-br from-green-400 to-emerald-600`}>
@@ -254,11 +259,11 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-dvh auth-bg flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="GiftSmart" className="w-40 h-40 object-contain mx-auto" />
+          <img src="/logo.png" alt="GiftSmart" className="w-24 h-24 object-contain mx-auto" />
           <span className="text-xs text-gray-400 mt-1 block">{t('auth.version')} {APP_VERSION}</span>
         </div>
 

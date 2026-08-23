@@ -119,6 +119,32 @@
   background: var(--lp-g-dark);
   box-shadow: 0 4px 16px rgba(22,163,74,0.3), 0 12px 32px rgba(22,163,74,0.2);
 }
+.lp-nav-burger {
+  display: none;
+  width: 44px; height: 44px;
+  align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px; cursor: pointer; color: #fff;
+}
+#lp-nav.lp-solid .lp-nav-burger {
+  background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); color: var(--lp-text);
+}
+.lp-nav-mobile {
+  position: fixed; top: 70px; inset-inline: 0; z-index: 998;
+  display: flex; flex-direction: column;
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.12);
+  padding: 8px 0 12px;
+}
+.lp-nav-mobile a {
+  padding: 14px clamp(1.5rem, 5vw, 5rem);
+  font-size: 16px; font-weight: 600; color: var(--lp-text);
+  text-decoration: none;
+}
+.lp-nav-mobile a:active { background: var(--lp-g-xlight); color: var(--lp-g); }
 
 /* ── HERO ───────────────────────────────────────────── */
 #lp-hero {
@@ -127,7 +153,7 @@
   display: flex; flex-direction: column;
   align-items: center; justify-content: flex-start;
   text-align: center;
-  padding: clamp(6rem, 10vw, 9rem) clamp(1.5rem, 6vw, 5rem) clamp(4rem, 8vw, 7rem);
+  padding: clamp(5.5rem, 8vw, 7.5rem) clamp(1.5rem, 6vw, 5rem) clamp(3.5rem, 6vw, 5.5rem);
   background:
     radial-gradient(ellipse 80% 60% at 10% 20%,  rgba(21,128,61,0.55) 0%, transparent 55%),
     radial-gradient(ellipse 60% 50% at 90% 80%,  rgba(147,51,234,0.2) 0%, transparent 50%),
@@ -165,7 +191,7 @@
   color: rgba(255,255,255,0.6); line-height: 1.7;
   max-width: 540px; margin-bottom: 36px;
 }
-.lp-hero-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; margin-bottom: 52px; }
+.lp-hero-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; margin-bottom: 40px; }
 .lp-btn-hero-p {
   font-family: 'Heebo', sans-serif;
   display: inline-flex; align-items: center; gap: 8px;
@@ -316,7 +342,8 @@
 .lp-dadd-input {
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
   border-radius: 10px; padding: 10px 12px;
-  font-size: 13px; font-weight: 600; color: #fff; font-family: 'Heebo', sans-serif;
+  /* 16px minimum — anything smaller triggers iOS Safari's auto-zoom on focus */
+  font-size: 16px; font-weight: 600; color: #fff; font-family: 'Heebo', sans-serif;
   direction: rtl; outline: none;
   transition: border-color 200ms, background 200ms;
 }
@@ -656,6 +683,7 @@
 }
 @media (max-width: 768px) {
   #lp-nav .lp-nav-links { display: none; }
+  .lp-nav-burger { display: flex; }
   .lp-c4, .lp-c7, .lp-c5, .lp-c8, .lp-c12 { grid-column: span 12; }
   #lp-footer { flex-direction: column; text-align: center; }
   .lp-flinks { justify-content: center; }

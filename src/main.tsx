@@ -12,6 +12,15 @@ applyNavGlassOpacity()
 document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false })
 document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false })
 
+// Capture the install prompt at module scope — Chrome fires beforeinstallprompt
+// once, typically before React mounts, so a listener registered inside a
+// component effect misses it and the install banner never appears.
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault()
+  ;(window as any).__gsInstallPrompt = e
+  window.dispatchEvent(new Event('gs-install-ready'))
+})
+
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

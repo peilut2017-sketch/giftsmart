@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { X, ZoomIn, ZoomOut, Eye, Minus, Accessibility } from 'lucide-react'
 
 const STORAGE_KEY = 'a11y_prefs'
@@ -74,6 +75,27 @@ export default function AccessibilityWidget() {
     }
   }, [open])
 
+  // Keep Tab cycling inside the open panel (it's a modal dialog)
+  useEffect(() => {
+    if (!open) return
+    const el = panelRef.current
+    if (!el) return
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const focusable = el.querySelectorAll<HTMLElement>('button, a[href], [tabindex]:not([tabindex="-1"])')
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
+    }
+    el.addEventListener('keydown', onTab)
+    return () => el.removeEventListener('keydown', onTab)
+  }, [open])
+
   function update<K extends keyof A11yPrefs>(key: K, value: A11yPrefs[K]) {
     setPrefs(p => ({ ...p, [key]: value }))
   }
@@ -93,7 +115,7 @@ export default function AccessibilityWidget() {
         aria-label={open ? 'סגור תפריט נגישות' : 'פתח תפריט נגישות'}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+        className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
           anyActive
             ? 'bg-blue-600 text-white'
             : 'bg-white text-gray-700 border border-gray-200'
@@ -177,7 +199,10 @@ export default function AccessibilityWidget() {
                     className={`relative w-10 h-5 rounded-full transition-colors ${prefs[key] ? 'bg-blue-600' : 'bg-gray-200'}`}
                     aria-label={label}
                   >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${prefs[key] ? 'translate-x-0.5' : 'right-0.5'}`} />
+                    <span
+                      className={`absolute top-0.5 start-0.5 w-4 h-4 rounded-full shadow transition-transform ${prefs[key] ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`}
+                      style={{ background: '#fff' }}
+                    />
                   </button>
                 </label>
               ))}
@@ -194,12 +219,12 @@ export default function AccessibilityWidget() {
             )}
 
             {/* Accessibility statement link */}
-            <a
-              href="/accessibility"
+            <Link
+              to="/accessibility"
               className="block text-center text-xs text-blue-600 hover:underline mt-1"
             >
               הצהרת נגישות
-            </a>
+            </Link>
           </div>
         </div>
       )}

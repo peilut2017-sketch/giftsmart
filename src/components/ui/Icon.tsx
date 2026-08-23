@@ -247,6 +247,8 @@ const rawIcons = import.meta.glob<string>(
   '../../../node_modules/@material-symbols/svg-400/rounded/info-fill.svg',
   '../../../node_modules/@material-symbols/svg-400/rounded/cloud_off.svg',
   '../../../node_modules/@material-symbols/svg-400/rounded/cloud_off-fill.svg',
+  '../../../node_modules/@material-symbols/svg-400/rounded/monitoring.svg',
+  '../../../node_modules/@material-symbols/svg-400/rounded/monitoring-fill.svg',
   ],
   { eager: true, query: '?raw', import: 'default' },
 )

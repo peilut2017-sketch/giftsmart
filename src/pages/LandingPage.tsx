@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { Fragment, useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './LandingPage.css'
 import AccessibilityWidget from '../components/AccessibilityWidget'
@@ -351,11 +351,10 @@ function InteractiveDemo() {
 export default function LandingPage() {
   const navigate = useNavigate()
   const navRef = useRef<HTMLElement>(null)
-  const probStagesRef = useRef<NodeListOf<Element> | null>(null)
-  const probFillRef = useRef<HTMLDivElement | null>(null)
   const fmcRefs = useRef<HTMLDivElement[]>([])
   const marketSectionRef = useRef<HTMLDivElement | null>(null)
   const [probIdx, setProbIdx] = useState(1)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const goToLogin = () => navigate('/login')
 
@@ -387,8 +386,6 @@ export default function LandingPage() {
     const stages = document.querySelectorAll('.lp-prob-stage')
     const fill = document.getElementById('lp-prob-fill') as HTMLDivElement | null
     if (!stages.length || !fill) return
-    probStagesRef.current = stages
-    probFillRef.current = fill
 
     const pio = new IntersectionObserver(entries => {
       entries.forEach(e => {
@@ -442,8 +439,27 @@ export default function LandingPage() {
           <li><a href="#lp-market">שוק שוברים</a></li>
           <li><a href="#lp-pricing">תמחור</a></li>
         </ul>
-        <button className="lp-nav-btn" onClick={goToLogin}>התחבר / הצטרף</button>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <button className="lp-nav-btn" onClick={goToLogin}>התחבר / הצטרף</button>
+          <button
+            className="lp-nav-burger"
+            aria-label={menuOpen ? 'סגור תפריט' : 'פתח תפריט'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(v => !v)}
+          >
+            <ph-icon name={menuOpen ? 'x' : 'list'} weight="bold" size="22"></ph-icon>
+          </button>
+        </div>
       </nav>
+      {menuOpen && (
+        <div className="lp-nav-mobile" onClick={() => setMenuOpen(false)}>
+          <a href="#lp-problem">הבעיה</a>
+          <a href="#lp-feat">פיצ'רים</a>
+          <a href="#lp-how">איך זה עובד</a>
+          <a href="#lp-market">שוק שוברים</a>
+          <a href="#lp-pricing">תמחור</a>
+        </div>
+      )}
 
       {/* ── HERO ── */}
       <section id="lp-hero" className="lp-grain">
@@ -504,8 +520,8 @@ export default function LandingPage() {
               <h3>"אני אשתמש בו<br />בהזדמנות הבאה."</h3>
               <p>קיבלת שובר ליום הולדת. שמת אותו במגירה "להזדמנות טובה". נזכרת בו חודש אחרי שהתוקף פג. ₪400 התאדו.</p>
               <div className="lp-prob-stat">
-                <span className="lp-prob-stat-n">23%</span>
-                <span className="lp-prob-stat-l">משוברי המתנה בישראל לא נצרכים בזמן</span>
+                <span className="lp-prob-stat-n">100%</span>
+                <span className="lp-prob-stat-l">מהיתרה נמחקת ברגע שהתוקף פג — בלי החזרים</span>
               </div>
             </article>
             <article className="lp-prob-stage" data-idx="2">
@@ -708,7 +724,7 @@ export default function LandingPage() {
         <h2 className="lp-ed-bigtitle lp-rv">
           דקה אחת.<br />
           <em>שלושה צעדים.</em><br />
-          אפס סדר עכוב.
+          אפס עיכובים.
         </h2>
         <div className="lp-how-rows">
           <article className="lp-how-row lp-rv">
@@ -938,21 +954,21 @@ export default function LandingPage() {
         <div className="lp-cta-box">
           <div className="lp-rv" style={{display:'flex',justifyContent:'center',gap:'clamp(1.5rem,4vw,3.5rem)',marginBottom:52,flexWrap:'wrap'}}>
             {[
-              {n:'₪890K+',l:'יתרה מנוהלת'},
-              {n:'2,400+',l:'שוברים פעילים'},
-              {n:'98%',l:'שוברים שנצלו בזמן'},
+              {n:'₪0',l:'מסלול חינמי — בלי כרטיס אשראי'},
+              {n:'AES-256',l:'הצפנה מקצה לקצה'},
+              {n:'דקה',l:'מהרשמה לשובר הראשון'},
             ].map((s, i) => (
-              <>
-                {i > 0 && <div key={`sep-${i}`} style={{width:1,background:'rgba(255,255,255,0.1)',alignSelf:'stretch'}} />}
-                <div key={s.n} style={{textAlign:'center'}}>
+              <Fragment key={s.n}>
+                {i > 0 && <div style={{width:1,background:'rgba(255,255,255,0.1)',alignSelf:'stretch'}} />}
+                <div style={{textAlign:'center'}}>
                   <div style={{fontSize:'clamp(2rem,3.5vw,2.8rem)',fontWeight:900,color:'#fff',letterSpacing:'-0.04em',lineHeight:1}}>{s.n}</div>
                   <div style={{fontSize:13,color:'rgba(255,255,255,0.5)',marginTop:6,fontWeight:500}}>{s.l}</div>
                 </div>
-              </>
+              </Fragment>
             ))}
           </div>
           <h2 className="lp-cta-title lp-rv">לא עוד שובר<br />שנזרק לפח</h2>
-          <p className="lp-cta-sub lp-rv">הצטרף לאלפי משתמשים שכבר חוסכים עם GiftSmart.<br />חינם. ללא כרטיס אשראי. מתחילים תוך דקה.</p>
+          <p className="lp-cta-sub lp-rv">כל השוברים שלך במקום אחד — מסודרים, מעודכנים ובטוחים.<br />חינם. ללא כרטיס אשראי. מתחילים תוך דקה.</p>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14}} className="lp-rv">
             <button className="lp-btn-cta" onClick={goToLogin}>התחל עכשיו</button>
             <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',justifyContent:'center'}}>
@@ -960,13 +976,13 @@ export default function LandingPage() {
                 {icon:'shield-check',text:'מוצפן ומאובטח'},
                 {icon:'device-mobile',text:'iOS ו-Android'},
               ].map((item, i) => (
-                <>
-                  {i > 0 && <div key={`dot-${i}`} style={{width:3,height:3,borderRadius:'50%',background:'rgba(255,255,255,0.2)'}} />}
-                  <div key={item.text} style={{display:'flex',alignItems:'center',gap:6,fontSize:13,color:'rgba(255,255,255,0.45)'}}>
+                <Fragment key={item.text}>
+                  {i > 0 && <div style={{width:3,height:3,borderRadius:'50%',background:'rgba(255,255,255,0.2)'}} />}
+                  <div style={{display:'flex',alignItems:'center',gap:6,fontSize:13,color:'rgba(255,255,255,0.45)'}}>
                     <ph-icon name={item.icon} weight="fill" size="14" color="rgba(255,255,255,0.35)"></ph-icon>
                     {item.text}
                   </div>
-                </>
+                </Fragment>
               ))}
             </div>
           </div>

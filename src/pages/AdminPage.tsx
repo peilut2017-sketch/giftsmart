@@ -92,6 +92,8 @@ export default function AdminPage() {
   const [showQuickSV, setShowQuickSV] = useState(false)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [userActionBusy, setUserActionBusy] = useState(false)
   // Coupons
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [showCoupons, setShowCoupons] = useState(false)
@@ -344,12 +346,18 @@ export default function AdminPage() {
     finally { setSavingDiscount(false) }
   }
 
-  async function handleDeleteClub(id: string) {
-    if (!window.confirm('למחוק מועדון זה? כל העסקאות המשויכות אליו יימחקו גם כן.')) return
-    const { error } = await supabase.rpc('admin_delete_club', { p_id: id })
-    if (error) { toast.error(error.message); return }
-    toast.success('מועדון נמחק')
-    setAdminClubs(prev => prev.filter(c => c.id !== id))
+  function handleDeleteClub(id: string) {
+    setConfirm({
+      title: 'למחוק מועדון זה?',
+      message: 'כל העסקאות המשויכות אליו יימחקו גם כן.',
+      onConfirm: async () => {
+        setConfirm(null)
+        const { error } = await supabase.rpc('admin_delete_club', { p_id: id })
+        if (error) { toast.error(error.message); return }
+        toast.success('מועדון נמחק')
+        setAdminClubs(prev => prev.filter(c => c.id !== id))
+      },
+    })
   }
 
   async function handleSaveBusiness() {
@@ -373,12 +381,18 @@ export default function AdminPage() {
     finally { setSavingDiscount(false) }
   }
 
-  async function handleDeleteBusiness(id: string) {
-    if (!window.confirm('למחוק עסק זה?')) return
-    const { error } = await supabase.rpc('admin_delete_business', { p_id: id })
-    if (error) { toast.error(error.message); return }
-    toast.success('עסק נמחק')
-    setAdminBusinesses(prev => prev.filter(b => b.id !== id))
+  function handleDeleteBusiness(id: string) {
+    setConfirm({
+      title: 'למחוק עסק זה?',
+      message: 'העסק יוסר מרשימת ההטבות.',
+      onConfirm: async () => {
+        setConfirm(null)
+        const { error } = await supabase.rpc('admin_delete_business', { p_id: id })
+        if (error) { toast.error(error.message); return }
+        toast.success('עסק נמחק')
+        setAdminBusinesses(prev => prev.filter(b => b.id !== id))
+      },
+    })
   }
 
   async function handleSaveDeal() {
@@ -430,12 +444,18 @@ export default function AdminPage() {
     finally { setSavingDiscount(false) }
   }
 
-  async function handleDeleteDeal(id: string) {
-    if (!window.confirm('למחוק עסקה זו?')) return
-    const { error } = await supabase.rpc('admin_delete_deal', { p_id: id })
-    if (error) { toast.error(error.message); return }
-    toast.success('עסקה נמחקה')
-    setAdminDeals(prev => prev.filter(d => d.deal_id !== id))
+  function handleDeleteDeal(id: string) {
+    setConfirm({
+      title: 'למחוק עסקה זו?',
+      message: 'העסקה תוסר לצמיתות.',
+      onConfirm: async () => {
+        setConfirm(null)
+        const { error } = await supabase.rpc('admin_delete_deal', { p_id: id })
+        if (error) { toast.error(error.message); return }
+        toast.success('עסקה נמחקה')
+        setAdminDeals(prev => prev.filter(d => d.deal_id !== id))
+      },
+    })
   }
 
   async function handleQuickAddClub() {
@@ -511,12 +531,18 @@ export default function AdminPage() {
     await loadSubmissions()
   }
 
-  async function handleDeleteSubmission(id: string) {
-    if (!window.confirm('למחוק הגשה זו?')) return
-    const { error } = await supabase.rpc('admin_delete_submission', { p_id: id })
-    if (error) { toast.error(error.message); return }
-    toast.success('הגשה נמחקה')
-    setSubmissions(prev => prev.filter(s => s.id !== id))
+  function handleDeleteSubmission(id: string) {
+    setConfirm({
+      title: 'למחוק הגשה זו?',
+      message: 'ההגשה תוסר לצמיתות.',
+      onConfirm: async () => {
+        setConfirm(null)
+        const { error } = await supabase.rpc('admin_delete_submission', { p_id: id })
+        if (error) { toast.error(error.message); return }
+        toast.success('הגשה נמחקה')
+        setSubmissions(prev => prev.filter(s => s.id !== id))
+      },
+    })
   }
 
   function openEditSubmission(sub: DiscountSubmission) {
@@ -1159,20 +1185,40 @@ export default function AdminPage() {
     })
   }
 
-  async function handleClearUserData(u: UserRow) {
+  function closeUserActionModal() {
     setDeleteTarget(null)
-    const { error } = await supabase.rpc('admin_clear_user_data', { target_user_id: u.id })
-    if (error) { toast.error('שגיאה: ' + error.message); return }
-    toast.success(`נתוני ${u.email} נמחקו — המשתמש צריך להתנתק ולהתחבר מחדש`, { duration: 5000 })
+    setDeleteConfirmText('')
+  }
+
+  async function handleClearUserData(u: UserRow) {
+    setUserActionBusy(true)
+    try {
+      const { error } = await supabase.rpc('admin_clear_user_data', { target_user_id: u.id })
+      if (error) { toast.error('שגיאה: ' + error.message); return }
+      closeUserActionModal()
+      toast.success(`נתוני ${u.email} נמחקו — המשתמש צריך להתנתק ולהתחבר מחדש`, { duration: 5000 })
+    } finally {
+      setUserActionBusy(false)
+    }
   }
 
   async function handleDeleteUser(u: UserRow) {
-    setDeleteTarget(null)
-    const { error } = await supabase.rpc('admin_delete_user', { target_user_id: u.id })
-    if (error) { toast.error('שגיאה: ' + error.message); return }
-    setAllUsers(prev => prev.filter(x => x.id !== u.id))
-    setSystemStats(prev => prev ? { ...prev, total_users: prev.total_users - 1 } : prev)
-    toast.success(`${u.email} נמחק`)
+    setUserActionBusy(true)
+    try {
+      const { error } = await supabase.rpc('admin_delete_user', { target_user_id: u.id })
+      if (error) { toast.error('שגיאה: ' + error.message); return }
+      setAllUsers(prev => prev.filter(x => x.id !== u.id))
+      setSystemStats(prev => prev ? { ...prev, total_users: prev.total_users - 1 } : prev)
+      closeUserActionModal()
+      toast.success(`${u.email} נמחק`)
+    } finally {
+      setUserActionBusy(false)
+    }
+  }
+
+  // A store name or code containing a comma/quote/newline must not shift columns
+  function csvCell(c: unknown): string {
+    return `"${String(c ?? '').replace(/"/g, '""')}"`
   }
 
   async function exportCSV() {
@@ -1185,7 +1231,7 @@ export default function AdminPage() {
         v.is_archived ? 'כן' : 'לא'
       ])
     ]
-    const csv = rows.map(r => r.join(',')).join('\n')
+    const csv = rows.map(r => r.map(csvCell).join(',')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1200,7 +1246,7 @@ export default function AdminPage() {
       ['מייל', 'שם', 'תאריך הרשמה'],
       ...allUsers.map(u => [u.email, u.name || '', formatDate(u.created_at)])
     ]
-    const csv = rows.map(r => r.join(',')).join('\n')
+    const csv = rows.map(r => r.map(csvCell).join(',')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1226,27 +1272,41 @@ export default function AdminPage() {
   return (
     <div className="flex-1 bg-gray-50">
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4" onClick={() => setDeleteTarget(null)}>
+        <div className="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4" onClick={() => !userActionBusy && closeUserActionModal()}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-900 mb-1">פעולה על משתמש</h3>
             <p className="text-sm text-gray-500 mb-1">{deleteTarget.email}</p>
-            <p className="text-xs text-gray-400 mb-5">בחר פעולה — לא ניתן לשחזר</p>
+            <p className="text-xs text-gray-400 mb-4">בחר פעולה — לא ניתן לשחזר</p>
+            <label className="block text-xs text-gray-500 mb-1" htmlFor="admin-delete-confirm">
+              למחיקה, הקלד <strong>מחק</strong> לאישור:
+            </label>
+            <input
+              id="admin-delete-confirm"
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder="מחק"
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm mb-4"
+              dir="rtl"
+            />
             <div className="space-y-2">
               <button
                 onClick={() => handleClearUserData(deleteTarget)}
-                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-medium text-sm transition-colors"
+                disabled={userActionBusy || deleteConfirmText.trim() !== 'מחק'}
+                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-medium text-sm transition-colors disabled:opacity-40"
               >
-                מחק נתונים בלבד (שמור חשבון)
+                {userActionBusy ? 'מוחק…' : 'מחק נתונים בלבד (שמור חשבון)'}
               </button>
               <button
                 onClick={() => handleDeleteUser(deleteTarget)}
-                className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-medium text-sm transition-colors"
+                disabled={userActionBusy || deleteConfirmText.trim() !== 'מחק'}
+                className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-medium text-sm transition-colors disabled:opacity-40"
               >
-                מחק משתמש לגמרי כולל נתונים
+                {userActionBusy ? 'מוחק…' : 'מחק משתמש לגמרי כולל נתונים'}
               </button>
               <button
-                onClick={() => setDeleteTarget(null)}
-                className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-medium text-sm transition-colors"
+                onClick={closeUserActionModal}
+                disabled={userActionBusy}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-medium text-sm transition-colors disabled:opacity-40"
               >
                 ביטול
               </button>
