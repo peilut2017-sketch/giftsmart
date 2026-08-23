@@ -15,6 +15,8 @@ interface UndoLabels {
   message: string
   undo: string
   failed?: string
+  /** Toast text for a bulk delete, given the item count. */
+  manyMessage?: (count: number) => string
 }
 
 export function useUndoableDelete(
@@ -28,13 +30,13 @@ export function useUndoableDelete(
     setHiddenIds(new Set(pending))
   }, [])
 
-  const { message, undo, failed } = labels
+  const { message, undo, failed, manyMessage } = labels
 
-  const requestDelete = useCallback((id: string) => {
-    pending.add(id)
-    setHiddenIds(prev => new Set(prev).add(id))
+  const scheduleIds = useCallback((ids: string[], toastText: string) => {
+    ids.forEach(id => pending.add(id))
+    setHiddenIds(prev => new Set([...prev, ...ids]))
 
-    const finish = async () => {
+    const finishOne = async (id: string) => {
       timers.delete(id)
       try {
         await onDelete(id)
@@ -45,19 +47,21 @@ export function useUndoableDelete(
         setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
       }
     }
-    timers.set(id, setTimeout(finish, UNDO_MS))
+    ids.forEach(id => timers.set(id, setTimeout(() => finishOne(id), UNDO_MS)))
 
     toast(
       tst => (
         <span>
-          {message}{' '}
+          {toastText}{' '}
           <button
             onClick={() => {
-              const timer = timers.get(id)
-              if (timer) clearTimeout(timer)
-              timers.delete(id)
-              pending.delete(id)
-              setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
+              ids.forEach(id => {
+                const timer = timers.get(id)
+                if (timer) clearTimeout(timer)
+                timers.delete(id)
+                pending.delete(id)
+              })
+              setHiddenIds(prev => { const s = new Set(prev); ids.forEach(id => s.delete(id)); return s })
               toast.dismiss(tst.id)
             }}
             className="font-bold underline ms-1"
@@ -68,7 +72,14 @@ export function useUndoableDelete(
       ),
       { duration: UNDO_MS },
     )
-  }, [onDelete, message, undo, failed])
+  }, [onDelete, undo, failed])
 
-  return { hiddenIds, requestDelete }
+  const requestDelete = useCallback((id: string) => scheduleIds([id], message), [scheduleIds, message])
+
+  const requestDeleteMany = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    scheduleIds(ids, manyMessage ? manyMessage(ids.length) : message)
+  }, [scheduleIds, manyMessage, message])
+
+  return { hiddenIds, requestDelete, requestDeleteMany }
 }
