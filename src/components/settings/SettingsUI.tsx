@@ -6,14 +6,15 @@ import Icon from '../ui/Icon'
     fixed/sticky; these are short simple pages so a header that scrolls away with the
     rest of the content is fine, and avoids the app's known position:sticky/fixed pitfalls
     that only matter for long, complex pages like Checkout). */
-export function SettingsSubHeader({ title }: { title: string }) {
+export function SettingsSubHeader({ title, action }: { title: string; action?: React.ReactNode }) {
   const navigate = useNavigate()
   return (
     <div className="bg-surface border-b border-border px-4 py-3 flex items-center gap-3">
       <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-bg">
         <Icon name="arrow_forward" size={22} color="var(--c-text)" />
       </button>
-      <h1 className="text-base font-bold text-text">{title}</h1>
+      <h1 className="text-base font-bold text-text flex-1 min-w-0 truncate">{title}</h1>
+      {action}
     </div>
   )
 }

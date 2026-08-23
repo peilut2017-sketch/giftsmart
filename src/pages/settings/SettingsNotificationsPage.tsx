@@ -8,6 +8,7 @@ import { getNotifChannels, saveNotifChannels, type NotifChannels } from '../../h
 import toast from 'react-hot-toast'
 import { useT } from '../../lib/i18n'
 import Icon from '../../components/ui/Icon'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { SettingsSubHeader, Card, SL, Spinner, Switch } from '../../components/settings/SettingsUI'
 import { usePageView } from '../../hooks/usePageView'
 
@@ -28,6 +29,11 @@ export default function SettingsNotificationsPage() {
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
   const [telegramCode, setTelegramCode] = useState<string | null>(null)
   const [telegramLoading, setTelegramLoading] = useState(false)
+  const [codeSecondsLeft, setCodeSecondsLeft] = useState(0)
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [daysInput, setDaysInput] = useState(String(reminderDays))
+  const pushPermission = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
 
   const reminderDaysRef = useRef(reminderDays)
   const calendarEnabledRef = useRef(calendarReminderEnabled)
@@ -39,14 +45,23 @@ export default function SettingsNotificationsPage() {
   const supabaseSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   function scheduleSupabaseSave() {
     if (supabaseSaveTimer.current) clearTimeout(supabaseSaveTimer.current)
+    setSaveState('saving')
     supabaseSaveTimer.current = setTimeout(async () => {
       try {
-        await supabase.rpc('upsert_user_settings', {
+        const { error } = await supabase.rpc('upsert_user_settings', {
           p_reminder_days: reminderDaysRef.current,
           p_notif_channels: notifChannelsRef.current,
           p_calendar_reminder_enabled: calendarEnabledRef.current,
         })
-      } catch {}
+        if (error) throw error
+        setSaveState('saved')
+        setTimeout(() => setSaveState(s => (s === 'saved' ? 'idle' : s)), 2000)
+      } catch {
+        // A rejected save is no longer swallowed silently — localStorage and the
+        // server would quietly disagree with zero feedback
+        setSaveState('error')
+        toast.error('השמירה לשרת נכשלה — ההגדרה נשמרה מקומית בלבד')
+      }
     }, 800)
   }
 
@@ -78,8 +93,22 @@ export default function SettingsNotificationsPage() {
   function saveReminderDays(days: number) {
     const val = Math.max(1, Math.min(90, days))
     setReminderDays(val)
+    setDaysInput(String(val))
     localStorage.setItem(reminderKey, String(val))
     scheduleSupabaseSave()
+  }
+
+  // The number field edits a local string and commits on blur — the old onChange
+  // clamp snapped an emptied field to "1" mid-typing, so entering "30" gave 1→30
+  // with a jarring flicker (and "0" was impossible to pass through)
+  function handleDaysInputChange(raw: string) {
+    setDaysInput(raw)
+    const parsed = parseInt(raw)
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 90) {
+      setReminderDays(parsed)
+      localStorage.setItem(reminderKey, String(parsed))
+      scheduleSupabaseSave()
+    }
   }
 
   function saveCalendarEnabled(val: boolean) {
@@ -93,6 +122,29 @@ export default function SettingsNotificationsPage() {
     setNotifChannels(next)
     if (user?.id) saveNotifChannels(user.id, next)
     scheduleSupabaseSave()
+  }
+
+  // The push switch now drives the REAL browser permission — it used to flip a
+  // preference bit while the OS permission stayed "default", so the switch showed
+  // green and nothing ever arrived
+  async function handleTogglePush(value: boolean) {
+    if (!value) { updateNotifChannel('push', false); return }
+    if (typeof Notification === 'undefined') {
+      toast.error('הדפדפן הזה אינו תומך בהתראות')
+      return
+    }
+    if (Notification.permission === 'denied') {
+      toast.error('התראות חסומות בדפדפן — אפשר אותן בהגדרות האתר של הדפדפן', { duration: 6000 })
+      return
+    }
+    if (Notification.permission === 'default') {
+      const result = await Notification.requestPermission()
+      if (result !== 'granted') {
+        toast('בלי אישור הדפדפן לא יגיעו התראות פוש', { icon: 'ℹ️' })
+        return
+      }
+    }
+    updateNotifChannel('push', true)
   }
 
   useEffect(() => {
@@ -118,6 +170,25 @@ export default function SettingsNotificationsPage() {
     return () => { clearInterval(timer); clearTimeout(stop) }
   }, [telegramCode, telegramLinked, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Live countdown for the 10-minute code window — the old UI said "valid for 10
+  // minutes" with no timer and silently stopped polling when it lapsed
+  useEffect(() => {
+    if (!telegramCode) { setCodeSecondsLeft(0); return }
+    setCodeSecondsLeft(10 * 60)
+    const timer = setInterval(() => {
+      setCodeSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          setTelegramCode(null)
+          toast('קוד הטלגרם פג — צור קוד חדש', { icon: '⏱️' })
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [telegramCode])
+
   async function handleGenerateTelegramCode() {
     if (!user) return
     setTelegramLoading(true)
@@ -134,9 +205,8 @@ export default function SettingsNotificationsPage() {
     }
   }
 
-  async function handleDisconnectTelegram() {
+  async function doDisconnectTelegram() {
     if (!user) return
-    if (!confirm('לנתק את חיבור הטלגרם?')) return
     await supabase.from('telegram_users').delete().eq('user_id', user.id)
     setTelegramLinked(false)
     setTelegramCode(null)
@@ -166,10 +236,15 @@ export default function SettingsNotificationsPage() {
     }
   }
 
+  const saveIndicator = saveState === 'saving' ? 'שומר…' : saveState === 'saved' ? '✓ נשמר' : saveState === 'error' ? 'השמירה נכשלה' : ''
+
   return (
     <div className="flex-1 bg-bg">
       <SettingsSubHeader title="התראות" />
       <div className="p-4 space-y-4 pb-10">
+        {saveIndicator && (
+          <p className={`text-xs text-center ${saveState === 'error' ? 'text-error' : 'text-text3'}`} aria-live="polite">{saveIndicator}</p>
+        )}
         <Card>
           <div className="p-4">
             <label className="flex items-center justify-between cursor-pointer mb-4">
@@ -181,9 +256,16 @@ export default function SettingsNotificationsPage() {
             </label>
             <p className="text-sm text-text2 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
             <div className="flex items-center gap-3">
-              <input type="range" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value))} className="flex-1 accent-primary" />
+              <input type="range" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value))} className="flex-1 accent-primary" aria-label="ימי תזכורת" />
               <div className="flex items-center gap-1">
-                <input type="number" inputMode="numeric" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value) || 1)} className="w-14 text-center px-2 py-1.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                <input
+                  type="number" inputMode="numeric" min={1} max={90}
+                  value={daysInput}
+                  onChange={e => handleDaysInputChange(e.target.value)}
+                  onBlur={() => saveReminderDays(parseInt(daysInput) || reminderDays)}
+                  aria-label="ימי תזכורת"
+                  className="w-16 text-center px-2 py-2 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
                 <span className="text-sm text-text3">ימים</span>
               </div>
             </div>
@@ -199,9 +281,19 @@ export default function SettingsNotificationsPage() {
                 <label className="flex items-center justify-between cursor-pointer">
                   <div className="flex items-center gap-2">
                     <Icon name="notifications" size={16} color="var(--c-warning)" />
-                    <span className="text-sm text-text2">{t('settings.notif.push')}</span>
+                    <div>
+                      <span className="text-sm text-text2">{t('settings.notif.push')}</span>
+                      {pushPermission === 'denied' && (
+                        <p className="text-[10px] text-error">חסום בדפדפן — אפשר בהגדרות האתר</p>
+                      )}
+                    </div>
                   </div>
-                  <Switch checked={notifChannels.push} onChange={v => updateNotifChannel('push', v)} size="sm" />
+                  <Switch
+                    checked={notifChannels.push && pushPermission === 'granted'}
+                    onChange={handleTogglePush}
+                    size="sm"
+                    ariaLabel={t('settings.notif.push')}
+                  />
                 </label>
                 <label className="flex items-center justify-between cursor-pointer">
                   <div className="flex items-center gap-2">
@@ -233,7 +325,7 @@ export default function SettingsNotificationsPage() {
                     <p className="text-sm font-medium text-text">מחובר לבוט טלגרם</p>
                     <p className="text-xs text-text3">מקבל את כל ההתראות גם בטלגרם</p>
                   </div>
-                  <button onClick={handleDisconnectTelegram} className="text-xs text-error font-medium px-3 py-1.5 bg-error/10 rounded-xl flex items-center gap-1">
+                  <button onClick={() => setConfirmDisconnect(true)} className="text-xs text-error font-medium px-3 py-2 bg-error/10 rounded-xl flex items-center gap-1">
                     <Icon name="link_off" size={14} /> נתק
                   </button>
                 </div>
@@ -262,8 +354,10 @@ export default function SettingsNotificationsPage() {
                       <p className="text-xs text-text3 mb-1">הפקודה לשליחה:</p>
                       <p className="font-mono text-lg font-bold tracking-widest text-text select-all">/start {telegramCode}</p>
                     </div>
-                    <p className="text-xs text-text3 text-center">הקוד תקף ל-10 דקות</p>
-                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-text2 py-1.5">צור קוד חדש</button>
+                    <p className="text-xs text-text3 text-center" aria-live="polite">
+                      הקוד תקף עוד {Math.floor(codeSecondsLeft / 60)}:{String(codeSecondsLeft % 60).padStart(2, '0')}
+                    </p>
+                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-text2 py-2">צור קוד חדש</button>
                   </div>
                 )}
               </div>
@@ -276,6 +370,16 @@ export default function SettingsNotificationsPage() {
           <MenuItemRow icon="notifications" label="שלח תזכורת תוקף עכשיו" desc="מייל עם רשימת שוברים שפגי תוקף בקרוב" onClick={handleSendExpiryReminder} loading={sendingReminder} />
         </Card>
       </div>
+
+      {confirmDisconnect && (
+        <ConfirmDialog
+          title="לנתק את חיבור הטלגרם?"
+          message="לא תקבל יותר התראות בטלגרם עד שתקשר מחדש."
+          danger
+          onConfirm={() => { setConfirmDisconnect(false); doDisconnectTelegram() }}
+          onCancel={() => setConfirmDisconnect(false)}
+        />
+      )}
     </div>
   )
 }
