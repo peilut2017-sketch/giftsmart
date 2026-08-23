@@ -22,7 +22,7 @@ export default function PrivacyPage() {
       </div>
 
       {/* Content */}
-      <div className="max-w-2xl mx-auto px-5 py-6 pb-28 space-y-8" dir="rtl">
+      <div className="legal-doc max-w-2xl mx-auto px-5 py-6 pb-28 space-y-8" dir="rtl">
 
         <section>
           <p style={{ color: 'var(--c-text2)', lineHeight: 1.8, fontSize: 14 }}>

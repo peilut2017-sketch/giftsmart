@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { MarketplaceMessage } from '../types'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
+import { useKeyboardInset } from '../hooks/useKeyboardInset'
+import { useModalHistory } from '../hooks/useModalHistory'
 import toast from 'react-hot-toast'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
@@ -37,11 +39,21 @@ export default function ChatModal({
   const { sendMessage, sendPriceOffer, fetchChat, respondToPriceOffer,
           registerActiveChat, unregisterActiveChat, markMessagesRead } = useMarketplace()
   useBodyScrollLock()
+  // Keyboard overlap (iOS: fixed elements don't track the visual viewport) —
+  // applied as bottom padding so the composer rides above the keyboard
+  const keyboardInset = useKeyboardInset()
 
   const [messages, setMessages] = useState<MarketplaceMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
+
+  // Android Back closes the chat (guarding a typed draft) instead of leaving the page.
+  // The hook reads the latest callback each render, so `text` here is current.
+  useModalHistory(true, () => {
+    if (text.trim()) setShowDiscardConfirm(true)
+    else onClose()
+  })
   const [sending, setSending] = useState(false)
   const [showOfferInput, setShowOfferInput] = useState(false)
   const [offerAmount, setOfferAmount] = useState('')
@@ -243,7 +255,9 @@ export default function ChatModal({
       >
         <motion.div
           className="bg-surface rounded-t-[28px] w-full max-w-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
-          style={{ height: '85dvh' }}
+          // Keyboard inset lifts the composer above the on-screen keyboard —
+          // iOS never resizes the layout viewport for fixed/dvh elements
+          style={{ height: '85dvh', paddingBottom: keyboardInset || undefined }}
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}

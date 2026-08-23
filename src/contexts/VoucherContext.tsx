@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, ty
 import { track } from '@vercel/analytics'
 import { phCapture } from '../lib/posthog'
 import { supabase } from '../lib/supabase'
+import { translate } from '../lib/i18n'
 import { useAuth } from './AuthContext'
 import type { Voucher, SuperVoucher, Category, Store } from '../types'
 import { DEFAULT_CATEGORIES } from '../types'
@@ -390,7 +391,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
     } catch (err: any) {
       console.error('Fetch error:', err)
-      setWalletError('שגיאת טעינה: ' + (err?.message || 'לא ידוע'))
+      setWalletError(translate('ctx.load.error', { msg: err?.message || translate('ctx.unknown') }))
     }
   }, [user, loadFromCache, saveToCache])
 
@@ -519,7 +520,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }, [walletId, user, mergeSingleVoucher])
 
   async function addVoucher(v: Omit<Voucher, 'id' | 'user_id' | 'wallet_id' | 'created_at' | 'updated_at'>): Promise<Voucher | null> {
-    if (!user) throw new Error('לא מחובר')
+    if (!user) throw new Error(translate('ctx.not.logged.in'))
 
     // Offline: create a local voucher that will sync when back online
     if (!navigator.onLine) {
@@ -583,7 +584,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         walletIdRef.current = null
         setWalletId(null)
         fetchData()
-        throw new Error('הארנק אופס — הרענן ונסה שוב')
+        throw new Error(translate('ctx.wallet.reset.retry'))
       }
       throw new Error(error.message)
     }
@@ -840,7 +841,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function createShareToken(voucherId: string, expiresInDays?: number, codeOverride?: string): Promise<string> {
-    if (!user) throw new Error('לא מחובר')
+    if (!user) throw new Error(translate('ctx.not.logged.in'))
     const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('')

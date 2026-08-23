@@ -4,6 +4,7 @@ import { exportVaultKey } from '../lib/e2ee'
 import { attemptVaultUnlockAtLogin } from '../lib/vaultBundle'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useT } from '../lib/i18n'
 import toast from 'react-hot-toast'
 import Icon from './ui/Icon'
 import Button from './ui/Button'
@@ -18,6 +19,7 @@ interface Props {
 }
 
 function GateShell({ children }: { children: React.ReactNode }) {
+  const { t } = useT()
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, var(--c-primary-light), var(--c-bg) 60%)' }}>
       <div className="w-full max-w-sm bg-surface rounded-[28px] shadow-fab p-8 text-center">
@@ -25,13 +27,14 @@ function GateShell({ children }: { children: React.ReactNode }) {
       </div>
       <div className="flex items-center gap-2 mt-4 text-xs text-text3">
         <Icon name="shield" size={16} />
-        <span>מוגן על ידי WebAuthn / Passkey</span>
+        <span>{t('gate.protected.by')}</span>
       </div>
     </div>
   )
 }
 
 export default function BiometricGate({ onUnlock, onSignOut }: Props) {
+  const { t } = useT()
   const { signIn, user } = useAuth()
   const [step, setStep] = useState<'biometric' | 'vault'>('biometric')
   const [loading, setLoading] = useState(false)
@@ -61,7 +64,7 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     try {
       const { authenticated, vaultKey, prfBytes } = await verifyBiometricForVaultUnlock()
       if (!isMountedRef.current) return
-      if (!authenticated) { setFailed(true); toast.error('אימות ביומטרי נכשל'); return }
+      if (!authenticated) { setFailed(true); toast.error(t('auth.biometric.failed')); return }
 
       if (vaultKey) {
         // PRF yielded the vault key — stash it so E2EEProvider auto-unlocks on mount
@@ -129,13 +132,13 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         if (!authOk) {
           // Just a wrong password — don't leave the "stale wrap" flag set
           sessionStorage.removeItem('gs_vault_pw_stale')
-          setVaultError('סיסמה שגויה — נסה שוב')
+          setVaultError(t('gate.wrong.password'))
         } else {
-          setVaultError('הסיסמה שלך התחדשה לאחרונה. פתח פעם אחת עם קוד השחזור בתוך האפליקציה כדי לחבר אותה מחדש — או דלג בינתיים.')
+          setVaultError(t('gate.stale.password'))
         }
         return
       }
-      setVaultError('שגיאת רשת — נסה שוב')
+      setVaultError(t('gate.network.error'))
     } finally {
       setVaultUnlocking(false)
     }
@@ -147,7 +150,7 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
     try {
       const { error } = await signIn(fallbackEmail, fallbackPassword)
       if (error) {
-        setFallbackError('אימייל או סיסמה שגויים')
+        setFallbackError(t('auth.invalid.credentials'))
         return
       }
       // Open the vault right here (password stays in this local variable — the old
@@ -166,7 +169,7 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
       }
       onUnlock()
     } catch {
-      setFallbackError('שגיאה בהתחברות — נסה שוב')
+      setFallbackError(t('gate.signin.error'))
     } finally {
       setFallbackLoading(false)
     }
@@ -179,16 +182,16 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5 shadow-fab bg-gradient-to-br from-primary-mid to-primary-dark">
           <Icon name="lock" size={36} color="#fff" />
         </div>
-        <h2 className="text-xl font-bold text-text mb-2">פתח את הכספת</h2>
+        <h2 className="text-xl font-bold text-text mb-2">{t('gate.vault.title')}</h2>
         <p className="text-sm text-text3 mb-6">
-          הזן את סיסמת הכניסה שלך כדי לפתוח את הכספת המוצפנת
+          {t('gate.vault.subtitle')}
         </p>
 
         <div className="relative mb-3">
           <Icon name="lock" size={16} color="var(--c-text3)" className="absolute right-3 top-1/2 -translate-y-1/2" />
           <input
             type={showVaultPass ? 'text' : 'password'}
-            placeholder="סיסמת כניסה"
+            placeholder={t('gate.vault.placeholder')}
             value={vaultPass}
             onChange={e => setVaultPass(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleVaultUnlock()}
@@ -208,10 +211,10 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         {vaultError && <p className="text-xs text-error mb-3 text-right leading-relaxed">{vaultError}</p>}
 
         <Button onClick={handleVaultUnlock} disabled={!vaultPass || vaultUnlocking} loading={vaultUnlocking} fullWidth className="mb-3">
-          פתח כספת
+          {t('e2ee.unlock')}
         </Button>
         <button onClick={onUnlock} className="w-full text-sm text-text3 py-2">
-          דלג — פתח כספת מאוחר יותר
+          {t('gate.vault.skip')}
         </button>
       </GateShell>
     )
@@ -224,17 +227,17 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5 shadow-fab bg-gradient-to-br from-primary-mid to-primary-dark">
           <Icon name="key" size={36} color="#fff" />
         </div>
-        <h2 className="text-xl font-bold text-text mb-1">כניסה עם סיסמה</h2>
+        <h2 className="text-xl font-bold text-text mb-1">{t('auth.use.password')}</h2>
         <p className="text-sm text-text3 mb-6">
           {biometricNative
-            ? 'הזן את פרטי הכניסה שלך — הזיהוי הביומטרי יאופס במכשיר זה'
-            : 'הזן את פרטי הכניסה שלך כדי להיכנס ללא ביומטרי'}
+            ? t('gate.fallback.native')
+            : t('gate.fallback.synced')}
         </p>
 
         <div className="space-y-3 mb-4">
           <input
             type="email"
-            placeholder="אימייל"
+            placeholder={t('auth.email')}
             value={fallbackEmail}
             onChange={e => setFallbackEmail(e.target.value)}
             className="w-full px-4 py-3 border border-border rounded-2xl text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -244,7 +247,7 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
           <div className="relative">
             <input
               type={showFallbackPass ? 'text' : 'password'}
-              placeholder="סיסמה"
+              placeholder={t('auth.password.placeholder')}
               value={fallbackPassword}
               onChange={e => setFallbackPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePasswordFallback()}
@@ -266,10 +269,10 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         {fallbackError && <p className="text-xs text-error mb-3">{fallbackError}</p>}
 
         <Button onClick={handlePasswordFallback} disabled={fallbackLoading || !fallbackEmail || !fallbackPassword} loading={fallbackLoading} fullWidth className="mb-3">
-          כניסה
+          {t('auth.login.tab')}
         </Button>
         <button onClick={() => setShowPasswordFallback(false)} className="w-full text-sm text-text3 py-2">
-          חזרה לזיהוי ביומטרי
+          {t('gate.back.biometric')}
         </button>
       </GateShell>
     )
@@ -287,13 +290,13 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
         }
       </div>
 
-      <h2 className="text-xl font-bold text-text mb-2">אימות ביומטרי</h2>
+      <h2 className="text-xl font-bold text-text mb-2">{t('gate.title')}</h2>
       <p className="text-sm text-text3 mb-6">
-        {loading ? 'ממתין לאימות...' : failed ? 'האימות נכשל. נסה שוב.' : 'השתמש בזיהוי פנים או טביעת אצבע כדי להיכנס'}
+        {loading ? t('auth.biometric.waiting') : failed ? t('gate.failed') : t('gate.prompt')}
       </p>
 
       <Button onClick={handleVerify} disabled={loading} loading={loading} fullWidth className="mb-3">
-        אמת זהות
+        {t('auth.biometric.verify')}
       </Button>
 
       {failed && (
@@ -302,12 +305,12 @@ export default function BiometricGate({ onUnlock, onSignOut }: Props) {
           className="w-full bg-bg text-text2 py-3 rounded-2xl font-medium text-sm mb-2 flex items-center justify-center gap-2"
         >
           <Icon name="key" size={16} />
-          כניסה עם סיסמה במקום
+          {t('gate.use.password.instead')}
         </button>
       )}
 
       <button onClick={onSignOut} className="w-full text-sm text-error py-2">
-        יציאה מהחשבון
+        {t('gate.sign.out')}
       </button>
     </GateShell>
   )

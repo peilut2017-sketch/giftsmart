@@ -52,23 +52,17 @@ export default function StatsPage() {
     const giftVouchers = active.filter(v => v.is_gift).length
 
     // Category breakdown — each category gets the FULL balance of vouchers assigned to it.
-    // Vouchers with multiple categories appear in each category at their full value.
-    // This means the sum may exceed totalBalance when vouchers span multiple categories.
+    // Each voucher counts once, under its primary (first) category — full-value
+    // duplication across categories made the pie slices sum past 100% of the
+    // wallet, which reads as a data bug.
     const catMap: Record<string, { balance: number; count: number }> = {}
     let multiCategoryCount = 0
     active.forEach(v => {
-      if (v.categories.length === 0) {
-        if (!catMap['אחר']) catMap['אחר'] = { balance: 0, count: 0 }
-        catMap['אחר'].balance += v.balance
-        catMap['אחר'].count += 1
-      } else {
-        if (v.categories.length > 1) multiCategoryCount++
-        v.categories.forEach(cat => {
-          if (!catMap[cat]) catMap[cat] = { balance: 0, count: 0 }
-          catMap[cat].balance += v.balance
-          catMap[cat].count += 1
-        })
-      }
+      const primary = v.categories[0] || 'אחר'
+      if (v.categories.length > 1) multiCategoryCount++
+      if (!catMap[primary]) catMap[primary] = { balance: 0, count: 0 }
+      catMap[primary].balance += v.balance
+      catMap[primary].count += 1
     })
     const categoryData = Object.entries(catMap)
       .filter(([, v]) => v.balance > 0)
@@ -434,14 +428,19 @@ export default function StatsPage() {
             {stats.multiCategoryCount > 0 && (
               <p className="text-xs text-text3 mb-3 flex items-start gap-1"><Icon name="info" size={13} color="var(--c-text3)" className="mt-0.5 shrink-0" /> {t('stats.multi.cat.note')}</p>
             )}
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={stats.categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
-                  {stats.categoryData.map((_entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                </Pie>
-                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-              </PieChart>
-            </ResponsiveContainer>
+            {/* Recharts positions tooltips assuming LTR — inside an RTL page the
+                tooltip gets clipped at the container edge, so the chart itself
+                renders in an LTR island while all labels stay translated */}
+            <div dir="ltr">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={stats.categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
+                    {stats.categoryData.map((_entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => formatCurrency(Number(v))} contentStyle={{ direction: 'rtl', fontFamily: 'inherit' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
             <div className="mt-2 space-y-2">
               {stats.categoryData.map((cat, i) => (
                 <div key={cat.name} className="flex items-center justify-between">

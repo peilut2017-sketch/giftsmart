@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ShieldCheck, Copy, CheckCircle, AlertTriangle, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useT } from '../lib/i18n'
 
 interface Props {
   phrase: string
@@ -12,6 +13,7 @@ interface Props {
 // them to retype two of the six groups, and offers a real file download alongside
 // copy — pen-and-paper was previously the only sanctioned storage method.
 export default function RecoveryKeyModal({ phrase, onDone }: Props) {
+  const { t } = useT()
   const [copied, setCopied] = useState(false)
   const [step, setStep] = useState<'show' | 'verify'>('show')
   const groups = phrase.split('-')
@@ -24,22 +26,22 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
     try {
       await navigator.clipboard.writeText(phrase)
       setCopied(true)
-      toast.success('קוד השחזור הועתק')
+      toast.success(t('recovery.copied.toast'))
       setTimeout(() => setCopied(false), 3000)
     } catch {
-      toast.error('לא ניתן להעתיק — העתק ידנית')
+      toast.error(t('recovery.copy.failed'))
     }
   }
 
   function handleDownload() {
     const content = [
-      'GiftSmart — קוד שחזור לכספת המוצפנת',
-      `נוצר: ${new Date().toLocaleDateString('he-IL')}`,
+      t('recovery.file.title'),
+      t('recovery.file.created', { date: new Date().toLocaleDateString('he-IL') }),
       '',
       phrase,
       '',
-      'שמור קובץ זה במקום מאובטח (מנהל סיסמאות, כספת מסמכים).',
-      'אל תשלח אותו בצ׳אט או בדוא"ל. בלעדיו לא ניתן לשחזר את הקודים המוצפנים.',
+      t('recovery.file.store'),
+      t('recovery.file.warning'),
     ].join('\n')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -71,11 +73,11 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
 
         {step === 'show' ? (
           <>
-            <h2 className="text-lg font-bold text-text mb-1">שמור את קוד השחזור</h2>
+            <h2 className="text-lg font-bold text-text mb-1">{t('recovery.title')}</h2>
             <p className="text-xs text-text2 mb-4 leading-relaxed">
-              קוד זה פותח את הכספת מכל מכשיר — גם אם תשכח את הסיסמה.
+              {t('recovery.subtitle')}
               <br />
-              <strong>הוא מוצג פעם אחת בלבד.</strong>
+              <strong>{t('recovery.once')}</strong>
             </p>
 
             <div
@@ -91,22 +93,22 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
                 className="flex-1 flex items-center justify-center gap-1.5 border border-border text-text2 hover:bg-bg py-2.5 rounded-2xl text-sm font-medium transition-colors"
               >
                 {copied
-                  ? <><CheckCircle className="w-4 h-4 text-primary" /> הועתק!</>
-                  : <><Copy className="w-4 h-4" /> העתק</>
+                  ? <><CheckCircle className="w-4 h-4 text-primary" /> {t('checkout.copied')}</>
+                  : <><Copy className="w-4 h-4" /> {t('market.payment.copy')}</>
                 }
               </button>
               <button
                 onClick={handleDownload}
                 className="flex-1 flex items-center justify-center gap-1.5 border border-border text-text2 hover:bg-bg py-2.5 rounded-2xl text-sm font-medium transition-colors"
               >
-                <Download className="w-4 h-4" /> הורד קובץ
+                <Download className="w-4 h-4" /> {t('recovery.download')}
               </button>
             </div>
 
             <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 text-right">
               <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-amber-800 leading-relaxed">
-                שמור אותו במנהל סיסמאות או במקום מאובטח — לא בצ'אט ולא בדוא"ל. אנחנו לא יכולים לשחזר אותו עבורך.
+                {t('recovery.warning')}
               </p>
             </div>
 
@@ -114,14 +116,14 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
               onClick={() => setStep('verify')}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md transition-all"
             >
-              שמרתי — המשך לאימות
+              {t('recovery.saved.continue')}
             </button>
           </>
         ) : (
           <>
-            <h2 className="text-lg font-bold text-text mb-1">רגע של אימות</h2>
+            <h2 className="text-lg font-bold text-text mb-1">{t('recovery.verify.title')}</h2>
             <p className="text-xs text-text2 mb-4 leading-relaxed">
-              כדי לוודא שהקוד באמת נשמר אצלך — הקלד את הקבוצה השנייה והחמישית:
+              {t('recovery.verify.subtitle')}
             </p>
 
             <div dir="ltr" className="flex items-center justify-center gap-1.5 mb-4 font-mono text-sm text-text3">
@@ -133,7 +135,7 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
                 className={`w-16 text-center py-1.5 border rounded-lg bg-surface text-text font-bold uppercase focus:outline-none focus:ring-2 focus:ring-primary/40 ${verifyError ? 'border-error' : 'border-border'}`}
                 autoCapitalize="characters"
                 autoFocus
-                aria-label="קבוצה שנייה"
+                aria-label={t('recovery.group2')}
               />
               <span>{groups[2]}</span>
               <span>{groups[3]}</span>
@@ -143,13 +145,13 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
                 maxLength={4}
                 className={`w-16 text-center py-1.5 border rounded-lg bg-surface text-text font-bold uppercase focus:outline-none focus:ring-2 focus:ring-primary/40 ${verifyError ? 'border-error' : 'border-border'}`}
                 autoCapitalize="characters"
-                aria-label="קבוצה חמישית"
+                aria-label={t('recovery.group5')}
               />
               <span>{groups[5]}</span>
             </div>
 
             {verifyError && (
-              <p className="text-xs text-error mb-3" role="alert">הקבוצות אינן תואמות — בדוק את מה ששמרת</p>
+              <p className="text-xs text-error mb-3" role="alert">{t('recovery.verify.error')}</p>
             )}
 
             <button
@@ -157,10 +159,10 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
               disabled={check1.length < 4 || check2.length < 4}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md disabled:opacity-40 transition-all mb-2"
             >
-              סיום
+              {t('app.done')}
             </button>
             <button onClick={() => setStep('show')} className="w-full text-xs text-text3 py-2">
-              חזרה לצפייה בקוד
+              {t('recovery.back.to.code')}
             </button>
           </>
         )}

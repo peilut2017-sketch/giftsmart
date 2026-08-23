@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useT } from '../lib/i18n'
 import { useAuth } from '../contexts/AuthContext'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -69,11 +70,28 @@ const CATEGORY_LABELS_KEYS: Record<string, string> = {
 
 type Confirm = { title: string; message?: string; onConfirm: () => void }
 
+const ADMIN_TABS = [
+  { id: 'inbox', label: 'דואר נכנס' },
+  { id: 'users', label: 'משתמשים' },
+  { id: 'content', label: 'תוכן' },
+  { id: 'market', label: 'שוק' },
+  { id: 'deals', label: 'הנחות' },
+  { id: 'stats', label: 'נתונים' },
+] as const
+
+type AdminTabId = typeof ADMIN_TABS[number]['id']
+
 export default function AdminPage() {
   const { t } = useT()
   const { user, profile, isAdmin } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, walletName, addSuperVoucher, updateSuperVoucher, deleteSuperVoucher, updateWalletName } = useVouchers()
   usePageView('admin')
+
+  // Tab state lives in the URL (?tab=...) so it survives refresh and is linkable
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const tab: AdminTabId = ADMIN_TABS.some(tb => tb.id === tabParam) ? (tabParam as AdminTabId) : 'inbox'
+  const switchTab = (id: AdminTabId) => setSearchParams({ tab: id }, { replace: true })
 
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [proCount, setProCount] = useState<number | null>(null)
@@ -1346,7 +1364,7 @@ export default function AdminPage() {
             <div className="flex flex-wrap gap-2">
               {inboxCounts.support_unread > 0 && (
                 <button
-                  onClick={() => { setShowMessages(true); setTimeout(() => document.getElementById('admin-messages')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  onClick={() => { switchTab('inbox'); setShowMessages(true); setTimeout(() => document.getElementById('admin-messages')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
                 >
                   <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.support_unread}</span>
@@ -1355,7 +1373,7 @@ export default function AdminPage() {
               )}
               {inboxCounts.reports_pending > 0 && (
                 <button
-                  onClick={() => { setShowReports(true); setTimeout(() => document.getElementById('admin-reports')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  onClick={() => { switchTab('inbox'); setShowReports(true); setTimeout(() => document.getElementById('admin-reports')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
                 >
                   <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.reports_pending}</span>
@@ -1364,7 +1382,7 @@ export default function AdminPage() {
               )}
               {inboxCounts.submissions_pending > 0 && (
                 <button
-                  onClick={() => { setShowDiscounts(true); setDiscountTab('submissions'); setTimeout(() => document.getElementById('admin-discounts')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                  onClick={() => { switchTab('deals'); setShowDiscounts(true); setDiscountTab('submissions'); setTimeout(() => document.getElementById('admin-discounts')?.scrollIntoView({ behavior: 'smooth' }), 100) }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-colors"
                 >
                   <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold">{inboxCounts.submissions_pending}</span>
@@ -1375,6 +1393,27 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ── Tab bar ── */}
+        <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-gray-50">
+          <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {ADMIN_TABS.map(tb => (
+              <button
+                key={tb.id}
+                onClick={() => switchTab(tb.id)}
+                aria-current={tab === tb.id ? 'page' : undefined}
+                className={`min-h-[40px] px-4 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors ${
+                  tab === tb.id
+                    ? 'bg-primary text-white'
+                    : 'bg-surface text-text2 border border-border'
+                }`}
+              >
+                {tb.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {tab === 'users' && (<>
         {/* ── Premium feature flag ── */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
@@ -1409,7 +1448,9 @@ export default function AdminPage() {
             </p>
           )}
         </div>
+        </>)}
 
+        {tab === 'market' && (<>
         {/* ── Marketplace Access Control ── */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <div className="flex items-center gap-3 mb-3">
@@ -1508,7 +1549,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'stats' && (<>
         {/* System Stats */}
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-3xl p-5 text-white">
           <div className="flex items-center gap-2 mb-3">
@@ -1581,7 +1624,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'users' && (<>
         {/* Registered Users List */}
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
@@ -1689,7 +1734,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'content' && (<>
         {/* Wallet name */}
         <div className="bg-white rounded-3xl shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">שם הארנק</h3>
@@ -2068,7 +2115,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'inbox' && (<>
         {/* ── Support Messages ── */}
         <div id="admin-messages" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
@@ -2238,7 +2287,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'users' && (<>
         {/* ── Broadcasts ── */}
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
@@ -2398,7 +2449,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'content' && (<>
         {/* ── Login Banner ── */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <button
@@ -2632,7 +2685,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'inbox' && (<>
         {/* Reports */}
 
         <div id="admin-reports" className="bg-white rounded-3xl shadow-sm overflow-hidden">
@@ -2741,7 +2796,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'market' && (<>
         {/* Marketplace Settings */}
         <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
@@ -2852,7 +2909,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'deals' && (<>
         {/* ── הנחות חכמות ── */}
         <div id="admin-discounts" className="bg-white rounded-3xl shadow-sm overflow-hidden">
           <button
@@ -3386,7 +3445,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'stats' && (<>
         {/* ── Page Views ── */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <button
@@ -3465,7 +3526,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'market' && (<>
         {/* ── Seller Profiles ── */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <button
@@ -3569,7 +3632,9 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>)}
 
+        {tab === 'stats' && (<>
         {/* Exports */}
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -3587,6 +3652,7 @@ export default function AdminPage() {
             ייצוא משתמשים
           </button>
         </div>
+        </>)}
 
       </div>
     </div>

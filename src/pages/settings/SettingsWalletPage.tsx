@@ -51,7 +51,7 @@ export default function SettingsWalletPage() {
       if (result === 'not_found') {
         setPendingInviteEmail(inviteEmail.trim())
       } else {
-        toast.success('החבר נוסף לארנק!')
+        toast.success(t('wallet.member.added'))
         logAction('system_wallet_share', 'ארנק', undefined, { email: inviteEmail.trim() })
         setInviteEmail('')
         if (walletId) {
@@ -60,7 +60,7 @@ export default function SettingsWalletPage() {
         }
       }
     } catch (err: any) {
-      toast.error(err?.message || 'שגיאה בהוספת חבר')
+      toast.error(err?.message || t('wallet.invite.error'))
     } finally {
       setInviteLoading(false)
     }
@@ -75,9 +75,9 @@ export default function SettingsWalletPage() {
         p_wallet_name: walletName,
         p_app_url: APP_URL,
       })
-      toast.success(`הזמנה נשלחה ל-${pendingInviteEmail}`)
+      toast.success(t('wallet.invite.sent', { email: pendingInviteEmail }))
     } catch {
-      toast.error('שגיאה בשליחת הזמנה')
+      toast.error(t('wallet.invite.send.error'))
     } finally {
       setPendingInviteEmail(null)
       setInviteEmail('')
@@ -90,9 +90,9 @@ export default function SettingsWalletPage() {
     try {
       await removeMember(userId)
       setMembers(prev => prev.filter(m => m.user_id !== userId))
-      toast.success('חבר הוסר מהארנק')
+      toast.success(t('wallet.member.removed'))
     } catch {
-      toast.error('הסרת החבר נכשלה — נסה שוב')
+      toast.error(t('wallet.member.remove.error'))
     }
   }
 
@@ -110,16 +110,16 @@ export default function SettingsWalletPage() {
 
   return (
     <div className="flex-1 bg-bg">
-      <SettingsSubHeader title="ארנק" />
+      <SettingsSubHeader title={t('nav.wallet')} />
       <div className="p-4 space-y-4 pb-10">
-        <SL>שיתוף וחברים</SL>
+        <SL>{t('wallet.sharing.section')}</SL>
         <Card>
           <div className="p-4 space-y-3">
             {/* The privacy consequence is stated BEFORE the invite input — it used
                 to appear only after the user had already typed and submitted */}
             <div className="flex items-start gap-2 bg-warning/10 border border-warning/25 rounded-xl p-2.5">
               <Icon name="group" size={15} color="var(--c-warning)" className="mt-0.5 shrink-0" />
-              <p className="text-xs text-warning">חברים בארנק רואים את <strong>כל</strong> השוברים שלך ויכולים לעדכן יתרות.</p>
+              <p className="text-xs text-warning">{t('wallet.share.warning.a')} <strong>{t('wallet.share.warning.b')}</strong> {t('wallet.share.warning.c')}</p>
             </div>
             {members.length > 0 && (
               <div className="space-y-1 mb-2">
@@ -127,7 +127,7 @@ export default function SettingsWalletPage() {
                   <div key={m.user_id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div>
                       <p className="text-sm text-text2">{m.email}</p>
-                      <p className="text-xs text-text3">{m.role === 'owner' ? 'בעלים' : 'חבר'}</p>
+                      <p className="text-xs text-text3">{m.role === 'owner' ? t('wallet.role.owner') : t('wallet.role.member')}</p>
                     </div>
                     {m.role !== 'owner' && (
                       <button onClick={() => setRemoveTarget(m)} aria-label={t('settings.wallet.remove.aria', { email: m.email })} className="p-2.5 text-error rounded-lg bg-error/5">
@@ -140,9 +140,9 @@ export default function SettingsWalletPage() {
             )}
             {pendingInviteEmail ? (
               <div className="bg-warning/10 rounded-2xl p-3 space-y-2">
-                <p className="text-sm text-warning">המשתמש <strong>{pendingInviteEmail}</strong> אינו רשום באפליקציה. לשלוח הזמנה להצטרף?</p>
+                <p className="text-sm text-warning">{t('wallet.not.registered.a')} <strong>{pendingInviteEmail}</strong> {t('wallet.not.registered.b')}</p>
                 <div className="flex gap-2">
-                  <button onClick={handleSendNotFoundInvite} className="flex-1 bg-warning text-white py-2 rounded-xl text-sm font-medium">שלח הזמנה</button>
+                  <button onClick={handleSendNotFoundInvite} className="flex-1 bg-warning text-white py-2 rounded-xl text-sm font-medium">{t('wallet.send.invite')}</button>
                   <button onClick={() => { setPendingInviteEmail(null); setInviteEmail('') }} className="flex-1 bg-bg text-text2 py-2 rounded-xl text-sm font-medium">{t('app.cancel')}</button>
                 </div>
               </div>
@@ -155,7 +155,7 @@ export default function SettingsWalletPage() {
                     value={inviteEmail}
                     onChange={e => setInviteEmail(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                    placeholder="כתובת מייל לשיתוף"
+                    placeholder={t('wallet.invite.placeholder')}
                     className="w-full min-w-0 pr-9 pl-3 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                     dir="ltr"
                   />
@@ -165,19 +165,19 @@ export default function SettingsWalletPage() {
                   disabled={inviteLoading || !inviteEmail.trim()}
                   className="shrink-0 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-1"
                 >
-                  {inviteLoading ? <Spinner size={16} color="#fff" /> : 'הוסף'}
+                  {inviteLoading ? <Spinner size={16} color="#fff" /> : t('app.add')}
                 </button>
               </div>
             )}
           </div>
         </Card>
 
-        <SL>תצוגה</SL>
+        <SL>{t('wallet.display.section')}</SL>
         <Card>
           <div className="flex items-center justify-between p-4">
             <div className="flex-1 ml-3">
-              <p className="text-sm font-medium text-text">הצג ערך שוק של שוברים</p>
-              <p className="text-xs text-text3 mt-0.5">מאפשר הזנת % ערך לכל שובר ומציג כמה % פחות הוא שווה מהנקוב</p>
+              <p className="text-sm font-medium text-text">{t('wallet.show.value')}</p>
+              <p className="text-xs text-text3 mt-0.5">{t('wallet.show.value.desc')}</p>
             </div>
             <Switch checked={!!profile?.show_voucher_value} onChange={v => updateProfile({ show_voucher_value: v })} />
           </div>
@@ -195,7 +195,7 @@ export default function SettingsWalletPage() {
             </div>
             <div className="flex items-center gap-2 shrink-0 me-2">
               {clubsDirty && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-warning/15 text-warning">לא נשמר</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-warning/15 text-warning">{t('wallet.unsaved')}</span>
               )}
               {localClubIds.length > 0 && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary text-white">
@@ -213,7 +213,7 @@ export default function SettingsWalletPage() {
               {!clubsLoaded ? (
                 <p className="text-sm text-center py-4 text-text3">{t('app.loading')}</p>
               ) : clubs.length === 0 ? (
-                <p className="text-sm text-center py-4 text-text3">אין מועדונים מוגדרים עדיין</p>
+                <p className="text-sm text-center py-4 text-text3">{t('wallet.no.clubs')}</p>
               ) : (
                 <>
                   {clubs.filter(c => c.type === 'credit_card').length > 0 && (

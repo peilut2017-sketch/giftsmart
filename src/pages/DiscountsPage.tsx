@@ -17,10 +17,10 @@ const ALL_TAGS = [
 ]
 
 const DISCOUNT_TYPES = [
-  { value: 'percent',   label: 'אחוז (%)' },
-  { value: 'fixed',     label: 'סכום קבוע (₪)' },
-  { value: 'free_item', label: 'פריט חינם' },
-  { value: 'other',     label: 'אחר' },
+  { value: 'percent',   labelKey: 'deals.type.percent' },
+  { value: 'fixed',     labelKey: 'deals.type.fixed' },
+  { value: 'free_item', labelKey: 'discounts.free_item' },
+  { value: 'other',     labelKey: 'deal.report.reason.other' },
 ] as const
 
 // ── Submit Deal Modal ────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
 
   async function handleSubmit() {
     if (!form.club_name.trim() || !form.business_name.trim() || !form.title.trim()) {
-      toast.error('מועדון, עסק וכותרת הם שדות חובה'); return
+      toast.error(t('deals.submit.required')); return
     }
     setSending(true)
     try {
@@ -101,7 +101,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
             <label className="text-xs font-semibold text-text2 mb-1 block">{t('discounts.submit.club')} *</label>
             <input
               className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="לדוגמה: ויזה כאל / מועדון YES"
+              placeholder={t('deals.submit.club.ph')}
               value={form.club_name}
               onChange={e => setForm(f => ({ ...f, club_name: e.target.value }))}
             />
@@ -111,17 +111,17 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
             <label className="text-xs font-semibold text-text2 mb-1 block">{t('discounts.submit.business')} *</label>
             <input
               className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="לדוגמה: ארומה / זארה / שופרסל"
+              placeholder={t('deals.submit.business.ph')}
               value={form.business_name}
               onChange={e => setForm(f => ({ ...f, business_name: e.target.value }))}
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-text2 mb-1 block">תיאור ההנחה *</label>
+            <label className="text-xs font-semibold text-text2 mb-1 block">{t('deals.submit.deal_title')} *</label>
             <input
               className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="לדוגמה: 20% הנחה על כל הקנייה לחברי ויזה כאל"
+              placeholder={t('deals.submit.deal_title.ph')}
               value={form.title}
               onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             />
@@ -139,7 +139,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
               onChange={e => setForm(f => ({ ...f, discount_type: e.target.value as typeof form.discount_type }))}
             >
               {DISCOUNT_TYPES.map(dt => (
-                <option key={dt.value} value={dt.value}>{dt.label}</option>
+                <option key={dt.value} value={dt.value}>{t(dt.labelKey)}</option>
               ))}
             </select>
             {(form.discount_type === 'percent' || form.discount_type === 'fixed') && (
@@ -156,7 +156,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
 
           <input
             className="w-full border border-border rounded-xl px-3 py-2.5 text-sm font-mono tracking-widest bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="קוד פרומו (אם יש)"
+            placeholder={t('deals.submit.promo.ph')}
             value={form.promo_code}
             onChange={e => setForm(f => ({ ...f, promo_code: e.target.value }))}
             dir="ltr"
@@ -164,12 +164,12 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
 
           <div>
             <label className="text-xs font-semibold text-text2 mb-1 block">
-              תמונת הפרסום <span className="font-normal text-text3">(אופציונלי)</span>
+              {t('deals.submit.image')} <span className="font-normal text-text3">{t('deals.optional')}</span>
             </label>
             <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl py-4 cursor-pointer hover:border-primary transition-colors">
               {imagePreview ? (
                 <div className="w-full relative">
-                  <img src={imagePreview} alt="תצוגה מקדימה" className="w-full max-h-40 object-cover rounded-lg" />
+                  <img src={imagePreview} alt={t('deals.submit.image.preview')} className="w-full max-h-40 object-cover rounded-lg" />
                   <button
                     type="button"
                     onClick={e => { e.preventDefault(); setImageFile(null); setImagePreview(null) }}
@@ -181,7 +181,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
               ) : (
                 <>
                   <Icon name="add" size={20} color="var(--c-text3)" />
-                  <span className="text-xs text-text3 mt-1">העלה תמונת ההנחה</span>
+                  <span className="text-xs text-text3 mt-1">{t('deals.submit.image.upload')}</span>
                 </>
               )}
               <input
@@ -204,37 +204,37 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
             className="flex items-center gap-1 text-xs text-text3"
           >
             <Icon name={showAdvanced ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={14} />
-            פרטים נוספים (תיאור, קישור, תאריכים, תגיות)
+            {t('deals.submit.advanced')}
           </button>
 
           {showAdvanced && (
             <div className="space-y-3 pt-1">
               <textarea
                 className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none h-20"
-                placeholder="תיאור מפורט (אופציונלי)"
+                placeholder={t('deals.submit.desc.ph')}
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
               />
               <input
                 className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="קישור לעמוד ההנחה (אופציונלי)"
+                placeholder={t('deals.submit.link.ph')}
                 value={form.external_link}
                 onChange={e => setForm(f => ({ ...f, external_link: e.target.value }))}
                 dir="ltr"
               />
               <input
                 className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="תגיות (קפה, מסעדה, אופנה...)"
+                placeholder={t('deals.submit.tags.ph')}
                 value={form.tags}
                 onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
               />
               <div className="grid grid-cols-2 gap-2">
                 <div className="min-w-0">
-                  <label className="text-xs text-text3 mb-1 block">תאריך התחלה</label>
+                  <label className="text-xs text-text3 mb-1 block">{t('discounts.start.date')}</label>
                   <input type="date" className="w-full min-w-0 border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
                 </div>
                 <div className="min-w-0">
-                  <label className="text-xs text-text3 mb-1 block">תאריך תפוגה</label>
+                  <label className="text-xs text-text3 mb-1 block">{t('deals.submit.expiry')}</label>
                   <input type="date" className="w-full min-w-0 border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text" value={form.expiration_date} onChange={e => setForm(f => ({ ...f, expiration_date: e.target.value }))} />
                 </div>
               </div>

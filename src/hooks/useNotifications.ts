@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { Voucher } from '../types'
 import { supabase } from '../lib/supabase'
 import { sendExpiryReminderEmail } from '../lib/emailService'
+import { translate } from '../lib/i18n'
 
 const NOTIF_KEY = 'last_expiry_notification'
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -81,15 +82,20 @@ export function useExpiryNotifications(
       )
 
       const title = urgent.length > 0
-        ? `${urgent.length} שובר${urgent.length > 1 ? 'ים' : ''} פגים בקרוב!`
-        : `${expiring.length} שובר${expiring.length > 1 ? 'ים' : ''} פגים תוך ${expiryWindowDays} יום`
+        ? (urgent.length === 1
+            ? translate('notif.expiry.title.urgent.one')
+            : translate('notif.expiry.title.urgent.many', { n: urgent.length }))
+        : (expiring.length === 1
+            ? translate('notif.expiry.title.window.one', { days: expiryWindowDays })
+            : translate('notif.expiry.title.window.many', { n: expiring.length, days: expiryWindowDays }))
 
       const body = expiring
         .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
         .slice(0, 5)
         .map(v => {
           const d = Math.ceil((new Date(v.expiry_date!).getTime() - nowTime) / (1000 * 60 * 60 * 24))
-          return `${v.store_name} — ${d === 0 ? 'היום!' : d === 1 ? 'מחר' : `${d} ימים`}`
+          const when = d === 0 ? translate('notif.day.today') : d === 1 ? translate('notif.day.tomorrow') : translate('notif.day.days', { d })
+          return `${v.store_name} — ${when}`
         })
         .join('\n')
 
@@ -176,12 +182,13 @@ export async function sendUsageNotification(
 ) {
   const fullyRedeemed = newBalance <= 0
   const storeLabel = storeUsed ? ` — ${storeUsed}` : ''
-  const title = fullyRedeemed
-    ? `שובר ${storeName} נוצל במלואו${storeLabel}`
-    : `שימוש בשובר ${storeName}${storeLabel}`
+  const at = storeUsed ? translate('notif.usage.at', { store: storeUsed }) : ''
+  const title = (fullyRedeemed
+    ? translate('notif.usage.full.title', { store: storeName })
+    : translate('notif.usage.title', { store: storeName })) + storeLabel
   const body = fullyRedeemed
-    ? `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} — השובר נוצל`
-    : `השתמשת ב-₪${usedAmount.toLocaleString('he-IL')}${storeUsed ? ` ב${storeUsed}` : ''} | יתרה נותרת: ₪${newBalance.toLocaleString('he-IL')}`
+    ? translate('notif.usage.full.body', { amount: usedAmount.toLocaleString('he-IL'), at })
+    : translate('notif.usage.body', { amount: usedAmount.toLocaleString('he-IL'), at, balance: newBalance.toLocaleString('he-IL') })
 
   if ('Notification' in window && Notification.permission === 'granted') {
     const options: NotificationOptions = {

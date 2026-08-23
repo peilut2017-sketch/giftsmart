@@ -178,7 +178,7 @@ export default function VoucherCard({
 
   // ─── Desktop hover actions ──────────────────────────────────────────────────
   const HoverActions = hovered && !isSelectMode ? (
-    <div className="absolute top-2 left-2 flex gap-1 z-10 animate-fade-in" role="group" aria-label={`פעולות עבור ${voucher.store_name}`}>
+    <div className="absolute top-2 left-2 flex gap-1 z-10 animate-fade-in" role="group" aria-label={t('card.actions.for', { name: voucher.store_name })}>
       <button onClick={e => { e.stopPropagation(); onEdit() }}    aria-label={`${t('card.edit.action')} ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50 transition-colors"><Edit2   className="w-3.5 h-3.5" /></button>
       <button onClick={e => { e.stopPropagation(); onArchive() }} aria-label={`${t('card.archive.action')} ${voucher.store_name}`} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50 transition-colors"><Archive className="w-3.5 h-3.5" /></button>
       <button onClick={e => { e.stopPropagation(); onDelete() }}  aria-label={`${t('card.delete.action')} ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50 transition-colors">  <Trash2  className="w-3.5 h-3.5" /></button>
@@ -412,9 +412,9 @@ export default function VoucherCard({
                   {expiryStatus === 'critical' ? '⚠ ' : ''}{expiryLabel}
                 </span>
               )}
-              {voucher.tags.slice(0, 1).map(t => (
-                <span key={t} className="text-xs px-2 py-0.5 rounded-full" style={{ color: 'var(--c-text3)', background: 'var(--c-bg)' }}>
-                  {t}
+              {voucher.tags.slice(0, 1).map(tag => (
+                <span key={tag} className="text-xs px-2 py-0.5 rounded-full" style={{ color: 'var(--c-text3)', background: 'var(--c-bg)' }}>
+                  {tag}
                 </span>
               ))}
             </div>

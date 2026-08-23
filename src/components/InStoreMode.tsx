@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { getDaysUntilExpiry } from '../utils/helpers'
+import { useModalHistory } from '../hooks/useModalHistory'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
 
@@ -84,6 +85,9 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Android/browser Back closes the in-store overlay instead of leaving the app
+  useModalHistory(true, () => handleClose())
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
+import { useModalHistory } from '../../hooks/useModalHistory'
 import Icon from './Icon'
 
 /** Single shared z-index for every sheet/modal in the redesigned UI — avoids the ad-hoc z-40/z-[80]/z-[90] scattering in the legacy components. */
@@ -35,6 +36,9 @@ export default function BottomSheet({
 }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   useBodyScrollLock(open)
+  // Android/browser Back closes the sheet instead of leaving the flow.
+  // Non-dismissible sheets (blocking vault setup) keep Back untouched.
+  useModalHistory(open && dismissible, onClose)
 
   useEffect(() => {
     if (!open || !dismissible) return

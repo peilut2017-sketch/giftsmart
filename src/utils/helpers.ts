@@ -1,8 +1,16 @@
 import { differenceInDays, format, isValid, parseISO } from 'date-fns'
 import { he } from 'date-fns/locale'
 
+// These helpers are called from everywhere without access to useT(), so they
+// read the active locale directly. Locale changes re-render the whole tree
+// (LocaleProvider context), which re-invokes them with the fresh value.
+function currentLocale(): 'he' | 'en' {
+  try { return (localStorage.getItem('gs_locale') as 'he' | 'en') || 'he' } catch { return 'he' }
+}
+
 export function formatCurrency(amount: number): string {
-  return `₪${amount.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+  const locale = currentLocale() === 'he' ? 'he-IL' : 'en-US'
+  return `₪${amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
 export function formatDate(dateStr?: string): string {
@@ -39,10 +47,11 @@ export function getExpiryStatus(dateStr?: string): 'expired' | 'critical' | 'war
 export function getExpiryLabel(dateStr?: string): string {
   const days = getDaysUntilExpiry(dateStr)
   if (days === null) return ''
-  if (days < 0) return 'פג תוקף'
-  if (days === 0) return 'פג היום!'
-  if (days === 1) return 'נותר יום אחד'
-  if (days <= 14) return `נותרו ${days} ימים`
+  const en = currentLocale() === 'en'
+  if (days < 0) return en ? 'Expired' : 'פג תוקף'
+  if (days === 0) return en ? 'Expires today!' : 'פג היום!'
+  if (days === 1) return en ? '1 day left' : 'נותר יום אחד'
+  if (days <= 14) return en ? `${days} days left` : `נותרו ${days} ימים`
   return formatDate(dateStr)
 }
 

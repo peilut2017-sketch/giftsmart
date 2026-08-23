@@ -8,6 +8,7 @@ import Icon from './ui/Icon'
 import VaultUnlockSheet from './VaultUnlockSheet'
 import VaultSetupSheet from './VaultSetupSheet'
 import ConfirmDialog from './ConfirmDialog'
+import { useModalHistory } from '../hooks/useModalHistory'
 import { useT } from '../lib/i18n'
 
 // Only ₪ and item-vouchers are selectable: the old $/€ options were never persisted
@@ -228,11 +229,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         await scanner.start(
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 250, height: 150 } },
-          (decodedText) => { setCode(decodedText); stopScanner(); toast.success('קוד נסרק!') },
+          (decodedText) => { setCode(decodedText); stopScanner(); toast.success(t('form.scan.success')) },
           () => {}
         )
       } catch {
-        toast.error('לא ניתן לפתוח מצלמה')
+        toast.error(t('form.scan.camera.error'))
         setShowScanner(false)
       }
     }, 100)
@@ -297,9 +298,9 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   // Per-step "Next" gate (add-mode wizard only)
   function validateStep(s: number): boolean {
-    if (s === STEP_STORE && !storeName.trim()) { toast.error('יש לבחור שם חנות'); return false }
-    if (s === STEP_CODE && !code.trim()) { toast.error('יש להזין קוד שובר'); return false }
-    if (s === STEP_BALANCE && amountUnit === 'פריט' && !itemName.trim()) { toast.error('יש להזין שם פריט'); return false }
+    if (s === STEP_STORE && !storeName.trim()) { toast.error(t('form.error.store.required')); return false }
+    if (s === STEP_CODE && !code.trim()) { toast.error(t('form.error.code.required')); return false }
+    if (s === STEP_BALANCE && amountUnit === 'פריט' && !itemName.trim()) { toast.error(t('form.error.item.required')); return false }
     return true
   }
 
@@ -325,8 +326,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault()
-    if (!storeName) return toast.error('יש לבחור שם חנות')
-    if (!code) return toast.error('יש להזין קוד שובר')
+    if (!storeName) return toast.error(t('form.error.store.required'))
+    if (!code) return toast.error(t('form.error.code.required'))
     // Duplicates are surfaced inline on the code step (duplicateVoucher warning) —
     // the extra native confirm() here was a blocking OS dialog repeating the same
     // information, so it's gone.
@@ -345,7 +346,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         ? Math.max(0, (voucher.balance ?? 0) - used)
         : (parseFloat(balance) || parsedAmount || 0)
 
-      if (amountUnit === 'פריט' && !itemName.trim()) { toast.error('יש להזין שם פריט'); return }
+      if (amountUnit === 'פריט' && !itemName.trim()) { toast.error(t('form.error.item.required')); return }
 
       const notesValue = notes.trim()
 
@@ -395,6 +396,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (dirty) setShowDiscardConfirm(true)
     else onClose()
   }
+
+  // Android/browser Back closes the form (with the same discard guard) instead
+  // of leaving the page mid-wizard
+  useModalHistory(true, requestClose)
 
   // Section visibility helper for the shared render (edit: all; add: gated by step)
   const show = (s: number) => showAll || step === s
@@ -506,7 +511,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                         <div className="sticky bottom-0 pointer-events-none h-6 bg-gradient-to-t from-[var(--c-surface)] to-transparent" />
                       )}
                       <button type="button" onClick={handleAddStore} className="w-full text-right px-4 py-2.5 text-sm text-primary hover:bg-primary-light flex items-center gap-2">
-                        <Icon name="add" size={16} /> הוסף "{storeSearch}" כחנות חדשה
+                        <Icon name="add" size={16} /> {t('form.store.add.new', { name: storeSearch })}
                       </button>
                     </div>
                   )}
@@ -524,7 +529,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     value={isEncryptedField(code) && !isVaultUnlocked ? '' : code}
                     onChange={e => setCode(e.target.value)}
                     disabled={isEncryptedField(code) && !isVaultUnlocked}
-                    placeholder={isEncryptedField(code) && !isVaultUnlocked ? '🔐 מוצפן — פתח כספת' : t('form.code.placeholder')}
+                    placeholder={isEncryptedField(code) && !isVaultUnlocked ? t('form.code.encrypted.placeholder') : t('form.code.placeholder')}
                     autoFocus={!showAll}
                     className={`ph-no-capture flex-1 ${inputCls} font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed`}
                     dir="ltr"
@@ -537,7 +542,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   <div className="mt-2 flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-2xl px-3 py-2.5">
                     <Icon name="warning" size={16} color="var(--c-warning)" className="mt-0.5" />
                     <p className="text-xs text-warning font-medium">
-                      קוד זה כבר קיים בשובר של <strong>{duplicateVoucher.store_name}</strong>
+                      {t('form.dup.msg', { store: duplicateVoucher.store_name })}
                     </p>
                   </div>
                 )}
@@ -555,56 +560,56 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 {amountUnit === 'פריט' ? (
                   <>
                     <div className="col-span-2">
-                      <label htmlFor="vf-item-name" className="text-sm font-medium text-text2 mb-1 block">שם פריט *</label>
-                      <input id="vf-item-name" type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="שם פריט / שירות..." className={inputCls} dir="rtl" />
+                      <label htmlFor="vf-item-name" className="text-sm font-medium text-text2 mb-1 block">{t('log.field.item_name')} *</label>
+                      <input id="vf-item-name" type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder={t('form.item.name.placeholder')} className={inputCls} dir="rtl" />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-text2 mb-1 block">ערך שובר <span className="text-text3 font-normal text-xs">(אופציונלי)</span></label>
+                      <label className="text-sm font-medium text-text2 mb-1 block">{t('form.item.value')} <span className="text-text3 font-normal text-xs">({t('form.optional')})</span></label>
                       <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
                         <input type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                       </div>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-text2 mb-1 block">כמה עלה לי (₪)</label>
+                      <label className="text-sm font-medium text-text2 mb-1 block">{t('form.actual.cost')}</label>
                       <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
                         <input type="number" inputMode="decimal" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                       </div>
                       {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
-                        <p className="text-xs mt-1 text-text3">ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪</p>
+                        <p className="text-xs mt-1 text-text3">{t('form.value.summary', { pct: ((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0), cost: parseFloat(actualCost).toLocaleString('he-IL') })}</p>
                       )}
                     </div>
                   </>
                 ) : (
                   <>
                     <div>
-                      <label htmlFor="vf-amount" className="text-sm font-medium text-text2 mb-1 block">{`שווי שובר (${amountUnit})`}</label>
+                      <label htmlFor="vf-amount" className="text-sm font-medium text-text2 mb-1 block">{t('form.voucher.value', { unit: amountUnit })}</label>
                       <input id="vf-amount" type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} dir="ltr" />
                     </div>
                     {voucher ? (
                       <div>
-                        <label htmlFor="vf-usage" className="text-sm font-medium text-text2 mb-1 block">סכום שימוש (₪)</label>
+                        <label htmlFor="vf-usage" className="text-sm font-medium text-text2 mb-1 block">{t('form.usage.amount')}</label>
                         <input id="vf-usage" type="number" inputMode="decimal" value={usageAmount} onChange={e => setUsageAmount(e.target.value)} placeholder="0" min="0" max={voucher.balance} className={inputCls} dir="ltr" />
                         {(() => {
                           const used = parseFloat(usageAmount) || 0
                           const newBal = Math.max(0, (voucher.balance ?? 0) - used)
                           return used > 0 ? (
-                            <p className={`text-xs mt-1 font-medium ${newBal <= 0 ? 'text-error' : 'text-success'}`}>יתרה חדשה: ₪{newBal.toLocaleString('he-IL')}</p>
+                            <p className={`text-xs mt-1 font-medium ${newBal <= 0 ? 'text-error' : 'text-success'}`}>{t('form.new.balance', { balance: newBal.toLocaleString('he-IL') })}</p>
                           ) : (
-                            <p className="text-xs mt-1 text-text3">יתרה: ₪{(voucher.balance ?? 0).toLocaleString('he-IL')}</p>
+                            <p className="text-xs mt-1 text-text3">{t('form.balance.current', { balance: (voucher.balance ?? 0).toLocaleString('he-IL') })}</p>
                           )
                         })()}
                         {(parseFloat(usageAmount) || 0) > 0 && (
-                          <input type="text" value={storeUsedInput} onChange={e => setStoreUsedInput(e.target.value)} placeholder="באיזה חנות? (אופציונלי)" className={`mt-2 ${inputCls} py-2.5 text-sm`} dir="rtl" />
+                          <input type="text" value={storeUsedInput} onChange={e => setStoreUsedInput(e.target.value)} placeholder={t('gift.placeholder.store_used')} className={`mt-2 ${inputCls} py-2.5 text-sm`} dir="rtl" />
                         )}
                       </div>
                     ) : (
                       <div>
-                        <label className="text-sm font-medium text-text2 mb-1 block">כמה עלה לי (₪)</label>
+                        <label className="text-sm font-medium text-text2 mb-1 block">{t('form.actual.cost')}</label>
                         <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
                           <input type="number" inputMode="decimal" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                         </div>
                         {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
-                          <p className="text-xs mt-1 text-text3">ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪</p>
+                          <p className="text-xs mt-1 text-text3">{t('form.value.summary', { pct: ((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0), cost: parseFloat(actualCost).toLocaleString('he-IL') })}</p>
                         )}
                       </div>
                     )}
@@ -616,12 +621,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             {/* Actual cost — edit mode, non-item (item mode includes it above) */}
             {show(STEP_BALANCE) && voucher && amountUnit !== 'פריט' && (
               <div>
-                <label className="text-sm font-medium text-text2 mb-1 block">כמה עלה לי (₪)</label>
+                <label className="text-sm font-medium text-text2 mb-1 block">{t('form.actual.cost')}</label>
                 <div className="flex items-center gap-2"><span className="text-sm text-text3 shrink-0">₪</span>
                   <input type="number" inputMode="decimal" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" min="0" className={inputCls} dir="ltr" />
                 </div>
                 {actualCost && parseFloat(actualCost) > 0 && parseFloat(amount) > 0 && (
-                  <p className="text-xs mt-1 text-text3">ערך {((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0)}% | עלה {parseFloat(actualCost).toLocaleString('he-IL')} ₪</p>
+                  <p className="text-xs mt-1 text-text3">{t('form.value.summary', { pct: ((parseFloat(actualCost) / parseFloat(amount)) * 100).toFixed(0), cost: parseFloat(actualCost).toLocaleString('he-IL') })}</p>
                 )}
               </div>
             )}
@@ -655,13 +660,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     <input
                       type="date" value={expiryDate}
                       onChange={e => { setExpiryDate(e.target.value); setDisplayDate(isoToDisplay(e.target.value)) }}
-                      aria-label="בחר תאריך מלוח שנה"
+                      aria-label={t('form.pick.date')}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                   </div>
                 </div>
                 <div className="flex gap-1.5 mt-2">
-                  {[{ label: '+שנה', years: 1 }, { label: '+שנתיים', years: 2 }, { label: '+5 שנים', years: 5 }].map(({ label, years }) => (
+                  {[{ label: t('form.expiry.plus1'), years: 1 }, { label: t('form.expiry.plus2'), years: 2 }, { label: t('form.expiry.plus5'), years: 5 }].map(({ label, years }) => (
                     <button key={years} type="button" onClick={() => { const d = new Date(); d.setFullYear(d.getFullYear() + years); const iso = d.toISOString().split('T')[0]; setExpiryDate(iso); setDisplayDate(isoToDisplay(iso)) }} className="flex-1 py-2.5 text-xs font-medium bg-bg text-text2 rounded-2xl hover:bg-primary-light hover:text-primary-dark transition">
                       {label}
                     </button>
@@ -681,7 +686,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     <Icon name="shield" size={16} color={e2eeEnabled ? '#4f46e5' : 'var(--c-text3)'} />
                     <div className="text-right">
                       <p className={`text-sm font-medium ${e2eeEnabled ? 'text-indigo-700' : 'text-text'}`}>{t('form.encrypt')}</p>
-                      <p className="text-xs text-text3">קוד וCVV מוצפנים — רק אתה יכול לקרוא</p>
+                      <p className="text-xs text-text3">{t('form.encrypt.desc')}</p>
                     </div>
                   </div>
                   <div className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${e2eeEnabled ? 'bg-primary' : 'bg-border'}`}>
@@ -696,15 +701,15 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     value={isEncryptedField(cvv) && !isVaultUnlocked ? '' : cvv}
                     onChange={e => setCvv(e.target.value)}
                     disabled={isEncryptedField(cvv) && !isVaultUnlocked}
-                    placeholder={isEncryptedField(cvv) && !isVaultUnlocked ? '🔐 מוצפן' : 'אופציונלי'}
+                    placeholder={isEncryptedField(cvv) && !isVaultUnlocked ? t('form.cvv.encrypted.placeholder') : t('form.optional')}
                     className={`ph-no-capture ${inputCls} font-mono disabled:bg-indigo-50 disabled:text-indigo-400 disabled:cursor-not-allowed`}
                     dir="ltr" />
                 </div>
 
                 {/* Source */}
                 <div>
-                  <label className="text-sm font-medium text-text2 mb-1 block">מקור שובר</label>
-                  <input type="text" value={source} onChange={e => setSource(e.target.value)} placeholder="לדוגמה: קיבלתי כמתנה, נקנה בחנות, תוכנית נאמנות..." className={inputCls} />
+                  <label className="text-sm font-medium text-text2 mb-1 block">{t('form.source')}</label>
+                  <input type="text" value={source} onChange={e => setSource(e.target.value)} placeholder={t('form.source.placeholder')} className={inputCls} />
                 </div>
 
                 {/* Link + operator */}
@@ -714,13 +719,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     <div className="flex gap-1.5">
                       <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." className={`flex-1 min-w-0 ${inputCls}`} dir="ltr" />
                       <button type="button" onClick={openOperatorPicker} className="flex-shrink-0 flex items-center gap-1 px-3 py-2 bg-teal-50 border border-teal-200 text-teal-700 rounded-2xl text-xs font-medium whitespace-nowrap">
-                        מפעיל <Icon name="keyboard_arrow_down" size={12} />
+                        {t('form.operator')} <Icon name="keyboard_arrow_down" size={12} />
                       </button>
                     </div>
                     {showOperatorPicker && (
                       <div className="absolute top-full right-0 left-0 mt-1 bg-surface border border-border rounded-2xl shadow-xl z-30 overflow-hidden">
                         {operators.length === 0 ? (
-                          <p className="px-4 py-3 text-xs text-text3 text-center">אין מפעילים מוגדרים</p>
+                          <p className="px-4 py-3 text-xs text-text3 text-center">{t('form.operator.none')}</p>
                         ) : (
                           <div className="max-h-44 overflow-y-auto divide-y divide-border">
                             {operators.map(op => (
@@ -749,7 +754,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                       )
                     })}
                     <button type="button" onClick={() => setShowCatDropdown(prev => !prev)} className="px-3 py-1.5 rounded-full text-xs font-medium bg-bg text-text2 border-2 border-dashed border-border hover:opacity-80">
-                      <Icon name="add" size={14} className="inline" /> {showCatDropdown ? 'סגור' : 'ערוך קטגוריות'}
+                      <Icon name="add" size={14} className="inline" /> {showCatDropdown ? t('app.close') : t('form.categories.edit')}
                     </button>
                   </div>
                   {showCatDropdown && (
@@ -760,11 +765,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                         </button>
                       ))}
                       <button type="button" onClick={() => setShowCatInput(!showCatInput)} className="px-3 py-1.5 rounded-full text-xs font-medium bg-surface text-text2 border-2 border-dashed border-border">
-                        <Icon name="add" size={14} className="inline" /> הוסף קטגוריה
+                        <Icon name="add" size={14} className="inline" /> {t('form.categories.add')}
                       </button>
                       {showCatInput && (
                         <div className="w-full flex gap-2 mt-1">
-                          <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="שם קטגוריה חדשה" className="flex-1 min-w-0 px-3 py-2 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                          <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder={t('form.categories.new.placeholder')} className="flex-1 min-w-0 px-3 py-2 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/40" />
                           <button type="button" onClick={handleAddCat} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium">{t('app.add')}</button>
                         </div>
                       )}
@@ -774,8 +779,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
                 {/* Tags */}
                 <div className="relative">
-                  <label className="text-sm font-medium text-text2 mb-1 block flex items-center gap-1"><Icon name="sell" size={14} /> תגיות (מופרדות בפסיק)</label>
-                  <input type="text" value={tags} onChange={e => { setTags(e.target.value); setShowTagSuggestions(true) }} onFocus={() => setShowTagSuggestions(true)} onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)} placeholder="מתנה, יום הולדת, קיץ..." className={inputCls} />
+                  <label className="text-sm font-medium text-text2 mb-1 block flex items-center gap-1"><Icon name="sell" size={14} /> {t('form.tags')}</label>
+                  <input type="text" value={tags} onChange={e => { setTags(e.target.value); setShowTagSuggestions(true) }} onFocus={() => setShowTagSuggestions(true)} onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)} placeholder={t('form.tags.placeholder')} className={inputCls} />
                   {showTagSuggestions && tagSuggestions.length > 0 && (
                     <div className="absolute z-20 w-full mt-1 bg-surface border border-border rounded-2xl shadow-lg overflow-hidden">
                       {tagSuggestions.map(tag => (
@@ -807,18 +812,18 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                   <button type="button" onClick={() => setIsLocked(prev => !prev)} className="w-full flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <Icon name="lock" size={16} color={isLocked ? 'var(--c-warning)' : 'var(--c-text3)'} />
-                      <span className={`text-sm font-medium ${isLocked ? 'text-warning' : 'text-text2'}`}>נעל שובר</span>
-                      {isLocked && <span className="text-xs bg-warning/20 text-warning px-2 py-0.5 rounded-full font-medium">פעיל</span>}
+                      <span className={`text-sm font-medium ${isLocked ? 'text-warning' : 'text-text2'}`}>{t('checkout.menu.lock')}</span>
+                      {isLocked && <span className="text-xs bg-warning/20 text-warning px-2 py-0.5 rounded-full font-medium">{t('checkout.badge.active')}</span>}
                     </div>
                     <div className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${isLocked ? 'bg-warning' : 'bg-border'}`}>
                       <span className={`absolute top-1 start-1 w-4 h-4 rounded-full shadow transition-transform ${isLocked ? 'ltr:translate-x-4 rtl:-translate-x-4' : ''}`} style={{ background: '#fff' }} />
                     </div>
                   </button>
-                  <p className="text-xs text-text3 mt-1 mr-6">שובר נעול יציג אזהרה לפני פתיחה בקופה</p>
+                  <p className="text-xs text-text3 mt-1 mr-6">{t('form.lock.hint')}</p>
                   {isLocked && (
                     <div className="mt-3">
-                      <label className="text-xs font-medium text-warning mb-1 block">סיבת נעילה</label>
-                      <textarea value={lockReason} onChange={e => setLockReason(e.target.value)} placeholder="לדוגמה: שמור ליום הולדת של דני, לא לשימוש עד דצמבר..." rows={2} className="w-full px-4 py-3 border border-warning/30 rounded-2xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-warning/40 resize-none" />
+                      <label className="text-xs font-medium text-warning mb-1 block">{t('checkout.lock.reason.label')}</label>
+                      <textarea value={lockReason} onChange={e => setLockReason(e.target.value)} placeholder={t('form.lock.reason.placeholder')} rows={2} className="w-full px-4 py-3 border border-warning/30 rounded-2xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-warning/40 resize-none" />
                     </div>
                   )}
                 </div>
@@ -907,11 +912,12 @@ function VoucherKindPicker({ amountUnit, setAmountUnit }: {
   amountUnit: AmountUnit
   setAmountUnit: (u: AmountUnit) => void
 }) {
+  const { t } = useT()
   const isItem = amountUnit === 'פריט'
 
   const KINDS = [
-    { key: 'amount' as const, label: 'סכום כספי', icon: 'payments',            active: !isItem },
-    { key: 'item'   as const, label: 'פריט / שירות', icon: 'inventory_2',      active: isItem  },
+    { key: 'amount' as const, label: t('form.kind.amount'), icon: 'payments',            active: !isItem },
+    { key: 'item'   as const, label: t('form.kind.item'), icon: 'inventory_2',      active: isItem  },
   ]
 
   return (

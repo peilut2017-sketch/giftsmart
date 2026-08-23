@@ -80,9 +80,10 @@ self.addEventListener('notificationclick', (event) => {
   )
 })
 
-// Handle push events (for future server-side push support)
+// Handle push events — payloads come from the send-push / push-expiry
+// edge functions as { title, body, url, tag }
 self.addEventListener('push', (event) => {
-  let data = { title: '⚠️ ארנק שוברים', body: 'יש לך שוברים שעומדים לפוג', url: '/' }
+  let data = { title: 'GiftSmart', body: 'יש לך שוברים שעומדים לפוג', url: '/', tag: undefined }
   try {
     if (event.data) data = { ...data, ...event.data.json() }
   } catch {}
@@ -92,7 +93,8 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: '/web-app-manifest-192x192.png',
       badge: '/web-app-manifest-192x192.png',
-      tag: 'push-expiry',
+      // Per-category tag so a marketplace push doesn't overwrite an expiry one
+      tag: data.tag || 'giftsmart',
       requireInteraction: true,
       data: { url: data.url },
     })

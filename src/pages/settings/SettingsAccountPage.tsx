@@ -92,26 +92,26 @@ export default function SettingsAccountPage() {
   }
 
   async function changePassword() {
-    if (!currentPass) return toast.error('הזן את הסיסמה הנוכחית')
-    if (newPass !== newPass2) return toast.error('הסיסמאות אינן תואמות')
-    if (newPass.length < 8) return toast.error('סיסמה חדשה: לפחות 8 תווים')
+    if (!currentPass) return toast.error(t('account.enter.current'))
+    if (newPass !== newPass2) return toast.error(t('auth.passwords.mismatch'))
+    if (newPass.length < 8) return toast.error(t('account.pass.min'))
     setPasswordChanging(true)
     try {
       const { error: authErr } = await supabase.auth.signInWithPassword({ email: user!.email!, password: currentPass })
-      if (authErr) return toast.error('סיסמה נוכחית שגויה')
+      if (authErr) return toast.error(t('account.pass.wrong'))
 
       let vaultEntries: Array<{id: string; code: string; cvv: string|null}> = []
 
       if (isUnifiedVault) {
-        if (!isVaultUnlocked) return toast.error('יש לפתוח את הכספת לפני שינוי הסיסמה')
+        if (!isVaultUnlocked) return toast.error(t('account.unlock.vault.first'))
         const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
         const { ok, entries } = await reDeriveVaultKeyFromPassword(newPass, e2eeVouchers)
-        if (!ok) return toast.error('שגיאה בעדכון הכספת')
+        if (!ok) return toast.error(t('account.vault.update.error'))
         vaultEntries = entries
       }
 
       const { error } = await supabase.auth.updateUser({ password: newPass })
-      if (error) { toast.error('שגיאה בשינוי סיסמה: ' + error.message); return }
+      if (error) { toast.error(t('account.pass.change.error', { error: error.message })); return }
 
       // v3: reDeriveVaultKeyFromPassword only re-wraps the master key — no voucher
       // is re-encrypted, so entries is empty and this loop is a legacy no-op
@@ -121,7 +121,7 @@ export default function SettingsAccountPage() {
         ))
       }
 
-      toast.success(isUnifiedVault ? 'הסיסמה שונתה והכספת עודכנה' : 'סיסמה שונתה!')
+      toast.success(isUnifiedVault ? t('account.pass.changed.vault') : t('account.pass.changed'))
       setEditPass(false)
       setCurrentPass(''); setNewPass(''); setNewPass2('')
       setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
@@ -133,7 +133,7 @@ export default function SettingsAccountPage() {
 
   return (
     <div className="flex-1 bg-bg">
-      <SettingsSubHeader title="חשבון" />
+      <SettingsSubHeader title={t('account.title')} />
       <div className="p-4 space-y-4 pb-10">
         <Card>
           <div className="p-4">
@@ -143,7 +143,7 @@ export default function SettingsAccountPage() {
                   {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-text">{profile?.name || 'ללא שם'}</p>
+                  <p className="text-sm font-bold text-text">{profile?.name || t('hub.no.name')}</p>
                   <p className="text-xs text-text3 truncate">{user?.email}</p>
                   {phone && <p className="text-xs text-text3">{phone}</p>}
                 </div>
@@ -153,8 +153,8 @@ export default function SettingsAccountPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="שם מלא" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="טלפון" dir="ltr" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
+                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('auth.name.placeholder')} className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('seller.profile.phone')} dir="ltr" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
                 <div className="flex gap-2">
                   <button onClick={saveProfile} disabled={savingProfile} className="flex-1 h-11 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
                     {savingProfile && <Spinner size={15} color="#fff" />}
@@ -167,16 +167,16 @@ export default function SettingsAccountPage() {
           </div>
         </Card>
 
-        <SL>סיסמה</SL>
+        <SL>{t('account.password.section')}</SL>
         <Card>
           {!editPass ? (
-            <MenuItem icon="lock" label="שינוי סיסמה" desc="עדכן את סיסמת הכניסה" onClick={() => setEditPass(true)} />
+            <MenuItem icon="lock" label={t('account.change.pass')} desc={t('account.change.pass.desc')} onClick={() => setEditPass(true)} />
           ) : (
             <div className="p-4 space-y-3">
               {isUnifiedVault && (
                 <div className="bg-primary-light/50 border border-primary/15 rounded-xl p-3 text-xs text-text2 flex items-start gap-2">
                   <Icon name="shield" size={14} color="var(--c-primary)" className="flex-shrink-0 mt-0.5" />
-                  <p>הכספת נפתחת עם סיסמת הכניסה — <strong>הסיסמה החדשה תחליף אותה גם בכספת</strong>, בלי לגעת בשוברים עצמם.</p>
+                  <p>{t('account.vault.note.a')} <strong>{t('account.vault.note.b')}</strong>{t('account.vault.note.c')}</p>
                 </div>
               )}
 
@@ -186,7 +186,7 @@ export default function SettingsAccountPage() {
                   type={showCurrentPass ? 'text' : 'password'}
                   value={currentPass}
                   onChange={e => setCurrentPass(e.target.value)}
-                  placeholder="סיסמה נוכחית"
+                  placeholder={t('account.pass.current.placeholder')}
                   className="w-full pr-10 pl-10 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                   dir="ltr"
                   autoFocus
@@ -203,7 +203,7 @@ export default function SettingsAccountPage() {
                     type={showNewPass ? 'text' : 'password'}
                     value={newPass}
                     onChange={e => { setNewPass(e.target.value); setShowPassStrength(true) }}
-                    placeholder="סיסמה חדשה (לפחות 8 תווים)"
+                    placeholder={t('account.pass.new.placeholder')}
                     className="w-full pr-10 pl-10 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                     dir="ltr"
                   />
@@ -240,7 +240,7 @@ export default function SettingsAccountPage() {
                   type={showNewPass2 ? 'text' : 'password'}
                   value={newPass2}
                   onChange={e => setNewPass2(e.target.value)}
-                  placeholder="אימות סיסמה חדשה"
+                  placeholder={t('account.pass.confirm.placeholder')}
                   className="w-full pr-10 pl-10 py-2.5 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                   dir="ltr"
                 />
@@ -256,7 +256,7 @@ export default function SettingsAccountPage() {
                   className="flex-1 bg-primary text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {passwordChanging && <Spinner size={16} color="#fff" />}
-                  {passwordChanging ? 'משנה...' : isUnifiedVault ? 'שנה סיסמה ועדכן כספת' : 'שנה סיסמה'}
+                  {passwordChanging ? t('account.changing') : isUnifiedVault ? t('account.change.pass.vault') : t('account.change.pass.button')}
                 </button>
                 <button
                   onClick={() => {
@@ -279,7 +279,7 @@ export default function SettingsAccountPage() {
           <MenuItem
             icon="logout"
             label={t('settings.logout')}
-            desc="יציאה מהחשבון במכשיר זה"
+            desc={t('account.logout.desc')}
             onClick={() => setConfirmDialog({
               title: t('settings.logout.confirm.title'),
               onConfirm: () => { setConfirmDialog(null); signOut() },
@@ -287,7 +287,7 @@ export default function SettingsAccountPage() {
           />
         </Card>
 
-        <SL>אזור מסוכן</SL>
+        <SL>{t('account.danger.zone')}</SL>
         <div className="bg-error/5 border border-error/20 rounded-card overflow-hidden">
           <MenuItem
             icon="delete"

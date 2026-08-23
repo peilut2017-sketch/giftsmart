@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { X, ChevronRight, ChevronLeft, Archive, Trash2, Edit2, Shield } from 'lucide-react'
+import { useModalHistory } from '../hooks/useModalHistory'
 
 const STORAGE_KEY = 'onboarding_seen_v2'
 const TOOLTIP_W = 310
@@ -47,43 +48,23 @@ function SwipeDemo() {
   )
 }
 
-// ── Long-press demo ──────────────────────────────────────────────────────────
-function LongPressDemo() {
-  return (
-    <div className="flex items-center gap-3 mt-3 justify-center">
-      <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, #22c55e, #059669)' }}>
-        <svg viewBox="0 0 28 28" className="w-6 h-6" fill="none">
-          <rect x="6" y="6" width="16" height="16" rx="3" transform="rotate(45 14 14)" stroke="white" strokeWidth="2" fill="none"/>
-          <line x1="14" y1="9" x2="14" y2="19" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          <line x1="9" y1="14" x2="19" y2="14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-      </div>
-      <div className="text-right text-sm" style={{ color: 'var(--c-text2)' }}>
-        <div>לחיצה קצרה → תפריט מהיר</div>
-        <div className="font-bold mt-0.5" style={{ color: 'var(--c-primary)' }}>לחיצה ארוכה → הוסף שובר</div>
-      </div>
-    </div>
-  )
-}
-
 // ── Steps ───────────────────────────────────────────────────────────────────
+// Every step here must describe UI that actually exists — the previous version
+// taught a long-press FAB menu, a quick-actions sheet, and a "market" nav tab
+// that were all removed, and pointed spotlights at anchors no longer in the DOM.
 const STEPS: Step[] = [
   {
     id: 'welcome',
     title: 'ברוכים הבאים ל-GiftSmart',
     body: (
-      <p>המדריך יסביר בקצרה את כל הפיצ׳רים — כולל הנסתרים שרוב המשתמשים לא מגלים. ניתן לדלג ולהפעיל מחדש מהגדרות.</p>
+      <p>המדריך יסביר בקצרה את הפיצ׳רים המרכזיים. ניתן לדלג ולהפעיל מחדש מהגדרות.</p>
     ),
   },
   {
     id: 'fab',
-    title: 'הכפתור החכם',
+    title: 'הוספת שובר',
     body: (
-      <>
-        <p>הכפתור הירוק בתחתית הוא נקודת הכניסה הראשית.</p>
-        <LongPressDemo />
-        <p className="mt-2 text-xs" style={{ color: 'var(--c-text3)' }}>תפריט מהיר: חיפוש · אני בחנות · בחירה מרובה</p>
-      </>
+      <p>הכפתור הירוק בתחתית פותח את טופס הוספת השובר — הקלדה ידנית, הדבקת SMS, סריקת ברקוד או צילום שובר עם ניתוח AI.</p>
     ),
     target: '[data-guide="fab"]',
     padding: 10,
@@ -111,54 +92,30 @@ const STEPS: Step[] = [
     tipSide: 'bottom',
   },
   {
-    id: 'filters',
-    title: 'סינון וחיפוש',
-    body: (
-      <p>הטאבים מאפשרים לסנן לפי: הכל, פג בקרוב, משותף. לחץ <strong>סינון</strong> לקטגוריות ומיון. לחץ על אייקון הגריד / שורות לשינוי תצוגה.</p>
-    ),
-    target: '[data-guide="filter-bar"]',
-    padding: 6,
-    tipSide: 'bottom',
-  },
-  {
     id: 'instore',
-    title: 'מצב "אני בחנות" — נסתר',
+    title: 'מצב "אני בחנות"',
     body: (
-      <p>פתח את תפריט הכפתור הירוק ← <strong>אני בחנות</strong>. חפש חנות, ראה את כל השוברים הזמינים, עדכן יתרה, והצג ברקוד — הכל מסך אחד.</p>
-    ),
-    target: '[data-guide="fab"]',
-    padding: 10,
-    tipSide: 'top',
-  },
-  {
-    id: 'ocr',
-    title: 'SMS · תמונה · QR — נסתר',
-    body: (
-      <p>בטופס הוספת שובר ← לחץ <strong>הדבק SMS</strong> לחילוץ פרטים אוטומטי, או <strong>סרוק תמונה</strong> לניתוח תמונת שובר עם AI. גם סריקת ברקוד מובנית.</p>
+      <p>בטאב <strong>חיפוש</strong> תמצא את כפתור <strong>"אני בחנות"</strong> — חפש חנות, ראה את כל השוברים הזמינים בה, עדכן יתרה והצג ברקוד, הכל ממסך אחד בקופה.</p>
     ),
   },
   {
     id: 'market',
     title: 'שוק שוברים',
     body: (
-      <p>בכרטיסייה <strong>שוק</strong> תוכל למכור שוברים שאינך צריך ולקנות מאחרים במחיר מיוחד. מכולל מערכת דירוג ואישור תשלום.</p>
+      <p>דרך החיפוש או ההגדרות תגיע ל<strong>שוק השוברים</strong> — מכור שוברים שאינך צריך וקנה מאחרים במחיר מוזל, עם מערכת דירוג ואישור תשלום.</p>
     ),
-    target: '[data-guide="market-nav"]',
-    padding: 8,
-    tipSide: 'top',
   },
   {
     id: 'e2ee',
     title: 'הצפנה מקצה לקצה (E2EE)',
     body: (
       <>
-        <p>בטופס הוספת שובר תוכל להפעיל הצפנה מקצה לקצה — הקוד יישמר מוצפן גם בשרת, רק מי שמחזיק בסיסמת הכספת יוכל לקרוא אותו.</p>
+        <p>בטופס הוספת שובר תוכל להפעיל הצפנה מקצה לקצה — הקוד נשמר מוצפן גם בשרת, ורק אתה יכול לקרוא אותו.</p>
         <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
           <p className="flex items-center gap-1.5 font-bold"><Shield className="w-3.5 h-3.5" /> חשוב לדעת:</p>
-          <p>• <strong>שכחת הסיסמה = אובדן גישה קבוע לקוד</strong> — אין שחזור בשרת</p>
-          <p>• שיתוף קישור לשובר מוצפן חושף את הקוד בשרת</p>
-          <p>• הגדר רמז סיסמה בעת ההגדרה כדי שלא לשכוח</p>
-          <p>• שנה ואפס כספת בהגדרות ← פרטי חשבון</p>
+          <p>• הכספת נפתחת עם סיסמת הכניסה, טביעת אצבע או קוד שחזור</p>
+          <p>• שמור את קוד השחזור במקום בטוח — הוא הגיבוי שלך</p>
+          <p>• ניהול הכספת: הגדרות ← פרטיות ואבטחה</p>
         </div>
       </>
     ),
@@ -218,11 +175,29 @@ function getTooltipStyle(rect: DOMRect | null, tipSide?: 'top' | 'bottom'): Reac
 
 // ── Main component ───────────────────────────────────────────────────────────
 export default function OnboardingGuide() {
-  const [visible, setVisible] = useState(() => !localStorage.getItem(STORAGE_KEY))
+  const [visible, setVisible] = useState(false)
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
 
   const current = STEPS[step]
+
+  // First auto-show: only after the WelcomeModal is out of the way. The two used
+  // to render simultaneously for a brand-new user — guide tooltip on top of the
+  // welcome sheet.
+  useEffect(() => {
+    if (localStorage.getItem(STORAGE_KEY)) return
+    const onWelcomeDone = () => setVisible(true)
+    window.addEventListener('gs-welcome-dismissed', onWelcomeDone)
+    // The welcome modal mounts in the same commit and only paints on its own
+    // state update — check for it after that render has flushed, not right now.
+    const timer = setTimeout(() => {
+      if (!document.querySelector('[data-welcome-modal]')) setVisible(true)
+    }, 120)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('gs-welcome-dismissed', onWelcomeDone)
+    }
+  }, [])
 
   // Listen for manual re-trigger from Settings
   useEffect(() => {
@@ -259,6 +234,9 @@ export default function OnboardingGuide() {
     localStorage.setItem(STORAGE_KEY, '1')
     setVisible(false)
   }
+
+  // Android/browser Back dismisses the guide instead of leaving the app
+  useModalHistory(visible, dismiss)
 
   function next() {
     if (step < STEPS.length - 1) setStep(s => s + 1)

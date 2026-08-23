@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { formatDate, getDaysUntilExpiry } from '../../utils/helpers'
 import { sendExpiryReminderEmail } from '../../lib/emailService'
 import { getNotifChannels, saveNotifChannels, type NotifChannels } from '../../hooks/useNotifications'
+import { subscribeToPush, unsubscribeFromPush } from '../../lib/push'
 import toast from 'react-hot-toast'
 import { useT } from '../../lib/i18n'
 import Icon from '../../components/ui/Icon'
@@ -60,7 +61,7 @@ export default function SettingsNotificationsPage() {
         // A rejected save is no longer swallowed silently — localStorage and the
         // server would quietly disagree with zero feedback
         setSaveState('error')
-        toast.error('השמירה לשרת נכשלה — ההגדרה נשמרה מקומית בלבד')
+        toast.error(t('notifset.save.error'))
       }
     }, 800)
   }
@@ -128,23 +129,35 @@ export default function SettingsNotificationsPage() {
   // preference bit while the OS permission stayed "default", so the switch showed
   // green and nothing ever arrived
   async function handleTogglePush(value: boolean) {
-    if (!value) { updateNotifChannel('push', false); return }
+    if (!value) {
+      updateNotifChannel('push', false)
+      // Also drop this device's server-side push subscription
+      unsubscribeFromPush()
+      return
+    }
     if (typeof Notification === 'undefined') {
-      toast.error('הדפדפן הזה אינו תומך בהתראות')
+      toast.error(t('notifset.push.unsupported'))
       return
     }
     if (Notification.permission === 'denied') {
-      toast.error('התראות חסומות בדפדפן — אפשר אותן בהגדרות האתר של הדפדפן', { duration: 6000 })
+      toast.error(t('notifset.push.blocked'), { duration: 6000 })
       return
     }
     if (Notification.permission === 'default') {
       const result = await Notification.requestPermission()
       if (result !== 'granted') {
-        toast('בלי אישור הדפדפן לא יגיעו התראות פוש', { icon: 'ℹ️' })
+        toast(t('notifset.push.denied'), { icon: 'ℹ️' })
         return
       }
     }
     updateNotifChannel('push', true)
+    // Register this device for real server push (expiry reminders while the app
+    // is closed). 'unconfigured' = no VAPID key set yet — local notifications
+    // still work, so the toggle stays on.
+    const result = await subscribeToPush()
+    if (result === 'error') {
+      toast.error(t('notifset.push.server.error'))
+    }
   }
 
   useEffect(() => {
@@ -163,7 +176,7 @@ export default function SettingsNotificationsPage() {
         setTelegramLinked(true)
         setTelegramCode(null)
         logAction('system_telegram_link', 'מערכת', undefined, { type: 'enabled' })
-        toast.success('טלגרם חובר בהצלחה!')
+        toast.success(t('notifset.telegram.connected'))
       }
     }, 4000)
     const stop = setTimeout(() => clearInterval(timer), 10 * 60 * 1000)
@@ -180,7 +193,7 @@ export default function SettingsNotificationsPage() {
         if (prev <= 1) {
           clearInterval(timer)
           setTelegramCode(null)
-          toast('קוד הטלגרם פג — צור קוד חדש', { icon: '⏱️' })
+          toast(t('notifset.telegram.code.expired'), { icon: '⏱️' })
           return 0
         }
         return prev - 1
@@ -199,7 +212,7 @@ export default function SettingsNotificationsPage() {
       if (error || !data) throw error ?? new Error('no code')
       setTelegramCode(data as string)
     } catch {
-      toast.error('שגיאה ביצירת קוד')
+      toast.error(t('notifset.code.error'))
     } finally {
       setTelegramLoading(false)
     }
@@ -211,7 +224,7 @@ export default function SettingsNotificationsPage() {
     setTelegramLinked(false)
     setTelegramCode(null)
     logAction('system_telegram_link', 'מערכת', undefined, { type: 'disabled' })
-    toast.success('טלגרם נותק')
+    toast.success(t('notifset.telegram.disconnected'))
   }
 
   async function handleSendExpiryReminder() {
@@ -221,26 +234,26 @@ export default function SettingsNotificationsPage() {
       const days = getDaysUntilExpiry(v.expiry_date)
       return days !== null && days >= 0 && days <= reminderDays
     })
-    if (expiring.length === 0) return toast(`אין שוברים שפגים ב-${reminderDays} הימים הקרובים`)
+    if (expiring.length === 0) return toast(t('notifset.no.expiring', { days: reminderDays }))
     setSendingReminder(true)
     try {
       const vouchers_list = expiring
         .map(v => `• ${v.store_name} — יתרה ₪${v.balance}${v.expiry_date ? `, תוקף: ${formatDate(v.expiry_date)}` : ''}`)
         .join('\n')
       await sendExpiryReminderEmail({ to_email: user.email, to_name: profile?.name || user.email, count: expiring.length, vouchers_list })
-      toast.success(`תזכורת נשלחה ל-${user.email}`)
+      toast.success(t('notifset.reminder.sent', { email: user.email }))
     } catch (err: any) {
-      toast.error('שגיאה בשליחת התזכורת' + (err?.message ? ': ' + err.message : ''))
+      toast.error(t('notifset.reminder.error') + (err?.message ? ': ' + err.message : ''))
     } finally {
       setSendingReminder(false)
     }
   }
 
-  const saveIndicator = saveState === 'saving' ? 'שומר…' : saveState === 'saved' ? '✓ נשמר' : saveState === 'error' ? 'השמירה נכשלה' : ''
+  const saveIndicator = saveState === 'saving' ? t('notifset.saving') : saveState === 'saved' ? t('notifset.saved') : saveState === 'error' ? t('notifset.save.failed') : ''
 
   return (
     <div className="flex-1 bg-bg">
-      <SettingsSubHeader title="התראות" />
+      <SettingsSubHeader title={t('settings.notifications')} />
       <div className="p-4 space-y-4 pb-10">
         {saveIndicator && (
           <p className={`text-xs text-center ${saveState === 'error' ? 'text-error' : 'text-text3'}`} aria-live="polite">{saveIndicator}</p>
@@ -254,24 +267,24 @@ export default function SettingsNotificationsPage() {
               </div>
               <Switch checked={calendarReminderEnabled} onChange={saveCalendarEnabled} size="sm" />
             </label>
-            <p className="text-sm text-text2 mb-3">שלח תזכורת <strong>{reminderDays}</strong> ימים לפני שהשובר יפוג</p>
+            <p className="text-sm text-text2 mb-3">{t('notifset.reminder.before.a')} <strong>{reminderDays}</strong> {t('notifset.reminder.before.b')}</p>
             <div className="flex items-center gap-3">
-              <input type="range" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value))} className="flex-1 accent-primary" aria-label="ימי תזכורת" />
+              <input type="range" min={1} max={90} value={reminderDays} onChange={e => saveReminderDays(parseInt(e.target.value))} className="flex-1 accent-primary" aria-label={t('notifset.reminder.days.aria')} />
               <div className="flex items-center gap-1">
                 <input
                   type="number" inputMode="numeric" min={1} max={90}
                   value={daysInput}
                   onChange={e => handleDaysInputChange(e.target.value)}
                   onBlur={() => saveReminderDays(parseInt(daysInput) || reminderDays)}
-                  aria-label="ימי תזכורת"
+                  aria-label={t('notifset.reminder.days.aria')}
                   className="w-16 text-center px-2 py-2 border border-border rounded-xl text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
-                <span className="text-sm text-text3">ימים</span>
+                <span className="text-sm text-text3">{t('notifset.days')}</span>
               </div>
             </div>
             <div className="flex justify-between text-xs text-text3 mt-1 px-0.5">
-              <span>1 יום</span>
-              <span>90 ימים</span>
+              <span>{t('notifset.one.day')}</span>
+              <span>{t('notifset.ninety.days')}</span>
             </div>
 
             <div className="mt-4 pt-3 border-t border-border">
@@ -284,7 +297,7 @@ export default function SettingsNotificationsPage() {
                     <div>
                       <span className="text-sm text-text2">{t('settings.notif.push')}</span>
                       {pushPermission === 'denied' && (
-                        <p className="text-[10px] text-error">חסום בדפדפן — אפשר בהגדרות האתר</p>
+                        <p className="text-[10px] text-error">{t('notifset.push.blocked.note')}</p>
                       )}
                     </div>
                   </div>
@@ -307,7 +320,7 @@ export default function SettingsNotificationsPage() {
                     <Icon name="send" size={16} color="#0ea5e9" />
                     <div>
                       <span className="text-sm text-text2">{t('settings.notif.telegram')}</span>
-                      {!telegramLinked && <p className="text-[10px] text-text3">יש לקשר טלגרם תחילה</p>}
+                      {!telegramLinked && <p className="text-[10px] text-text3">{t('notifset.telegram.link.first')}</p>}
                     </div>
                   </div>
                   <Switch checked={notifChannels.telegram && !!telegramLinked} onChange={v => telegramLinked && updateNotifChannel('telegram', v)} size="sm" />
@@ -322,11 +335,11 @@ export default function SettingsNotificationsPage() {
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center"><Icon name="send" size={20} color="#0ea5e9" /></div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-text">מחובר לבוט טלגרם</p>
-                    <p className="text-xs text-text3">מקבל את כל ההתראות גם בטלגרם</p>
+                    <p className="text-sm font-medium text-text">{t('notifset.telegram.linked.title')}</p>
+                    <p className="text-xs text-text3">{t('notifset.telegram.linked.desc')}</p>
                   </div>
                   <button onClick={() => setConfirmDisconnect(true)} className="text-xs text-error font-medium px-3 py-2 bg-error/10 rounded-xl flex items-center gap-1">
-                    <Icon name="link_off" size={14} /> נתק
+                    <Icon name="link_off" size={14} /> {t('notifset.disconnect')}
                   </button>
                 </div>
               </div>
@@ -335,29 +348,29 @@ export default function SettingsNotificationsPage() {
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-bg flex items-center justify-center"><Icon name="send" size={20} color="var(--c-text3)" /></div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-text">קשר לטלגרם</p>
-                    <p className="text-xs text-text3">קבל את כל ההתראות גם בטלגרם</p>
+                    <p className="text-sm font-medium text-text">{t('notifset.telegram.link.title')}</p>
+                    <p className="text-xs text-text3">{t('notifset.telegram.link.desc')}</p>
                   </div>
                   {!telegramCode && (
                     <button onClick={handleGenerateTelegramCode} disabled={telegramLoading} className="text-xs font-medium px-3 py-1.5 bg-bg text-text2 rounded-xl flex items-center gap-1 disabled:opacity-50">
                       {telegramLoading ? <Spinner size={14} color="var(--c-text3)" /> : <Icon name="link" size={14} />}
-                      קשר
+                      {t('notifset.link.button')}
                     </button>
                   )}
                 </div>
                 {telegramCode && (
                   <div className="bg-bg rounded-2xl p-4 space-y-2">
-                    <p className="text-xs text-text2 font-medium">שלב 1 — פתח את הבוט בטלגרם:</p>
-                    <a href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`} target="_blank" rel="noopener noreferrer" className="block text-center bg-primary text-white py-2.5 rounded-xl text-sm font-medium">פתח בוט טלגרם</a>
-                    <p className="text-xs text-text3 text-center">או שלח ידנית לבוט:</p>
+                    <p className="text-xs text-text2 font-medium">{t('notifset.telegram.step1')}</p>
+                    <a href={`https://t.me/Vouchermanagementbot?start=${telegramCode}`} target="_blank" rel="noopener noreferrer" className="block text-center bg-primary text-white py-2.5 rounded-xl text-sm font-medium">{t('notifset.telegram.open.bot')}</a>
+                    <p className="text-xs text-text3 text-center">{t('notifset.telegram.manual')}</p>
                     <div className="bg-surface rounded-xl px-4 py-3 text-center">
-                      <p className="text-xs text-text3 mb-1">הפקודה לשליחה:</p>
+                      <p className="text-xs text-text3 mb-1">{t('notifset.telegram.command')}</p>
                       <p className="font-mono text-lg font-bold tracking-widest text-text select-all">/start {telegramCode}</p>
                     </div>
                     <p className="text-xs text-text3 text-center" aria-live="polite">
-                      הקוד תקף עוד {Math.floor(codeSecondsLeft / 60)}:{String(codeSecondsLeft % 60).padStart(2, '0')}
+                      {t('notifset.code.valid.for', { time: `${Math.floor(codeSecondsLeft / 60)}:${String(codeSecondsLeft % 60).padStart(2, '0')}` })}
                     </p>
-                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-text2 py-2">צור קוד חדש</button>
+                    <button onClick={handleGenerateTelegramCode} className="w-full text-xs text-text2 py-2">{t('notifset.new.code')}</button>
                   </div>
                 )}
               </div>
@@ -365,16 +378,16 @@ export default function SettingsNotificationsPage() {
           </div>
         </Card>
 
-        <SL>כלים</SL>
+        <SL>{t('notifset.tools')}</SL>
         <Card>
-          <MenuItemRow icon="notifications" label="שלח תזכורת תוקף עכשיו" desc="מייל עם רשימת שוברים שפגי תוקף בקרוב" onClick={handleSendExpiryReminder} loading={sendingReminder} />
+          <MenuItemRow icon="notifications" label={t('notifset.send.reminder.now')} desc={t('notifset.send.reminder.desc')} onClick={handleSendExpiryReminder} loading={sendingReminder} />
         </Card>
       </div>
 
       {confirmDisconnect && (
         <ConfirmDialog
-          title="לנתק את חיבור הטלגרם?"
-          message="לא תקבל יותר התראות בטלגרם עד שתקשר מחדש."
+          title={t('notifset.disconnect.confirm.title')}
+          message={t('notifset.disconnect.confirm.message')}
           danger
           onConfirm={() => { setConfirmDisconnect(false); doDisconnectTelegram() }}
           onCancel={() => setConfirmDisconnect(false)}

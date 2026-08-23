@@ -357,6 +357,8 @@ export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const goToLogin = () => navigate('/login')
+  // "Start" CTAs carry sign-up intent — land on the register tab, not the login tab
+  const goToRegister = () => navigate('/login?mode=register')
 
   // Navbar scroll effect
   useEffect(() => {
@@ -479,7 +481,7 @@ export default function LandingPage() {
           </p>
 
           <div className="lp-hero-actions">
-            <button className="lp-btn-hero-p" onClick={goToLogin}>התחל עכשיו</button>
+            <button className="lp-btn-hero-p" onClick={goToRegister}>התחל עכשיו</button>
             <a className="lp-btn-hero-g" href="#lp-feat">
               גלה את הפיצ'רים
               <ph-icon name="caret-down" weight="bold" size="16"></ph-icon>
@@ -781,7 +783,7 @@ export default function LandingPage() {
               <div className="lp-ms-pill"><ph-icon name="star" weight="duotone" size="16" color="#c084fc"></ph-icon> מערכת דירוג</div>
               <div className="lp-ms-pill"><ph-icon name="seal-check" weight="duotone" size="16" color="#c084fc"></ph-icon> מוכרים מאומתים</div>
             </div>
-            <button className="lp-btn-ms lp-rv" onClick={goToLogin}>
+            <button className="lp-btn-ms lp-rv" onClick={goToRegister}>
               גלה את השוק
               <ph-icon name="arrow-left" weight="bold" size="17"></ph-icon>
             </button>
@@ -843,7 +845,7 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-            <button className="lp-pr-btn-free" onClick={goToLogin}>התחל בחינם</button>
+            <button className="lp-pr-btn-free" onClick={goToRegister}>התחל בחינם</button>
           </div>
 
           {/* Pro */}
@@ -874,7 +876,7 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-            <button className="lp-pr-btn-pro" onClick={goToLogin}>שדרג לפרו — ₪9 לחודש</button>
+            <button className="lp-pr-btn-pro" onClick={goToRegister}>שדרג לפרו — ₪9 לחודש</button>
           </div>
 
         </div>
@@ -970,7 +972,7 @@ export default function LandingPage() {
           <h2 className="lp-cta-title lp-rv">לא עוד שובר<br />שנזרק לפח</h2>
           <p className="lp-cta-sub lp-rv">כל השוברים שלך במקום אחד — מסודרים, מעודכנים ובטוחים.<br />חינם. ללא כרטיס אשראי. מתחילים תוך דקה.</p>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14}} className="lp-rv">
-            <button className="lp-btn-cta" onClick={goToLogin}>התחל עכשיו</button>
+            <button className="lp-btn-cta" onClick={goToRegister}>התחל עכשיו</button>
             <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',justifyContent:'center'}}>
               {[
                 {icon:'shield-check',text:'מוצפן ומאובטח'},
