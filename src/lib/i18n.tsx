@@ -2792,6 +2792,12 @@ const translations: Record<string, string> = {
   'listing.buy3.did_you_send.en': 'Did you send ₪{amount}?',
   'listing.buy3.next_title': 'מה קורה עכשיו?',
   'listing.buy3.next_title.en': 'What happens next?',
+  'market.closed.toast': 'שוק השוברים סגור כרגע ואינו מקבל מודעות חדשות',
+  'market.closed.toast.en': 'The marketplace is currently closed and not accepting new listings',
+  'market.closed.title': 'השוק סגור כרגע',
+  'market.closed.title.en': 'The marketplace is closed',
+  'market.closed.desc': 'שוק השוברים אינו פעיל כרגע. נסה שוב מאוחר יותר.',
+  'market.closed.desc.en': 'The voucher marketplace is not active right now. Try again later.',
   'listing.buy3.next_body': 'המוכר יקבל התראה ויאשר את קבלת התשלום. לאחר האישור השובר יועבר לארנק שלך אוטומטית. מומלץ לאמת את היתרה מול המותג מיד עם הקבלה.',
   'listing.buy3.next_body.en': 'The seller gets notified and confirms receiving the payment. Once confirmed, the voucher transfers to your wallet automatically. Verify the balance with the brand as soon as you receive it.',
   // Keys referenced in code but missing from the dictionary (rendered as raw
