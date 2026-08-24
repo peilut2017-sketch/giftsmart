@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,6 +16,7 @@ import { DEFAULT_CATEGORIES } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel, getStoreInitials, getCategoryColor } from '../utils/helpers'
 import toast from 'react-hot-toast'
 import { usePageView } from '../hooks/usePageView'
+import { useCountUp } from '../hooks/useCountUp'
 import { useNotificationsFeed } from '../hooks/useNotificationsFeed'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -131,6 +133,8 @@ export default function HomePage() {
   }, [vouchers])
 
   const totalBalance = vouchers.reduce((s, v) => s + v.balance, 0)
+  // In-place balance changes count toward the new value instead of teleporting
+  const balanceRef = useCountUp<HTMLDivElement>(totalBalance, v => formatCurrency(Math.round(v)))
 
   const topCategories = useMemo(() => {
     const counts = new Map<string, number>()
@@ -155,14 +159,17 @@ export default function HomePage() {
   // value still available. (Previously the number showed % spent while the arc
   // showed % remaining, two opposite readings of one control.)
   const remainingPct = 100 - utilization
+  const pctRef = useCountUp<HTMLDivElement>(remainingPct, v => `${Math.round(v)}%`)
   const GAUGE_CIRC = 314 // ≈ π * r(100)
   const gaugeDash = (remainingPct / 100) * GAUGE_CIRC
 
   return (
     <div className="flex-1 bg-bg">
-      {confirm && (
-        <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
-      )}
+      <AnimatePresence>
+        {confirm && (
+          <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
+        )}
+      </AnimatePresence>
 
       {/* ── Google Calendar prompt ── */}
       {calendarVoucher && (
@@ -241,7 +248,7 @@ export default function HomePage() {
 
       {/* ── Balance + gauge ── */}
       <div className="text-center mt-2 mb-1">
-        <div className="text-[44px] font-black text-text tracking-tight leading-none">{formatCurrency(totalBalance)}</div>
+        <div ref={balanceRef} className="text-[44px] font-black text-text tracking-tight leading-none">{formatCurrency(totalBalance)}</div>
       </div>
 
       <div className="relative h-[130px] mt-1.5">
@@ -250,10 +257,11 @@ export default function HomePage() {
           <path
             d="M20,120 A100,100 0 0 1 220,120" fill="none" stroke="var(--c-primary)" strokeWidth="14" strokeLinecap="round"
             strokeDasharray={`${gaugeDash} ${GAUGE_CIRC * 2}`}
+            style={{ transition: 'stroke-dasharray 400ms var(--ease-out)' }}
           />
         </svg>
         <div className="absolute inset-x-0 bottom-3 text-center">
-          <div className="text-2xl font-extrabold text-text">{remainingPct}%</div>
+          <div ref={pctRef} className="text-2xl font-extrabold text-text">{remainingPct}%</div>
           <div className="text-[11px] text-text3 font-medium">{t('home.gauge.left')}</div>
         </div>
       </div>
@@ -332,7 +340,7 @@ export default function HomePage() {
                       <>
                         <div className="text-[11.5px] font-bold text-success my-1">{pct}% {t('home.remaining')}</div>
                         <div className="h-1.5 rounded-full bg-bg overflow-hidden">
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                          <div className="h-full w-full rounded-full bg-primary origin-right" style={{ transform: `scaleX(${Math.min(100, pct) / 100})`, transition: 'transform 200ms var(--ease-out)' }} />
                         </div>
                       </>
                     )}
@@ -362,12 +370,14 @@ export default function HomePage() {
         </div>
       )}
 
-      {showForm && (
-        <VoucherForm
-          onClose={() => setShowForm(false)}
-          onSave={handleSave}
-        />
-      )}
+      <AnimatePresence>
+        {showForm && (
+          <VoucherForm
+            onClose={() => setShowForm(false)}
+            onSave={handleSave}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

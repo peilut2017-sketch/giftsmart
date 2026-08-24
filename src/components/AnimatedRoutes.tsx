@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef } from 'react'
 import { Routes, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { EASE_DRAWER } from '../lib/motion'
 
 // Tab order (RTL layout: rightmost = index 0).
 // Market/Discounts/Archive/Admin are no longer top-level nav tabs — they're reached
 // from Settings, so they're intentionally absent here and fall through to the
-// isDeepRoute (-1) branch below, which already gives them a fade/scale transition
+// deep-route (-1) branch below, which gives them a fade/scale push transition
 // instead of a horizontal slide. That's the correct behavior for a "pushed" page.
 const TAB_ORDER: Record<string, number> = {
   '/':         0,
@@ -20,7 +21,26 @@ function tabIndex(pathname: string): number {
     if (path !== '/' && pathname.startsWith(path)) return idx
   }
   if (pathname === '/') return 0
-  return -1 // non-tab route → treat as deep push (vertical)
+  return -1 // non-tab route → deep push
+}
+
+type NavMode = 'deep' | 'fwd' | 'back' | 'none'
+
+// Tab-to-tab keeps a directional cue but travels only 24% of the width in 240ms —
+// this fires dozens of times a day, so it must whisper, not perform. A subtle 2px
+// blur masks the brief moment both pages are visible in the crossfade. All keyframes
+// share one transform template (translateX + scale) so interpolation never jumps,
+// and full transform strings keep the animation compositable.
+const variants = {
+  enter: (nav: NavMode) =>
+    nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(0.97)', filter: 'blur(0px)' }
+    : nav === 'none' ? { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' }
+    : { opacity: 0, transform: `translateX(${nav === 'fwd' ? '-24%' : '24%'}) scale(1)`, filter: 'blur(2px)' },
+  center: { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' },
+  exit: (nav: NavMode) =>
+    nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(1.01)', filter: 'blur(0px)' }
+    : nav === 'none' ? { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' }
+    : { opacity: 0, transform: `translateX(${nav === 'fwd' ? '12%' : '-12%'}) scale(1)`, filter: 'blur(2px)' },
 }
 
 interface Props {
@@ -29,41 +49,25 @@ interface Props {
 
 export default function AnimatedRoutes({ children }: Props) {
   const location = useLocation()
-  const prevIndexRef = useRef<number>(tabIndex(location.pathname))
+  const reducedMotion = useReducedMotion()
 
   const currentIndex = tabIndex(location.pathname)
-  const prevIndex    = prevIndexRef.current
+  // Committed in an effect, never in the render body: mutating the ref while
+  // rendering meant a second tab tap mid-transition re-read an already-advanced
+  // "previous" index and slid the entering page in from the wrong side.
+  const prevIndexRef = useRef(currentIndex)
+  const prevIndex = prevIndexRef.current
 
-  // RTL: higher tab index is further left on screen
-  // Going to a higher index → new page enters from the left  (negative x)
-  // Going to a lower index  → new page enters from the right (positive x)
-  const isDeepRoute = currentIndex === -1
-  const delta = currentIndex - prevIndex
+  // RTL: higher tab index is further left on screen, so "forward" enters from the left.
+  const nav: NavMode =
+    currentIndex === -1 || prevIndex === -1 ? 'deep'
+    : currentIndex > prevIndex ? 'fwd'
+    : currentIndex < prevIndex ? 'back'
+    : 'none'
 
-  // Decide enter/exit direction
-  let enterX: string
-  let exitX: string
-
-  if (isDeepRoute) {
-    // Deep push (checkout, listing detail, etc.) — slide up subtly
-    enterX = '0'
-    exitX  = '0'
-  } else if (delta > 0) {
-    // Moving to a tab further left (RTL "forward")
-    enterX = '-100%'
-    exitX  = '30%'
-  } else if (delta < 0) {
-    // Moving to a tab further right (RTL "back")
-    enterX = '100%'
-    exitX  = '-30%'
-  } else {
-    // Same tab or first render — no slide
-    enterX = '0'
-    exitX  = '0'
-  }
-
-  // Update prev after determining direction
-  if (currentIndex !== -1) prevIndexRef.current = currentIndex
+  useLayoutEffect(() => {
+    prevIndexRef.current = currentIndex
+  }, [location.pathname, currentIndex])
 
   // The document scroll position (pages scroll the window itself, not an inner
   // container) otherwise carries over from whatever the previous page was scrolled
@@ -75,45 +79,24 @@ export default function AnimatedRoutes({ children }: Props) {
     window.scrollTo(0, 0)
   }, [location.pathname])
 
-  const variants = {
-    enter: {
-      x: enterX,
-      opacity: isDeepRoute ? 0 : 1,
-      scale: isDeepRoute ? 0.97 : 1,
-    },
-    center: {
-      x: 0,
-      opacity: 1,
-      scale: 1,
-    },
-    exit: {
-      x: exitX,
-      opacity: isDeepRoute ? 0 : 1,
-      scale: isDeepRoute ? 1.01 : 1,
-    },
-  }
-
-  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  // The blanket `@media (prefers-reduced-motion: reduce)` rule in index.css only zeroes
-  // CSS transition/animation durations — this transition is driven by Framer Motion's own
-  // requestAnimationFrame loop, which that rule can't touch, so route transitions were
-  // still fully animated even with the OS preference set. A near-instant tween respects
-  // it instead of just skipping the slide/scale (still a hair of motion to avoid an
-  // outright content pop, per Framer Motion's own reduced-motion guidance).
+  // Framer's own rAF loop ignores the CSS reduced-motion overrides in index.css, so
+  // it must be branched here explicitly. A near-instant tween (rather than zero)
+  // avoids an outright content pop, per Framer Motion's reduced-motion guidance.
   //
-  // A spring here (rather than a fixed-duration tween) previously let the entering and
-  // exiting pages settle at slightly different times depending on how far each had to
-  // travel, which read as a stutter rather than one continuous motion. A single eased
-  // tween — the curve iOS/Android use for standard push transitions — keeps both pages
-  // moving in lockstep for a fixed, predictable duration instead.
+  // A spring here previously let the entering and exiting pages settle at slightly
+  // different times, which read as a stutter — a single eased tween keeps both pages
+  // in lockstep.
   const transition = reducedMotion
     ? { type: 'tween' as const, duration: 0.01 }
-    : { type: 'tween' as const, duration: 0.32, ease: [0.32, 0.72, 0, 1] as const }
+    : { type: 'tween' as const, duration: nav === 'deep' ? 0.28 : 0.24, ease: EASE_DRAWER }
 
   return (
-    <AnimatePresence mode="popLayout" initial={false}>
+    // `custom` on AnimatePresence keeps the EXITING page's direction current too —
+    // without it the old page replays the direction of the transition it entered with.
+    <AnimatePresence mode="popLayout" initial={false} custom={nav}>
       <motion.div
         key={location.pathname}
+        custom={nav}
         variants={variants}
         initial="enter"
         animate="center"

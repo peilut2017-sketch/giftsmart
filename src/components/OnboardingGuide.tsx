@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { X, ChevronRight, ChevronLeft, Archive, Trash2, Edit2, Shield } from 'lucide-react'
 import { useModalHistory } from '../hooks/useModalHistory'
+import { EASE_IN_OUT } from '../lib/motion'
 
 const STORAGE_KEY = 'onboarding_seen_v2'
 const TOOLTIP_W = 310
@@ -130,6 +132,10 @@ const STEPS: Step[] = [
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+// No CSS transition here on purpose: transitioning top/left/width/height re-paints
+// the 9999px spotlight shadow on every frame. The element is rendered as a
+// motion.div with `layout`, so moves between targets run as a FLIP transform
+// (rasterize once, composite the rest) with border-radius corrected by Framer.
 function getSpotlightStyle(rect: DOMRect, padding: number): React.CSSProperties {
   return {
     position: 'fixed',
@@ -141,7 +147,6 @@ function getSpotlightStyle(rect: DOMRect, padding: number): React.CSSProperties 
     boxShadow: '0 0 0 9999px rgba(0,0,0,0.62)',
     pointerEvents: 'none',
     zIndex: 9999,
-    transition: 'all 0.3s ease',
   }
 }
 
@@ -265,12 +270,19 @@ export default function OnboardingGuide() {
         />
       )}
 
-      {/* Spotlight rect */}
-      {spotlightStyle && <div style={spotlightStyle} />}
+      {/* Spotlight rect — `layout` animates moves between targets as a transform */}
+      {spotlightStyle && (
+        <motion.div layout transition={{ duration: 0.3, ease: EASE_IN_OUT }} style={spotlightStyle} />
+      )}
 
-      {/* Tooltip card */}
-      <div
-        style={{ ...tooltipStyle, animation: 'guide-in 0.2s ease-out both' }}
+      {/* Tooltip card — `layout` retargets between steps (a rapid prev/next tap
+          redirects the in-flight move instead of teleporting) */}
+      <motion.div
+        layout
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ layout: { duration: 0.25, ease: EASE_IN_OUT }, duration: 0.2, ease: 'easeOut' }}
+        style={tooltipStyle}
         dir="rtl"
         onClick={e => e.stopPropagation()}
       >
@@ -315,7 +327,7 @@ export default function OnboardingGuide() {
                 <button
                   key={i}
                   onClick={() => setStep(i)}
-                  className="rounded-full transition-all"
+                  className="rounded-full transition-[width,background-color] duration-200 ease-out-strong"
                   style={{
                     width: i === step ? 18 : 6,
                     height: 6,
@@ -329,7 +341,7 @@ export default function OnboardingGuide() {
             {/* Next / Done */}
             <button
               onClick={next}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-semibold text-white transition-all active:scale-95"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-semibold text-white transition-transform duration-[160ms] ease-out-strong active:scale-[0.97]"
               style={{ background: 'var(--c-primary)' }}
             >
               {isLast ? 'סיום' : 'הבא'}
@@ -337,7 +349,7 @@ export default function OnboardingGuide() {
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </>
   )
 }

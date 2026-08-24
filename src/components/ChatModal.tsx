@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { BACKDROP_FADE, SHEET_SPRING } from '../lib/motion'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -36,6 +37,7 @@ export default function ChatModal({
 }: ChatModalProps) {
   const { t } = useT()
   const { user } = useAuth()
+  const reduceMotion = useReducedMotion()
   const { sendMessage, sendPriceOffer, fetchChat, respondToPriceOffer,
           registerActiveChat, unregisterActiveChat, markMessagesRead } = useMarketplace()
   useBodyScrollLock()
@@ -239,14 +241,16 @@ export default function ChatModal({
   const otherDisplayName = otherUserName || t('chat.default.user')
 
   return (
-    <AnimatePresence>
-      <motion.div
+    // No inner AnimatePresence around an unconditional child — it can't animate its
+    // own unmount. Call sites wrap `{open && <ChatModal/>}` in <AnimatePresence> so
+    // the exit below actually plays.
+    <motion.div
         className="fixed inset-0 bg-black/60 flex items-end justify-center overflow-hidden"
         style={{ zIndex: SHEET_Z_INDEX }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
+        transition={BACKDROP_FADE}
         onClick={() => {
           // A typed-but-unsent message shouldn't be destroyed by a stray backdrop tap
           if (text.trim()) { setShowDiscardConfirm(true); return }
@@ -258,10 +262,10 @@ export default function ChatModal({
           // Keyboard inset lifts the composer above the on-screen keyboard —
           // iOS never resizes the layout viewport for fixed/dvh elements
           style={{ height: '85dvh', paddingBottom: keyboardInset || undefined }}
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', stiffness: 380, damping: 38, mass: 0.9 }}
+          initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+          animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+          transition={reduceMotion ? { duration: 0.15 } : SHEET_SPRING}
           onClick={e => e.stopPropagation()}
           dir="rtl"
         >
@@ -379,17 +383,18 @@ export default function ChatModal({
           </div>
         </motion.div>
 
-        {showDiscardConfirm && (
-          <ConfirmDialog
-            title={t('chat.discard.confirm.title')}
-            message={t('chat.discard.confirm.msg')}
-            danger
-            onConfirm={() => { setShowDiscardConfirm(false); onClose() }}
-            onCancel={() => setShowDiscardConfirm(false)}
-          />
-        )}
-      </motion.div>
-    </AnimatePresence>
+        <AnimatePresence>
+          {showDiscardConfirm && (
+            <ConfirmDialog
+              title={t('chat.discard.confirm.title')}
+              message={t('chat.discard.confirm.msg')}
+              danger
+              onConfirm={() => { setShowDiscardConfirm(false); onClose() }}
+              onCancel={() => setShowDiscardConfirm(false)}
+            />
+          )}
+        </AnimatePresence>
+    </motion.div>
   )
 }
 

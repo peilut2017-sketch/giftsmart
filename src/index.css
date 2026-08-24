@@ -32,6 +32,11 @@
   --c-urgent-bg:     #fef2f2;
   --r-card:          18px;
   --r-btn:           12px;
+  /* Motion tokens — the only easing curves in the app. Framer Motion mirrors live in
+     src/lib/motion.ts; keep both in sync. */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);   /* entrances/exits, press feedback */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);  /* movement between on-screen positions */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);   /* iOS-like drawer/sheet curve */
   --shadow-card:     0 1px 3px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.07);
   --shadow-fab:      0 4px 20px rgba(22,163,74,0.40);
   --shadow-nav:      0 -1px 0 rgba(0,0,0,0.06);
@@ -208,36 +213,9 @@ body {
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
 /* ── Animations ───────────────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(100%); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes pulse-ring {
-  0%   { transform: scale(1);   opacity: 1; }
-  100% { transform: scale(1.4); opacity: 0; }
-}
 @keyframes gs-shimmer {
   0%   { background-position: -200% center; }
   100% { background-position:  200% center; }
-}
-@keyframes gs-fadeup {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes gs-pop {
-  0%   { transform: scale(0.92); opacity: 0; }
-  100% { transform: scale(1);    opacity: 1; }
-}
-@keyframes speed-dial-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.9); }
-  to   { opacity: 1; transform: translateY(0)   scale(1); }
-}
-.speed-dial-item {
-  animation: speed-dial-in 0.18s ease-out both;
 }
 @keyframes swipe-card-demo {
   0%   { transform: translateX(0); }
@@ -248,16 +226,6 @@ body {
   88%  { transform: translateX(52px); }
   100% { transform: translateX(0); }
 }
-@keyframes guide-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.animate-fade-in  { animation: fadeIn    0.2s ease-out; }
-.animate-slide-up { animation: slideUp   0.3s ease-out; }
-.gs-fadeup        { animation: gs-fadeup 0.3s ease both; }
-.gs-pop           { animation: gs-pop    0.2s cubic-bezier(0.34,1.56,0.64,1) both; }
-
 /* Skeleton loader */
 .gs-skeleton {
   background: linear-gradient(90deg, #e8edec 25%, #f4f7f6 50%, #e8edec 75%);
@@ -266,17 +234,21 @@ body {
   border-radius: 8px;
 }
 
-/* Tap press effect */
-.gs-tap { transition: transform 0.12s ease, opacity 0.12s ease; cursor: pointer; }
+/* Tap press effect — the app-wide press recipe: scale(0.97) over 160ms ease-out */
+.gs-tap { transition: transform 160ms var(--ease-out), opacity 160ms var(--ease-out); cursor: pointer; }
 .gs-tap:active { transform: scale(0.97); opacity: 0.88; }
 
 /* ── Card hover ───────────────────────────────────────────────── */
-.voucher-card {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.voucher-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.10);
+/* Gated to real pointers: on touch screens a tap fires :hover and the lift
+   "sticks" until the next tap somewhere else. */
+@media (hover: hover) and (pointer: fine) {
+  .voucher-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .voucher-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.10);
+  }
 }
 
 /* ── Glass effect ─────────────────────────────────────────────── */
@@ -303,15 +275,16 @@ body {
   border-radius: 999px;
   /* Tint alpha is user-adjustable (Settings → Appearance); rgb triplet swaps per theme. */
   background: rgba(var(--nav-bg-rgb), var(--nav-glass-opacity));
-  backdrop-filter: blur(64px) saturate(180%);
-  -webkit-backdrop-filter: blur(64px) saturate(180%);
+  /* 20px is the ceiling for a blur that composites while the page scrolls under it —
+     heavier radii jank visibly on mobile Safari. */
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--nav-border);
   box-shadow: var(--nav-shadow-outer), inset 0 1px 0 rgba(255,255,255,.25);
   /* No overflow:hidden — that clipped the raised "+" FAB (a child of this element,
      positioned to poke above the capsule) to this box's own rounded rect. The glass
      background/highlight/scroll-overlay layers below are pseudo-elements with their own
      border-radius, so they stay clipped to the capsule shape without it. */
-  transition: transform 280ms cubic-bezier(.32,.72,0,1);
 }
 [data-theme="dark"] .bottom-nav {
   /* Same alpha reads far fainter against near-black — scale it up so the default slider
@@ -320,12 +293,9 @@ body {
   box-shadow: var(--nav-shadow-outer), inset 0 1px 0 rgba(255,255,255,.10);
 }
 
-/* Slides down slightly and the material reads more opaque while scrolling down (see the
-   scroll listener in BottomNav.tsx); returns on scroll up. Transform + opacity only, so
-   this stays GPU-accelerated. */
-.bottom-nav[data-scrolled="true"] {
-  transform: translateY(6px);
-}
+/* The material reads more opaque while scrolling down (see the scroll listener in
+   BottomNav.tsx); returns on scroll up. Opacity-only on a pseudo-element — a positional
+   nudge here would be decorative motion on an action that fires dozens of times a day. */
 .bottom-nav[data-scrolled="true"]::after {
   opacity: 0.95;
 }
@@ -353,7 +323,7 @@ body {
   border-radius: inherit;
   background: var(--c-surface);
   opacity: 0;
-  transition: opacity 280ms ease;
+  transition: opacity 250ms ease;
   pointer-events: none;
 }
 
@@ -518,17 +488,26 @@ html, body {
 
 /* ─────────────────────────────────────────────
    ACCESSIBILITY — reduce motion
+   Reduced motion means fewer + gentler, not zero. iteration-count:1 caps
+   infinite loops (shimmer, spinners) that a duration-only override would
+   turn into a strobing blur. JS-driven motion (Framer) branches on
+   useReducedMotion() in the components themselves and keeps short
+   comprehension fades there.
 ───────────────────────────────────────────── */
 .a11y-no-motion *,
 .a11y-no-motion *::before,
 .a11y-no-motion *::after {
   animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

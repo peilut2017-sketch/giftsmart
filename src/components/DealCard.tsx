@@ -241,7 +241,7 @@ function DealDetailSheet({ deal, onClose }: { deal: DiscountDeal; onClose: () =>
                 <button
                   key={r.key}
                   onClick={() => setReportReason(r.key)}
-                  className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${
+                  className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors duration-150 ${
                     reportReason === r.key
                       ? 'border-error bg-error/10 text-error'
                       : 'border-border bg-surface text-text2'

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -215,7 +216,7 @@ function BuyModal({
             {[1, 2, 3].map(s => (
               <span
                 key={s}
-                className="rounded-full transition-all"
+                className="rounded-full transition-[width,background-color] duration-200 ease-out-strong"
                 style={{
                   width: s === step ? 18 : 6,
                   height: 6,
@@ -677,6 +678,7 @@ export default function ListingDetailPage() {
           onClose={() => setShowReport(false)}
         />
       )}
+      <AnimatePresence>
       {showChat && !isOwnListing && (
         <ChatModal
           listingId={listing.id}
@@ -689,6 +691,7 @@ export default function ListingDetailPage() {
           onPriceUpdated={(newPrice) => setCurrentPrice(newPrice)}
         />
       )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVouchers } from '../../contexts/VoucherContext'
 import { useE2EE } from '../../contexts/E2EEContext'
@@ -315,17 +316,20 @@ export default function SettingsAccountPage() {
         </div>
       </div>
 
-      {confirmDialog && (
-        <ConfirmDialog
-          title={confirmDialog.title}
-          message={confirmDialog.message}
-          confirmLabel={confirmDialog.confirmLabel}
-          danger
-          onConfirm={confirmDialog.onConfirm}
-          onCancel={() => setConfirmDialog(null)}
-        />
-      )}
+      <AnimatePresence>
+        {confirmDialog && (
+          <ConfirmDialog
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            confirmLabel={confirmDialog.confirmLabel}
+            danger
+            onConfirm={confirmDialog.onConfirm}
+            onCancel={() => setConfirmDialog(null)}
+          />
+        )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {showDeleteDialog && (
         <ConfirmDialog
           title={t('settings.delete.account')}
@@ -350,6 +354,7 @@ export default function SettingsAccountPage() {
           />
         </ConfirmDialog>
       )}
+      </AnimatePresence>
     </div>
   )
 }

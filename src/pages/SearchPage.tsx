@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { EASE_DRAWER, EASE_OUT } from '../lib/motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
@@ -282,10 +284,13 @@ export default function SearchPage() {
 
   return (
     <div className="flex-1 bg-bg">
-      {confirm && (
-        <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
-      )}
+      <AnimatePresence>
+        {confirm && (
+          <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
+        )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {archiveTarget && (
         <ConfirmDialog
           title={t('confirm.archive.title')}
@@ -307,6 +312,7 @@ export default function SearchPage() {
           />
         </ConfirmDialog>
       )}
+      </AnimatePresence>
 
       {/* Page title (scrolls away) */}
       <div className="px-5 pt-5 pb-2 bg-surface">
@@ -401,8 +407,18 @@ export default function SearchPage() {
           </div>
         )}
 
+        {/* Expands from under its trigger instead of snapping open — the reveal
+            explains where the panel came from. Interruptible (height retargets). */}
+        <AnimatePresence initial={false}>
         {showFilters && !isSelectMode && (
-          <div className="px-4 pb-3 pt-3 border-t border-border bg-bg">
+          <motion.div
+            className="overflow-hidden border-t border-border bg-bg"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: EASE_DRAWER }}
+          >
+          <div className="px-4 pb-3 pt-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-text2">{t('search.categories')}</span>
               <div className="flex items-center gap-2">
@@ -443,7 +459,9 @@ export default function SearchPage() {
               )}
             </div>
           </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
 
       <div className="p-4 pb-40">
@@ -493,24 +511,37 @@ export default function SearchPage() {
           <>
             {displayVouchers.length > 0 && (
               <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'flex flex-col gap-2'}>
-                {displayVouchers.map(v => {
-                  const sv = superVouchers.find(s => s.id === v.super_voucher_id)
-                  return (
-                    <VoucherCard
-                      key={v.id}
-                      voucher={v}
-                      superVoucherName={sv?.name}
-                      onClick={() => navigate(`/checkout/${v.id}`)}
-                      onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
-                      onDelete={() => requestDelete(v.id)}
-                      onArchive={() => requestArchive(v.id)}
-                      isSelectMode={isSelectMode}
-                      isSelected={selectedIds.has(v.id)}
-                      onSelect={() => toggleSelect(v.id)}
-                      rowMode={viewMode === 'rows'}
-                    />
-                  )
-                })}
+                {/* Deleted/archived cards fade out while the rest close the gap
+                    (layout) instead of the list teleporting; an undone card fades
+                    back in the same way. */}
+                <AnimatePresence initial={false} mode="popLayout">
+                  {displayVouchers.map(v => {
+                    const sv = superVouchers.find(s => s.id === v.super_voucher_id)
+                    return (
+                      <motion.div
+                        key={v.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.92 }}
+                        transition={{ duration: 0.18, ease: EASE_OUT }}
+                      >
+                        <VoucherCard
+                          voucher={v}
+                          superVoucherName={sv?.name}
+                          onClick={() => navigate(`/checkout/${v.id}`)}
+                          onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
+                          onDelete={() => requestDelete(v.id)}
+                          onArchive={() => requestArchive(v.id)}
+                          isSelectMode={isSelectMode}
+                          isSelected={selectedIds.has(v.id)}
+                          onSelect={() => toggleSelect(v.id)}
+                          rowMode={viewMode === 'rows'}
+                        />
+                      </motion.div>
+                    )
+                  })}
+                </AnimatePresence>
               </div>
             )}
 
@@ -619,6 +650,7 @@ export default function SearchPage() {
         </div>
       )}
 
+      <AnimatePresence>
       {showForm && (
         <VoucherForm voucher={editingVoucher} onClose={() => { setShowForm(false); setEditingVoucher(undefined) }} onSave={async vData => {
           if (editingVoucher) {
@@ -628,7 +660,9 @@ export default function SearchPage() {
           }
         }} />
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {showInStoreMode && (
         <InStoreMode
           vouchers={vouchers}
@@ -638,6 +672,7 @@ export default function SearchPage() {
           onClose={() => setShowInStoreMode(false)}
         />
       )}
+      </AnimatePresence>
     </div>
   )
 }

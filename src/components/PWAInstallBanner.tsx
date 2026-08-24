@@ -1,12 +1,15 @@
 import { useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Download, X, Share, SquarePlus } from 'lucide-react'
 import { usePWAInstall } from '../hooks/usePWAInstall'
 import { useT } from '../lib/i18n'
+import { SHEET_SPRING, BACKDROP_FADE } from '../lib/motion'
 
 export default function PWAInstallBanner() {
   const { t } = useT()
   const { isInstallable, isIOSInstallable, triggerInstall, dismiss } = usePWAInstall()
   const [showIOSGuide, setShowIOSGuide] = useState(false)
+  const reduceMotion = useReducedMotion()
 
   if (!isInstallable && !isIOSInstallable) return null
 
@@ -34,19 +37,28 @@ export default function PWAInstallBanner() {
         </button>
       </div>
 
-      {showIOSGuide && (
-        <div
+      <AnimatePresence>
+        {showIOSGuide && (
+        <motion.div
           className="fixed inset-0 bg-black/50 z-[100] flex items-end justify-center"
           onClick={() => setShowIOSGuide(false)}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={BACKDROP_FADE}
         >
-          <div
+          <motion.div
             role="dialog"
             aria-modal="true"
             aria-label={t('pwa.ios.title')}
-            className="bg-surface rounded-t-3xl w-full max-w-md p-6 animate-slide-up"
+            className="bg-surface rounded-t-3xl w-full max-w-md p-6"
             style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
             onClick={e => e.stopPropagation()}
             dir="rtl"
+            initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+            animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+            transition={reduceMotion ? { duration: 0.15 } : SHEET_SPRING}
           >
             <div className="w-10 h-1 rounded-full bg-border mx-auto mb-5" />
             <h2 className="text-lg font-bold text-text mb-1">{t('pwa.ios.title')}</h2>
@@ -73,9 +85,10 @@ export default function PWAInstallBanner() {
             >
               {t('pwa.ios.done')}
             </button>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }

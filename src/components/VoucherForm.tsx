@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { EASE_DRAWER, EASE_OUT, SPRING } from '../lib/motion'
 import { useNavigate } from 'react-router-dom'
 import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -75,6 +77,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [step, setStep] = useState(STEP_STORE)
   const showAll = isEdit
   const [savedSummary, setSavedSummary] = useState<{ id?: string; store: string; balance: number } | null>(null)
+  const reduceMotion = useReducedMotion()
+  // +1 = forward, -1 = back — decides which side the next step slides in from (RTL-aware)
+  const stepDirRef = useRef(1)
+  // Skips the step-slide on the wizard's very first paint (the panel entrance covers it)
+  const mountedRef = useRef(false)
+  useEffect(() => { mountedRef.current = true }, [])
 
   const [storeName, setStoreName] = useState(voucher?.store_name || '')
   const [storeSearch, setStoreSearch] = useState(voucher?.store_name || '')
@@ -307,10 +315,12 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   function goNext() {
     if (!validateStep(step)) return
     const idx = INPUT_STEPS.indexOf(step)
+    stepDirRef.current = 1
     if (idx < INPUT_STEPS.length - 1) setStep(INPUT_STEPS[idx + 1])
   }
   function goBack() {
     const idx = INPUT_STEPS.indexOf(step)
+    stepDirRef.current = -1
     if (idx > 0) setStep(INPUT_STEPS[idx - 1])
   }
 
@@ -412,8 +422,26 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     // the wizard's 5 steps jolted the sheet, since its anchor point was exactly where the
     // keyboard appears from. Centered + a real margin on every side barely moves when the
     // visual viewport shrinks for the keyboard.
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={requestClose}>
-      <div className="relative bg-surface w-full sm:max-w-lg rounded-[28px] max-h-[92dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+    <motion.div
+      className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.15 } }}
+      transition={{ duration: 0.2 }}
+      onClick={requestClose}
+    >
+      <motion.div
+        className="relative bg-surface w-full sm:max-w-lg rounded-[28px] max-h-[92dvh] flex flex-col overflow-hidden"
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'translateY(12px) scale(0.96)' }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0px) scale(1)' }}
+        exit={
+          reduceMotion
+            ? { opacity: 0, transition: { duration: 0.15 } }
+            : { opacity: 0, transform: 'translateY(12px) scale(0.96)', transition: { duration: 0.15, ease: EASE_OUT } }
+        }
+        transition={{ duration: 0.2, ease: EASE_OUT }}
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <button onClick={requestClose} aria-label={t('app.close')} className="w-11 h-11 rounded-full flex items-center justify-center bg-bg text-text2">
@@ -426,7 +454,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           {!showAll && step !== STEP_SUCCESS ? (
             <div className="flex items-center gap-1">
               {INPUT_STEPS.map(s => (
-                <span key={s} className={`h-1.5 rounded-full transition-all ${s === step ? 'w-4 bg-primary' : s < step ? 'w-1.5 bg-primary/50' : 'w-1.5 bg-border'}`} />
+                <span key={s} className={`h-1.5 rounded-full transition-[width,background-color] duration-200 ease-out-strong ${s === step ? 'w-4 bg-primary' : s < step ? 'w-1.5 bg-primary/50' : 'w-1.5 bg-border'}`} />
               ))}
             </div>
           ) : <span className="w-9" />}
@@ -444,22 +472,49 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
         {/* ── Success step (add mode) ── */}
         {!showAll && step === STEP_SUCCESS ? (
+          /* Rare, high-emotion moment — the one place the delight budget applies:
+             springy ring, drawn checkmark, then the text/card stagger in. */
           <div className="flex-1 overflow-y-auto p-6 text-center flex flex-col items-center justify-center">
-            <div className="w-24 h-24 rounded-full bg-primary-light flex items-center justify-center mb-5">
+            <motion.div
+              className="w-24 h-24 rounded-full bg-primary-light flex items-center justify-center mb-5"
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'scale(0.6)' }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'scale(1)' }}
+              transition={reduceMotion ? { duration: 0.15 } : SPRING}
+            >
               <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center">
-                <Icon name="check" size={38} color="#fff" />
+                <svg width={38} height={38} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <motion.path
+                    d="M5 12.5l4.5 4.5L19 7.5"
+                    stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"
+                    initial={reduceMotion ? { pathLength: 1 } : { pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: 0.3, delay: 0.15, ease: 'easeOut' }}
+                  />
+                </svg>
               </div>
-            </div>
-            <h3 className="text-xl font-black text-text mb-1">{t('voucher.added')}</h3>
+            </motion.div>
+            <motion.h3
+              className="text-xl font-black text-text mb-1"
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'translateY(8px)' }}
+              animate={{ opacity: 1, transform: 'translateY(0px)' }}
+              transition={{ duration: 0.25, delay: 0.06, ease: EASE_OUT }}
+            >
+              {t('voucher.added')}
+            </motion.h3>
             {savedSummary && (
-              <div className="mt-5 w-full bg-surface border border-border rounded-card shadow-card p-4 flex items-center gap-3 text-right">
+              <motion.div
+                className="mt-5 w-full bg-surface border border-border rounded-card shadow-card p-4 flex items-center gap-3 text-right"
+                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'translateY(8px)' }}
+                animate={{ opacity: 1, transform: 'translateY(0px)' }}
+                transition={{ duration: 0.25, delay: 0.12, ease: EASE_OUT }}
+              >
                 <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-extrabold">{savedSummary.store.charAt(0)}</div>
                 <div className="flex-1">
                   <div className="text-sm font-bold text-text">{savedSummary.store}</div>
                   <div className="text-xs text-text3">{t('checkout.current.balance')}</div>
                 </div>
                 <div className="text-lg font-black text-text">₪{savedSummary.balance.toLocaleString('he-IL')}</div>
-              </div>
+              </motion.div>
             )}
           </div>
         ) : (
@@ -472,8 +527,21 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               if (!showAll && step !== STEP_DETAILS) goNext()
               else handleSubmit()
             }}
-            className="overflow-y-auto flex-1 p-4 space-y-4"
+            className="overflow-y-auto flex-1 p-4"
           >
+            {/* Direction-aware step slide (add mode): the next step drifts in from the
+                side you're heading toward — RTL, so "forward" enters from the left. */}
+            <motion.div
+              key={showAll ? 'edit' : step}
+              className="space-y-4"
+              initial={
+                !mountedRef.current || showAll || reduceMotion
+                  ? false
+                  : { opacity: 0, transform: `translateX(${stepDirRef.current > 0 ? -28 : 28}px)` }
+              }
+              animate={{ opacity: 1, transform: 'translateX(0px)' }}
+              transition={{ duration: 0.22, ease: EASE_DRAWER }}
+            >
             {/* Step titles (add mode) */}
             {!showAll && (
               <div className="text-center mb-1">
@@ -829,6 +897,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 </div>
               </div>
             )}
+            </motion.div>
           </form>
         )}
 
@@ -882,19 +951,21 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           onDone={() => setE2eeEnabled(true)}
         />
 
-        {showDiscardConfirm && (
-          <ConfirmDialog
-            title={t('form.discard.title')}
-            message={t('form.discard.message')}
-            danger
-            confirmLabel={t('form.discard.confirm')}
-            cancelLabel={t('form.discard.cancel')}
-            onConfirm={() => { setShowDiscardConfirm(false); onClose() }}
-            onCancel={() => setShowDiscardConfirm(false)}
-          />
-        )}
-      </div>
-    </div>
+        <AnimatePresence>
+          {showDiscardConfirm && (
+            <ConfirmDialog
+              title={t('form.discard.title')}
+              message={t('form.discard.message')}
+              danger
+              confirmLabel={t('form.discard.confirm')}
+              cancelLabel={t('form.discard.cancel')}
+              onConfirm={() => { setShowDiscardConfirm(false); onClose() }}
+              onCancel={() => setShowDiscardConfirm(false)}
+            />
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   )
 }
 

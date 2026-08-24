@@ -302,7 +302,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             <div className="flex bg-gray-100 rounded-2xl p-1 mb-6">
               <button
                 onClick={() => { setMode('login'); setLoginStep('email'); setEmail(''); setPassword('') }}
-                className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all ${
+                className={`flex-1 py-2 text-sm font-medium rounded-xl transition-colors duration-150 ${
                   mode === 'login' ? 'bg-white shadow text-green-600' : 'text-gray-500'
                 }`}
               >
@@ -310,7 +310,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               </button>
               <button
                 onClick={() => { setMode('register'); setPendingConfirmEmail(null) }}
-                className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all ${
+                className={`flex-1 py-2 text-sm font-medium rounded-xl transition-colors duration-150 ${
                   mode === 'register' ? 'bg-white shadow text-green-600' : 'text-gray-500'
                 }`}
               >
@@ -367,7 +367,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               </div>
               <button
                 type="submit"
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all"
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-colors duration-150"
               >
                 {t('auth.continue')}
               </button>
@@ -416,7 +416,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-[transform,opacity] duration-[160ms] ease-out-strong disabled:opacity-70 active:scale-[0.97]"
               >
                 {loading ? '...' : t('auth.login.tab')}
               </button>
@@ -511,7 +511,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                           {[0,1,2,3,4].map(i => (
                             <div
                               key={i}
-                              className={`flex-1 h-1.5 rounded-full transition-all ${i < strength.score ? strength.color : 'bg-gray-100'}`}
+                              className={`flex-1 h-1.5 rounded-full transition-colors duration-150 ${i < strength.score ? strength.color : 'bg-gray-100'}`}
                             />
                           ))}
                         </div>
@@ -587,7 +587,7 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-70 active:scale-98"
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-[transform,opacity] duration-[160ms] ease-out-strong disabled:opacity-70 active:scale-[0.97]"
               >
                 {loading ? '...' : mode === 'register' ? t('auth.register.tab') : mode === 'forgot' ? t('auth.send.link') : t('auth.update.password')}
               </button>

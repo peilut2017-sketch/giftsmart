@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Fingerprint, X } from 'lucide-react'
 import { isBiometricSupported } from '../lib/passkey'
+import { SHEET_SPRING, BACKDROP_FADE } from '../lib/motion'
 import { useE2EE } from '../contexts/E2EEContext'
 import toast from 'react-hot-toast'
 
@@ -14,6 +16,7 @@ interface Props {
 export default function BiometricSetupPrompt({ userId, userName, userEmail, onDone }: Props) {
   const [loading, setLoading] = useState(false)
   const { enableBiometricVaultUnlock } = useE2EE()
+  const reduceMotion = useReducedMotion()
 
   if (!isBiometricSupported()) return null
 
@@ -30,9 +33,23 @@ export default function BiometricSetupPrompt({ userId, userName, userEmail, onDo
     }
   }
 
+  // Conditionally mounted by its parent — wrap the call site in
+  // <AnimatePresence> so the root motion.div's exit animation plays on unmount.
   return (
-    <div className="fixed inset-0 bg-black/50 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 text-center animate-slide-up">
+    <motion.div
+      className="fixed inset-0 bg-black/50 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={BACKDROP_FADE}
+    >
+      <motion.div
+        className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 text-center"
+        initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+        animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+        exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+        transition={reduceMotion ? { duration: 0.15 } : SHEET_SPRING}
+      >
         <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl shadow-lg mb-4">
           <Fingerprint className="w-8 h-8 text-white" />
         </div>
@@ -59,7 +76,7 @@ export default function BiometricSetupPrompt({ userId, userName, userEmail, onDo
           <X className="w-3.5 h-3.5" />
           לא עכשיו
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

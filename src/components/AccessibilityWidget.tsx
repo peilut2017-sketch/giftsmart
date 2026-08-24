@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X, ZoomIn, ZoomOut, Eye, Minus, Accessibility } from 'lucide-react'
+import { EASE_OUT } from '../lib/motion'
 
 const STORAGE_KEY = 'a11y_prefs'
 
@@ -47,6 +49,8 @@ export default function AccessibilityWidget() {
   const [prefs, setPrefs] = useState<A11yPrefs>(loadPrefs)
   const panelRef = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  // Honor both the OS preference and this widget's own "stop animations" toggle
+  const reduceMotion = useReducedMotion() || prefs.noMotion
 
   // Apply prefs on mount and whenever they change
   useEffect(() => {
@@ -115,7 +119,7 @@ export default function AccessibilityWidget() {
         aria-label={open ? 'סגור תפריט נגישות' : 'פתח תפריט נגישות'}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+        className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-[transform,background-color,color,border-color] duration-[160ms] ease-out-strong active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
           anyActive
             ? 'bg-blue-600 text-white'
             : 'bg-white text-gray-700 border border-gray-200'
@@ -127,14 +131,25 @@ export default function AccessibilityWidget() {
         )}
       </button>
 
-      {/* Panel */}
+      {/* Panel — scales from its trigger (bottom-left, where the button sits), with a
+          real exit; transitions retarget mid-flight if the button is tapped rapidly */}
+      <AnimatePresence>
       {open && (
-        <div
+        <motion.div
           ref={panelRef}
           role="dialog"
           aria-modal="true"
           aria-label="הגדרות נגישות"
-          className="absolute bottom-14 left-0 w-72 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden animate-fade-in"
+          className="absolute bottom-14 left-0 w-72 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden"
+          style={{ transformOrigin: 'bottom left' }}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+          exit={
+            reduceMotion
+              ? { opacity: 0, transition: { duration: 0.1 } }
+              : { opacity: 0, scale: 0.95, transition: { duration: 0.15, ease: EASE_OUT } }
+          }
+          transition={{ duration: 0.2, ease: EASE_OUT }}
           dir="rtl"
         >
           {/* Header */}
@@ -226,8 +241,9 @@ export default function AccessibilityWidget() {
               הצהרת נגישות
             </Link>
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { BACKDROP_FADE, SHEET_SPRING } from '../lib/motion'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
@@ -42,6 +43,7 @@ export default function UpgradeSheet() {
   const [timeSuccess, setTimeSuccess] = useState<TimeSuccess | null>(null)
   const [discountApplied, setDiscountApplied] = useState<DiscountApplied | null>(null)
   const openedStripe = useRef(false)
+  const reduceMotion = useReducedMotion()
 
   // Close the post-payment loop: after the Stripe tab was opened, refresh the plan
   // whenever the user returns to this tab — the UI used to keep saying "free" until
@@ -54,8 +56,6 @@ export default function UpgradeSheet() {
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [refreshPlan])
-
-  if (!upgradeSheetOpen) return null
 
   async function handleRedeemCoupon() {
     if (!couponCode.trim()) return
@@ -85,45 +85,28 @@ export default function UpgradeSheet() {
     }
   }
 
-  // Full-screen success for time-based coupons
-  if (timeSuccess) {
-    return (
-      <AnimatePresence>
-        <motion.div
-          className="fixed inset-0 bg-black/50"
-          style={{ zIndex: SHEET_Z_INDEX }}
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-          onClick={closeUpgradeSheet}
-        >
-          <motion.div
-            className="absolute bottom-0 inset-x-0 bg-surface rounded-t-[28px] max-w-2xl mx-auto"
-            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 380, damping: 38, mass: 0.9 }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="p-8 flex flex-col items-center gap-4 text-center">
-              <div className="w-16 h-16 bg-primary-light rounded-2xl flex items-center justify-center">
-                <Icon name="check_circle" size={32} filled color="var(--c-primary)" />
-              </div>
-              <div>
-                <p className="text-xl font-extrabold text-text">{t('upgrade.success.title')}</p>
-                <p className="text-sm text-text3 mt-1">{timeSuccess.label}</p>
-                {timeSuccess.until && (
-                  <p className="text-xs text-text3 mt-0.5">{t('listing.valid_until')} {timeSuccess.until}</p>
-                )}
-              </div>
-              <button
-                onClick={() => { setTimeSuccess(null); closeUpgradeSheet() }}
-                className="w-full bg-primary text-white py-3 rounded-2xl font-bold text-base"
-              >
-                {t('upgrade.success.cta')}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
-    )
-  }
+  // Success content for time-based coupons — swapped INSIDE the same sheet, so
+  // redeeming a coupon doesn't remount the panel and replay its entrance over itself.
+  const successContent = timeSuccess && (
+    <div className="p-8 flex flex-col items-center gap-4 text-center">
+      <div className="w-16 h-16 bg-primary-light rounded-2xl flex items-center justify-center">
+        <Icon name="check_circle" size={32} filled color="var(--c-primary)" />
+      </div>
+      <div>
+        <p className="text-xl font-extrabold text-text">{t('upgrade.success.title')}</p>
+        <p className="text-sm text-text3 mt-1">{timeSuccess.label}</p>
+        {timeSuccess.until && (
+          <p className="text-xs text-text3 mt-0.5">{t('listing.valid_until')} {timeSuccess.until}</p>
+        )}
+      </div>
+      <button
+        onClick={() => { setTimeSuccess(null); closeUpgradeSheet() }}
+        className="w-full bg-primary text-white py-3 rounded-2xl font-bold text-base"
+      >
+        {t('upgrade.success.cta')}
+      </button>
+    </div>
+  )
 
   const stripeLink = discountApplied?.stripeCode
     ? `${STRIPE_PAYMENT_LINK}?prefilled_promo_code=${discountApplied.stripeCode}`
@@ -133,18 +116,22 @@ export default function UpgradeSheet() {
 
   return (
     <AnimatePresence>
+      {upgradeSheetOpen && (
       <motion.div
         className="fixed inset-0 bg-black/50"
         style={{ zIndex: SHEET_Z_INDEX }}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={BACKDROP_FADE}
         onClick={closeUpgradeSheet}
       >
         <motion.div
           className="absolute bottom-0 inset-x-0 bg-surface rounded-t-[28px] max-w-2xl mx-auto overflow-y-auto max-h-[92dvh]"
-          initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-          transition={{ type: 'spring', stiffness: 380, damping: 38, mass: 0.9 }}
+          initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+          animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+          transition={reduceMotion ? { duration: 0.15 } : SHEET_SPRING}
           onClick={e => e.stopPropagation()}
         >
+          {timeSuccess ? successContent : (<>
           {/* Header */}
           <div className="relative bg-gradient-to-br from-gold-mid to-gold rounded-t-[28px] px-6 pt-6 pb-8 text-white text-center">
             <button
@@ -205,7 +192,7 @@ export default function UpgradeSheet() {
                 href={stripeLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full bg-gradient-to-r from-gold-mid to-gold text-white text-center font-bold text-lg py-4 rounded-2xl shadow-fab active:scale-95 transition-transform"
+                className="block w-full bg-gradient-to-r from-gold-mid to-gold text-white text-center font-bold text-lg py-4 rounded-2xl shadow-fab active:scale-[0.97] transition-transform duration-[160ms] ease-out-strong"
                 onClick={() => { openedStripe.current = true; closeUpgradeSheet() }}
               >
                 {ctaLabel}
@@ -234,7 +221,7 @@ export default function UpgradeSheet() {
                   <button
                     onClick={handleRedeemCoupon}
                     disabled={couponLoading || !couponCode.trim()}
-                    className="px-4 py-2 bg-gold text-white rounded-xl text-sm font-medium disabled:opacity-40 active:scale-95 transition-transform"
+                    className="px-4 py-2 bg-gold text-white rounded-xl text-sm font-medium disabled:opacity-40 active:scale-[0.97] transition-transform duration-[160ms] ease-out-strong"
                   >
                     {couponLoading ? '...' : t('upgrade.coupon.redeem')}
                   </button>
@@ -258,8 +245,10 @@ export default function UpgradeSheet() {
               {t('upgrade.later')}
             </button>
           </div>
+          </>)}
         </motion.div>
       </motion.div>
+      )}
     </AnimatePresence>
   )
 }

@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react'
 import { useSwipeable } from 'react-swipeable'
+import { animate } from 'framer-motion'
+import type { AnimationPlaybackControls } from 'framer-motion'
 import type { Voucher } from '../types'
 import { formatCurrency, getExpiryStatus, getExpiryLabel } from '../utils/helpers'
 import { Edit2, Trash2, Archive, Star, Check, ExternalLink, Gift, Lock, ShoppingBag, Shield } from 'lucide-react'
@@ -76,18 +78,25 @@ function getCatColor(categories: string[]): string {
 const REVEAL_EDIT   = 80
 const REVEAL_DELETE = 120
 const SNAP_THRESHOLD = 50
+/** Flick velocity (px/ms) beyond which the swipe commits regardless of distance. */
+const FLICK_VELOCITY = 0.11
+/** Rising friction past the reveal edge instead of a hard clamp. */
+const OVERDRAG = 0.35
 
 export default function VoucherCard({
   voucher, onClick, onEdit, onDelete, onArchive,
   superVoucherName, isSelectMode, isSelected, onSelect, rowMode,
 }: Props) {
   const [hovered, setHovered] = useState(false)
-  const [swipeX, setSwipeX] = useState(0)
   const [snapped, setSnapped] = useState<'edit' | 'delete' | null>(null)
-  const [animating, setAnimating] = useState(false)
   const { profile } = useAuth()
   const { t } = useT()
   const baseXRef = useRef(0)
+  // The swipe position lives in a ref and is written straight to the node —
+  // a setState per pointermove frame re-rendered every card in the list.
+  const xRef = useRef(0)
+  const slideRef = useRef<HTMLDivElement | null>(null)
+  const animRef = useRef<AnimationPlaybackControls | null>(null)
 
   const safeLink   = isSafeUrl(voucher.link) ? voucher.link : undefined
   const expiryStatus = getExpiryStatus(voucher.expiry_date)
@@ -113,10 +122,22 @@ export default function VoucherCard({
     return { color: 'var(--c-text3)', bg: 'var(--c-bg)' }
   })()
 
-  function snapTo(x: number, s: 'edit' | 'delete' | null) {
-    setAnimating(true); setSwipeX(x); setSnapped(s)
+  function applyX(v: number) {
+    xRef.current = v
+    if (slideRef.current) slideRef.current.style.transform = `translateX(${v}px)`
   }
-  function closeSwipe() { snapTo(0, null) }
+
+  // Spring release: carries the finger's velocity into the snap instead of a
+  // fixed-duration tween, and retargets mid-flight if a new gesture interrupts.
+  function springTo(target: number, s: 'edit' | 'delete' | null, velocity = 0) {
+    animRef.current?.stop()
+    animRef.current = animate(xRef.current, target, {
+      type: 'spring', stiffness: 380, damping: 38, mass: 0.9, velocity,
+      onUpdate: applyX,
+    })
+    setSnapped(s)
+  }
+  function closeSwipe() { springTo(0, null) }
   function handleClick() {
     if (snapped) { closeSwipe(); return }
     if (isSelectMode) onSelect?.()
@@ -126,29 +147,52 @@ export default function VoucherCard({
   const swipeHandlers = useSwipeable({
     onSwipeStart: () => {
       if (isSelectMode) return
+      animRef.current?.stop()
       baseXRef.current = snapped === 'edit' ? REVEAL_EDIT : snapped === 'delete' ? -REVEAL_DELETE : 0
-      setAnimating(false)
     },
     onSwiping: ({ deltaX }) => {
       if (isSelectMode) return
       const raw = baseXRef.current + deltaX
-      setSwipeX(raw > 0 ? Math.min(REVEAL_EDIT + 16, raw) : Math.max(-(REVEAL_DELETE + 16), raw))
+      // Rising friction past the reveal edge — no hard stop.
+      let next = raw
+      if (raw > REVEAL_EDIT) next = REVEAL_EDIT + (raw - REVEAL_EDIT) * OVERDRAG
+      else if (raw < -REVEAL_DELETE) next = -REVEAL_DELETE + (raw + REVEAL_DELETE) * OVERDRAG
+      applyX(next)
     },
-    onSwiped: ({ deltaX }) => {
+    onSwiped: ({ deltaX, vxvy }) => {
       if (isSelectMode) return
       const raw = baseXRef.current + deltaX
-      if (raw > SNAP_THRESHOLD) snapTo(REVEAL_EDIT, 'edit')
-      else if (raw < -SNAP_THRESHOLD) snapTo(-REVEAL_DELETE, 'delete')
-      else snapTo(0, null)
+      const vx = vxvy[0] // px/ms
+      const v = vx * 1000 // px/s for the spring
+      const flickRight = vx > FLICK_VELOCITY
+      const flickLeft = vx < -FLICK_VELOCITY
+      // A fast flick decides by direction; otherwise fall back to distance.
+      if (flickLeft) {
+        if (raw > 0) springTo(0, null, v)
+        else springTo(-REVEAL_DELETE, 'delete', v)
+      } else if (flickRight) {
+        if (raw < 0) springTo(0, null, v)
+        else springTo(REVEAL_EDIT, 'edit', v)
+      } else if (raw > SNAP_THRESHOLD) springTo(REVEAL_EDIT, 'edit', v)
+      else if (raw < -SNAP_THRESHOLD) springTo(-REVEAL_DELETE, 'delete', v)
+      else springTo(0, null, v)
     },
     preventScrollOnSwipe: false,
     trackMouse: false,
     delta: 10,
   })
 
+  // react-swipeable's spread includes its own ref callback — merge it with ours
+  // instead of overriding it (which would silently disable the gesture).
+  const bindSlide = (el: HTMLDivElement | null) => {
+    slideRef.current = el
+    swipeHandlers.ref(el)
+  }
+
+  // transform is kept in sync with xRef so unrelated re-renders (hover, list
+  // updates) don't yank an open swipe back to zero.
   const slideStyle: React.CSSProperties = {
-    transform: `translateX(${swipeX}px)`,
-    transition: animating ? 'transform 200ms ease-out' : 'none',
+    transform: `translateX(${xRef.current}px)`,
     touchAction: 'pan-y',
   }
 
@@ -178,7 +222,7 @@ export default function VoucherCard({
 
   // ─── Desktop hover actions ──────────────────────────────────────────────────
   const HoverActions = hovered && !isSelectMode ? (
-    <div className="absolute top-2 left-2 flex gap-1 z-10 animate-fade-in" role="group" aria-label={t('card.actions.for', { name: voucher.store_name })}>
+    <div className="absolute top-2 left-2 flex gap-1 z-10" role="group" aria-label={t('card.actions.for', { name: voucher.store_name })}>
       <button onClick={e => { e.stopPropagation(); onEdit() }}    aria-label={`${t('card.edit.action')} ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-blue-500 hover:bg-blue-50 transition-colors"><Edit2   className="w-3.5 h-3.5" /></button>
       <button onClick={e => { e.stopPropagation(); onArchive() }} aria-label={`${t('card.archive.action')} ${voucher.store_name}`} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:bg-gray-50 transition-colors"><Archive className="w-3.5 h-3.5" /></button>
       <button onClick={e => { e.stopPropagation(); onDelete() }}  aria-label={`${t('card.delete.action')} ${voucher.store_name}`}    className="p-1.5 bg-white rounded-lg shadow text-red-500 hover:bg-red-50 transition-colors">  <Trash2  className="w-3.5 h-3.5" /></button>
@@ -214,6 +258,7 @@ export default function VoucherCard({
         {SwipeBgs}
         <div
           {...swipeHandlers}
+          ref={bindSlide}
           style={{ ...slideStyle, display: 'flex', background: 'var(--c-surface)' }}
           onClick={handleClick}
           onMouseEnter={() => setHovered(true)}
@@ -224,7 +269,7 @@ export default function VoucherCard({
 
           <div className="flex items-center gap-3 flex-1 min-w-0 px-3 py-3">
             {isSelectMode && (
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${isSelected ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors duration-150 ${isSelected ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
                 {isSelected && <Check className="w-3 h-3 text-white" />}
               </div>
             )}
@@ -248,7 +293,7 @@ export default function VoucherCard({
 
             {voucher.amount > 0 && (
               <div className="w-14 h-1.5 rounded-full overflow-hidden flex-shrink-0" style={{ background: 'var(--c-bg)' }}>
-                <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: catColor }} />
+                <div className="h-full w-full rounded-full origin-right" style={{ transform: `scaleX(${Math.min(100, pct) / 100})`, background: catColor, transition: 'transform 200ms var(--ease-out)' }} />
               </div>
             )}
 
@@ -306,6 +351,7 @@ export default function VoucherCard({
 
       <div
         {...swipeHandlers}
+        ref={bindSlide}
         style={{ ...slideStyle, display: 'flex', background: 'var(--c-surface)' }}
         onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
@@ -320,7 +366,7 @@ export default function VoucherCard({
           {/* Select checkbox */}
           {isSelectMode && (
             <div className="absolute top-2 right-2 z-10">
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-150 ${isSelected ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
                 {isSelected && <Check className="w-3 h-3 text-white" />}
               </div>
             </div>
@@ -395,8 +441,8 @@ export default function VoucherCard({
           {voucher.amount > 0 && voucher.amount !== voucher.balance && (
             <div className="mt-3 h-[3px] rounded-full overflow-hidden" style={{ background: 'var(--c-bg)' }}>
               <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${Math.min(100, pct)}%`, background: catColor }}
+                className="h-full w-full rounded-full origin-right"
+                style={{ transform: `scaleX(${Math.min(100, pct) / 100})`, background: catColor, transition: 'transform 200ms var(--ease-out)' }}
               />
             </div>
           )}

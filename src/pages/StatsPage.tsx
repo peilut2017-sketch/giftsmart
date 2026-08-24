@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
@@ -337,7 +338,7 @@ export default function StatsPage() {
               <span className="text-sm font-bold text-text">{stats.utilized}%</span>
             </div>
             <div className="h-3 bg-bg rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all" style={{ width: `${stats.utilized}%` }} />
+              <div className="h-full w-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full origin-right" style={{ transform: `scaleX(${Math.min(100, stats.utilized) / 100})`, transition: 'transform 200ms var(--ease-out)' }} />
             </div>
             <div className="flex justify-between text-xs text-text3 mt-1">
               <span>{t('stats.original')} {formatCurrency(stats.allOriginal)}</span>
@@ -412,7 +413,7 @@ export default function StatsPage() {
                       <span className="text-sm font-semibold text-text">{formatCurrency(store.balance)}</span>
                     </div>
                     <div className="h-2 bg-bg rounded-full overflow-hidden mr-6">
-                      <div className="h-full rounded-full bg-gradient-to-r from-primary-mid to-primary-dark" style={{ width: `${pct}%` }} />
+                      <div className="h-full w-full rounded-full bg-gradient-to-r from-primary-mid to-primary-dark origin-right" style={{ transform: `scaleX(${Math.min(100, pct) / 100})`, transition: 'transform 200ms var(--ease-out)' }} />
                     </div>
                   </div>
                 )
@@ -458,15 +459,17 @@ export default function StatsPage() {
       </div>
       )}
 
-      {showCsvConfirm && (
-        <ConfirmDialog
-          title={t('stats.export.csv.confirm.title')}
-          message={t('stats.export.csv.confirm.message')}
-          confirmLabel={t('stats.export.csv.confirm.cta')}
-          onConfirm={() => { setShowCsvConfirm(false); exportCSV() }}
-          onCancel={() => setShowCsvConfirm(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showCsvConfirm && (
+          <ConfirmDialog
+            title={t('stats.export.csv.confirm.title')}
+            message={t('stats.export.csv.confirm.message')}
+            confirmLabel={t('stats.export.csv.confirm.cta')}
+            onConfirm={() => { setShowCsvConfirm(false); exportCSV() }}
+            onCancel={() => setShowCsvConfirm(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

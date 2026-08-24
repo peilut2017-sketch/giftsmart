@@ -46,6 +46,12 @@ export default {
         fab: 'var(--shadow-fab)',
         nav: 'var(--shadow-nav)',
       },
+      transitionTimingFunction: {
+        // Mirrors the --ease-* tokens in index.css / src/lib/motion.ts
+        'out-strong': 'var(--ease-out)',
+        'in-out-strong': 'var(--ease-in-out)',
+        drawer: 'var(--ease-drawer)',
+      },
     },
   },
   plugins: [],

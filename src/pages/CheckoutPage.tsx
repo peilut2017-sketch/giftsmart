@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift } from '../contexts/VoucherContext'
@@ -8,6 +9,7 @@ import { useMarketplace } from '../contexts/MarketplaceContext'
 import { sendVoucherSharedEmail, sendVoucherShareInviteEmail, sendGiftEmail } from '../lib/emailService'
 import { isAlphanumeric, formatCurrency, formatDate, getExpiryLabel, getExpiryStatus, getStoreInitials, getCategoryColor } from '../utils/helpers'
 import { sendUsageNotification } from '../hooks/useNotifications'
+import { useCountUp } from '../hooks/useCountUp'
 import { supabase } from '../lib/supabase'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
@@ -51,39 +53,6 @@ function drawQr(el: HTMLCanvasElement | null, value: string, size: number) {
 // Small inline spinner (Material Symbols has no animated spinner glyph)
 function Spinner({ className = '' }: { className?: string }) {
   return <span className={`inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ${className}`} />
-}
-
-// Animates a number toward `target` on change; skips animation entirely under prefers-reduced-motion.
-function useCountUp(target: number): number {
-  const [display, setDisplay] = useState(target)
-  const prevRef = useRef(target)
-  const rafRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    const from = prevRef.current
-    const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (reduced || from === target) {
-      setDisplay(target)
-      prevRef.current = target
-      return
-    }
-    const duration = 700
-    const start = performance.now()
-    function tick(now: number) {
-      const p = Math.min(1, (now - start) / duration)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setDisplay(from + (target - from) * eased)
-      if (p < 1) {
-        rafRef.current = requestAnimationFrame(tick)
-      } else {
-        prevRef.current = target
-      }
-    }
-    rafRef.current = requestAnimationFrame(tick)
-    return () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current) }
-  }, [target])
-
-  return display
 }
 
 function InfoRow({ label, value, onCopy, onOpen, extra, ltr }: { label: string; value: string; onCopy?: () => void; onOpen?: () => void; extra?: React.ReactNode; ltr?: boolean }) {
@@ -179,7 +148,7 @@ export default function CheckoutPage() {
   const [sellLoading, setSellLoading] = useState(false)
   const [removingFromSale, setRemovingFromSale] = useState(false)
 
-  const animatedBalance = useCountUp(voucher?.balance ?? 0)
+  const balanceRef = useCountUp<HTMLDivElement>(voucher?.balance ?? 0, v => formatCurrency(Math.round(v)))
 
   // Shared-voucher "share" tab has no accordion trigger to lazy-load its tokens —
   // load them when the tab opens. (Previously this was invoked as a side effect
@@ -775,16 +744,19 @@ export default function CheckoutPage() {
   return (
     <div className="flex-1 bg-bg">
       {/* Confirm dialogs */}
-      {confirmAction && (
-        <ConfirmDialog
-          title={confirmAction.title}
-          message={confirmAction.message}
-          confirmLabel={confirmAction.confirmLabel}
-          danger
-          onConfirm={confirmAction.onConfirm}
-          onCancel={() => setConfirmAction(null)}
-        />
-      )}
+      <AnimatePresence>
+        {confirmAction && (
+          <ConfirmDialog
+            title={confirmAction.title}
+            message={confirmAction.message}
+            confirmLabel={confirmAction.confirmLabel}
+            danger
+            onConfirm={confirmAction.onConfirm}
+            onCancel={() => setConfirmAction(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
       {confirmArchive && (
         <ConfirmDialog
           title={t('checkout.archive.confirm.title')}
@@ -802,20 +774,24 @@ export default function CheckoutPage() {
           />
         </ConfirmDialog>
       )}
-      {confirmDelete && (
-        <ConfirmDialog
-          title={t('checkout.delete.confirm.title')}
-          message={t('checkout.delete.confirm.msg')}
-          danger
-          onConfirm={async () => {
-            setConfirmDelete(false)
-            await deleteVoucher(voucher.id)
-            toast.success(t('checkout.deleted'))
-            navigate(-1)
-          }}
-          onCancel={() => setConfirmDelete(false)}
-        />
-      )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {confirmDelete && (
+          <ConfirmDialog
+            title={t('checkout.delete.confirm.title')}
+            message={t('checkout.delete.confirm.msg')}
+            danger
+            onConfirm={async () => {
+              setConfirmDelete(false)
+              await deleteVoucher(voucher.id)
+              toast.success(t('checkout.deleted'))
+              navigate(-1)
+            }}
+            onCancel={() => setConfirmDelete(false)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
       {showEditForm && (
         <VoucherForm
           voucher={voucher}
@@ -831,6 +807,7 @@ export default function CheckoutPage() {
           onClose={() => setShowEditForm(false)}
         />
       )}
+      </AnimatePresence>
 
       {/* ── Header (transparent over Hero, solidifies on scroll) + Hero ──
           position:fixed, not sticky — the app's root layout (#root/main/AnimatedRoutes'
@@ -887,7 +864,7 @@ export default function CheckoutPage() {
             </div>
             <div className="min-w-0">
               <div className="text-[13px] font-medium mb-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{t('checkout.current.balance')}</div>
-              <div className="text-white font-black tabular-nums" style={{ fontSize: 44, letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(Math.round(animatedBalance))}</div>
+              <div ref={balanceRef} className="text-white font-black tabular-nums" style={{ fontSize: 44, letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(Math.round(voucher.balance))}</div>
               {voucher.amount > 0 && voucher.amount !== voucher.balance && (
                 <div className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.6)' }}>
                   {t('checkout.original.of')} {formatCurrency(voucher.amount)} {t('checkout.original.label')}
@@ -901,8 +878,8 @@ export default function CheckoutPage() {
             <div className="mt-4">
               <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.25)' }}>
                 <div
-                  className="h-full rounded-full transition-all duration-[1200ms] ease-out"
-                  style={{ width: `${Math.min(100, (voucher.balance / voucher.amount) * 100)}%`, background: isExpired ? 'var(--c-error)' : '#fff' }}
+                  className="h-full w-full rounded-full origin-right"
+                  style={{ transform: `scaleX(${Math.min(100, (voucher.balance / voucher.amount) * 100) / 100})`, background: isExpired ? 'var(--c-error)' : '#fff', transition: 'transform 200ms var(--ease-out)' }}
                 />
               </div>
             </div>
@@ -1081,11 +1058,16 @@ export default function CheckoutPage() {
         {/* ── Segment tabs ── */}
         <div className="grid relative bg-bg rounded-2xl p-1" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
           <div
-            className="absolute rounded-xl bg-surface shadow-sm transition-all duration-300"
+            className="absolute rounded-xl bg-surface shadow-sm"
             style={{
               top: 4, bottom: 4,
               width: `calc(${100 / tabs.length}% - 4px)`,
-              [dir === 'rtl' ? 'right' : 'left']: `calc(${tabIndex * (100 / tabs.length)}% + 2px)`,
+              // Pinned at the inline-start edge; slides between slots with a
+              // transform (one slot = own width + the 4px gap) instead of
+              // animating left/right, which forced layout + shadow repaints.
+              [dir === 'rtl' ? 'right' : 'left']: 2,
+              transform: `translateX(calc(${dir === 'rtl' ? -tabIndex : tabIndex} * (100% + 4px)))`,
+              transition: 'transform 200ms var(--ease-out)',
             }}
           />
           {tabs.map(tab => (

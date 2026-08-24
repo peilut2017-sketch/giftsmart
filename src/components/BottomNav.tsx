@@ -168,15 +168,21 @@ export default function BottomNav() {
 
     const nav = navRef.current
     if (!nav) return
-    const maxX  = nav.offsetWidth - pillW.get() - 4
-    const newX  = Math.max(4, Math.min(maxX, dragOrigin.current.pillX + delta))
+    const maxX = nav.offsetWidth - pillW.get() - 4
+    // Rising friction past the track edges instead of a hard clamp.
+    const raw = dragOrigin.current.pillX + delta
+    let newX = raw
+    if (raw < 4) newX = 4 + (raw - 4) * 0.35
+    else if (raw > maxX) newX = maxX + (raw - maxX) * 0.35
     pillX.set(newX)
 
     const ci = closestTab(e.clientX)
     if (ci !== hoverIdx.current) {
       hoverIdx.current = ci
       const m = getMetrics(ci)
-      if (m) animate(pillW, m.w, { duration: 0.12 })
+      // Same spring as the X handoff — a fixed tween here dropped the morph's
+      // velocity mid-drag, and the width change is the loudest part of it.
+      if (m) animate(pillW, m.w, prefersReducedMotion() ? REDUCED_MOTION : SPRING)
     }
   }
 
