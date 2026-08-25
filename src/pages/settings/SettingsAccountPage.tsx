@@ -36,6 +36,7 @@ export default function SettingsAccountPage() {
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(profile?.name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
+  const [email, setEmail] = useState(user?.email || '')
   const [savingProfile, setSavingProfile] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -58,9 +59,27 @@ export default function SettingsAccountPage() {
     if (savingProfile) return
     setSavingProfile(true)
     try {
+      // Email change goes through Supabase Auth: a confirmation link is emailed and
+      // the address only actually switches after it's clicked. A duplicate address
+      // is rejected by the server.
+      const newEmail = email.trim().toLowerCase()
+      const emailChanged = !!newEmail && newEmail !== (user?.email || '').toLowerCase()
+      if (emailChanged) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+          toast.error(t('account.email.invalid'))
+          return
+        }
+        const { error } = await supabase.auth.updateUser({ email: newEmail })
+        if (error) {
+          if (/already|exists|registered/i.test(error.message || '')) toast.error(t('account.email.exists'))
+          else toast.error(error.message || t('app.error'))
+          return
+        }
+        toast.success(t('account.email.confirm.sent'), { duration: 8000 })
+      }
       await updateProfile({ name, phone })
       setEditName(false)
-      toast.success(t('settings.profile.updated'))
+      if (!emailChanged) toast.success(t('settings.profile.updated'))
     } catch {
       toast.error(t('app.error'))
     } finally {
@@ -163,13 +182,17 @@ export default function SettingsAccountPage() {
                   <p className="text-xs text-text3 truncate">{user?.email}</p>
                   {phone && <p className="text-xs text-text3">{phone}</p>}
                 </div>
-                <button onClick={() => setEditName(true)} className="w-9 h-9 rounded-xl bg-bg flex items-center justify-center shrink-0">
+                <button onClick={() => { setEmail(user?.email || ''); setEditName(true) }} className="w-9 h-9 rounded-xl bg-bg flex items-center justify-center shrink-0">
                   <Icon name="edit" size={16} color="var(--c-text2)" />
                 </button>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
                 <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('auth.name.placeholder')} className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t('auth.email.placeholder')} dir="ltr" autoComplete="email" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
+                {email.trim().toLowerCase() !== (user?.email || '').toLowerCase() && (
+                  <p className="text-[11px] text-text3 px-1">{t('account.email.change.note')}</p>
+                )}
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('seller.profile.phone')} dir="ltr" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
                 <div className="flex gap-2">
                   <button onClick={saveProfile} disabled={savingProfile} className="flex-1 h-11 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">

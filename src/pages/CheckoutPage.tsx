@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { EASE_OUT } from '../lib/motion'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useVouchers, type ActivityLogEntry, type VoucherShare, type PendingGift } from '../contexts/VoucherContext'
@@ -18,7 +19,6 @@ import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
-import BottomSheet from '../components/ui/BottomSheet'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { useT } from '../lib/i18n'
@@ -149,6 +149,7 @@ export default function CheckoutPage() {
   const [removingFromSale, setRemovingFromSale] = useState(false)
 
   const balanceRef = useCountUp<HTMLDivElement>(voucher?.balance ?? 0, v => formatCurrency(Math.round(v)))
+  const reduceMotion = useReducedMotion()
 
   // Shared-voucher "share" tab has no accordion trigger to lazy-load its tokens —
   // load them when the tab opens. (Previously this was invoked as a side effect
@@ -824,6 +825,7 @@ export default function CheckoutPage() {
           of staying pinned. */}
       <>
         {createPortal(
+          <>
           <div
             className={`fixed top-0 inset-x-0 z-30 flex items-center justify-between px-3 transition-colors duration-200 ${headerScrolled ? 'bg-surface/95 backdrop-blur-xl shadow-sm border-b border-border' : ''}`}
             style={{ height: 64 }}
@@ -833,14 +835,69 @@ export default function CheckoutPage() {
             </button>
             <div className={`text-base font-bold truncate max-w-[55%] transition-colors ${headerScrolled ? 'text-text' : 'text-white'}`}>{sv?.name || voucher.store_name}</div>
             <button
-              onClick={() => setShowMoreMenu(true)}
+              onClick={() => setShowMoreMenu(v => !v)}
               aria-label={t('checkout.menu.title')}
+              aria-expanded={showMoreMenu}
+              aria-haspopup="menu"
               className="w-9 h-9 rounded-xl flex items-center justify-center transition"
               style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}
             >
               <Icon name="more_horiz" size={22} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
             </button>
-          </div>,
+          </div>
+
+          {/* Anchored more-menu — drops down from the header dots. The previous
+              bottom sheet opened behind the bottom nav and the redeem button. */}
+          <AnimatePresence>
+            {showMoreMenu && (
+              <motion.div
+                className="fixed inset-0 z-40"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                transition={{ duration: 0.15 }}
+                onClick={() => setShowMoreMenu(false)}
+              >
+                <motion.div
+                  role="menu"
+                  className="absolute w-60 bg-surface rounded-2xl shadow-2xl border border-border overflow-hidden"
+                  style={{ top: 58, left: 10, transformOrigin: 'top left' }}
+                  initial={reduceMotion ? undefined : { scale: 0.95, opacity: 0 }}
+                  animate={reduceMotion ? undefined : { scale: 1, opacity: 1 }}
+                  exit={reduceMotion ? undefined : { scale: 0.95, opacity: 0, transition: { duration: 0.15, ease: EASE_OUT } }}
+                  transition={{ duration: 0.2, ease: EASE_OUT }}
+                  dir="rtl"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="flex flex-col px-4">
+                    {/* שיתוף/מכירה already have their own tab as the one entry point — listing them
+                        here too was a third (and fourth) way into the same place. */}
+                    {!isSharedVoucher && !isArchived && (
+                      <MenuRow icon="edit" label={t('checkout.edit')} onClick={() => { setShowMoreMenu(false); setShowEditForm(true) }} />
+                    )}
+                    {voucher.is_e2ee && isVaultUnlocked && (
+                      <MenuRow icon="shield" label={t('checkout.e2ee.lock.vault.title')} onClick={() => { setShowMoreMenu(false); lockVault() }} />
+                    )}
+                    {!isSharedVoucher && !isArchived && (
+                      <MenuRow
+                        icon={voucher.is_locked ? 'lock_open' : 'lock'}
+                        label={voucher.is_locked ? t('checkout.menu.unlock') : t('checkout.menu.lock')}
+                        onClick={handleToggleLock}
+                        disabled={lockToggling}
+                      />
+                    )}
+                    {!isArchived && (
+                      <MenuRow icon="archive" label={t('checkout.archive')} onClick={() => { setShowMoreMenu(false); openArchiveConfirm() }} />
+                    )}
+                    {!isSharedVoucher && (
+                      <MenuRow icon="delete" label={t('checkout.delete')} danger onClick={() => { setShowMoreMenu(false); setConfirmDelete(true) }} />
+                    )}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          </>,
           document.body,
         )}
 
@@ -1558,33 +1615,6 @@ export default function CheckoutPage() {
         document.body,
       )}
 
-      {/* ── More actions sheet ── */}
-      <BottomSheet open={showMoreMenu} onClose={() => setShowMoreMenu(false)} title={t('checkout.menu.title')}>
-        <div className="flex flex-col">
-          {/* שיתוף/מכירה already have their own tab as the one entry point — listing them
-              here too was a third (and fourth) way into the same place. */}
-          {!isSharedVoucher && !isArchived && (
-            <MenuRow icon="edit" label={t('checkout.edit')} onClick={() => { setShowMoreMenu(false); setShowEditForm(true) }} />
-          )}
-          {voucher.is_e2ee && isVaultUnlocked && (
-            <MenuRow icon="shield" label={t('checkout.e2ee.lock.vault.title')} onClick={() => { setShowMoreMenu(false); lockVault() }} />
-          )}
-          {!isSharedVoucher && !isArchived && (
-            <MenuRow
-              icon={voucher.is_locked ? 'lock_open' : 'lock'}
-              label={voucher.is_locked ? t('checkout.menu.unlock') : t('checkout.menu.lock')}
-              onClick={handleToggleLock}
-              disabled={lockToggling}
-            />
-          )}
-          {!isArchived && (
-            <MenuRow icon="archive" label={t('checkout.archive')} onClick={() => { setShowMoreMenu(false); openArchiveConfirm() }} />
-          )}
-          {!isSharedVoucher && (
-            <MenuRow icon="delete" label={t('checkout.delete')} danger onClick={() => { setShowMoreMenu(false); setConfirmDelete(true) }} />
-          )}
-        </div>
-      </BottomSheet>
     </div>
   )
 }

@@ -91,11 +91,13 @@ export default function SettingsPrivacyPage() {
     }
   }
 
-  function handleDisableBiometric() {
-    disableBiometric()
+  async function handleDisableBiometric() {
     setBiometricEnabled(false)
+    await disableBiometric()
     toast.success(t('privacy.biometric.disabled.toast'))
     logAction('system_biometric_link', 'מערכת', undefined, { type: 'disabled' })
+    // Re-read the vault doors so "vault health" stops showing fingerprint as active
+    refreshDoors()
   }
 
   async function handleRegenerateRecovery() {

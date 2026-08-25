@@ -4,11 +4,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
-import { useE2EE } from '../contexts/E2EEContext'
 import { useDiscounts } from '../contexts/DiscountsContext'
 import { useT } from '../lib/i18n'
 import VoucherForm from '../components/VoucherForm'
-import VaultUnlockSheet from '../components/VaultUnlockSheet'
 import DealCard from '../components/DealCard'
 import Icon from '../components/ui/Icon'
 import type { Voucher } from '../types'
@@ -35,13 +33,10 @@ export default function HomePage() {
   const { user } = useAuth()
   const { vouchers, loading, walletError, isOnline, walletName, addVoucher, archiveExpired, refreshVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
-  const { hasVault, isVaultUnlocked, lockVault } = useE2EE()
   const { recentDeals, fetchRecentDeals } = useDiscounts()
   const { unseenCount } = useNotificationsFeed()
 
   useEffect(() => { fetchRecentDeals() }, [fetchRecentDeals])
-
-  const [showVaultSheet, setShowVaultSheet] = useState(false)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [showForm, setShowForm] = useState(false)
@@ -207,9 +202,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Vault unlock — the shared sheet (biometric + password + recovery) ── */}
-      <VaultUnlockSheet open={showVaultSheet} onClose={() => setShowVaultSheet(false)} />
-
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-5 pt-5 pb-1">
         <button onClick={() => navigate('/notifications')} className="relative w-10 h-10 rounded-full flex items-center justify-center" aria-label={t('notifications.title')}>
@@ -227,13 +219,15 @@ export default function HomePage() {
             {t('home.your.wallet')}
           </div>
         </div>
+        {/* Quick jump to search — replaced the vault shield here (vault lock/unlock
+            still lives in Settings → Privacy, and unlock prompts appear where needed) */}
         <button
-          onClick={() => hasVault && (isVaultUnlocked ? lockVault() : setShowVaultSheet(true))}
-          className={`w-10 h-10 rounded-full flex items-center justify-center ${!hasVault ? 'invisible' : ''}`}
-          style={{ background: isVaultUnlocked ? 'var(--c-primary-light)' : 'var(--c-bg)' }}
-          aria-label={isVaultUnlocked ? t('e2ee.lock') : t('e2ee.unlock')}
+          onClick={() => navigate('/search')}
+          className="w-10 h-10 rounded-full flex items-center justify-center"
+          style={{ background: 'var(--c-bg)' }}
+          aria-label={t('nav.search')}
         >
-          <Icon name="shield" size={18} color={isVaultUnlocked ? 'var(--c-primary)' : 'var(--c-text3)'} />
+          <Icon name="search" size={18} color="var(--c-text3)" />
         </button>
       </div>
 

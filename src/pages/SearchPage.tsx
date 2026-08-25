@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { EASE_DRAWER, EASE_OUT } from '../lib/motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
@@ -52,6 +53,29 @@ export default function SearchPage() {
     try { return JSON.parse(sessionStorage.getItem('searchFilterCats') || '[]') } catch { return [] }
   })
   const [showFilters, setShowFilters] = useState(false)
+  // The "sticky" search bar can't actually stick (the app shell's flex chain breaks
+  // position:sticky), so once it scrolls away a small floating pill brings the user
+  // back to it — showing the active query when there is one.
+  const [scrolledPast, setScrolledPast] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const reduceMotion = useReducedMotion()
+
+  useEffect(() => {
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        setScrolledPast(window.scrollY > 280)
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
 
   useEffect(() => { sessionStorage.setItem('searchQuery', search) }, [search])
   useEffect(() => { sessionStorage.setItem('searchFilterTab', filterTab) }, [filterTab])
@@ -328,6 +352,7 @@ export default function SearchPage() {
           <div className="flex items-center gap-2.5 bg-bg rounded-2xl px-3.5">
             <Icon name="search" size={20} color="var(--c-text3)" />
             <input
+              ref={searchInputRef}
               type="search"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -673,6 +698,33 @@ export default function SearchPage() {
         />
       )}
       </AnimatePresence>
+
+      {/* Floating return-to-search pill — portaled to <body> so route-transition
+          transforms don't shift its fixed position */}
+      {createPortal(
+        <AnimatePresence>
+          {scrolledPast && !isSelectMode && (
+            <motion.button
+              className="fixed z-40 flex items-center gap-2 max-w-[70vw] bg-surface border border-border shadow-lg rounded-full px-4 py-2.5 text-sm font-medium text-text2"
+              style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)', left: '50%' }}
+              dir="rtl"
+              initial={{ opacity: 0, transform: `translateX(-50%) translateY(${reduceMotion ? 0 : -8}px)` }}
+              animate={{ opacity: 1, transform: 'translateX(-50%) translateY(0px)' }}
+              exit={{ opacity: 0, transform: `translateX(-50%) translateY(${reduceMotion ? 0 : -8}px)`, transition: { duration: 0.15, ease: EASE_OUT } }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' })
+                searchInputRef.current?.focus({ preventScroll: true })
+              }}
+              aria-label={t('nav.search')}
+            >
+              <Icon name="search" size={16} color="var(--c-primary)" />
+              <span className="truncate">{search || t('nav.search')}</span>
+            </motion.button>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   )
 }

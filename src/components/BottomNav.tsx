@@ -294,12 +294,13 @@ export default function BottomNav() {
           one of `items`. If it were rendered inside that row, onPointerUp's
           closestTab() would always redirect a tap on the FAB to whichever real tab
           is nearest, since that handler fires on every pointerup within the drag
-          container regardless of click target. Landing on `/?add=1` re-uses
-          HomePage's existing "open add-voucher form on mount" query-param behavior.
+          container regardless of click target. Opens the add-voucher overlay IN
+          PLACE (GlobalAddVoucher listens for this event) — it used to navigate to
+          /?add=1, yanking the user to the home page just to show a modal.
         */}
         <button
           data-guide="fab"
-          onClick={() => { tapHaptic(); navigate('/?add=1') }}
+          onClick={() => { tapHaptic(); window.dispatchEvent(new CustomEvent('gs-open-add-voucher')) }}
           aria-label={t('form.add.voucher')}
           className="absolute left-1/2 -translate-x-1/2 -top-[6px] w-[52px] h-[52px] rounded-[18px] flex items-center justify-center text-white bg-gradient-to-br from-primary-mid to-primary-dark shadow-fab transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           style={{ zIndex: 2 }}

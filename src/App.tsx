@@ -21,6 +21,7 @@ import LandingPage from './pages/LandingPage'
 import HomePage from './pages/HomePage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
+import GlobalAddVoucher from './components/GlobalAddVoucher'
 import OfflineBanner from './components/OfflineBanner'
 import LoginBanner from './components/LoginBanner'
 import PWAInstallBanner from './components/PWAInstallBanner'
@@ -446,6 +447,7 @@ function AppRoutes() {
     <MarketplaceProvider>
       <NotificationBridge />
       <E2EEBridge />
+      <GlobalAddVoucher />
       <VaultModals />
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}
