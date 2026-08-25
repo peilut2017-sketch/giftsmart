@@ -12,7 +12,7 @@ What is prepared in this repo for shipping GiftSmart to Google Play and the App 
 | File | Purpose | Placeholder to fill |
 |---|---|---|
 | `public/manifest.json` | PWA manifest (id, scope, display_override, any+maskable icons) | screenshots (optional) |
-| `public/.well-known/assetlinks.json` | Android Digital Asset Links — removes the browser URL bar in the TWA | `sha256_cert_fingerprints` from Play Console → App signing |
+| `public/.well-known/assetlinks.json` | Android Digital Asset Links — removes the browser URL bar in the TWA | App-signing SHA-256 filled in. Optional: also add the upload-key certificate's SHA-256 (covers sideloaded upload-key builds) |
 | `public/.well-known/apple-app-site-association` | iOS universal links (`/gift/*`, `/s/*`) + passkey domain association | `REPLACE_TEAMID` with the Apple Team ID |
 | `vercel.json` | Serves the two files above with correct headers (static files bypass the SPA rewrite on Vercel) | — |
 | `twa-manifest.json` | Bubblewrap config: package `site.giftsmart.app`, host `giftsmart.site`, notifications on | `appVersionCode` bump per release |
