@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVouchers } from '../../contexts/VoucherContext'
 import { useDiscounts } from '../../contexts/DiscountsContext'
@@ -229,7 +230,7 @@ export default function SettingsWalletPage() {
                             <button
                               key={club.id}
                               onClick={() => setLocalClubIds(prev => selected ? prev.filter(id => id !== club.id) : [...prev, club.id])}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${selected ? 'border-primary bg-primary-light text-primary' : 'border-border bg-surface text-text2'}`}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors duration-150 ${selected ? 'border-primary bg-primary-light text-primary' : 'border-border bg-surface text-text2'}`}
                             >
                               {selected && <Icon name="check" size={12} />}
                               {club.name}
@@ -253,7 +254,7 @@ export default function SettingsWalletPage() {
                             <button
                               key={club.id}
                               onClick={() => setLocalClubIds(prev => selected ? prev.filter(id => id !== club.id) : [...prev, club.id])}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${selected ? 'border-primary bg-primary-light text-primary' : 'border-border bg-surface text-text2'}`}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors duration-150 ${selected ? 'border-primary bg-primary-light text-primary' : 'border-border bg-surface text-text2'}`}
                             >
                               {selected && <Icon name="check" size={12} />}
                               {club.name}
@@ -279,15 +280,17 @@ export default function SettingsWalletPage() {
         </Card>
       </div>
 
-      {removeTarget && (
-        <ConfirmDialog
-          title={t('settings.wallet.remove.confirm.title', { email: removeTarget.email })}
-          message={t('settings.wallet.remove.confirm.message')}
-          danger
-          onConfirm={() => { const m = removeTarget; setRemoveTarget(null); doRemoveMember(m.user_id) }}
-          onCancel={() => setRemoveTarget(null)}
-        />
-      )}
+      <AnimatePresence>
+        {removeTarget && (
+          <ConfirmDialog
+            title={t('settings.wallet.remove.confirm.title', { email: removeTarget.email })}
+            message={t('settings.wallet.remove.confirm.message')}
+            danger
+            onConfirm={() => { const m = removeTarget; setRemoveTarget(null); doRemoveMember(m.user_id) }}
+            onCancel={() => setRemoveTarget(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

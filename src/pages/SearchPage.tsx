@@ -1,4 +1,7 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { EASE_DRAWER, EASE_OUT } from '../lib/motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useMarketplace } from '../contexts/MarketplaceContext'
@@ -50,6 +53,29 @@ export default function SearchPage() {
     try { return JSON.parse(sessionStorage.getItem('searchFilterCats') || '[]') } catch { return [] }
   })
   const [showFilters, setShowFilters] = useState(false)
+  // The "sticky" search bar can't actually stick (the app shell's flex chain breaks
+  // position:sticky), so once it scrolls away a small floating pill brings the user
+  // back to it — showing the active query when there is one.
+  const [scrolledPast, setScrolledPast] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const reduceMotion = useReducedMotion()
+
+  useEffect(() => {
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        setScrolledPast(window.scrollY > 280)
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
 
   useEffect(() => { sessionStorage.setItem('searchQuery', search) }, [search])
   useEffect(() => { sessionStorage.setItem('searchFilterTab', filterTab) }, [filterTab])
@@ -282,10 +308,13 @@ export default function SearchPage() {
 
   return (
     <div className="flex-1 bg-bg">
-      {confirm && (
-        <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
-      )}
+      <AnimatePresence>
+        {confirm && (
+          <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
+        )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {archiveTarget && (
         <ConfirmDialog
           title={t('confirm.archive.title')}
@@ -307,6 +336,7 @@ export default function SearchPage() {
           />
         </ConfirmDialog>
       )}
+      </AnimatePresence>
 
       {/* Page title (scrolls away) */}
       <div className="px-5 pt-5 pb-2 bg-surface">
@@ -322,6 +352,7 @@ export default function SearchPage() {
           <div className="flex items-center gap-2.5 bg-bg rounded-2xl px-3.5">
             <Icon name="search" size={20} color="var(--c-text3)" />
             <input
+              ref={searchInputRef}
               type="search"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -401,8 +432,18 @@ export default function SearchPage() {
           </div>
         )}
 
+        {/* Expands from under its trigger instead of snapping open — the reveal
+            explains where the panel came from. Interruptible (height retargets). */}
+        <AnimatePresence initial={false}>
         {showFilters && !isSelectMode && (
-          <div className="px-4 pb-3 pt-3 border-t border-border bg-bg">
+          <motion.div
+            className="overflow-hidden border-t border-border bg-bg"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: EASE_DRAWER }}
+          >
+          <div className="px-4 pb-3 pt-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-text2">{t('search.categories')}</span>
               <div className="flex items-center gap-2">
@@ -443,7 +484,9 @@ export default function SearchPage() {
               )}
             </div>
           </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
 
       <div className="p-4 pb-40">
@@ -493,24 +536,37 @@ export default function SearchPage() {
           <>
             {displayVouchers.length > 0 && (
               <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'flex flex-col gap-2'}>
-                {displayVouchers.map(v => {
-                  const sv = superVouchers.find(s => s.id === v.super_voucher_id)
-                  return (
-                    <VoucherCard
-                      key={v.id}
-                      voucher={v}
-                      superVoucherName={sv?.name}
-                      onClick={() => navigate(`/checkout/${v.id}`)}
-                      onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
-                      onDelete={() => requestDelete(v.id)}
-                      onArchive={() => requestArchive(v.id)}
-                      isSelectMode={isSelectMode}
-                      isSelected={selectedIds.has(v.id)}
-                      onSelect={() => toggleSelect(v.id)}
-                      rowMode={viewMode === 'rows'}
-                    />
-                  )
-                })}
+                {/* Deleted/archived cards fade out while the rest close the gap
+                    (layout) instead of the list teleporting; an undone card fades
+                    back in the same way. */}
+                <AnimatePresence initial={false} mode="popLayout">
+                  {displayVouchers.map(v => {
+                    const sv = superVouchers.find(s => s.id === v.super_voucher_id)
+                    return (
+                      <motion.div
+                        key={v.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.92 }}
+                        transition={{ duration: 0.18, ease: EASE_OUT }}
+                      >
+                        <VoucherCard
+                          voucher={v}
+                          superVoucherName={sv?.name}
+                          onClick={() => navigate(`/checkout/${v.id}`)}
+                          onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
+                          onDelete={() => requestDelete(v.id)}
+                          onArchive={() => requestArchive(v.id)}
+                          isSelectMode={isSelectMode}
+                          isSelected={selectedIds.has(v.id)}
+                          onSelect={() => toggleSelect(v.id)}
+                          rowMode={viewMode === 'rows'}
+                        />
+                      </motion.div>
+                    )
+                  })}
+                </AnimatePresence>
               </div>
             )}
 
@@ -619,6 +675,7 @@ export default function SearchPage() {
         </div>
       )}
 
+      <AnimatePresence>
       {showForm && (
         <VoucherForm voucher={editingVoucher} onClose={() => { setShowForm(false); setEditingVoucher(undefined) }} onSave={async vData => {
           if (editingVoucher) {
@@ -628,7 +685,9 @@ export default function SearchPage() {
           }
         }} />
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {showInStoreMode && (
         <InStoreMode
           vouchers={vouchers}
@@ -637,6 +696,34 @@ export default function SearchPage() {
           onNavigate={id => { setShowInStoreMode(false); navigate(`/checkout/${id}`) }}
           onClose={() => setShowInStoreMode(false)}
         />
+      )}
+      </AnimatePresence>
+
+      {/* Floating return-to-search pill — portaled to <body> so route-transition
+          transforms don't shift its fixed position */}
+      {createPortal(
+        <AnimatePresence>
+          {scrolledPast && !isSelectMode && (
+            <motion.button
+              className="fixed z-40 flex items-center gap-2 max-w-[70vw] bg-surface border border-border shadow-lg rounded-full px-4 py-2.5 text-sm font-medium text-text2"
+              style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)', left: '50%' }}
+              dir="rtl"
+              initial={{ opacity: 0, transform: `translateX(-50%) translateY(${reduceMotion ? 0 : -8}px)` }}
+              animate={{ opacity: 1, transform: 'translateX(-50%) translateY(0px)' }}
+              exit={{ opacity: 0, transform: `translateX(-50%) translateY(${reduceMotion ? 0 : -8}px)`, transition: { duration: 0.15, ease: EASE_OUT } }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' })
+                searchInputRef.current?.focus({ preventScroll: true })
+              }}
+              aria-label={t('nav.search')}
+            >
+              <Icon name="search" size={16} color="var(--c-primary)" />
+              <span className="truncate">{search || t('nav.search')}</span>
+            </motion.button>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
     </div>
   )

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X, Shield, Gift, Camera, MessageSquare, BarChart2, Bell, Users, Rocket } from 'lucide-react'
+import { SHEET_SPRING, BACKDROP_FADE } from '../lib/motion'
 
 interface Props {
   userId: string
@@ -17,6 +19,7 @@ const FEATURES = [
 export default function WelcomeModal({ userId }: Props) {
   const storageKey = `welcome_seen_${userId}`
   const [visible, setVisible] = useState(false)
+  const reduceMotion = useReducedMotion()
 
   useEffect(() => {
     if (!localStorage.getItem(storageKey)) {
@@ -31,11 +34,24 @@ export default function WelcomeModal({ userId }: Props) {
     window.dispatchEvent(new Event('gs-welcome-dismissed'))
   }
 
-  if (!visible) return null
-
   return (
-    <div data-welcome-modal className="fixed inset-0 bg-black/60 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] flex flex-col animate-slide-up">
+    <AnimatePresence>
+      {visible && (
+    <motion.div
+      data-welcome-modal
+      className="fixed inset-0 bg-black/60 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={BACKDROP_FADE}
+    >
+      <motion.div
+        className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] flex flex-col"
+        initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+        animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+        exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+        transition={reduceMotion ? { duration: 0.15 } : SHEET_SPRING}
+      >
         {/* Header */}
         <div className="relative p-6 pb-4 text-center bg-gradient-to-br from-green-50 to-emerald-50 rounded-t-3xl sm:rounded-t-3xl">
           <button
@@ -83,7 +99,9 @@ export default function WelcomeModal({ userId }: Props) {
             בואו נתחיל!
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

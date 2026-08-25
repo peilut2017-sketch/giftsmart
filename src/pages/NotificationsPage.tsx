@@ -10,6 +10,7 @@ import DealCard from '../components/DealCard'
 import { SettingsSubHeader, Spinner } from '../components/settings/SettingsUI'
 import { usePageView } from '../hooks/usePageView'
 import { useNotificationsFeed, type NotificationItem } from '../hooks/useNotificationsFeed'
+import { FLICK_VELOCITY } from '../lib/motion'
 
 const DISMISS_THRESHOLD = 90
 
@@ -22,11 +23,17 @@ function SwipeableRow({ id, onDismiss, children }: { id: string; onDismiss: (id:
   const draggedRef = useRef(false)
 
   function handleDragEnd(_e: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
-    if (Math.abs(info.offset.x) > DISMISS_THRESHOLD) {
-      animate(x, info.offset.x > 0 ? 400 : -400, { duration: 0.2, ease: 'easeIn' })
-      setTimeout(() => onDismiss(id), 180)
+    // A fast flick dismisses even before the distance threshold; the exit spring
+    // inherits the finger's velocity so the handoff is seamless, and the row is
+    // removed when the animation lands rather than on a magic-number timer.
+    const flick = Math.abs(info.velocity.x) > FLICK_VELOCITY
+    if (Math.abs(info.offset.x) > DISMISS_THRESHOLD || flick) {
+      const dir = (flick ? info.velocity.x : info.offset.x) > 0 ? 1 : -1
+      animate(x, dir * 400, {
+        type: 'spring', stiffness: 380, damping: 40, velocity: info.velocity.x,
+      }).then(() => onDismiss(id))
     } else {
-      animate(x, 0, { type: 'spring', stiffness: 500, damping: 32 })
+      animate(x, 0, { type: 'spring', stiffness: 500, damping: 32, velocity: info.velocity.x })
     }
   }
 

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useT } from '../lib/i18n'
+import { EASE_OUT } from '../lib/motion'
 
 interface Props {
   title: string
@@ -60,20 +62,37 @@ export default function ConfirmDialog({
     return () => el.removeEventListener('keydown', onTab)
   }, [])
 
+  const reduceMotion = useReducedMotion()
+
   return (
-    <div
+    <motion.div
       // Topmost layer: a confirmation must never render UNDER the sheet (z-100) or
-      // vault modals (z-110) that opened it
+      // vault modals (z-110) that opened it. Call sites wrap the conditional mount in
+      // <AnimatePresence> so the exit below actually plays.
       className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.15 } }}
+      transition={{ duration: 0.2 }}
       onClick={onCancel}
     >
-      <div
+      <motion.div
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
         aria-describedby={message ? 'confirm-desc' : undefined}
-        className="bg-surface rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-slide-up"
+        className="bg-surface rounded-3xl w-full max-w-sm p-6 shadow-2xl"
+        // Asymmetric on purpose: the deliberate phase (opening a destructive
+        // confirm) eases in; the system's response to the choice snaps out faster.
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'translateY(8px) scale(0.96)' }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0px) scale(1)' }}
+        exit={
+          reduceMotion
+            ? { opacity: 0, transition: { duration: 0.15 } }
+            : { opacity: 0, transform: 'translateY(8px) scale(0.96)', transition: { duration: 0.15, ease: EASE_OUT } }
+        }
+        transition={{ duration: 0.2, ease: EASE_OUT }}
         onClick={e => e.stopPropagation()}
       >
         <h2 id="confirm-title" className="text-lg font-bold text-text mb-1">{title}</h2>
@@ -99,7 +118,7 @@ export default function ConfirmDialog({
             {confirmLabel ?? t('app.confirm')}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

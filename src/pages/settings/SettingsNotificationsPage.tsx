@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVouchers } from '../../contexts/VoucherContext'
 import { supabase } from '../../lib/supabase'
@@ -384,15 +385,17 @@ export default function SettingsNotificationsPage() {
         </Card>
       </div>
 
-      {confirmDisconnect && (
-        <ConfirmDialog
-          title={t('notifset.disconnect.confirm.title')}
-          message={t('notifset.disconnect.confirm.message')}
-          danger
-          onConfirm={() => { setConfirmDisconnect(false); doDisconnectTelegram() }}
-          onCancel={() => setConfirmDisconnect(false)}
-        />
-      )}
+      <AnimatePresence>
+        {confirmDisconnect && (
+          <ConfirmDialog
+            title={t('notifset.disconnect.confirm.title')}
+            message={t('notifset.disconnect.confirm.message')}
+            danger
+            onConfirm={() => { setConfirmDisconnect(false); doDisconnectTelegram() }}
+            onCancel={() => setConfirmDisconnect(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -114,7 +114,7 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
 
             <button
               onClick={() => setStep('verify')}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md transition-all"
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md transition-colors duration-150"
             >
               {t('recovery.saved.continue')}
             </button>
@@ -157,7 +157,7 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
             <button
               onClick={handleVerify}
               disabled={check1.length < 4 || check2.length < 4}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md disabled:opacity-40 transition-all mb-2"
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md disabled:opacity-40 transition-opacity duration-150 mb-2"
             >
               {t('app.done')}
             </button>

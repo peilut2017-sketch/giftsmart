@@ -723,10 +723,22 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function addStore(name: string): Promise<Store> {
-    const { data } = await supabase.from('stores').insert({ name }).select().single()
-    if (data) {
-      setStores(prev => [...prev, data])
-      return data
+    // Per-user stores: the RPC inserts the row owned by the calling user (or
+    // returns an existing visible row with the same name), so one user's typos
+    // no longer become suggestions for everyone. Falls back to the legacy
+    // direct insert while supabase-user-stores.sql hasn't been applied yet.
+    const { data, error } = await supabase.rpc('add_store', { p_name: name })
+    if (!error && data) {
+      const row = (Array.isArray(data) ? data[0] : data) as Store
+      setStores(prev => (prev.some(s => s.id === row.id) ? prev : [...prev, row]))
+      return row
+    }
+    if (error && /function|schema cache/i.test(error.message || '')) {
+      const { data: legacy } = await supabase.from('stores').insert({ name }).select().single()
+      if (legacy) {
+        setStores(prev => [...prev, legacy])
+        return legacy
+      }
     }
     const fake: Store = { id: `local-${Date.now()}`, name }
     setStores(prev => [...prev, fake])

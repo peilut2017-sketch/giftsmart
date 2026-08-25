@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useT } from '../lib/i18n'
 import { useAuth } from '../contexts/AuthContext'
@@ -1340,15 +1341,17 @@ export default function AdminPage() {
         </div>
       )}
 
-      {confirm && (
-        <ConfirmDialog
-          title={confirm.title}
-          message={confirm.message}
-          danger
-          onConfirm={confirm.onConfirm}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
+      <AnimatePresence>
+        {confirm && (
+          <ConfirmDialog
+            title={confirm.title}
+            message={confirm.message}
+            danger
+            onConfirm={confirm.onConfirm}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <div className="bg-white border-b px-4 py-4">
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -1487,7 +1490,7 @@ export default function AdminPage() {
                   key={mode}
                   onClick={() => handleSetMarketplaceMode(mode)}
                   disabled={settingMktMode || marketplaceMode === null}
-                  className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 ${isActive ? colors[mode].active : colors[mode].inactive}`}
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-[background-color,color,opacity] duration-150 disabled:opacity-50 ${isActive ? colors[mode].active : colors[mode].inactive}`}
                 >
                   {labels[mode]}
                 </button>

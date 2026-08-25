@@ -43,15 +43,31 @@ export function isBiometricNative(): boolean {
 }
 
 // Clears biometric everywhere: this device + Supabase (all other synced devices lose it too).
-// Use only when the credential is genuinely broken on the device that owns it.
-export function disableBiometric() {
+// Use only when the user turns biometric off or the credential is genuinely broken.
+// Returns a promise so callers can refresh the vault-doors status afterwards —
+// without deleting the server-side PRF wrap, "vault health" kept listing
+// fingerprint as an active unlock method forever.
+export async function disableBiometric(): Promise<void> {
+  const credId = localStorage.getItem(CREDENTIAL_KEY) || ''
   localStorage.removeItem(BIOMETRIC_ENABLED_KEY)
   localStorage.removeItem(CREDENTIAL_KEY)
   localStorage.removeItem(BIOMETRIC_EMAIL_KEY)
   localStorage.removeItem(BIOMETRIC_WRAPPED_VAULT_KEY)
   localStorage.removeItem(BIOMETRIC_NATIVE_KEY)
   // Clear from Supabase so other synced devices also lose the credential reference
-  ;(async () => { try { await supabase.rpc('clear_biometric_meta') } catch {} })()
+  try { await supabase.rpc('clear_biometric_meta') } catch {}
+  // Remove the PRF vault door(s) too. Both RPCs refuse to delete the LAST
+  // remaining wrap of an active vault ('last_wrap') — the door correctly stays.
+  // Bulk delete covers credentials registered from other devices; fall back to
+  // this device's slot when the newer RPC isn't applied yet.
+  try {
+    const { error } = await supabase.rpc('delete_vault_wraps_by_method', { p_method: 'prf' })
+    if (error) throw error
+  } catch {
+    try {
+      await supabase.rpc('delete_vault_wrap', { p_method: 'prf', p_slot_id: credId })
+    } catch { /* last_wrap or offline — door stays until next disable attempt */ }
+  }
 }
 
 // Clears biometric from this device's localStorage ONLY — leaves Supabase intact so

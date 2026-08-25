@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { EASE_OUT } from '../lib/motion'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useNavigate } from 'react-router-dom'
 import { formatCurrency, formatDate, getStoreInitials } from '../utils/helpers'
@@ -92,9 +94,11 @@ export default function ArchivePage() {
 
   return (
     <div className="flex-1 bg-bg">
-      {confirm && (
-        <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
-      )}
+      <AnimatePresence>
+        {confirm && (
+          <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <div className="bg-surface border-b border-border sticky top-0 z-20 px-5 pt-5 pb-4">
@@ -155,14 +159,22 @@ export default function ArchivePage() {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Restored/deleted rows fade out while the rest close the gap instead
+                of the list teleporting */}
+            <AnimatePresence initial={false} mode="popLayout">
             {sortedFiltered.map(v => (
-              <div
+              <motion.div
                 key={v.id}
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 0.8, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.18, ease: EASE_OUT }}
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate(`/checkout/${v.id}`)}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/checkout/${v.id}`) } }}
-                className="flex overflow-hidden rounded-card shadow-card bg-surface opacity-80 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="flex overflow-hidden rounded-card shadow-card bg-surface cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <div className="w-1.5 flex-shrink-0 bg-text3" />
                 <div className="flex items-center flex-1 gap-3 py-3 pe-2.5 ps-3">
@@ -206,8 +218,9 @@ export default function ArchivePage() {
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
+            </AnimatePresence>
           </div>
         )}
       </div>

@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { EASE_OUT } from '../lib/motion'
 import JsBarcode from 'jsbarcode'
 import QRCodeLib from 'qrcode'
 import type { Voucher, SuperVoucher } from '../types'
@@ -72,6 +74,7 @@ function BarcodeDisplay({ code }: { code: string }) {
 
 export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavigate, onClose }: Props) {
   const { t } = useT()
+  const reduceMotion = useReducedMotion()
   const [search, setSearch] = useState('')
   const [storeUsed, setStoreUsed] = useState('')
   const [payments, setPayments] = useState<Record<string, string>>({})
@@ -147,7 +150,21 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-bg" dir="rtl" role="dialog" aria-modal="true" aria-label={t('instore.title')}>
+    // Full-screen takeover: a brief rise+fade explains the mode switch instead of an
+    // instant swap. The SearchPage call site wraps this in <AnimatePresence> so the
+    // exit plays too.
+    <motion.div
+      className="fixed inset-0 z-[70] flex flex-col bg-bg"
+      dir="rtl" role="dialog" aria-modal="true" aria-label={t('instore.title')}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'translateY(16px)' }}
+      animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0px)' }}
+      exit={
+        reduceMotion
+          ? { opacity: 0, transition: { duration: 0.15 } }
+          : { opacity: 0, transform: 'translateY(16px)', transition: { duration: 0.15, ease: EASE_OUT } }
+      }
+      transition={{ duration: 0.2, ease: EASE_OUT }}
+    >
       {/* Header — padded past the notch/status bar on standalone PWA */}
       <div
         style={{ background: 'linear-gradient(160deg, var(--c-primary-dark) 0%, var(--c-primary-mid) 60%, var(--c-primary) 100%)', paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
@@ -259,7 +276,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
           </>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 

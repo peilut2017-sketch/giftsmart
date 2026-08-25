@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -251,6 +252,7 @@ export default function MarketplacePage() {
 
   return (
     <div className="flex-1 bg-bg" dir="rtl">
+      <AnimatePresence>
       {confirmState && (
         <ConfirmDialog
           title={confirmState.title}
@@ -265,6 +267,7 @@ export default function MarketplacePage() {
           onCancel={() => { confirmState.resolve(); setConfirmState(null) }}
         />
       )}
+      </AnimatePresence>
       {/* Header */}
       <div className="sticky top-0 z-20 bg-surface border-b border-border">
         <div className="px-5 pt-4">
@@ -769,6 +772,7 @@ export default function MarketplacePage() {
       )}
 
       {/* Chat */}
+      <AnimatePresence>
       {chatTarget && (
         <ChatModal
           listingId={chatTarget.listingId}
@@ -786,6 +790,7 @@ export default function MarketplacePage() {
           }}
         />
       )}
+      </AnimatePresence>
     </div>
   )
 }

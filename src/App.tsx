@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import AnimatedRoutes from './components/AnimatedRoutes'
@@ -20,6 +21,7 @@ import LandingPage from './pages/LandingPage'
 import HomePage from './pages/HomePage'
 import BottomNav from './components/BottomNav'
 import WelcomeModal from './components/WelcomeModal'
+import GlobalAddVoucher from './components/GlobalAddVoucher'
 import OfflineBanner from './components/OfflineBanner'
 import LoginBanner from './components/LoginBanner'
 import PWAInstallBanner from './components/PWAInstallBanner'
@@ -143,21 +145,26 @@ function VaultModals() {
   // pendingRecoveryPhrase and the branch above takes over. (It was previously
   // wired to dismissRecoveryPhrase, which silently threw away the freshly
   // minted recovery phrase before the user ever saw it.)
-  if (needsMigration && !migrationDismissed) {
-    return (
-      <VaultMigrationModal
-        onDone={() => {}}
-        onSkip={() => setMigrationDismissed(true)}
-      />
-    )
-  }
+  // AnimatePresence stays mounted across the dismissal so the modal's exit
+  // animation can play before it unmounts.
+  const showMigration = needsMigration && !migrationDismissed
 
-  // OAuth users (Google etc.) who have no vault yet
-  if (needsOAuthVaultSetup && !oauthSetupDismissed) {
-    return <VaultSetupSheet open blocking onClose={() => setOauthSetupDismissed(true)} />
-  }
-
-  return null
+  return (
+    <>
+      <AnimatePresence>
+        {showMigration && (
+          <VaultMigrationModal
+            onDone={() => {}}
+            onSkip={() => setMigrationDismissed(true)}
+          />
+        )}
+      </AnimatePresence>
+      {/* OAuth users (Google etc.) who have no vault yet */}
+      {!showMigration && needsOAuthVaultSetup && !oauthSetupDismissed && (
+        <VaultSetupSheet open blocking onClose={() => setOauthSetupDismissed(true)} />
+      )}
+    </>
+  )
 }
 
 // Builds the in-memory decrypted map whenever the vault opens or vouchers change
@@ -440,6 +447,7 @@ function AppRoutes() {
     <MarketplaceProvider>
       <NotificationBridge />
       <E2EEBridge />
+      <GlobalAddVoucher />
       <VaultModals />
       <WelcomeModal userId={user!.id} />
       {/* Skip to main content — visible on keyboard focus */}

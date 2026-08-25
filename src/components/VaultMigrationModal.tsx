@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { ShieldCheck, Lock, Eye, EyeOff, Info } from 'lucide-react'
+import { SHEET_SPRING, BACKDROP_FADE } from '../lib/motion'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useVouchers } from '../contexts/VoucherContext'
 import toast from 'react-hot-toast'
@@ -17,6 +19,7 @@ interface Props {
 // the next login.
 export default function VaultMigrationModal({ onDone, onSkip }: Props) {
   const { t } = useT()
+  const reduceMotion = useReducedMotion()
   const { migrateVault } = useE2EE()
   const { vouchers, archivedVouchers, refreshVouchers } = useVouchers()
   const [passphrase, setPassphrase] = useState('')
@@ -50,9 +53,23 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
     }
   }
 
+  // Mounted/unmounted by the parent (VaultModals in App.tsx) inside an
+  // <AnimatePresence>, so the root motion.div's exit animation plays on unmount.
   return (
-    <div className="fixed inset-0 bg-black/60 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-surface w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 text-center animate-slide-up max-h-[92dvh] overflow-y-auto modal-scroll">
+    <motion.div
+      className="fixed inset-0 bg-black/60 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={BACKDROP_FADE}
+    >
+      <motion.div
+        className="bg-surface w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 text-center max-h-[92dvh] overflow-y-auto modal-scroll"
+        initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+        animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+        exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+        transition={reduceMotion ? { duration: 0.15 } : SHEET_SPRING}
+      >
 
         <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-mid to-primary-dark rounded-2xl shadow-lg mb-4">
           <ShieldCheck className="w-8 h-8 text-white" />
@@ -111,7 +128,7 @@ export default function VaultMigrationModal({ onDone, onSkip }: Props) {
         >
           {t('vault.migrate.not.now')}
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

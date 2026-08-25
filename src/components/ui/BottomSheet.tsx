@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useModalHistory } from '../../hooks/useModalHistory'
+import { BACKDROP_FADE, SHEET_SPRING } from '../../lib/motion'
 import Icon from './Icon'
 
 /** Single shared z-index for every sheet/modal in the redesigned UI — avoids the ad-hoc z-40/z-[80]/z-[90] scattering in the legacy components. */
@@ -21,9 +22,9 @@ interface BottomSheetProps {
 
 /**
  * Shared bottom-sheet primitive (Framer Motion enter+exit, focus trap, Escape-to-close,
- * backdrop click-to-close, body-scroll lock). Replaces the hand-rolled `.animate-slide-up`
- * CSS-only pattern duplicated across ConfirmDialog/UpgradeSheet/vault modals — those keep
- * working as-is and migrate to this opportunistically, not in one pass.
+ * backdrop click-to-close, body-scroll lock). The reference sheet implementation — the
+ * legacy CSS-only slide-up overlays were all migrated to Framer enter+exit using the
+ * same SHEET_SPRING/BACKDROP_FADE tokens (src/lib/motion.ts).
  */
 export default function BottomSheet({
   open,
@@ -35,6 +36,7 @@ export default function BottomSheet({
   className = '',
 }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const reduceMotion = useReducedMotion()
   useBodyScrollLock(open)
   // Android/browser Back closes the sheet instead of leaving the flow.
   // Non-dismissible sheets (blocking vault setup) keep Back untouched.
@@ -78,7 +80,7 @@ export default function BottomSheet({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={BACKDROP_FADE}
           onClick={dismissible ? onClose : undefined}
         >
           <motion.div
@@ -87,10 +89,11 @@ export default function BottomSheet({
             aria-modal="true"
             aria-labelledby={title ? 'sheet-title' : undefined}
             className={`absolute bottom-0 inset-x-0 bg-surface rounded-t-[28px] max-h-[92dvh] overflow-y-auto pb-[env(safe-area-inset-bottom)] ${className}`}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 380, damping: 38, mass: 0.9 }}
+            // Reduced motion keeps the comprehension fade but drops the slide.
+            initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+            animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+            transition={reduceMotion ? { duration: 0.15 } : SHEET_SPRING}
             onClick={e => e.stopPropagation()}
           >
             <div className="w-10 h-1.5 bg-border rounded-full mx-auto mt-2.5 mb-1" />

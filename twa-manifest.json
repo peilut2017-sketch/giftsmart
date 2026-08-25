@@ -1,0 +1,46 @@
+{
+  "packageId": "site.giftsmart.app",
+  "host": "giftsmart.site",
+  "name": "GiftSmart – ניהול שוברי מתנה",
+  "launcherName": "GiftSmart",
+  "display": "standalone",
+  "themeColor": "#22c55e",
+  "themeColorDark": "#0d1117",
+  "navigationColor": "#ffffff",
+  "navigationColorDark": "#0d1117",
+  "navigationDividerColor": "#ffffff",
+  "navigationDividerColorDark": "#0d1117",
+  "backgroundColor": "#f8fafc",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://giftsmart.site/web-app-manifest-512x512.png",
+  "maskableIconUrl": "https://giftsmart.site/web-app-manifest-512x512.png",
+  "splashScreenFadeOutDuration": 300,
+  "appVersionName": "1.1.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "הוסף שובר",
+      "shortName": "הוסף שובר",
+      "url": "/?add=1",
+      "chosenIconUrl": "https://giftsmart.site/web-app-manifest-192x192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://giftsmart.site/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://giftsmart.site/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "1.1.0"
+}

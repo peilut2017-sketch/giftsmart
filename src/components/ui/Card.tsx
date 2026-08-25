@@ -24,7 +24,7 @@ export default function Card({
 }: CardProps) {
   return (
     <div
-      className={`bg-surface border border-border rounded-card shadow-card ${PADDING_CLASSES[padding]} ${interactive ? 'transition active:scale-[0.98]' : ''} ${className}`}
+      className={`bg-surface border border-border rounded-card shadow-card ${PADDING_CLASSES[padding]} ${interactive ? 'transition-transform duration-[160ms] ease-out-strong active:scale-[0.97]' : ''} ${className}`}
       {...rest}
     >
       {children}

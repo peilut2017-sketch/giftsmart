@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, formatDate, getExpiryStatus, getExpiryLabel, isAlphanumeric } from '../utils/helpers'
@@ -256,7 +257,7 @@ export default function SharedVoucherPage() {
               {/* Balance bar */}
               {voucher.amount > 0 && (
                 <div className="h-2 bg-bg rounded-full overflow-hidden mb-4">
-                  <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                  <div className={`h-full w-full origin-right rounded-full ${barColor}`} style={{ transform: `scaleX(${Math.min(100, pct) / 100})`, transition: 'transform 200ms var(--ease-out)' }} />
                 </div>
               )}
 
@@ -273,7 +274,7 @@ export default function SharedVoucherPage() {
                 <p className="text-xl font-mono font-bold text-text tracking-wider mb-3">{voucher.code}</p>
                 <button
                   onClick={copyCode}
-                  className={`flex items-center gap-2 mx-auto px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
+                  className={`flex items-center gap-2 mx-auto px-5 py-2.5 rounded-2xl text-sm font-semibold transition-colors duration-150 ${
                     copied ? 'bg-primary text-white' : 'bg-primary-light text-primary'
                   }`}
                 >
@@ -400,18 +401,20 @@ export default function SharedVoucherPage() {
         )}
       </div>
 
-      {confirmUpdate && voucher && (
-        <ConfirmDialog
-          title={t('shared.update.confirm.title')}
-          message={t('shared.update.confirm.message', {
-            from: formatCurrency(voucher.balance),
-            to: formatCurrency(Math.max(0, voucher.balance - (parseFloat(usedAmount) || 0))),
-          })}
-          confirmLabel={t('shared.update.confirm.cta')}
-          onConfirm={() => { setConfirmUpdate(false); handleUpdateBalance() }}
-          onCancel={() => setConfirmUpdate(false)}
-        />
-      )}
+      <AnimatePresence>
+        {confirmUpdate && voucher && (
+          <ConfirmDialog
+            title={t('shared.update.confirm.title')}
+            message={t('shared.update.confirm.message', {
+              from: formatCurrency(voucher.balance),
+              to: formatCurrency(Math.max(0, voucher.balance - (parseFloat(usedAmount) || 0))),
+            })}
+            confirmLabel={t('shared.update.confirm.cta')}
+            onConfirm={() => { setConfirmUpdate(false); handleUpdateBalance() }}
+            onCancel={() => setConfirmUpdate(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
