@@ -7,6 +7,7 @@ import { identifyUser, resetPostHog, phCapture } from '../lib/posthog'
 import { sendWelcomeEmail } from '../lib/emailService'
 import { translate } from '../lib/i18n'
 import { markExplicitSignOut } from '../lib/appMode'
+import { parkGuestVaultKeyForMerge, storeResealIds } from '../lib/e2eeMerge'
 
 /** Single source of truth for "who is this" — UI must branch on this, not on
     scattered provider/metadata checks. */
@@ -34,9 +35,11 @@ interface AuthContextType {
   ensureAnonymousSession: () => Promise<{ error: Error | null }>
   /** Anonymous → registered in place: same user id, same data, email+password linked */
   upgradeAnonymousAccount: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>
-  /** Call BEFORE logging an anonymous user into an EXISTING account — parks a
-      server-side merge ticket so the guest data survives the session switch */
-  beginMergeLogin: () => Promise<boolean>
+  /** Call BEFORE logging an anonymous user into an EXISTING account — unseals
+      guest E2EE fields (their vault dies with the merge) and parks a server-side
+      merge ticket so the guest data survives the session switch.
+      'locked' = the guest vault must be opened first. */
+  beginMergeLogin: () => Promise<'ok' | 'locked' | 'failed'>
 }
 
 const MERGE_TICKET_KEY = 'gs_merge_ticket'
@@ -183,10 +186,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       phCapture('anonymous_data_merge_completed')
-      const moved = (Array.isArray(data) ? data[0] : data)?.moved ?? 0
+      const result = (Array.isArray(data) ? data[0] : data) ?? {}
+      const moved = result.moved ?? 0
       if (moved > 0) toast.success(translate('guest.merge.done', { count: moved }), { duration: 6000 })
-      // Vouchers landed after the initial fetch — tell VoucherProvider to reload.
-      window.dispatchEvent(new CustomEvent('gs-merge-completed'))
+      // Persist the moved ids BEFORE dispatching: the re-seal (decrypt with the
+      // parked guest key → re-encrypt under this account's vault) must survive
+      // an app restart if the vault isn't open yet.
+      storeResealIds(result.moved_ids ?? [])
+      window.dispatchEvent(new CustomEvent('gs-merge-completed', { detail: { movedIds: result.moved_ids ?? [] } }))
     } catch {
       try { localStorage.removeItem(MERGE_TICKET_KEY) } catch { /* storage unavailable */ }
     }
@@ -237,16 +244,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null }
   }
 
-  async function beginMergeLogin(): Promise<boolean> {
-    if (!user?.is_anonymous) return true // nothing to merge — proceed normally
+  async function beginMergeLogin(): Promise<'ok' | 'locked' | 'failed'> {
+    if (!user?.is_anonymous) return 'ok' // nothing to merge — proceed normally
     phCapture('existing_account_login_started')
+    // Sealed rows move sealed — the server NEVER sees plaintext. The guest
+    // vault key is parked on this device so the target account can re-seal
+    // them under its own vault right after the merge (see e2eeMerge.ts).
+    const prep = await parkGuestVaultKeyForMerge()
+    if (prep !== 'ok') return prep === 'locked' ? 'locked' : 'failed'
     const { data, error } = await supabase.rpc('create_merge_ticket')
     const secret = Array.isArray(data) ? data[0] : data
-    if (error || !secret) return false
+    if (error || !secret) return 'failed'
     try {
       localStorage.setItem(MERGE_TICKET_KEY, JSON.stringify({ secret, from: user.id }))
-    } catch { return false }
-    return true
+    } catch { return 'failed' }
+    return 'ok'
   }
 
   async function signIn(email: string, password: string) {

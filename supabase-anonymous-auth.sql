@@ -119,6 +119,7 @@ DECLARE
   v_target_wallet uuid;
   v_moved        int := 0;
   v_skipped      int := 0;
+  v_moved_ids    uuid[] := '{}';
   v_email        text;
 BEGIN
   IF v_claimant IS NULL THEN
@@ -147,6 +148,12 @@ BEGIN
     DELETE FROM merge_tickets WHERE secret = p_secret;
     RAISE EXCEPTION 'source_not_anonymous';
   END IF;
+
+  -- E2EE rows move STILL SEALED under the guest vault key — the server never
+  -- sees plaintext at any point of the merge. The device that initiated the
+  -- login parked the guest key locally and re-seals these rows under the
+  -- claimant's own vault immediately after (client: e2eeMerge.ts + the
+  -- re-seal handler in App.tsx, resumable across restarts via moved_ids).
 
   -- Target wallet: the claimant's primary wallet (create if missing).
   SELECT wallet_id INTO v_target_wallet
@@ -187,8 +194,9 @@ BEGIN
       AND v.id NOT IN (SELECT id FROM dupes)
     RETURNING v.id
   )
-  SELECT (SELECT count(*) FROM moved), (SELECT count(*) FROM dupes)
-  INTO v_moved, v_skipped;
+  SELECT (SELECT coalesce(array_agg(id), '{}') FROM moved), (SELECT count(*) FROM dupes)
+  INTO v_moved_ids, v_skipped;
+  v_moved := coalesce(array_length(v_moved_ids, 1), 0);
 
   -- Super-vouchers move as-is (name collisions are kept — no data loss).
   UPDATE super_vouchers SET wallet_id = v_target_wallet
@@ -211,7 +219,9 @@ BEGIN
   -- wallet_members and the duplicate vouchers that stayed behind.
   DELETE FROM auth.users WHERE id = v_from;
 
-  RETURN json_build_object('moved', v_moved, 'skipped', v_skipped);
+  -- moved_ids lets the client re-seal (re-encrypt) exactly these rows under
+  -- the claimant's own vault right after the merge.
+  RETURN json_build_object('moved', v_moved, 'skipped', v_skipped, 'moved_ids', to_jsonb(v_moved_ids));
 END;
 $$;
 REVOKE ALL ON FUNCTION public.claim_merge_ticket(uuid) FROM anon, public;

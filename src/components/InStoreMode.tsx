@@ -157,7 +157,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
       className="fixed inset-0 z-[70] flex flex-col bg-bg"
       dir="rtl" role="dialog" aria-modal="true" aria-label={t('instore.title')}
       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'translateY(16px)' }}
-      animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0px)' }}
+      animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0px)', transitionEnd: { transform: 'none' } }}
       exit={
         reduceMotion
           ? { opacity: 0, transition: { duration: 0.15 } }
