@@ -119,6 +119,7 @@ DECLARE
   v_target_wallet uuid;
   v_moved        int := 0;
   v_skipped      int := 0;
+  v_moved_ids    uuid[] := '{}';
   v_email        text;
 BEGIN
   IF v_claimant IS NULL THEN
@@ -146,6 +147,17 @@ BEGIN
   IF v_from_anon IS DISTINCT FROM true THEN
     DELETE FROM merge_tickets WHERE secret = p_secret;
     RAISE EXCEPTION 'source_not_anonymous';
+  END IF;
+
+  -- E2EE safety: sealed rows are encrypted under the guest vault, which dies
+  -- with the anonymous user below — merging them would make them permanently
+  -- unreadable. The client unseals them first (e2eeMerge.ts); refuse otherwise.
+  IF EXISTS (
+    SELECT 1 FROM vouchers v
+    JOIN wallets w ON w.id = v.wallet_id
+    WHERE w.owner_id = v_from AND v.is_e2ee = true
+  ) THEN
+    RAISE EXCEPTION 'e2ee_pending';
   END IF;
 
   -- Target wallet: the claimant's primary wallet (create if missing).
@@ -187,8 +199,9 @@ BEGIN
       AND v.id NOT IN (SELECT id FROM dupes)
     RETURNING v.id
   )
-  SELECT (SELECT count(*) FROM moved), (SELECT count(*) FROM dupes)
-  INTO v_moved, v_skipped;
+  SELECT (SELECT coalesce(array_agg(id), '{}') FROM moved), (SELECT count(*) FROM dupes)
+  INTO v_moved_ids, v_skipped;
+  v_moved := coalesce(array_length(v_moved_ids, 1), 0);
 
   -- Super-vouchers move as-is (name collisions are kept — no data loss).
   UPDATE super_vouchers SET wallet_id = v_target_wallet
@@ -211,7 +224,9 @@ BEGIN
   -- wallet_members and the duplicate vouchers that stayed behind.
   DELETE FROM auth.users WHERE id = v_from;
 
-  RETURN json_build_object('moved', v_moved, 'skipped', v_skipped);
+  -- moved_ids lets the client re-seal (re-encrypt) exactly these rows under
+  -- the claimant's own vault right after the merge.
+  RETURN json_build_object('moved', v_moved, 'skipped', v_skipped, 'moved_ids', to_jsonb(v_moved_ids));
 END;
 $$;
 REVOKE ALL ON FUNCTION public.claim_merge_ticket(uuid) FROM anon, public;

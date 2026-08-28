@@ -143,7 +143,10 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
             {canPasskey && !oauthNoPasskey ? (
               <>
                 <p className="text-sm text-text2">
-                  {t('vault.setup.oauth.intro', { provider: provider === 'google' ? 'Google' : String(provider) })} <b>{t('vault.setup.oauth.bio')}</b>{t('vault.setup.oauth.nopass')}
+                  {provider === 'anonymous'
+                    ? t('vault.setup.guest.intro')
+                    : t('vault.setup.oauth.intro', { provider: provider === 'google' ? 'Google' : String(provider) })}
+                  {' '}<b>{t('vault.setup.oauth.bio')}</b>{t('vault.setup.oauth.nopass')}
                 </p>
                 {error && <p className="text-sm text-error leading-relaxed" role="alert">{error}</p>}
                 <Button onClick={() => handleOAuthSetup(true)} fullWidth disabled={busy} loading={busy}>

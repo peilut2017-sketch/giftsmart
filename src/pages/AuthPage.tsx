@@ -5,6 +5,7 @@ import { isAppMode, clearExplicitSignOut } from '../lib/appMode'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { isBiometricEnabled, getBiometricEmail, verifyBiometricForVaultUnlock } from '../lib/passkey'
+import VaultUnlockSheet from '../components/VaultUnlockSheet'
 import { exportVaultKey } from '../lib/e2ee'
 import { attemptVaultUnlockAtLogin } from '../lib/vaultBundle'
 import { supabase } from '../lib/supabase'
@@ -47,6 +48,9 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
   const { t } = useT()
   const navigate = useNavigate()
   const [guestContinueLoading, setGuestContinueLoading] = useState(false)
+  // Guest merge-login needs the guest vault OPEN (to unseal E2EE rows first) —
+  // 'locked' pops this sheet, then the user simply taps login again.
+  const [showGuestVaultUnlock, setShowGuestVaultUnlock] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [mode, setMode] = useState<Mode>(initialMode)
   const [loginStep, setLoginStep] = useState<LoginStep>('email')
@@ -173,8 +177,13 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
         // get attached to the account right after sign-in. Without a ticket the
         // guest data would be orphaned — refuse to continue rather than lose it.
         if (isAnonymous) {
-          const ok = await beginMergeLogin()
-          if (!ok) return toast.error(t('guest.merge.ticket.failed'), { duration: 7000 })
+          const prep = await beginMergeLogin()
+          if (prep === 'locked') {
+            toast(t('guest.merge.vault.locked'), { duration: 7000 })
+            setShowGuestVaultUnlock(true)
+            return
+          }
+          if (prep === 'failed') return toast.error(t('guest.merge.ticket.failed'), { duration: 7000 })
         }
         const { error } = await signIn(email, password)
         if (!error) {
@@ -663,9 +672,14 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                   // covers both cases — a brand-new Google user gets the guest
                   // data merged in, and an existing account absorbs it.
                   if (isAnonymous) {
-                    const ok = await beginMergeLogin()
-                    if (!ok) {
-                      toast.error(t('guest.merge.ticket.failed'), { duration: 7000 })
+                    const prep = await beginMergeLogin()
+                    if (prep !== 'ok') {
+                      if (prep === 'locked') {
+                        toast(t('guest.merge.vault.locked'), { duration: 7000 })
+                        setShowGuestVaultUnlock(true)
+                      } else {
+                        toast.error(t('guest.merge.ticket.failed'), { duration: 7000 })
+                      }
                       setGoogleLoading(false)
                       return
                     }
@@ -710,6 +724,13 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
             </button>
           )}
         </div>
+
+        {/* Guest vault unlock (fingerprint / recovery phrase) — only mounted for
+            guests, who always arrive here via the in-app route where the E2EE
+            provider exists */}
+        {isAnonymous && (
+          <VaultUnlockSheet open={showGuestVaultUnlock} onClose={() => setShowGuestVaultUnlock(false)} />
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-4">
           {t('auth.footer')}
