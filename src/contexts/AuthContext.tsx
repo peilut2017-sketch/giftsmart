@@ -1,9 +1,16 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
+import toast from 'react-hot-toast'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types'
-import { identifyUser, resetPostHog } from '../lib/posthog'
+import { identifyUser, resetPostHog, phCapture } from '../lib/posthog'
 import { sendWelcomeEmail } from '../lib/emailService'
+import { translate } from '../lib/i18n'
+import { markExplicitSignOut } from '../lib/appMode'
+
+/** Single source of truth for "who is this" — UI must branch on this, not on
+    scattered provider/metadata checks. */
+export type AccountState = 'initializing' | 'signedOut' | 'anonymous' | 'registered'
 
 interface AuthContextType {
   user: User | null
@@ -12,6 +19,9 @@ interface AuthContextType {
   isAdmin: boolean
   loading: boolean
   passwordRecovery: boolean
+  /** Guest (Supabase anonymous) account — data lives server-side but has no recoverable identity yet */
+  isAnonymous: boolean
+  accountState: AccountState
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signInWithBiometric: () => Promise<{ error: Error | null }>
   signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>
@@ -20,7 +30,20 @@ interface AuthContextType {
   updateProfile: (data: Partial<Profile>) => Promise<void>
   resetPassword: (email: string) => Promise<{ error: Error | null }>
   updatePassword: (password: string) => Promise<{ error: Error | null }>
+  /** Idempotent, race-safe: reuses an existing session or creates ONE anonymous user */
+  ensureAnonymousSession: () => Promise<{ error: Error | null }>
+  /** Anonymous → registered in place: same user id, same data, email+password linked */
+  upgradeAnonymousAccount: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>
+  /** Call BEFORE logging an anonymous user into an EXISTING account — parks a
+      server-side merge ticket so the guest data survives the session switch */
+  beginMergeLogin: () => Promise<boolean>
 }
+
+const MERGE_TICKET_KEY = 'gs_merge_ticket'
+
+// Module-level so concurrent callers share one in-flight sign-in — the race
+// that would otherwise mint several anonymous users on first launch.
+let anonInFlight: Promise<{ error: Error | null }> | null = null
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
@@ -109,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const cached = readCachedProfile(session.user.id)
         if (cached) setProfile(cached)
         await fetchProfile(session.user.id)
+        // A registered sign-in with a parked merge ticket = a guest logged into
+        // an existing account. Claim the ticket so the guest vouchers join it.
+        if (!session.user.is_anonymous) await claimPendingMergeTicket(session.user.id)
       } else {
         resetPostHog()
         setProfile(null)
@@ -134,6 +160,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         writeCachedProfile(data)
       }
     } catch {}
+  }
+
+  // ── Guest-account plumbing ─────────────────────────────────────────────────
+
+  async function claimPendingMergeTicket(currentUserId: string) {
+    let raw: string | null = null
+    try { raw = localStorage.getItem(MERGE_TICKET_KEY) } catch { /* storage unavailable */ }
+    if (!raw) return
+    try {
+      const ticket = JSON.parse(raw) as { secret?: string; from?: string }
+      // Anonymous → upgraded IN PLACE (same id): no merge needed, drop the ticket.
+      if (!ticket.secret || ticket.from === currentUserId) {
+        localStorage.removeItem(MERGE_TICKET_KEY)
+        return
+      }
+      const { data, error } = await supabase.rpc('claim_merge_ticket', { p_secret: ticket.secret })
+      localStorage.removeItem(MERGE_TICKET_KEY)
+      if (error) {
+        phCapture('anonymous_data_merge_failed')
+        toast.error(translate('guest.merge.failed'), { duration: 8000 })
+        return
+      }
+      phCapture('anonymous_data_merge_completed')
+      const moved = (Array.isArray(data) ? data[0] : data)?.moved ?? 0
+      if (moved > 0) toast.success(translate('guest.merge.done', { count: moved }), { duration: 6000 })
+      // Vouchers landed after the initial fetch — tell VoucherProvider to reload.
+      window.dispatchEvent(new CustomEvent('gs-merge-completed'))
+    } catch {
+      try { localStorage.removeItem(MERGE_TICKET_KEY) } catch { /* storage unavailable */ }
+    }
+  }
+
+  async function ensureAnonymousSession(): Promise<{ error: Error | null }> {
+    if (anonInFlight) return anonInFlight
+    anonInFlight = (async () => {
+      try {
+        const { data } = await supabase.auth.getSession()
+        if (data.session) return { error: null }
+        const { data: anon, error } = await supabase.auth.signInAnonymously()
+        if (error) return { error }
+        if (anon.user) phCapture('anonymous_user_created')
+        return { error: null }
+      } catch (e) {
+        return { error: e instanceof Error ? e : new Error('anonymous_signin_failed') }
+      } finally {
+        anonInFlight = null
+      }
+    })()
+    return anonInFlight
+  }
+
+  async function upgradeAnonymousAccount(email: string, password: string, name?: string) {
+    phCapture('account_upgrade_started')
+    const cleaned = email.trim().toLowerCase()
+    const { error } = await supabase.auth.updateUser({
+      email: cleaned,
+      password,
+      data: { name: name || cleaned.split('@')[0] },
+    })
+    if (error) {
+      if (/already|exists|registered/i.test(error.message || '')) {
+        return { error: new Error('email_exists') }
+      }
+      return { error }
+    }
+    // Keep the profile row in step (the server trigger also syncs on confirmation)
+    try {
+      await supabase.from('profiles').update({ email: cleaned, ...(name ? { name } : {}) }).eq('id', user?.id ?? '')
+      setProfile(prev => (prev ? { ...prev, email: cleaned, ...(name ? { name } : {}) } : prev))
+    } catch { /* profile sync is best-effort; the server trigger covers it on confirmation */ }
+    // is_anonymous flips only after the confirmation link is clicked — refresh
+    // so the UI picks the change up when it happens mid-session.
+    supabase.auth.refreshSession().catch(() => {})
+    phCapture('account_upgrade_completed')
+    return { error: null }
+  }
+
+  async function beginMergeLogin(): Promise<boolean> {
+    if (!user?.is_anonymous) return true // nothing to merge — proceed normally
+    phCapture('existing_account_login_started')
+    const { data, error } = await supabase.rpc('create_merge_ticket')
+    const secret = Array.isArray(data) ? data[0] : data
+    if (error || !secret) return false
+    try {
+      localStorage.setItem(MERGE_TICKET_KEY, JSON.stringify({ secret, from: user.id }))
+    } catch { return false }
+    return true
   }
 
   async function signIn(email: string, password: string) {
@@ -185,6 +298,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     evictProfileCache()
+    // Remembered so app-mode doesn't instantly re-create a guest session and
+    // trap the user out of the login screen they explicitly asked for.
+    markExplicitSignOut()
     await supabase.auth.signOut()
   }
 
@@ -213,9 +329,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const isAdmin = profile?.is_admin === true
+  const isAnonymous = user?.is_anonymous === true
+  const accountState: AccountState =
+    loading ? 'initializing' : !user ? 'signedOut' : isAnonymous ? 'anonymous' : 'registered'
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, passwordRecovery, signIn, signInWithBiometric, signUp, signInWithGoogle, signOut, updateProfile, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, passwordRecovery, isAnonymous, accountState, signIn, signInWithBiometric, signUp, signInWithGoogle, signOut, updateProfile, resetPassword, updatePassword, ensureAnonymousSession, upgradeAnonymousAccount, beginMergeLogin }}>
       {children}
     </AuthContext.Provider>
   )

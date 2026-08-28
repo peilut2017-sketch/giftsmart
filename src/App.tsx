@@ -5,13 +5,14 @@ import { SpeedInsights } from '@vercel/speed-insights/react'
 import AnimatedRoutes from './components/AnimatedRoutes'
 import toast, { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { isAppMode, hasExplicitSignOut } from './lib/appMode'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { MarketplaceProvider } from './contexts/MarketplaceContext'
 import { DiscountsProvider } from './contexts/DiscountsContext'
 import { E2EEProvider } from './contexts/E2EEContext'
 import { ThemeProvider } from './contexts/ThemeContext'
-import { LocaleProvider, useLocale } from './lib/i18n'
+import { LocaleProvider, useLocale, useT } from './lib/i18n'
 import { useExpiryNotifications } from './hooks/useNotifications'
 import { refreshPushSubscription } from './lib/push'
 import { supabase } from './lib/supabase'
@@ -308,6 +309,47 @@ function NotificationBridge() {
   return <UpgradeSheet />
 }
 
+// App-mode first launch: creates the silent guest (anonymous) session. The user
+// sees only the normal splash — never a "creating account" step. A network
+// failure lands on a clear retry screen instead of a login wall or a loop.
+function GuestBootstrap() {
+  const { ensureAnonymousSession } = useAuth()
+  const { t } = useT()
+  const [failed, setFailed] = useState(false)
+  const startedRef = useRef(false)
+  const ensureRef = useRef(ensureAnonymousSession)
+  useEffect(() => { ensureRef.current = ensureAnonymousSession })
+
+  function attempt() {
+    ensureRef.current().then(({ error }) => { if (error) setFailed(true) })
+  }
+
+  useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+    attempt()
+  })
+
+  if (failed) {
+    return (
+      <div className="flex-1 min-h-dvh flex flex-col items-center justify-center gap-3 bg-bg p-8 text-center" dir="rtl">
+        <p className="text-lg font-bold text-text">{t('guest.offline.title')}</p>
+        <p className="text-sm text-text3 max-w-xs">{t('guest.offline.message')}</p>
+        <button onClick={() => { setFailed(false); attempt() }} className="mt-3 px-8 py-3 rounded-2xl bg-primary text-white font-bold">
+          {t('app.retry')}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-gray-50">
+      <GiftSmartSplash />
+      <LoadingDots />
+    </div>
+  )
+}
+
 function AppRoutes() {
   const { user, loading, passwordRecovery, signOut } = useAuth()
   const navigate = useNavigate()
@@ -402,15 +444,19 @@ function AppRoutes() {
     const path = window.location.pathname
     if (path === '/privacy') return <PrivacyPage />
     if (path === '/terms') return <TermsPage />
-    // Skip landing page if running as installed PWA or navigating directly to /login
-    const isPWA =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true
-    if (isPWA || path === '/login') {
-      // /login?mode=register lands on the register tab — used by gift links and
-      // marketing CTAs whose audience doesn't have an account yet.
+    // /login?mode=register lands on the register tab — used by gift links and
+    // marketing CTAs whose audience doesn't have an account yet.
+    if (path === '/login') {
       const mode = new URLSearchParams(window.location.search).get('mode')
       return <AuthPage initialMode={mode === 'register' ? 'register' : undefined} />
+    }
+    // Installed app (TWA / installed PWA): no login wall. A guest (anonymous)
+    // Supabase session is created silently and the wallet opens directly —
+    // unless the user explicitly signed out, in which case they asked for the
+    // login screen and must not be trapped back into a guest session.
+    if (isAppMode()) {
+      if (hasExplicitSignOut()) return <AuthPage />
+      return <GuestBootstrap />
     }
     return <LandingPage />
   }
@@ -459,6 +505,10 @@ function AppRoutes() {
           <Suspense fallback={<PageSpinner />}>
             <AnimatedRoutes>
               <Route path="/" element={<HomePage />} />
+              {/* In-app account screen: lets a GUEST register (upgrade in place)
+                  or log into an existing account (with data merge). Registered
+                  users have nothing to do here — send them to account settings. */}
+              <Route path="/login" element={user && !user.is_anonymous ? <Navigate to="/settings/account" replace /> : <AuthPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/voucher/:id" element={<VoucherRedirect />} />

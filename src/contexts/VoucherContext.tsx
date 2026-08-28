@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import toast from 'react-hot-toast'
 import { track } from '@vercel/analytics'
 import { phCapture } from '../lib/posthog'
 import { supabase } from '../lib/supabase'
@@ -795,6 +796,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function shareVoucherWithUser(voucherId: string, email: string): Promise<'shared' | 'already_shared' | 'not_found'> {
+    assertNotGuest()
     const { data, error } = await supabase.rpc('share_voucher_with_email', {
       p_voucher_id: voucherId,
       p_email: email,
@@ -852,8 +854,30 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     await fetchData()
   }
 
+  // A guest-data merge finishes right AFTER a login's initial fetch — reload so
+  // the merged vouchers appear without a manual refresh. The ref keeps the
+  // LATEST closure: user and wallet change during the very login that fires this.
+  const mergeRefreshRef = useRef<() => void>(() => {})
+  mergeRefreshRef.current = () => { refreshVouchers().catch(() => {}) }
+  useEffect(() => {
+    const onMerge = () => mergeRefreshRef.current()
+    window.addEventListener('gs-merge-completed', onMerge)
+    return () => window.removeEventListener('gs-merge-completed', onMerge)
+  }, [])
+
+  // Sharing/gifting reach OTHER people — they need a real identity behind them.
+  // One centralized gate (instead of scattered per-screen checks): guests get a
+  // clear "connect an account first" error.
+  function assertNotGuest() {
+    if (user?.is_anonymous) {
+      toast.error(translate('guest.requires.account'), { duration: 6000 })
+      throw new Error('guest_account')
+    }
+  }
+
   async function createShareToken(voucherId: string, expiresInDays?: number, codeOverride?: string): Promise<string> {
     if (!user) throw new Error(translate('ctx.not.logged.in'))
+    assertNotGuest()
     const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('')
@@ -949,6 +973,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   async function createGift(voucherId: string, recipientEmail: string | null, message: string, sendAt: Date, codeOverride?: string): Promise<string | null> {
     if (!user) return null
+    assertNotGuest()
     const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
       .map(b => b.toString(16).padStart(2, '0')).join('')
     // Only pass send_at for scheduled (future) gifts; immediate gifts use the DB's DEFAULT NOW()

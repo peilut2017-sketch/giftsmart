@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { isAppMode, clearExplicitSignOut } from '../lib/appMode'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ShieldCheck, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { isBiometricEnabled, getBiometricEmail, verifyBiometricForVaultUnlock } from '../lib/passkey'
@@ -38,8 +40,13 @@ function getPasswordStrength(password: string, t: (k: string) => string): Passwo
 }
 
 export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode }) {
-  const { signIn, signInWithBiometric, signUp, signInWithGoogle, resetPassword, updatePassword } = useAuth()
+  const {
+    signIn, signInWithBiometric, signUp, signInWithGoogle, resetPassword, updatePassword,
+    isAnonymous, accountState, upgradeAnonymousAccount, beginMergeLogin, ensureAnonymousSession,
+  } = useAuth()
   const { t } = useT()
+  const navigate = useNavigate()
+  const [guestContinueLoading, setGuestContinueLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [mode, setMode] = useState<Mode>(initialMode)
   const [loginStep, setLoginStep] = useState<LoginStep>('email')
@@ -65,6 +72,10 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
     if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
     const biometricEmail = getBiometricEmail()
     if (
+      // Guests must take the password path: the biometric shortcut works by
+      // refreshing the CURRENT session, which for a guest would just renew the
+      // anonymous session while looking like a successful login.
+      !isAnonymous &&
       isBiometricEnabled() &&
       biometricEmail &&
       email.toLowerCase() === biometricEmail.toLowerCase()
@@ -157,6 +168,14 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       // login – password step
       if (mode === 'login') {
         if (!password) return toast.error(t('auth.password.required'))
+        // A guest logging into an EXISTING account: park a server-side merge
+        // ticket first, so the guest vouchers survive the session switch and
+        // get attached to the account right after sign-in. Without a ticket the
+        // guest data would be orphaned — refuse to continue rather than lose it.
+        if (isAnonymous) {
+          const ok = await beginMergeLogin()
+          if (!ok) return toast.error(t('guest.merge.ticket.failed'), { duration: 7000 })
+        }
         const { error } = await signIn(email, password)
         if (!error) {
           // Open the vault here, with the password still in a local variable — the
@@ -188,6 +207,27 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
       if (!EMAIL_RE.test(email.trim())) return toast.error(t('auth.email.invalid'))
       if (password !== password2) return toast.error(t('auth.passwords.mismatch'))
       if (!validatePasswordStrong()) return
+      // A guest registering for the first time: link the identity to the SAME
+      // anonymous user (same id, same vouchers) instead of creating a new user.
+      if (isAnonymous) {
+        const { error: upErr } = await upgradeAnonymousAccount(email, password, name)
+        if (upErr) {
+          if (upErr.message === 'email_exists') {
+            // The email already has an account — steer to login, which merges.
+            toast.error(t('guest.upgrade.email.exists'), { duration: 7000 })
+            setMode('login')
+            setLoginStep('password')
+            setPassword('')
+            setPassword2('')
+          } else {
+            toast.error(t('auth.register.error') + ': ' + upErr.message)
+          }
+          return
+        }
+        toast.success(t('guest.upgrade.confirm.sent'), { duration: 8000 })
+        navigate('/', { replace: true })
+        return
+      }
       const { error } = await signUp(email, password, name)
       if (error) toast.error(t('auth.register.error') + ': ' + error.message)
       else {
@@ -316,6 +356,14 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
               >
                 {t('auth.register.tab')}
               </button>
+            </div>
+          )}
+
+          {/* Guest context: registering keeps the same account and vouchers;
+              logging into an existing account merges them in */}
+          {isAnonymous && mode !== 'forgot' && mode !== 'newPassword' && (
+            <div className="mb-4 p-3 rounded-2xl bg-green-50 border border-green-200 text-xs text-green-800 leading-relaxed text-right">
+              {t('guest.authpage.note')}
             </div>
           )}
 
@@ -611,6 +659,17 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                     return
                   }
                   setGoogleLoading(true)
+                  // Guest → Google: park a merge ticket before the redirect. It
+                  // covers both cases — a brand-new Google user gets the guest
+                  // data merged in, and an existing account absorbs it.
+                  if (isAnonymous) {
+                    const ok = await beginMergeLogin()
+                    if (!ok) {
+                      toast.error(t('guest.merge.ticket.failed'), { duration: 7000 })
+                      setGoogleLoading(false)
+                      return
+                    }
+                  }
                   const { error } = await signInWithGoogle()
                   if (error) { toast.error(t('auth.google.error')); setGoogleLoading(false) }
                 }}
@@ -629,6 +688,26 @@ export default function AuthPage({ initialMode = 'login' }: { initialMode?: Mode
                 {mode === 'login' ? t('auth.google.login') : t('auth.google.register')}
               </button>
             </>
+          )}
+
+          {/* App mode after an explicit sign-out: the road back into guest usage */}
+          {accountState === 'signedOut' && isAppMode() && (
+            <button
+              type="button"
+              disabled={guestContinueLoading}
+              onClick={async () => {
+                setGuestContinueLoading(true)
+                clearExplicitSignOut()
+                const { error } = await ensureAnonymousSession()
+                if (error) {
+                  toast.error(t('guest.offline.title'))
+                  setGuestContinueLoading(false)
+                }
+              }}
+              className="w-full text-center text-sm text-gray-500 underline py-2 mt-3 disabled:opacity-50"
+            >
+              {guestContinueLoading ? '...' : t('guest.continue.without')}
+            </button>
           )}
         </div>
 
