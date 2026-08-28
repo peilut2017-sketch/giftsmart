@@ -4,6 +4,7 @@ import { EASE_DRAWER, EASE_OUT, SPRING } from '../lib/motion'
 import { useNavigate } from 'react-router-dom'
 import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import Icon from './ui/Icon'
@@ -67,6 +68,7 @@ interface Props {
 
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
+  const { isAnonymous } = useAuth()
   useSubscription()
   const { hasVault, isVaultUnlocked, encrypt, decrypt, decryptedMap } = useE2EE()
   const { t } = useT()
@@ -126,8 +128,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   // E2EE vault — creation/unlock both go through the shared sheets, replacing the
   // in-form overlay that had its own (weaker) password rules and unlock paths.
+  // Guests have no login password to derive a vault from, and E2EE data could
+  // not survive an account merge — encryption is a registered-account feature.
   const [e2eeEnabled, setE2eeEnabled] = useState(
-    voucher?.is_e2ee ?? (localStorage.getItem('gs_e2ee_default') !== 'false')
+    voucher?.is_e2ee ?? (!isAnonymous && localStorage.getItem('gs_e2ee_default') !== 'false')
   )
   const [showVaultUnlock, setShowVaultUnlock] = useState(false)
   const [showVaultSetup, setShowVaultSetup] = useState(false)
@@ -271,6 +275,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const hasEncryptedVouchers = [...vouchers, ...archivedVouchers].some(v => v.is_e2ee)
 
   function openVaultGate() {
+    // Defense in depth: the toggle is hidden for guests, but nothing should be
+    // able to drag a guest into vault setup (it looped: no password to derive
+    // a vault door from, and the setup sheet's close re-triggered the form).
+    if (isAnonymous) {
+      toast.error(t('guest.requires.account'), { duration: 6000 })
+      return
+    }
     if (hasVault || hasEncryptedVouchers) setShowVaultUnlock(true)
     else setShowVaultSetup(true)
   }
@@ -748,7 +759,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               <div className="space-y-4">
                 {!showAll && <p className="text-xs text-text3 text-center">{t('form.more.details.hint')}</p>}
 
-                {/* E2EE toggle */}
+                {/* E2EE toggle — hidden for guests (requires a registered account) */}
+                {!isAnonymous && (
                 <button type="button" onClick={handleToggleE2EE} className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border transition ${e2eeEnabled ? 'bg-indigo-50 border-indigo-200' : 'bg-bg border-border hover:opacity-90'}`}>
                   <div className="flex items-center gap-2">
                     <Icon name="shield" size={16} color={e2eeEnabled ? '#4f46e5' : 'var(--c-text3)'} />
@@ -761,6 +773,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                     <span className={`absolute top-0.5 start-0.5 w-4 h-4 rounded-full shadow transition-transform ${e2eeEnabled ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} style={{ background: '#fff' }} />
                   </div>
                 </button>
+                )}
 
                 {/* CVV */}
                 <div>

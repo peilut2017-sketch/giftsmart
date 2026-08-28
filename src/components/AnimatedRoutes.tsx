@@ -36,7 +36,16 @@ const variants = {
     nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(0.97)', filter: 'blur(0px)' }
     : nav === 'none' ? { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' }
     : { opacity: 0, transform: `translateX(${nav === 'fwd' ? '-24%' : '24%'}) scale(1)`, filter: 'blur(2px)' },
-  center: { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' },
+  center: {
+    opacity: 1,
+    transform: 'translateX(0%) scale(1)',
+    filter: 'blur(0px)',
+    // Clear both once settled: a lingering transform/filter turns this wrapper
+    // into a stacking context, which pins every fixed modal opened INSIDE a
+    // page (sheets, add-voucher form, confirms) underneath the z-50 BottomNav
+    // no matter how high the modal's own z-index is.
+    transitionEnd: { transform: 'none', filter: 'none' },
+  },
   exit: (nav: NavMode) =>
     nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(1.01)', filter: 'blur(0px)' }
     : nav === 'none' ? { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' }
