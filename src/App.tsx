@@ -32,6 +32,8 @@ import RecoveryKeyModal from './components/RecoveryKeyModal'
 import VaultMigrationModal from './components/VaultMigrationModal'
 import VaultSetupSheet from './components/VaultSetupSheet'
 import { isBiometricEnabled, getBiometricEmail, syncBiometricFromSupabase } from './lib/passkey'
+import { readParkedGuestKey, readResealIds, clearMergeArtifacts } from './lib/e2eeMerge'
+import { importVaultKey, decryptField, isEncryptedField } from './lib/e2ee'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
 import { AlertTriangle } from 'lucide-react'
@@ -183,44 +185,59 @@ function E2EEBridge() {
     buildDecryptedMap(all)
   }, [isVaultUnlocked, vouchers, archivedVouchers]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-seal merged guest vouchers: they were unsealed for the account switch
-  // (the guest vault dies with the merge — see e2eeMerge.ts), so the E2EE
-  // promise is restored here by encrypting them under THIS account's vault.
-  // If the vault is still locked when the merge lands (e.g. Google login),
-  // the ids wait and are sealed the moment it opens.
-  const pendingResealIds = useRef<string[]>([])
-  const resealRef = useRef<(ids: string[]) => void>(() => {})
+  // Re-seal merged guest vouchers — zero server-side plaintext:
+  // the rows arrived still sealed under the GUEST vault key, which was parked
+  // on this device (e2eeMerge.ts). Here they are decrypted locally with the
+  // parked key and immediately re-encrypted under THIS account's vault, after
+  // which the parked key is wiped. Ids + key persist in localStorage, so a
+  // restart or a late vault unlock (e.g. Google login) just resumes the work.
+  const resealBusy = useRef(false)
+  const resealRef = useRef<() => void>(() => {})
   useEffect(() => {
-  resealRef.current = async (ids: string[]) => {
-    if (!ids.length) return
-    if (!hasVault || !isVaultUnlocked) {
-      pendingResealIds.current = [...new Set([...pendingResealIds.current, ...ids])]
-      return
-    }
-    try {
-      const { data: rows } = await supabase.from('vouchers').select('id, code, cvv, is_e2ee').in('id', ids)
-      for (const r of rows ?? []) {
-        if (r.is_e2ee) continue
-        const code = r.code ? await encrypt(r.code) : r.code
-        const cvv = r.cvv ? await encrypt(r.cvv) : r.cvv
-        await supabase.from('vouchers').update({ code, cvv, is_e2ee: true }).eq('id', r.id)
+    resealRef.current = async () => {
+      if (resealBusy.current) return
+      const ids = readResealIds()
+      if (!ids.length) return
+      if (!hasVault || !isVaultUnlocked) return // waits for vault setup/unlock
+      resealBusy.current = true
+      try {
+        const parked = readParkedGuestKey()
+        const guestKey = parked ? await importVaultKey(parked) : null
+        const { data: rows, error } = await supabase
+          .from('vouchers').select('id, code, cvv, is_e2ee').in('id', ids)
+        if (error) return
+        let allDone = true
+        for (const r of rows ?? []) {
+          if (!r.is_e2ee) continue
+          if (!guestKey) { allDone = false; continue } // parked key lost — leave sealed
+          try {
+            const codePlain = isEncryptedField(r.code) ? await decryptField(guestKey, r.code) : r.code
+            const cvvPlain = r.cvv && isEncryptedField(r.cvv) ? await decryptField(guestKey, r.cvv) : r.cvv
+            const code = codePlain ? await encrypt(codePlain) : codePlain
+            const cvv = cvvPlain ? await encrypt(cvvPlain) : cvvPlain
+            const { error: upErr } = await supabase.from('vouchers')
+              .update({ code, cvv, is_e2ee: true }).eq('id', r.id)
+            if (upErr) allDone = false
+          } catch { allDone = false }
+        }
+        if (allDone) {
+          clearMergeArtifacts()
+          refreshVouchers()
+        }
+      } finally {
+        resealBusy.current = false
       }
-      refreshVouchers()
-    } catch { /* rows stay readable; "encrypt all" in privacy settings re-seals them */ }
-  }
+    }
   })
   useEffect(() => {
-    const onMerge = (e: Event) => {
-      resealRef.current(((e as CustomEvent).detail?.movedIds ?? []) as string[])
-    }
+    const onMerge = () => resealRef.current()
     window.addEventListener('gs-merge-completed', onMerge)
+    // Also try on mount — resumes after a restart mid-flow
+    resealRef.current()
     return () => window.removeEventListener('gs-merge-completed', onMerge)
   }, [])
   useEffect(() => {
-    if (!isVaultUnlocked || pendingResealIds.current.length === 0) return
-    const ids = pendingResealIds.current
-    pendingResealIds.current = []
-    resealRef.current(ids)
+    if (isVaultUnlocked) resealRef.current()
   }, [isVaultUnlocked])
 
   return null

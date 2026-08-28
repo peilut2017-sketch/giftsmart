@@ -135,6 +135,28 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const [showVaultUnlock, setShowVaultUnlock] = useState(false)
   const [showVaultSetup, setShowVaultSetup] = useState(false)
   const [pendingSubmitAfterUnlock, setPendingSubmitAfterUnlock] = useState(false)
+  // Escape hatch from the vault gate: the user declined/failed to open the vault
+  // and explicitly chose to save this voucher without encryption (one-shot).
+  const [showPlainFallback, setShowPlainFallback] = useState(false)
+  const plainOverrideRef = useRef(false)
+  // Live mirrors for the vault-gate close handler (state there may lag a tick)
+  const unlockedRef = useRef(isVaultUnlocked)
+  const pendingRef = useRef(false)
+  useEffect(() => { unlockedRef.current = isVaultUnlocked }, [isVaultUnlocked])
+  useEffect(() => { pendingRef.current = pendingSubmitAfterUnlock }, [pendingSubmitAfterUnlock])
+
+  // The vault gate closed. Success is handled by the resubmit-after-unlock
+  // effect; a dismissal WITHOUT an open vault used to strand the user in a
+  // save → gate → save loop — now it offers saving without encryption.
+  function handleVaultGateClosed() {
+    setShowVaultUnlock(false)
+    setShowVaultSetup(false)
+    window.setTimeout(() => {
+      if (unlockedRef.current || !pendingRef.current) return
+      setPendingSubmitAfterUnlock(false)
+      setShowPlainFallback(true)
+    }, 250)
+  }
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const operatorPickerRef = useRef<HTMLDivElement>(null)
@@ -345,7 +367,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     // the extra native confirm() here was a blocking OS dialog repeating the same
     // information, so it's gone.
 
-    if (e2eeEnabled && !isVaultUnlocked) {
+    // plainOverrideRef = the user explicitly chose "save without encryption"
+    // after declining the vault gate — a one-shot escape from the gate loop.
+    const effectiveE2EE = e2eeEnabled && !plainOverrideRef.current
+    if (effectiveE2EE && !isVaultUnlocked) {
       setPendingSubmitAfterUnlock(true)
       openVaultGate()
       return
@@ -365,7 +390,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
       let finalCode = code.trim()
       let finalCvv  = cvv.trim() || undefined
-      if (e2eeEnabled) {
+      if (effectiveE2EE) {
         if (!isEncryptedField(finalCode)) finalCode = await encrypt(finalCode)
         if (finalCvv && !isEncryptedField(finalCvv)) finalCvv = await encrypt(finalCvv)
       }
@@ -389,7 +414,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         is_shared: false,
         is_locked: isLocked,
         lock_reason: isLocked ? lockReason.trim() || undefined : undefined,
-        is_e2ee: e2eeEnabled,
+        is_e2ee: effectiveE2EE,
         _storeUsed: (voucher && used > 0) ? (storeUsedInput.trim() || null) : undefined,
       }
       const saved = await onSave(v) as unknown as (Voucher | undefined)
@@ -398,6 +423,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     } catch {
       // error already handled by caller (toast shown in handleSave)
     } finally {
+      plainOverrideRef.current = false
       setLoading(false)
     }
   }
@@ -436,7 +462,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       <motion.div
         className="relative bg-surface w-full sm:max-w-lg rounded-[28px] max-h-[92dvh] flex flex-col overflow-hidden"
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, transform: 'translateY(12px) scale(0.96)' }}
-        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0px) scale(1)' }}
+        // transitionEnd clears the transform once settled: a lingering transform
+        // on this card turns it into the containing block for the position:fixed
+        // vault/confirm sheets rendered inside it — clipping them INTO the card
+        // (overflow-hidden) instead of covering the screen.
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0px) scale(1)', transitionEnd: { transform: 'none' } }}
         exit={
           reduceMotion
             ? { opacity: 0, transition: { duration: 0.15 } }
@@ -941,18 +971,39 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           )}
         </div>
 
-        {/* Vault gate — the shared unlock/setup sheets */}
+        {/* Vault gate — the shared unlock/setup sheets. NOTE: onClose must NOT
+            clear pendingSubmitAfterUnlock directly — on success that killed the
+            automatic "save after unlock", leaving users tapping save into the
+            gate forever. handleVaultGateClosed defers, checks whether the vault
+            actually opened, and otherwise offers saving without encryption. */}
         <VaultUnlockSheet
           open={showVaultUnlock}
-          onClose={() => { setShowVaultUnlock(false); setPendingSubmitAfterUnlock(false) }}
+          onClose={handleVaultGateClosed}
           onUnlocked={() => setE2eeEnabled(true)}
           contextLabel={t('form.vault.context')}
         />
         <VaultSetupSheet
           open={showVaultSetup}
-          onClose={() => { setShowVaultSetup(false); setPendingSubmitAfterUnlock(false) }}
+          onClose={handleVaultGateClosed}
           onDone={() => setE2eeEnabled(true)}
         />
+
+        <AnimatePresence>
+          {showPlainFallback && (
+            <ConfirmDialog
+              title={t('form.plain.fallback.title')}
+              message={t('form.plain.fallback.message')}
+              confirmLabel={t('form.plain.fallback.confirm')}
+              cancelLabel={t('form.plain.fallback.cancel')}
+              onConfirm={() => {
+                setShowPlainFallback(false)
+                plainOverrideRef.current = true
+                handleSubmit()
+              }}
+              onCancel={() => setShowPlainFallback(false)}
+            />
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {showDiscardConfirm && (

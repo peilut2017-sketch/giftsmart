@@ -149,16 +149,11 @@ BEGIN
     RAISE EXCEPTION 'source_not_anonymous';
   END IF;
 
-  -- E2EE safety: sealed rows are encrypted under the guest vault, which dies
-  -- with the anonymous user below — merging them would make them permanently
-  -- unreadable. The client unseals them first (e2eeMerge.ts); refuse otherwise.
-  IF EXISTS (
-    SELECT 1 FROM vouchers v
-    JOIN wallets w ON w.id = v.wallet_id
-    WHERE w.owner_id = v_from AND v.is_e2ee = true
-  ) THEN
-    RAISE EXCEPTION 'e2ee_pending';
-  END IF;
+  -- E2EE rows move STILL SEALED under the guest vault key — the server never
+  -- sees plaintext at any point of the merge. The device that initiated the
+  -- login parked the guest key locally and re-seals these rows under the
+  -- claimant's own vault immediately after (client: e2eeMerge.ts + the
+  -- re-seal handler in App.tsx, resumable across restarts via moved_ids).
 
   -- Target wallet: the claimant's primary wallet (create if missing).
   SELECT wallet_id INTO v_target_wallet

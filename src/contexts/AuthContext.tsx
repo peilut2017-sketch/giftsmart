@@ -7,7 +7,7 @@ import { identifyUser, resetPostHog, phCapture } from '../lib/posthog'
 import { sendWelcomeEmail } from '../lib/emailService'
 import { translate } from '../lib/i18n'
 import { markExplicitSignOut } from '../lib/appMode'
-import { prepareGuestE2EEForMerge } from '../lib/e2eeMerge'
+import { parkGuestVaultKeyForMerge, storeResealIds } from '../lib/e2eeMerge'
 
 /** Single source of truth for "who is this" — UI must branch on this, not on
     scattered provider/metadata checks. */
@@ -189,9 +189,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = (Array.isArray(data) ? data[0] : data) ?? {}
       const moved = result.moved ?? 0
       if (moved > 0) toast.success(translate('guest.merge.done', { count: moved }), { duration: 6000 })
-      // Vouchers landed after the initial fetch — tell VoucherProvider to reload,
-      // and hand the moved ids to the re-seal handler (E2EEBridge) so vouchers
-      // that were unsealed for the merge get re-encrypted under THIS vault.
+      // Persist the moved ids BEFORE dispatching: the re-seal (decrypt with the
+      // parked guest key → re-encrypt under this account's vault) must survive
+      // an app restart if the vault isn't open yet.
+      storeResealIds(result.moved_ids ?? [])
       window.dispatchEvent(new CustomEvent('gs-merge-completed', { detail: { movedIds: result.moved_ids ?? [] } }))
     } catch {
       try { localStorage.removeItem(MERGE_TICKET_KEY) } catch { /* storage unavailable */ }
@@ -246,9 +247,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function beginMergeLogin(): Promise<'ok' | 'locked' | 'failed'> {
     if (!user?.is_anonymous) return 'ok' // nothing to merge — proceed normally
     phCapture('existing_account_login_started')
-    // Guest E2EE rows must be unsealed first — their vault key won't exist
-    // after the merge (see e2eeMerge.ts; re-sealed by the target right after).
-    const prep = await prepareGuestE2EEForMerge()
+    // Sealed rows move sealed — the server NEVER sees plaintext. The guest
+    // vault key is parked on this device so the target account can re-seal
+    // them under its own vault right after the merge (see e2eeMerge.ts).
+    const prep = await parkGuestVaultKeyForMerge()
     if (prep !== 'ok') return prep === 'locked' ? 'locked' : 'failed'
     const { data, error } = await supabase.rpc('create_merge_ticket')
     const secret = Array.isArray(data) ? data[0] : data
