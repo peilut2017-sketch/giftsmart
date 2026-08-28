@@ -30,7 +30,7 @@ interface Props {
 export default function VaultSetupSheet({ open, onClose, onDone, blocking = false }: Props) {
   const { t } = useT()
   const { setupVaultFromPassword, setupVaultWithMasterKey } = useE2EE()
-  const { user, profile } = useAuth()
+  const { user, profile, isAnonymous } = useAuth()
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
@@ -38,7 +38,11 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
   const [oauthNoPasskey, setOauthNoPasskey] = useState(false)
 
   const provider = user?.app_metadata?.provider
-  const isOAuth = !!provider && provider !== 'email'
+  // Guests MUST take the no-password (master key + passkey/recovery) path:
+  // branching on is_anonymous, not on provider metadata — a guest's provider
+  // field isn't reliably 'anonymous', and landing them on the email/password
+  // branch dead-ends silently (no login password exists to verify).
+  const isOAuth = isAnonymous || (!!provider && provider !== 'email')
   const canPasskey = isBiometricSupported()
 
   function succeed() {
@@ -49,7 +53,9 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
   // ── Email flow: verify the password IS the login password, then create ────
   async function handleEmailSetup(e?: React.FormEvent) {
     e?.preventDefault()
-    if (!password || busy || !user?.id || !user.email) return
+    if (!password || busy || !user?.id) return
+    // Never fail silently: anyone without a login email cannot take this path
+    if (!user.email) { setError(t('vault.setup.error')); return }
     setBusy(true)
     setError('')
     try {
@@ -143,7 +149,7 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
             {canPasskey && !oauthNoPasskey ? (
               <>
                 <p className="text-sm text-text2">
-                  {provider === 'anonymous'
+                  {isAnonymous || provider === 'anonymous'
                     ? t('vault.setup.guest.intro')
                     : t('vault.setup.oauth.intro', { provider: provider === 'google' ? 'Google' : String(provider) })}
                   {' '}<b>{t('vault.setup.oauth.bio')}</b>{t('vault.setup.oauth.nopass')}

@@ -3,6 +3,7 @@ import BottomSheet from './ui/BottomSheet'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
 import { useE2EE } from '../contexts/E2EEContext'
+import { useAuth } from '../contexts/AuthContext'
 import { hasBiometricWrappedVaultKey, isBiometricSupported, isBiometricEnabled } from '../lib/passkey'
 import { isVaultPersistEnabled, setVaultPersistEnabled } from '../lib/vaultKeyStore'
 import { useT } from '../lib/i18n'
@@ -24,7 +25,8 @@ interface Props {
  */
 export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLabel }: Props) {
   const { t } = useT()
-  const { unlockWithPassword, unlockVaultFromRecovery, unlockVaultWithBiometric, hint, passwordWrapStale } = useE2EE()
+  const { unlockWithPassword, unlockVaultFromRecovery, unlockVaultWithBiometric, hint, passwordWrapStale, doors } = useE2EE()
+  const { isAnonymous } = useAuth()
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [phrase, setPhrase] = useState('')
@@ -35,15 +37,19 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
   const [stayUnlocked, setStayUnlocked] = useState(() => isVaultPersistEnabled())
 
   const biometricAvailable = isBiometricSupported() && (hasBiometricWrappedVaultKey() || isBiometricEnabled())
+  // Guest/OAuth vaults have no password wrap — their only doors are biometric and
+  // the recovery code. Showing the login-password form there is a dead end that
+  // reads as "wrong password" forever, so route them straight to recovery.
+  const noPasswordDoor = isAnonymous || (doors ? !doors.password : false)
 
   useEffect(() => {
     if (open) {
       setPassword('')
       setPhrase('')
       setError('')
-      setShowRecovery(passwordWrapStale)
+      setShowRecovery(passwordWrapStale || noPasswordDoor)
     }
-  }, [open, passwordWrapStale])
+  }, [open, passwordWrapStale, noPasswordDoor])
 
   function persistPref(next: boolean) {
     setStayUnlocked(next)
@@ -179,13 +185,17 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
         )}
 
         <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => { setShowRecovery(v => !v); setError('') }}
-            className="text-sm text-primary font-medium py-2"
-          >
-            {showRecovery ? t('vault.unlock.back.password') : t('vault.unlock.have.recovery')}
-          </button>
+          {showRecovery && noPasswordDoor ? (
+            <span />
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setShowRecovery(v => !v); setError('') }}
+              className="text-sm text-primary font-medium py-2"
+            >
+              {showRecovery ? t('vault.unlock.back.password') : t('vault.unlock.have.recovery')}
+            </button>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-text2 py-2 cursor-pointer">
             <input
