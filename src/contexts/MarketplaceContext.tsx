@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { MarketplaceListing, MarketplacePurchase, MarketplaceMessage, ListingConversation, MarketplaceMode, MarketplaceAccessStatus } from '../types'
 import toast from 'react-hot-toast'
+import { translate } from '../lib/i18n'
 
 interface MarketplaceContextValue {
   // Data
@@ -213,6 +214,12 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   }, [fetchListings, fetchMyListings, fetchMyPurchases])
 
   const listForSale = useCallback(async (voucherId: string, askingPrice: number, description?: string) => {
+    // Selling to other people requires a real identity — guests must connect an
+    // account first (centralized gate; server-side RLS still applies regardless).
+    if (user?.is_anonymous) {
+      toast.error(translate('guest.requires.account'), { duration: 6000 })
+      throw new Error('guest_account')
+    }
     const { data, error } = await supabase.rpc('list_voucher_for_sale', {
       p_voucher_id: voucherId,
       p_asking_price: askingPrice,

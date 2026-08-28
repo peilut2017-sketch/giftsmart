@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
+import { clearExplicitSignOut } from '../../lib/appMode'
 import { useVouchers } from '../../contexts/VoucherContext'
 import { useE2EE } from '../../contexts/E2EEContext'
 import { supabase } from '../../lib/supabase'
@@ -29,7 +31,8 @@ function getPasswordStrength(password: string, t: (k: string) => string): Passwo
 export default function SettingsAccountPage() {
   usePageView('settings_account')
   const { t } = useT()
-  const { user, profile, updateProfile, signOut } = useAuth()
+  const { user, profile, updateProfile, signOut, isAnonymous } = useAuth()
+  const navigate = useNavigate()
   const { vouchers, archivedVouchers, logAction, updateVoucher } = useVouchers()
   const { isUnifiedVault, isVaultUnlocked, reDeriveVaultKeyFromPassword } = useE2EE()
 
@@ -105,8 +108,10 @@ export default function SettingsAccountPage() {
           return
         }
         // RPC not applied yet (supabase-delete-account.sql) — fall back to the
-        // old support-request path so the button never dead-ends
+        // old support-request path so the button never dead-ends. Guests have no
+        // contact identity for a support follow-up, so for them it's a plain error.
         if (/function|schema cache/i.test(error.message || '')) {
+          if (isAnonymous) { toast.error(t('app.error')); return }
           const { error: reqErr } = await supabase.from('support_messages').insert({
             user_id: user!.id, user_email: user!.email, user_name: profile?.name || null,
             subject: t('settings.delete.account.subject'), body: t('settings.delete.account.body'), category: 'general',
@@ -117,8 +122,11 @@ export default function SettingsAccountPage() {
         }
         throw error
       }
-      toast.success(t('account.delete.done'), { duration: 6000 })
+      toast.success(isAnonymous ? t('guest.reset.done') : t('account.delete.done'), { duration: 6000 })
       await signOut()
+      // A guest who reset their data should land in a FRESH guest session, not
+      // on a login wall they never asked for.
+      if (isAnonymous) clearExplicitSignOut()
     } catch (e: any) {
       toast.error(e?.message || t('settings.delete.account.error'))
     } finally {
@@ -178,8 +186,8 @@ export default function SettingsAccountPage() {
                   {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-text">{profile?.name || t('hub.no.name')}</p>
-                  <p className="text-xs text-text3 truncate">{user?.email}</p>
+                  <p className="text-sm font-bold text-text">{isAnonymous ? t('guest.profile.name') : (profile?.name || t('hub.no.name'))}</p>
+                  <p className="text-xs text-text3 truncate">{isAnonymous ? t('guest.profile.desc') : user?.email}</p>
                   {phone && <p className="text-xs text-text3">{phone}</p>}
                 </div>
                 <button onClick={() => { setEmail(user?.email || ''); setEditName(true) }} className="w-9 h-9 rounded-xl bg-bg flex items-center justify-center shrink-0">
@@ -189,9 +197,13 @@ export default function SettingsAccountPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('auth.name.placeholder')} className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t('auth.email.placeholder')} dir="ltr" autoComplete="email" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
-                {email.trim().toLowerCase() !== (user?.email || '').toLowerCase() && (
-                  <p className="text-[11px] text-text3 px-1">{t('account.email.change.note')}</p>
+                {!isAnonymous && (
+                  <>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t('auth.email.placeholder')} dir="ltr" autoComplete="email" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
+                    {email.trim().toLowerCase() !== (user?.email || '').toLowerCase() && (
+                      <p className="text-[11px] text-text3 px-1">{t('account.email.change.note')}</p>
+                    )}
+                  </>
                 )}
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('seller.profile.phone')} dir="ltr" className="h-11 rounded-xl border border-border bg-surface text-text text-base px-3 outline-none focus:ring-2 focus:ring-primary/30" />
                 <div className="flex gap-2">
@@ -206,6 +218,7 @@ export default function SettingsAccountPage() {
           </div>
         </Card>
 
+        {!isAnonymous && (<>
         <SL>{t('account.password.section')}</SL>
         <Card>
           {!editPass ? (
@@ -325,13 +338,28 @@ export default function SettingsAccountPage() {
             })}
           />
         </Card>
+        </>)}
+
+        {/* Guest: connect-account CTA instead of password/logout — a guest who
+            signs out has no credential to get back to their data, so a regular
+            logout is deliberately NOT offered here */}
+        {isAnonymous && (
+          <Card>
+            <MenuItem
+              icon="cloud"
+              label={t('guest.cta.button')}
+              desc={t('guest.cta.subtitle')}
+              onClick={() => navigate('/login')}
+            />
+          </Card>
+        )}
 
         <SL>{t('account.danger.zone')}</SL>
         <div className="bg-error/5 border border-error/20 rounded-card overflow-hidden">
           <MenuItem
             icon="delete"
-            label={t('settings.delete.account')}
-            desc={t('settings.delete.account.desc')}
+            label={isAnonymous ? t('guest.reset.title') : t('settings.delete.account')}
+            desc={isAnonymous ? t('guest.reset.desc') : t('settings.delete.account.desc')}
             onClick={deletingAccount ? undefined : handleDeleteAccount}
             danger
             right={deletingAccount ? <Icon name="progress_activity" size={20} color="var(--c-error)" className="animate-spin" /> : undefined}
@@ -355,9 +383,9 @@ export default function SettingsAccountPage() {
       <AnimatePresence>
       {showDeleteDialog && (
         <ConfirmDialog
-          title={t('settings.delete.account')}
-          message={t('account.delete.confirm.message')}
-          confirmLabel={t('account.delete.confirm.cta')}
+          title={isAnonymous ? t('guest.reset.confirm.title') : t('settings.delete.account')}
+          message={isAnonymous ? t('guest.reset.confirm.message') : t('account.delete.confirm.message')}
+          confirmLabel={isAnonymous ? t('guest.reset.confirm.cta') : t('account.delete.confirm.cta')}
           danger
           onConfirm={() => {
             if (deleteConfirmText.trim() !== 'מחק') {

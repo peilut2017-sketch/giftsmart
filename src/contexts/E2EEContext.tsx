@@ -295,9 +295,11 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // OAuth user (Google etc.) with no vault — prompt setup
+      // OAuth user (Google etc.) with no vault — prompt setup. Guests are
+      // excluded: their provider is 'anonymous' and they have no password or
+      // identity to derive a vault door from yet.
       const provider = user?.app_metadata?.provider
-      const isOAuth = provider && provider !== 'email'
+      const isOAuth = provider && provider !== 'email' && provider !== 'anonymous' && !user?.is_anonymous
       if (isOAuth && !localStorage.getItem(CHECK_KEY)) {
         setNeedsOAuthVaultSetup(true)
       }

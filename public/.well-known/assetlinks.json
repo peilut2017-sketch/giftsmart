@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "site.giftsmart.app",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_SHA256_FINGERPRINT_FROM_PLAY_CONSOLE"
+        "D6:EA:77:FB:DE:AA:41:D5:6C:62:19:A3:76:0C:21:A1:40:FF:6E:4C:77:9F:F4:1E:10:6D:63:5D:94:C1:16:2F",
+        "57:25:D9:EC:99:93:78:8B:52:D8:85:92:A6:C3:BA:9E:EC:6B:0D:AE:0F:BA:AA:6D:97:95:5B:A7:C5:C0:7C:A6"
       ]
     }
   }

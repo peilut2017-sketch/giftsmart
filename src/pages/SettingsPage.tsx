@@ -16,7 +16,7 @@ interface CategoryDef { key: string; icon: string; title: string; desc: string; 
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { user, profile, isAdmin } = useAuth()
+  const { user, profile, isAdmin, isAnonymous } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { vouchers, archivedVouchers, isOnline, pendingOpsCount } = useVouchers()
   const { marketplaceMode } = useMarketplace()
@@ -87,6 +87,37 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* Guest account: the one place that explains what connecting adds and
+            offers it — usage stays possible without it */}
+        {isAnonymous && (
+          <div className="px-4">
+            <div className="bg-surface border border-primary/20 rounded-[24px] p-5 shadow-card">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-11 h-11 rounded-2xl bg-primary-light flex items-center justify-center shrink-0">
+                  <Icon name="cloud" size={22} color="var(--c-primary)" />
+                </div>
+                <div>
+                  <div className="text-base font-extrabold text-text">{t('guest.cta.title')}</div>
+                  <div className="text-xs text-text3 mt-0.5">{t('guest.cta.subtitle')}</div>
+                </div>
+              </div>
+              <ul className="text-[13px] text-text2 space-y-1.5 mb-4">
+                {[t('guest.cta.point.restore'), t('guest.cta.point.devices'), t('guest.cta.point.web'), t('guest.cta.point.backup')].map(p => (
+                  <li key={p} className="flex items-center gap-2">
+                    <Icon name="check" size={15} color="var(--c-primary)" /> {p}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => navigate('/login')}
+                className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm"
+              >
+                {t('guest.cta.button')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Profile hero card */}
         <div className="px-4">
           <div
@@ -98,8 +129,8 @@ export default function SettingsPage() {
                 {(profile?.name || user?.email || '?').charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xl font-extrabold text-white">{profile?.name || t('hub.no.name')}</div>
-                <div className="text-[13px] text-white/70 mt-0.5 truncate">{user?.email}</div>
+                <div className="text-xl font-extrabold text-white">{isAnonymous ? t('guest.profile.name') : (profile?.name || t('hub.no.name'))}</div>
+                <div className="text-[13px] text-white/70 mt-0.5 truncate">{isAnonymous ? t('guest.profile.desc') : user?.email}</div>
                 <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full text-white ${isPro ? 'bg-white/30' : 'bg-white/20'}`}>
                     {isPro ? 'Pro ★' : t('hub.plan.free')}
