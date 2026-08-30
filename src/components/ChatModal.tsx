@@ -189,6 +189,7 @@ export default function ChatModal({
   }
 
   async function handleSendOffer() {
+    if (sending) return // sync guard against a double-tap creating two offers
     const amount = parseFloat(offerAmount)
     if (!amount || amount <= 0) { toast.error(t('chat.offer.invalid.price')); return }
     if (amount >= currentAskingPrice) { toast.error(t('chat.offer.must.be.lower')); return }

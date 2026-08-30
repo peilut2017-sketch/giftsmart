@@ -8,9 +8,13 @@ function currentLocale(): 'he' | 'en' {
   try { return (localStorage.getItem('gs_locale') as 'he' | 'en') || 'he' } catch { return 'he' }
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | null | undefined): string {
+  // Guard null/undefined/NaN: callers pass voucher.balance directly, and a single
+  // bad/legacy row used to throw here or render "₪NaN".
+  const n = typeof amount === 'number' && Number.isFinite(amount) ? amount : Number(amount)
+  const safe = Number.isFinite(n) ? n : 0
   const locale = currentLocale() === 'he' ? 'he-IL' : 'en-US'
-  return `₪${amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+  return `₪${safe.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
 export function formatDate(dateStr?: string): string {
@@ -113,4 +117,14 @@ export function getCategoryColor(category: string): string {
 
 export function getStoreInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
+}
+
+// Quote a CSV cell AND neutralize spreadsheet formula injection: a user-controlled
+// value like "=HYPERLINK(...)" or "@SUM(...)" executes as a formula when the CSV is
+// opened in Excel/Sheets. Prefixing a leading =,+,-,@,tab,CR with an apostrophe
+// makes the cell inert text.
+export function csvCell(value: unknown): string {
+  let s = String(value ?? '')
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  return `"${s.replace(/"/g, '""')}"`
 }

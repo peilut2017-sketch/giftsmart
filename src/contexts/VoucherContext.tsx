@@ -106,6 +106,24 @@ function withTimeout<T>(thenable: PromiseLike<T>, ms = QUERY_TIMEOUT_MS): Promis
   return Promise.race([Promise.resolve(thenable), timeout])
 }
 
+// The Voucher type declares categories/tags as non-null arrays and balance as a
+// number, so NOTHING downstream guards them — a single NULL column from a legacy
+// row or an RPC that doesn't populate an array would crash Home/Search/Stats with
+// "x is not iterable". Normalize every row as it enters the app so those
+// invariants actually hold.
+function normalizeVoucher(v: any): Voucher {
+  return {
+    ...v,
+    categories: Array.isArray(v?.categories) ? v.categories : [],
+    tags: Array.isArray(v?.tags) ? v.tags : [],
+    balance: typeof v?.balance === 'number' && !Number.isNaN(v.balance) ? v.balance : Number(v?.balance) || 0,
+    amount: typeof v?.amount === 'number' && !Number.isNaN(v.amount) ? v.amount : Number(v?.amount) || 0,
+  }
+}
+function normalizeVouchers(rows: any[] | null | undefined): Voucher[] {
+  return Array.isArray(rows) ? rows.map(normalizeVoucher) : []
+}
+
 export function VoucherProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [vouchers, setVouchers] = useState<Voucher[]>([])
@@ -147,8 +165,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       const cached = localStorage.getItem(CACHE_KEY_PREFIX + userId)
       if (cached) {
         const data = JSON.parse(cached)
-        setVouchers(data.active || [])
-        setArchivedVouchers(data.archived || [])
+        setVouchers(normalizeVouchers(data.active))
+        setArchivedVouchers(normalizeVouchers(data.archived))
       }
     } catch {}
   }, [])
@@ -364,8 +382,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         const vData = vRes.value.data
         const vErr = (vRes.value as any).error
         if (vData) {
-          const active = vData.filter((v: any) => !v.is_archived)
-          const archived = vData.filter((v: any) => v.is_archived)
+          const rows = normalizeVouchers(vData)
+          const active = rows.filter((v) => !v.is_archived)
+          const archived = rows.filter((v) => v.is_archived)
           // Preserve any local (offline-created) vouchers that haven't been synced yet
           setVouchers(prev => {
             const localUnsynced = prev.filter(v => v.id.startsWith('local-'))
@@ -384,8 +403,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
               .order('expiry_date', { ascending: true })
               .limit(500)).catch(() => ({ data: null }))
             if (byUserId && byUserId.length > 0) {
-              const active2 = byUserId.filter((v: any) => !v.is_archived)
-              const archived2 = byUserId.filter((v: any) => v.is_archived)
+              const rows2 = normalizeVouchers(byUserId)
+              const active2 = rows2.filter((v) => !v.is_archived)
+              const archived2 = rows2.filter((v) => v.is_archived)
               setVouchers(prev => {
                 const localUnsynced = prev.filter(v => v.id.startsWith('local-'))
                 return [...active2, ...localUnsynced]
@@ -408,7 +428,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
       // ── Fetch vouchers shared with me by others ──
       Promise.resolve(supabase.rpc('get_vouchers_shared_with_me'))
-        .then(({ data }) => { if (data) setSharedWithMe(data as Voucher[]) })
+        .then(({ data }) => { if (data) setSharedWithMe(normalizeVouchers(data)) })
         .catch(() => {})
 
     } catch (err: any) {
@@ -421,8 +441,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const mergeSingleVoucher = useCallback(async (id: string) => {
     if (!navigator.onLine || !user) return
     try {
-      const { data } = await supabase.from(VOUCHERS_VIEW).select('*').eq('id', id).single() as any
-      if (!data) return
+      const { data: raw } = await supabase.from(VOUCHERS_VIEW).select('*').eq('id', id).single() as any
+      if (!raw) return
+      const data = normalizeVoucher(raw)
       if (data.is_archived) {
         setArchivedVouchers(prev => {
           const exists = prev.some((v: any) => v.id === id)
@@ -449,8 +470,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const localVouchers = vouchersRef.current.filter(v => v.id.startsWith('local-'))
     for (const v of localVouchers) {
       const { id, ...rest } = v
-      const { data } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletIdRef.current }).select().single()
-      if (data) {
+      const { data: raw } = await supabase.from(VOUCHERS_VIEW).insert({ ...rest, user_id: user.id, wallet_id: walletIdRef.current }).select().single()
+      if (raw) {
+        const data = normalizeVoucher(raw)
         setVouchers(prev => prev.map(pv => pv.id === id ? data : pv))
         logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
       }
@@ -609,11 +631,12 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       throw new Error(error.message)
     }
 
-    commitVoucherState([...vouchersRef.current, data], archivedVouchersRef.current)
-    logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
-    track('voucher_added', { store_name: data.store_name, amount: data.amount })
-    phCapture('voucher_added', { store_name: data.store_name, amount: data.amount })
-    return data
+    const saved = normalizeVoucher(data)
+    commitVoucherState([...vouchersRef.current, saved], archivedVouchersRef.current)
+    logAction('add', saved.store_name, saved.id, { amount: saved.amount, balance: saved.balance })
+    track('voucher_added', { store_name: saved.store_name, amount: saved.amount })
+    phCapture('voucher_added', { store_name: saved.store_name, amount: saved.amount })
+    return saved
   }
 
   async function updateVoucher(id: string, vData: Partial<Voucher>, storeUsed?: string | null) {

@@ -4,7 +4,9 @@ import { supabase } from '../lib/supabase'
 import { sendExpiryReminderEmail } from '../lib/emailService'
 import { translate } from '../lib/i18n'
 
-const NOTIF_KEY = 'last_expiry_notification'
+// Per-user so one account's daily check on a shared device doesn't suppress
+// every other account's expiry notifications for 24h.
+const notifKey = (userId?: string) => `last_expiry_notification_${userId ?? 'anon'}`
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 export interface NotifChannels {
@@ -59,7 +61,7 @@ export function useExpiryNotifications(
     async function checkAndNotify() {
       if (vouchers.length === 0) return
 
-      const last = localStorage.getItem(NOTIF_KEY)
+      const last = localStorage.getItem(notifKey(userId))
       if (last && Date.now() - parseInt(last) < CHECK_INTERVAL_MS) return
 
       const expiryWindowDays = parseInt(localStorage.getItem(`reminder_days_${userId}`) || '14')
@@ -73,9 +75,12 @@ export function useExpiryNotifications(
 
       if (expiring.length === 0) return
 
-      localStorage.setItem(NOTIF_KEY, Date.now().toString())
-
       const channels = getNotifChannels(userId)
+      // Only start the 24h throttle once we can actually deliver on some channel —
+      // stamping pre-emptively meant a dismissed permission prompt silenced
+      // notifications for a day with nothing shown.
+      const canDeliver = (channels.push && Notification.permission === 'granted') || channels.email || channels.telegram
+      if (canDeliver) localStorage.setItem(notifKey(userId), Date.now().toString())
 
       const urgent = expiring.filter(v =>
         Math.ceil((new Date(v.expiry_date!).getTime() - nowTime) / (1000 * 60 * 60 * 24)) <= 3
@@ -164,12 +169,6 @@ export async function requestPushPermission(): Promise<NotificationPermission> {
   if (!('Notification' in window)) return 'denied'
   if (Notification.permission !== 'default') return Notification.permission
   return await Notification.requestPermission()
-}
-
-// Force a notification check (ignores throttle)
-export async function forceNotificationCheck(_vouchers?: Voucher[]) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return
-  localStorage.removeItem(NOTIF_KEY)
 }
 
 // Send an immediate push notification when a voucher is used

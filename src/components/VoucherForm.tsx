@@ -435,6 +435,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault()
+    // Synchronous re-entry guard: `disabled={loading}` on the button isn't applied
+    // until React commits, so a fast double-tap could fire addVoucher twice and
+    // create a duplicate voucher.
+    if (loading) return
     if (!storeName) return toast.error(t('form.error.store.required'))
     if (!code) return toast.error(t('form.error.code.required'))
     // Guard the quick-save and edit paths too (they bypass the per-step gate)

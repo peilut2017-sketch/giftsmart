@@ -1257,7 +1257,11 @@ export default function AdminPage() {
 
   // A store name or code containing a comma/quote/newline must not shift columns
   function csvCell(c: unknown): string {
-    return `"${String(c ?? '').replace(/"/g, '""')}"`
+    // Neutralize spreadsheet formula injection from user-controlled fields
+    // (store names, emails, notes) before quoting.
+    let s = String(c ?? '')
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+    return `"${s.replace(/"/g, '""')}"`
   }
 
   async function exportCSV() {

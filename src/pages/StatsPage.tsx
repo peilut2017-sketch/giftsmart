@@ -5,7 +5,7 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
-import { formatCurrency, getExpiryStatus } from '../utils/helpers'
+import { formatCurrency, getExpiryStatus, csvCell } from '../utils/helpers'
 import Icon from '../components/ui/Icon'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
@@ -186,7 +186,7 @@ export default function StatsPage() {
       // The file must say rows are missing — a silent skip reads as a complete export
       if (omitted > 0) rows.push([t('stats.export.omitted', { count: omitted }), '', '', '', ''])
 
-      const csvContent = '﻿' + rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
+      const csvContent = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

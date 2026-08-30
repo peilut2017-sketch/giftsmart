@@ -8,6 +8,7 @@ import { sendWelcomeEmail } from '../lib/emailService'
 import { translate } from '../lib/i18n'
 import { markExplicitSignOut } from '../lib/appMode'
 import { parkGuestVaultKeyForMerge, storeResealIds } from '../lib/e2eeMerge'
+import { wipeVaultSessionKeys } from '../lib/vaultBundle'
 
 /** Single source of truth for "who is this" — UI must branch on this, not on
     scattered provider/metadata checks. */
@@ -81,6 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const welcomeCheckedRef = useRef(false)
+  // Bumped on every auth transition; a slow fetchProfile only applies if its
+  // generation is still current, so a fetch for user A can't repopulate the
+  // profile (or its cache) after a sign-out / switch to user B already cleared it.
+  const authGenRef = useRef(0)
 
   // Welcome email — sent exactly once per account. should_send_welcome_email()
   // atomically flips a profile flag server-side and returns true only for
@@ -128,6 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPasswordRecovery(true)
         return
       }
+      // New auth generation — invalidates any in-flight fetchProfile from before
+      authGenRef.current += 1
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -152,13 +159,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function fetchProfile(userId: string) {
+    const gen = authGenRef.current
     try {
       const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 5000))
       const query = Promise.resolve(supabase.from('profiles').select('*').eq('id', userId).limit(1))
         .then(r => r.data?.[0] ?? null)
         .catch(() => null)
       const data = await Promise.race([query, timeout])
-      if (data) {
+      // Drop a late result whose auth generation has been superseded (sign-out or
+      // a different user signed in while this was in flight).
+      if (data && gen === authGenRef.current) {
         setProfile(data)
         writeCachedProfile(data)
       }
@@ -310,6 +320,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     evictProfileCache()
+    // Wipe the vault key material HERE, not only in E2EEContext's `!user` effect:
+    // signing out sets user→null, which unmounts E2EEProvider before that effect
+    // can run, so the exported AES master key used to survive in sessionStorage
+    // (and was readable by the next account signing in on the same tab).
+    wipeVaultSessionKeys()
     // Remembered so app-mode doesn't instantly re-create a guest session and
     // trap the user out of the login screen they explicitly asked for.
     markExplicitSignOut()

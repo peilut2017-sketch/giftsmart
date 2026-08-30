@@ -21,6 +21,27 @@ export interface ExtractedVoucher {
 // Patterns that indicate an unsubscribe / opt-out link — exclude these
 const UNSUBSCRIBE_RE = /unsubscribe|optout|opt-out|remove|הסרה|הסר/i
 
+// Parse a money token that may use a comma as either a decimal or a thousands
+// separator. "150,50" (2 digits after comma) is decimal → 150.5; "1,500"
+// (3 digits) is thousands → 1500. The old code blindly stripped the comma, so
+// "150,50" became 15050 — a 100× error on the extracted amount.
+function parseAmount(raw: string): number {
+  const s = raw.trim()
+  if (s.includes(',') && s.includes('.')) {
+    // Both present: the LAST separator is the decimal point.
+    return s.lastIndexOf(',') > s.lastIndexOf('.')
+      ? parseFloat(s.replace(/\./g, '').replace(',', '.'))
+      : parseFloat(s.replace(/,/g, ''))
+  }
+  if (s.includes(',')) {
+    const after = s.slice(s.lastIndexOf(',') + 1)
+    return after.length === 2
+      ? parseFloat(s.replace(',', '.'))   // decimal comma
+      : parseFloat(s.replace(/,/g, ''))   // thousands comma
+  }
+  return parseFloat(s)
+}
+
 export function extractFromSMS(text: string): ExtractedVoucher {
   const result: ExtractedVoucher = {}
 
@@ -36,7 +57,7 @@ export function extractFromSMS(text: string): ExtractedVoucher {
   for (const pattern of amountPatterns) {
     const match = text.match(pattern)
     if (match) {
-      result.amount = parseFloat(match[1].replace(',', ''))
+      result.amount = parseAmount(match[1])
       break
     }
   }
