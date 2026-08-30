@@ -581,7 +581,7 @@ export default function CheckoutPage() {
     setLockToggling(true)
     try {
       const nowLocked = !voucher.is_locked
-      await updateVoucher(voucher.id, { is_locked: nowLocked, ...(nowLocked ? {} : { lock_reason: null }) } as any)
+      await updateVoucher(voucher.id, { is_locked: nowLocked, ...(nowLocked ? {} : { lock_reason: null }) })
       toast.success(nowLocked ? t('checkout.locked.now') : t('checkout.unlocked.now'))
       setShowMoreMenu(false)
       await refreshVouchers()

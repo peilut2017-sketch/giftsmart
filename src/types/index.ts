@@ -21,7 +21,7 @@ export interface Voucher {
   is_shared: boolean
   is_gift?: boolean
   is_locked?: boolean
-  lock_reason?: string
+  lock_reason?: string | null
   is_e2ee?: boolean
   item_name?: string
   archive_reason?: string | null
