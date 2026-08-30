@@ -461,9 +461,11 @@ export default function SearchPage() {
                 </select>
                 <button
                   onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                  aria-label={t(sortDir === 'asc' ? 'search.sort.asc' : 'search.sort.desc')}
+                  title={t(sortDir === 'asc' ? 'search.sort.asc' : 'search.sort.desc')}
                   className={`flex items-center px-2 py-1 rounded-lg border text-xs ${sortDir === 'desc' ? 'bg-primary-light border-primary text-primary-dark' : 'bg-surface border-border text-text2'}`}
                 >
-                  <Icon name="swap_vert" size={15} />
+                  <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={15} />
                 </button>
               </div>
             </div>

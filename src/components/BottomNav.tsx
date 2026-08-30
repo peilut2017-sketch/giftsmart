@@ -219,7 +219,6 @@ export default function BottomNav() {
       <button
         key={item.path}
         ref={el => { btnRefs.current[idx] = el }}
-        role="listitem"
         onClick={() => { if (!justDragged.current) { tapHaptic(); navigate(item.path) } }}
         aria-label={item.label}
         aria-current={active ? 'page' : undefined}
@@ -243,7 +242,7 @@ export default function BottomNav() {
   }
 
   return (
-    <nav className="bottom-nav" aria-label="ניווט ראשי" data-scrolled={scrolledDown}>
+    <nav className="bottom-nav" aria-label={t('nav.primary.aria')} data-scrolled={scrolledDown}>
       <div className="relative w-full h-full" style={{ zIndex: 1 }}>
         <div
           ref={navRef}

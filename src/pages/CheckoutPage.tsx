@@ -257,6 +257,14 @@ export default function CheckoutPage() {
     window.scrollTo({ top: window.scrollY + rect.top - 64 - 12, behavior: 'smooth' })
   }
 
+  // Honest copy: only claim success if the write actually succeeded (iOS Safari,
+  // non-secure contexts and denied permission all reject).
+  async function copyToClipboard(text: string) {
+    const ok = await navigator.clipboard.writeText(text).then(() => true).catch(() => false)
+    if (ok) toast.success(t('checkout.copied'))
+    else toast.error(t('checkout.copy.failed'))
+  }
+
   async function copyCode() {
     if (voucher?.is_e2ee && !isVaultUnlocked) {
       toast.error(t('checkout.copy.vault.locked'))
@@ -1332,8 +1340,8 @@ export default function CheckoutPage() {
                                 {' · '}{tok.view_count} {t('checkout.share.link.views')}
                               </p>
                             </div>
-                            <button onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
-                            <button onClick={() => handleDeleteShareToken(tok.token)} className="p-2 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
+                            <button onClick={() => copyToClipboard(url)} aria-label={t('checkout.share.copy.link')} title={t('checkout.share.copy.link')} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
+                            <button onClick={() => handleDeleteShareToken(tok.token)} aria-label={t('checkout.share.link.deleted')} title={t('checkout.share.link.deleted')} className="p-2 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
                           </div>
                         )
                       })}
@@ -1435,7 +1443,7 @@ export default function CheckoutPage() {
                       <p className="text-xs font-medium text-primary-dark flex items-center gap-1"><Icon name="redeem" size={14} /> {t('checkout.gift.link.label')}:</p>
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-primary-dark font-mono break-all flex-1">{giftLink}</p>
-                        <button onClick={() => { navigator.clipboard.writeText(giftLink).catch(() => {}); toast.success(t('checkout.copied')) }} className="flex-shrink-0 p-2 bg-primary/10 hover:bg-primary/20 rounded-xl"><Icon name="content_copy" size={16} color="var(--c-primary-dark)" /></button>
+                        <button onClick={() => copyToClipboard(giftLink)} aria-label={t('checkout.share.copy.link')} title={t('checkout.share.copy.link')} className="flex-shrink-0 p-2 bg-primary/10 hover:bg-primary/20 rounded-xl"><Icon name="content_copy" size={16} color="var(--c-primary-dark)" /></button>
                       </div>
                     </div>
                   )}
@@ -1479,7 +1487,7 @@ export default function CheckoutPage() {
                   return (
                     <div key={tok.token} className="flex items-center gap-2 p-3 rounded-2xl border bg-bg border-border">
                       <p className="flex-1 min-w-0 text-xs font-mono text-text2 truncate">{url}</p>
-                      <button onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
+                      <button onClick={() => copyToClipboard(url)} aria-label={t('checkout.share.copy.link')} title={t('checkout.share.copy.link')} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
                     </div>
                   )
                 })}
