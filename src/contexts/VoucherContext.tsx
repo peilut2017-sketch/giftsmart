@@ -56,7 +56,7 @@ interface VoucherContextType {
   getActivityLog: (limit?: number) => Promise<ActivityLogEntry[]>
   getVoucherActivityLog: (voucherId: string) => Promise<ActivityLogEntry[]>
   logAction: (action: ActivityLogEntry['action'], voucherName: string, voucherId?: string, details?: Record<string, any>) => void
-  createGift: (voucherId: string, recipientEmail: string | null, message: string, sendAt: Date, codeOverride?: string) => Promise<string | null>
+  createGift: (voucherId: string, recipientEmail: string | null, message: string, sendAt: Date, codeOverride?: string, cvvOverride?: string) => Promise<string | null>
   cancelGift: (giftId: string) => Promise<void>
   getPendingGifts: (voucherId: string) => Promise<PendingGift[]>
 }
@@ -1040,7 +1040,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   // ── Gift sending ────────────────────────────────────────────────────────────
 
-  async function createGift(voucherId: string, recipientEmail: string | null, message: string, sendAt: Date, codeOverride?: string): Promise<string | null> {
+  async function createGift(voucherId: string, recipientEmail: string | null, message: string, sendAt: Date, codeOverride?: string, cvvOverride?: string): Promise<string | null> {
     if (!user) return null
     assertNotGuest()
     const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
@@ -1056,10 +1056,11 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       recipient_email: recipientEmail || '',
       message: message || null,
       token,
-      // E2EE vouchers: the vault-decrypted code travels on the gift row, mirroring
-      // shared_voucher_tokens.code_override. Without it the recipient would receive
-      // ciphertext encrypted with the sender's key — unusable, not just unreadable.
+      // E2EE vouchers: the vault-decrypted code AND cvv travel on the gift row,
+      // mirroring shared_voucher_tokens.code_override. Without them the recipient
+      // would receive ciphertext encrypted with the sender's key — unusable.
       ...(codeOverride ? { code_override: codeOverride } : {}),
+      ...(cvvOverride ? { cvv_override: cvvOverride } : {}),
       ...(isScheduled ? { send_at: sendAt.toISOString() } : {}),
     })
     if (error) { console.error('createGift error:', error); return null }

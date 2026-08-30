@@ -187,6 +187,11 @@ export default function ArchivePage() {
                       const isE2EE = isEncryptedField(v.code)
                       const decrypted = decryptedMap.get(v.id)
                       if (isE2EE && !isVaultUnlocked) return null
+                      // Never render raw ciphertext: if an E2EE entry couldn't be
+                      // decrypted, show a lock placeholder instead of "e2ee:iv:ct".
+                      if (isE2EE && !decrypted) {
+                        return <div className="text-[11px] text-text3 font-mono mt-0.5">••••••</div>
+                      }
                       const displayCode = isE2EE && decrypted ? decrypted.code : v.code
                       return <div className="text-[11px] text-text3 font-mono mt-0.5">{displayCode}</div>
                     })()}

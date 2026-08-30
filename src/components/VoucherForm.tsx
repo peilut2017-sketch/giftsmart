@@ -394,6 +394,18 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       if (effectiveE2EE) {
         if (!isEncryptedField(finalCode)) finalCode = await encrypt(finalCode)
         if (finalCvv && !isEncryptedField(finalCvv)) finalCvv = await encrypt(finalCvv)
+      } else if (isEncryptedField(finalCode) || (finalCvv && isEncryptedField(finalCvv))) {
+        // Saving as plaintext, but the field is still ciphertext — this only
+        // happens when editing an E2EE voucher whose vault is locked (the input
+        // shows nothing but state still holds "e2ee:iv:ct"). Writing it with
+        // is_e2ee:false would store ciphertext as plaintext and lose the code
+        // forever. Force the vault open instead of destroying the voucher.
+        setLoading(false)
+        plainOverrideRef.current = false
+        toast.error(t('form.e2ee.unlock.to.edit'))
+        setPendingSubmitAfterUnlock(true)
+        openVaultGate()
+        return
       }
 
       const v = {
@@ -411,8 +423,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         notes: notesValue || undefined,
         link: link.trim() || undefined,
         source: source.trim() || undefined,
-        is_archived: false,
-        is_shared: false,
+        // Only set on CREATE. On edit these were unconditionally written false,
+        // silently clearing is_shared (who can spend this voucher) and is_archived
+        // on every unrelated edit.
+        ...(isEdit ? {} : { is_archived: false, is_shared: false }),
         is_locked: isLocked,
         lock_reason: isLocked ? lockReason.trim() || undefined : undefined,
         is_e2ee: effectiveE2EE,

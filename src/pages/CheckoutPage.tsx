@@ -252,9 +252,16 @@ export default function CheckoutPage() {
       toast.error(t('checkout.copy.vault.locked'))
       return
     }
-    const codeToCopy = effectiveCode ?? voucher?.code
-    if (!codeToCopy) return
-    await navigator.clipboard.writeText(codeToCopy).catch(() => {})
+    // For E2EE vouchers use ONLY the decrypted value — never fall back to
+    // voucher.code, which is raw ciphertext when decryption failed (copying
+    // "e2ee:iv:ct" to the clipboard is worse than useless at a register).
+    const codeToCopy = voucher?.is_e2ee ? effectiveCode : (effectiveCode ?? voucher?.code)
+    if (!codeToCopy || isEncryptedField(codeToCopy)) {
+      toast.error(t('checkout.copy.decrypt.failed'))
+      return
+    }
+    const ok = await navigator.clipboard.writeText(codeToCopy).then(() => true).catch(() => false)
+    if (!ok) { toast.error(t('checkout.copy.failed')); return }
     setCopied(true)
     toast.success(t('checkout.code.copied'))
     setTimeout(() => setCopied(false), 2000)
@@ -267,8 +274,12 @@ export default function CheckoutPage() {
       return
     }
     const cvvToCopy = voucher.is_e2ee ? plainCvv : voucher.cvv
-    if (!cvvToCopy) return
-    await navigator.clipboard.writeText(cvvToCopy).catch(() => {})
+    if (!cvvToCopy || isEncryptedField(cvvToCopy)) {
+      toast.error(t('checkout.copy.decrypt.failed'))
+      return
+    }
+    const ok = await navigator.clipboard.writeText(cvvToCopy).then(() => true).catch(() => false)
+    if (!ok) { toast.error(t('checkout.copy.failed')); return }
     toast.success(t('checkout.code.copied'))
   }
 
@@ -403,13 +414,21 @@ export default function CheckoutPage() {
       toast.error(t('checkout.share.vault.locked'))
       return
     }
+    // Vault unlocked but decryption failed → effectiveCode is null/ciphertext.
+    // Sending would hand the recipient unreadable ciphertext, so block it.
+    if (voucher.is_e2ee && (!effectiveCode || isEncryptedField(effectiveCode))) {
+      toast.error(t('checkout.copy.decrypt.failed'))
+      return
+    }
     const sendAt = giftScheduled && giftDate ? new Date(giftDate) : new Date()
     setGiftSending(true)
     setGiftLink(null)
     try {
       const email = giftMode === 'email' ? giftEmail.trim() : null
       const codeOverride = voucher.is_e2ee && effectiveCode ? effectiveCode : undefined
-      const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt, codeOverride)
+      // Carry the decrypted CVV too, or the recipient's copy gets ciphertext in cvv
+      const cvvOverride = voucher.is_e2ee && plainCvv && !isEncryptedField(plainCvv) ? plainCvv : undefined
+      const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt, codeOverride, cvvOverride)
       if (!token) { toast.error(t('checkout.gift.create.error')); return }
 
       const link = `${APP_BASE}/gift/${token}`
@@ -489,6 +508,10 @@ export default function CheckoutPage() {
     // E2EE vouchers: require vault open so recipient sees the real code
     if (voucher.is_e2ee && !isVaultUnlocked) {
       toast.error(t('checkout.share.vault.locked'))
+      return
+    }
+    if (voucher.is_e2ee && (!effectiveCode || isEncryptedField(effectiveCode))) {
+      toast.error(t('checkout.copy.decrypt.failed'))
       return
     }
     setShareLoading(true)
