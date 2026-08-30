@@ -364,7 +364,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       // vouchers from ALL wallets the user is a member of (own + shared wallets).
       type QueryResult = { data: any[] | null; error?: any }
       const [vRes, svRes, storeRes, catRes] = await Promise.allSettled([
-        withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').order('expiry_date', { ascending: true }).limit(500) as any),
+        // Active vouchers ordered BEFORE archived, so if a user exceeds the cap it's
+        // stale archived rows that drop off — never a spendable active voucher.
+        withTimeout<QueryResult>(supabase.from(VOUCHERS_VIEW).select('*').order('is_archived', { ascending: true }).order('expiry_date', { ascending: true }).limit(1000) as any),
         withTimeout<QueryResult>(
           (async () => {
             const res = await (supabase.from('super_vouchers').select('*').or(`wallet_id.eq.${wId},is_global.eq.true`).limit(100) as any)
@@ -400,8 +402,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
               .from(VOUCHERS_VIEW)
               .select('*')
               .eq('user_id', user.id)
+              .order('is_archived', { ascending: true })
               .order('expiry_date', { ascending: true })
-              .limit(500)).catch(() => ({ data: null }))
+              .limit(1000)).catch(() => ({ data: null }))
             if (byUserId && byUserId.length > 0) {
               const rows2 = normalizeVouchers(byUserId)
               const active2 = rows2.filter((v) => !v.is_archived)
