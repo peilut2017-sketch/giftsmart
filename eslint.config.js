@@ -19,5 +19,11 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Empty catches are an intentional pattern here (best-effort haptics,
+      // wake-lock release, cache writes). Allowing them unburies the real
+      // signals (rules-of-hooks, unused vars) that were drowned out.
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
   },
 ])

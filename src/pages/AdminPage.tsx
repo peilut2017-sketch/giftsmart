@@ -791,7 +791,7 @@ export default function AdminPage() {
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
     supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(parsePremiumFlag(data)) })
     supabase.rpc('get_marketplace_mode').then(({ data }) => { if (data) setMarketplaceMode(data as 'enabled' | 'disabled' | 'selective') })
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin])  
 
   // Realtime on profiles is blocked by RLS (users see only their own row).
   // Instead: re-fetch when the admin returns to the tab, and poll every 60s.
@@ -804,7 +804,7 @@ export default function AdminPage() {
       document.removeEventListener('visibilitychange', onVisible)
       clearInterval(interval)
     }
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin])  
 
   async function handleTogglePremium() {
     if (premiumEnabled === null) return
@@ -1162,7 +1162,7 @@ export default function AdminPage() {
     supabase.rpc('admin_get_inbox_counts').then(({ data }) => {
       if (data) setInboxCounts(data as typeof inboxCounts)
     })
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin])  
 
   if (!isAdmin) {
     // Profile is still being fetched — don't flash "access restricted" for a real admin

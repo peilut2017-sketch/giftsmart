@@ -227,7 +227,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     return () => { document.removeEventListener('mousedown', onOutside); document.removeEventListener('touchstart', onOutside) }
   }, [showOperatorPicker])
 
-  useEffect(() => () => { stopScanner() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { stopScanner() }, [])  
 
   async function openOperatorPicker() {
     if (!operatorsLoaded) {

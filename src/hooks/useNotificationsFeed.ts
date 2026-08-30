@@ -132,7 +132,7 @@ export function useNotificationsFeed() {
       }
     }
     load()
-  }, [user, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, reloadKey])  
 
   const refresh = useCallback(() => {
     rawCache = null
