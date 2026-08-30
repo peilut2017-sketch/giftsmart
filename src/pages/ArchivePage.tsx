@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { EASE_OUT } from '../lib/motion'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useNavigate } from 'react-router-dom'
-import { formatCurrency, formatDate, getStoreInitials } from '../utils/helpers'
+import { formatCurrency, formatDate, getStoreInitials, voucherMatchesQuery } from '../utils/helpers'
 import Icon from '../components/ui/Icon'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -38,15 +38,14 @@ export default function ArchivePage() {
 
   const sortedFiltered = useMemo(() => {
     const q = search.toLowerCase()
+    // Search the DECRYPTED code for E2EE vouchers (matching SearchPage) — matching
+    // raw ciphertext both missed real matches and could match base64 noise. Now the
+    // same field set as everywhere else (store, code, cats, tags, notes, source, item).
     const result = archivedVouchers.filter(v => {
       if (hiddenIds.has(v.id)) return false
-      if (!q) return true
-      // Search the DECRYPTED code for E2EE vouchers (matching SearchPage) — matching
-      // raw ciphertext both missed real matches and could match base64 noise.
-      const codeText = isEncryptedField(v.code)
-        ? (isVaultUnlocked ? decryptedMap.get(v.id)?.code ?? '' : '')
-        : v.code
-      return v.store_name.toLowerCase().includes(q) || codeText.toLowerCase().includes(q)
+      return voucherMatchesQuery(v, q, {
+        resolveCode: () => isEncryptedField(v.code) ? (isVaultUnlocked ? decryptedMap.get(v.id)?.code ?? '' : '') : v.code,
+      })
     })
     switch (sortKey) {
       case 'store': result.sort((a, b) => a.store_name.localeCompare(b.store_name, 'he')); break

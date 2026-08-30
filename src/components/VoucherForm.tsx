@@ -6,6 +6,8 @@ import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
+import { extractFromSMS, type ExtractedVoucher } from '../utils/smsExtractor'
+import { analyzeVoucherImage } from '../lib/gemini'
 import Icon from './ui/Icon'
 import VaultUnlockSheet from './VaultUnlockSheet'
 import VaultSetupSheet from './VaultSetupSheet'
@@ -114,6 +116,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   })
   const [usageAmount, setUsageAmount] = useState('')
   const [storeUsedInput, setStoreUsedInput] = useState('')
+  // Paste-from-SMS / photo quick fill (add mode only)
+  const [showSmsPaste, setShowSmsPaste] = useState(false)
+  const [smsText, setSmsText] = useState('')
+  const [analyzingImage, setAnalyzingImage] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const [actualCost, setActualCost] = useState(voucher?.actual_cost?.toString() || '')
   const [code, setCode] = useState(voucher?.code || '')
   const [cvv, setCvv] = useState(voucher?.cvv || '')
@@ -336,6 +343,50 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     const newStore = await addStore(storeSearch.trim())
     setStoreName(newStore.name)
     setShowStoreDropdown(false)
+  }
+
+  // Fill the form from an extracted voucher; returns how many fields were set.
+  function applyExtracted(ex: ExtractedVoucher): number {
+    let filled = 0
+    if (ex.store_name) { setStoreName(ex.store_name); setStoreSearch(ex.store_name); filled++ }
+    if (ex.code) { setCode(ex.code); filled++ }
+    if (ex.cvv) { setCvv(ex.cvv); filled++ }
+    if (ex.amount != null) { setAmount(String(ex.amount)); filled++ }
+    if (ex.link) { setLink(ex.link); filled++ }
+    if (Array.isArray(ex.categories) && ex.categories.length > 0) { setSelectedCats(ex.categories); filled++ }
+    if (ex.expiry_date && /^\d{4}-\d{2}-\d{2}$/.test(ex.expiry_date)) {
+      setExpiryDate(ex.expiry_date); setDisplayDate(isoToDisplay(ex.expiry_date)); filled++
+    }
+    return filled
+  }
+
+  // Parse a pasted voucher SMS/email — client-side regex, works offline. The
+  // promised "paste SMS" input the onboarding advertised but was never wired up.
+  function applySms() {
+    const text = smsText.trim()
+    if (!text) return
+    const filled = applyExtracted(extractFromSMS(text))
+    if (filled === 0) { toast.error(t('form.sms.none')); return }
+    toast.success(t('form.sms.filled', { count: filled }))
+    setShowSmsPaste(false); setSmsText('')
+  }
+
+  // Analyze a voucher photo via the analyze-voucher Edge Function (Gemini). The
+  // API key is server-side; on any failure we degrade to a clear toast.
+  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-picking the same file
+    if (!file) return
+    setAnalyzingImage(true)
+    try {
+      const filled = applyExtracted(await analyzeVoucherImage(file))
+      if (filled === 0) toast.error(t('form.sms.none'))
+      else { toast.success(t('form.sms.filled', { count: filled })); setShowSmsPaste(false) }
+    } catch (err: any) {
+      toast.error(err?.message?.includes('GEMINI_API_KEY') ? t('form.scan.unavailable') : t('form.scan.error'))
+    } finally {
+      setAnalyzingImage(false)
+    }
   }
 
   async function handleAddCat() {
@@ -620,6 +671,51 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 <p className="text-lg font-extrabold text-text">
                   {step === STEP_STORE ? t('form.store') : step === STEP_CODE ? t('form.code') : step === STEP_BALANCE ? t('form.amount') : step === STEP_EXPIRY ? t('form.expiry') : t('form.more.details')}
                 </p>
+              </div>
+            )}
+
+            {/* Quick-fill the whole form from an SMS/text or a photo (add mode only) */}
+            {show(STEP_STORE) && !isEdit && (
+              <div>
+                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+                {!showSmsPaste ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={analyzingImage}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-primary/40 text-primary text-sm font-medium hover:bg-primary-light transition disabled:opacity-60"
+                    >
+                      {analyzingImage
+                        ? <><Icon name="progress_activity" size={18} className="animate-spin" aria-hidden /> {t('form.scan.analyzing')}</>
+                        : <><Icon name="photo_camera" size={18} aria-hidden /> {t('form.scan.photo')}</>}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSmsPaste(true)}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-primary/40 text-primary text-sm font-medium hover:bg-primary-light transition"
+                    >
+                      <Icon name="content_paste" size={18} aria-hidden /> {t('form.sms.cta.short')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-border bg-bg p-3 space-y-2">
+                    <label htmlFor="vf-sms" className="text-sm font-medium text-text2 block">{t('form.sms.label')}</label>
+                    <textarea
+                      id="vf-sms" value={smsText} onChange={e => setSmsText(e.target.value)}
+                      rows={4} autoFocus placeholder={t('form.sms.placeholder')}
+                      className={`${inputCls} resize-none`}
+                    />
+                    <div className="flex gap-2">
+                      <button type="button" onClick={applySms} disabled={!smsText.trim()} className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-50">
+                        {t('form.sms.analyze')}
+                      </button>
+                      <button type="button" onClick={() => { setShowSmsPaste(false); setSmsText('') }} className="px-4 py-2.5 rounded-xl bg-surface border border-border text-text2 text-sm">
+                        {t('app.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

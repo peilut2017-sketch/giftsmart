@@ -7,7 +7,7 @@ import type { Voucher, SuperVoucher } from '../types'
 import toast from 'react-hot-toast'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
-import { getDaysUntilExpiry, formatDate, formatCurrency } from '../utils/helpers'
+import { getDaysUntilExpiry, formatDate, formatCurrency, voucherMatchesQuery } from '../utils/helpers'
 import { useModalHistory } from '../hooks/useModalHistory'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
@@ -116,18 +116,21 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
   // Android/browser Back closes the in-store overlay instead of leaving the app
   useModalHistory(true, () => handleClose())
 
+  const { decryptedMap } = useE2EE()
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
     return vouchers.filter(v => {
       if (v.is_archived) return false
       if (!q) return true
       const sv = superVouchers.find(s => s.id === v.super_voucher_id)
-      return (
-        v.store_name.toLowerCase().includes(q) ||
-        (sv != null && sv.stores.some(s => s.toLowerCase().includes(q)))
-      )
+      // Same field coverage as the main search (incl. tags/categories/notes and
+      // the decrypted code) plus the super-voucher's member store names.
+      return voucherMatchesQuery(v, q, {
+        resolveCode: () => v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code,
+        extraHaystack: sv ? [sv.name, ...sv.stores].join(' ') : undefined,
+      })
     })
-  }, [vouchers, superVouchers, search])
+  }, [vouchers, superVouchers, search, decryptedMap])
 
   const directVouchers = sortGroup(filtered.filter(v => !v.super_voucher_id))
   const superGroupVouchers = sortGroup(filtered.filter(v => !!v.super_voucher_id))

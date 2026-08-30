@@ -26,12 +26,12 @@ export function extractFromSMS(text: string): ExtractedVoucher {
 
   // Extract amount
   const amountPatterns = [
-    /(?:סכום|שובר|ערך|יתרה)[:\s]*(?:של\s*)?₪?\s*(\d+(?:[,\.]\d+)?)/i,
-    /₪\s*(\d+(?:[,\.]\d+)?)/,
-    /(\d+(?:[,\.]\d+)?)\s*₪/,
-    /(\d+(?:[,\.]\d+)?)\s*שקל/i,
-    /(\d+(?:[,\.]\d+)?)\s*ש"ח/i,
-    /(\d+(?:[,\.]\d+)?)\s*NIS/i,
+    /(?:סכום|שובר|ערך|יתרה)[:\s]*(?:של\s*)?₪?\s*(\d+(?:[,.]\d+)?)/i,
+    /₪\s*(\d+(?:[,.]\d+)?)/,
+    /(\d+(?:[,.]\d+)?)\s*₪/,
+    /(\d+(?:[,.]\d+)?)\s*שקל/i,
+    /(\d+(?:[,.]\d+)?)\s*ש"ח/i,
+    /(\d+(?:[,.]\d+)?)\s*NIS/i,
   ]
   for (const pattern of amountPatterns) {
     const match = text.match(pattern)
@@ -43,9 +43,9 @@ export function extractFromSMS(text: string): ExtractedVoucher {
 
   // Extract code (various patterns)
   const codePatterns = [
-    /(?:קוד|code|voucher|שובר|gift\s*card|גיפט)[:\s#]*([A-Z0-9\-]{4,20})/i,
-    /(?:מספר)[:\s]*([A-Z0-9\-]{6,20})/i,
-    /\b([A-Z]{2,4}[\-]?[0-9]{4,12})\b/,
+    /(?:קוד|code|voucher|שובר|gift\s*card|גיפט)[:\s#]*([A-Z0-9-]{4,20})/i,
+    /(?:מספר)[:\s]*([A-Z0-9-]{6,20})/i,
+    /\b([A-Z]{2,4}-?[0-9]{4,12})\b/,
     /(?:card\s*number|מספר כרטיס)[:\s]*([0-9\s]{12,19})/i,
     // Broad fallback last — exclude Israeli phone numbers (05x / 07x / 02–09 landlines)
     /\b(?!05\d)(?!07\d)(?!0[2-9]\d{7})([0-9]{8,19})\b/,
@@ -64,16 +64,16 @@ export function extractFromSMS(text: string): ExtractedVoucher {
 
   // Extract expiry date — if multiple dates found, pick last (latest)
   const expiryPatterns = [
-    /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[\/\.\-]\d{2,4})/i,
+    /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[/.-]\d{2,4})/i,
     /(?:תוקף|valid)[:\s]*(\d{1,2}\/\d{2,4})/i,
-    /(\d{1,2}[\/\.]\d{2,4})/,
-    /(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})/,
-    /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/,
+    /(\d{1,2}[/.]\d{2,4})/,
+    /(\d{2}[/-]\d{2}[/-]\d{2,4})/,
+    /(\d{4}[/-]\d{2}[/-]\d{2})/,
   ]
 
   // First try labeled expiry
   let foundExpiry = false
-  const labeledExpiryRe = /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[\/\.\-][\d\/\.\-]{2,9})/i
+  const labeledExpiryRe = /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[/.-][\d/.-]{2,9})/i
   const labeledMatch = text.match(labeledExpiryRe)
   if (labeledMatch) {
     const parsed = parseDate(labeledMatch[1])
@@ -144,14 +144,16 @@ export function extractFromSMS(text: string): ExtractedVoucher {
 
 function parseDate(str: string): string | null {
   try {
-    const parts = str.split(/[\/\.\-]/)
+    const parts = str.split(/[/.-]/)
     if (parts.length === 2) {
-      // MM/YY or MM/YYYY
+      // MM/YY or MM/YYYY — a voucher's "valid until MM/YY" means the END of the
+      // month, so use the last day (0-based next month, day 0) not the 1st.
       const month = parseInt(parts[0])
       let year = parseInt(parts[1])
       if (year < 100) year += 2000
       if (month >= 1 && month <= 12) {
-        return `${year}-${String(month).padStart(2, '0')}-01`
+        const lastDay = new Date(year, month, 0).getDate()
+        return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
       }
     } else if (parts.length === 3) {
       // DD/MM/YYYY or YYYY/MM/DD
@@ -162,6 +164,6 @@ function parseDate(str: string): string | null {
         return `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
       }
     }
-  } catch {}
+  } catch { /* unparseable date — fall through to null */ }
   return null
 }

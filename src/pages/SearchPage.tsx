@@ -8,7 +8,7 @@ import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useT } from '../lib/i18n'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, formatDate, getDaysUntilExpiry } from '../utils/helpers'
+import { formatCurrency, formatDate, getDaysUntilExpiry, voucherMatchesQuery } from '../utils/helpers'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import InStoreMode from '../components/InStoreMode'
@@ -171,16 +171,11 @@ export default function SearchPage() {
 
     if (search) {
       const q = search.toLowerCase()
+      const resolveCode = (vv: Voucher) => vv.is_e2ee ? (decryptedMap.get(vv.id)?.code ?? '') : vv.code
       const withScore = result
         .map(v => {
           const sv = superVouchers.find(s => s.id === v.super_voucher_id)
-          const decryptedCode = v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code
-          const directMatch =
-            v.store_name.toLowerCase().includes(q) ||
-            decryptedCode.toLowerCase().includes(q) ||
-            v.categories.some(c => c.toLowerCase().includes(q)) ||
-            v.tags.some(tag => tag.toLowerCase().includes(q)) ||
-            (v.notes && v.notes.toLowerCase().includes(q))
+          const directMatch = voucherMatchesQuery(v, q, { resolveCode })
           const superMatch = !directMatch && sv && (
             sv.name.toLowerCase().includes(q) ||
             sv.stores.some(s => s.toLowerCase().includes(q))
@@ -200,18 +195,8 @@ export default function SearchPage() {
 
   const searchedArchived = useMemo(() => {
     if (!search) return []
-    const q = search.toLowerCase()
-    return archivedVouchers.filter(v => {
-      const decryptedCode = v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code
-      return (
-        v.store_name.toLowerCase().includes(q) ||
-        decryptedCode.toLowerCase().includes(q) ||
-        v.categories.some(c => c.toLowerCase().includes(q)) ||
-        v.tags.some(tag => tag.toLowerCase().includes(q)) ||
-        (v.notes && v.notes.toLowerCase().includes(q)) ||
-        (v.source && v.source.toLowerCase().includes(q))
-      )
-    })
+    const resolveCode = (v: Voucher) => v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code
+    return archivedVouchers.filter(v => voucherMatchesQuery(v, search, { resolveCode }))
   }, [search, archivedVouchers, decryptedMap])
 
   const searchedListings = useMemo(() => {
@@ -388,13 +373,14 @@ export default function SearchPage() {
               </button>
             ))}
             <div className="flex-1" />
+            {/* Visible label — the onboarding points users to an "אני בחנות" button,
+                so it must actually read that, not be an unlabeled icon. */}
             <button
               onClick={() => setShowInStoreMode(true)}
-              className="flex items-center gap-1 text-xs px-2.5 py-2 rounded-full font-medium bg-bg text-text2 flex-shrink-0"
-              aria-label={t('instore.title')}
+              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold bg-primary-light text-primary-dark flex-shrink-0"
               title={t('instore.title')}
             >
-              <Icon name="storefront" size={17} />
+              <Icon name="storefront" size={17} /> {t('instore.title')}
             </button>
             <button
               onClick={() => setIsSelectMode(true)}

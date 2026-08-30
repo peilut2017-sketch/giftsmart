@@ -59,6 +59,31 @@ export function isAlphanumeric(code: string): boolean {
   return /[A-Za-z]/.test(code)
 }
 
+// Single source of truth for "does this voucher match the search box".
+// Previously four screens each searched a different subset of fields, so the
+// same query found a voucher in one place and not another, and item_name was
+// searchable nowhere. `resolveCode` lets callers pass the DECRYPTED code for
+// E2EE vouchers (raw v.code is ciphertext); super-voucher store names can be
+// folded in via `extraHaystack`.
+export function voucherMatchesQuery(
+  v: {
+    store_name: string; code: string; is_e2ee?: boolean
+    categories?: string[]; tags?: string[]; notes?: string
+    source?: string; item_name?: string
+  },
+  query: string,
+  opts?: { resolveCode?: (v: any) => string; extraHaystack?: string },
+): boolean {
+  const q = query.toLowerCase().trim()
+  if (!q) return true
+  const code = opts?.resolveCode ? opts.resolveCode(v) : (v.is_e2ee ? '' : v.code)
+  const parts: (string | undefined)[] = [
+    v.store_name, code, v.notes, v.source, v.item_name, opts?.extraHaystack,
+    ...(v.categories ?? []), ...(v.tags ?? []),
+  ]
+  return parts.some(p => p != null && p.toLowerCase().includes(q))
+}
+
 export function generateId(): string {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 }
