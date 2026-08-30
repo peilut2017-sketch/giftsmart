@@ -7,10 +7,12 @@ import type { Voucher, SuperVoucher } from '../types'
 import toast from 'react-hot-toast'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
-import { getDaysUntilExpiry } from '../utils/helpers'
+import { getDaysUntilExpiry, formatDate, formatCurrency } from '../utils/helpers'
 import { useModalHistory } from '../hooks/useModalHistory'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
+import VaultUnlockSheet from './VaultUnlockSheet'
+import ConfirmDialog from './ConfirmDialog'
 
 interface Props {
   vouchers: Voucher[]
@@ -81,6 +83,28 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
   const [transactionTotal, setTransactionTotal] = useState(0)
   const [updating, setUpdating] = useState<string | null>(null)
   const [expandedBarcode, setExpandedBarcode] = useState<string | null>(null)
+  const [showVaultUnlock, setShowVaultUnlock] = useState(false)
+  // Full-redemption confirm: zeroing a voucher at the register is irreversible
+  const [confirmZero, setConfirmZero] = useState<Voucher | null>(null)
+  const wakeLockRef = useRef<any>(null)
+
+  // Keep the screen awake while the register scans — same as CheckoutPage. The
+  // "I'm at the store" screen is exactly where the phone must not sleep.
+  useEffect(() => {
+    async function acquire() {
+      try {
+        if ('wakeLock' in navigator) wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
+      } catch {}
+    }
+    acquire()
+    const onVis = () => { if (document.visibilityState === 'visible') acquire() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      try { wakeLockRef.current?.release() } catch {}
+      wakeLockRef.current = null
+    }
+  }, [])
 
   // Escape closes; the overlay is a real dialog now
   useEffect(() => {
@@ -115,10 +139,17 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
   const directTotal = directVouchers.filter(v => v.balance > 0 && notExpired(v)).reduce((s, v) => s + v.balance, 0)
   const superTotal = superGroupVouchers.filter(v => v.balance > 0 && notExpired(v)).reduce((s, v) => s + v.balance, 0)
 
-  async function handleUpdate(v: Voucher) {
+  function handleUpdate(v: Voucher) {
     const amt = parseFloat(payments[v.id] || '0')
     if (!amt || amt <= 0) { toast.error(t('instore.amount.invalid')); return }
     if (amt > v.balance) { toast.error(t('instore.amount.exceeds')); return }
+    // Zeroing the voucher is irreversible and has no undo here — confirm first,
+    // mirroring CheckoutPage's full-redemption guard.
+    if (Math.max(0, v.balance - amt) <= 0) { setConfirmZero(v); return }
+    void commitUpdate(v, amt)
+  }
+
+  async function commitUpdate(v: Voucher, amt: number) {
     setUpdating(v.id)
     try {
       const newBal = Math.max(0, v.balance - amt)
@@ -253,6 +284,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
                 onUpdate={() => handleUpdate(v)}
                 onToggleBarcode={() => toggleBarcode(v.id)}
                 onNavigate={() => onNavigate(v.id)}
+                onRequestUnlock={() => setShowVaultUnlock(true)}
                 updating={updating === v.id}
               />
             ))}
@@ -270,17 +302,41 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
                 onUpdate={() => handleUpdate(v)}
                 onToggleBarcode={() => toggleBarcode(v.id)}
                 onNavigate={() => onNavigate(v.id)}
+                onRequestUnlock={() => setShowVaultUnlock(true)}
                 updating={updating === v.id}
               />
             ))}
           </>
         )}
       </div>
+
+      {/* Unlock the vault right here — E2EE-locked vouchers were a dead end at the
+          register (the button said "open vault" and did nothing). */}
+      <VaultUnlockSheet
+        open={showVaultUnlock}
+        onClose={() => setShowVaultUnlock(false)}
+        onUnlocked={() => setShowVaultUnlock(false)}
+        contextLabel={t('instore.title')}
+      />
+
+      {confirmZero && (
+        <ConfirmDialog
+          title={t('instore.zero.confirm.title')}
+          message={t('instore.zero.confirm.msg', { store: confirmZero.store_name })}
+          onConfirm={() => {
+            const v = confirmZero
+            const amt = parseFloat(payments[v.id] || '0')
+            setConfirmZero(null)
+            if (amt > 0) void commitUpdate(v, amt)
+          }}
+          onCancel={() => setConfirmZero(null)}
+        />
+      )}
     </motion.div>
   )
 }
 
-function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill, onUpdate, onToggleBarcode, onNavigate, updating }: {
+function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill, onUpdate, onToggleBarcode, onNavigate, onRequestUnlock, updating }: {
   voucher: Voucher
   payment: string
   barcodeOpen: boolean
@@ -289,6 +345,7 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
   onUpdate: () => void
   onToggleBarcode: () => void
   onNavigate: () => void
+  onRequestUnlock: () => void
   updating: boolean
 }) {
   const { t } = useT()
@@ -323,12 +380,12 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-text text-sm truncate">{v.store_name}</p>
           <p className={`text-xs font-bold ${disabled ? 'text-text3' : 'text-primary'}`}>
-            ₪{v.balance.toLocaleString('he-IL')}
+            {formatCurrency(v.balance)}
           </p>
           {isExpired ? (
             <p className="text-xs font-bold text-error">{t('instore.expired')}</p>
           ) : v.expiry_date ? (
-            <p className="text-xs text-text3">{v.expiry_date.slice(0, 10)}</p>
+            <p className="text-xs text-text3">{formatDate(v.expiry_date)}</p>
           ) : null}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -368,8 +425,8 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
       {/* Code row */}
       <div className="px-3 pb-2.5 flex items-center gap-2 border-t border-border pt-2">
         <button
-          onClick={copyCode}
-          disabled={isLocked}
+          onClick={isLocked ? (isVaultUnlocked ? undefined : onRequestUnlock) : copyCode}
+          disabled={isLocked && isVaultUnlocked}
           className="flex-1 min-w-0 text-right"
         >
           {isLocked ? (

@@ -40,23 +40,40 @@ function isoToDisplay(iso: string): string {
   return iso
 }
 
+// Builds an ISO date only if the day/month/year form a REAL calendar date.
+// "31.02.2026" or "31.04.2026" used to pass the naive 1-31 check and produce an
+// invalid ISO string that silently became "no expiry".
+function buildISO(dStr: string, mStr: string, y: string): string | null {
+  const d = +dStr, m = +mStr
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null
+  const dt = new Date(Number(y), m - 1, d)
+  if (dt.getFullYear() !== Number(y) || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null
+  return `${y}-${mStr}-${dStr}`
+}
+
 function parseDisplayToISO(val: string): string | null {
   const digitsOnly = val.replace(/\D/g, '')
   if (/^\d{6}$/.test(digitsOnly)) {
-    const d = digitsOnly.slice(0, 2), m = digitsOnly.slice(2, 4), y = '20' + digitsOnly.slice(4, 6)
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+    return buildISO(digitsOnly.slice(0, 2), digitsOnly.slice(2, 4), '20' + digitsOnly.slice(4, 6))
   }
   if (/^\d{8}$/.test(digitsOnly)) {
-    const d = digitsOnly.slice(0, 2), m = digitsOnly.slice(2, 4), y = digitsOnly.slice(4, 8)
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+    return buildISO(digitsOnly.slice(0, 2), digitsOnly.slice(2, 4), digitsOnly.slice(4, 8))
   }
   const match = val.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/)
   if (match) {
-    const d = match[1].padStart(2, '0'), m = match[2].padStart(2, '0')
     let y = match[3]; if (y.length === 2) y = '20' + y
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+    return buildISO(match[1].padStart(2, '0'), match[2].padStart(2, '0'), y)
   }
   return null
+}
+
+// True when the field holds a complete-looking date (6 or 8 digits, or d.m.y)
+// that does NOT resolve to a real calendar date — used to warn at save time.
+function isCompleteButInvalidDate(val: string): boolean {
+  const digitsOnly = val.replace(/\D/g, '')
+  const looksComplete = /^\d{6}$/.test(digitsOnly) || /^\d{8}$/.test(digitsOnly) ||
+    /^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}$/.test(val)
+  return looksComplete && parseDisplayToISO(val) === null
 }
 
 interface Props {
@@ -335,6 +352,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (s === STEP_STORE && !storeName.trim()) { toast.error(t('form.error.store.required')); return false }
     if (s === STEP_CODE && !code.trim()) { toast.error(t('form.error.code.required')); return false }
     if (s === STEP_BALANCE && amountUnit === 'פריט' && !itemName.trim()) { toast.error(t('form.error.item.required')); return false }
+    // An impossible date (31.02) silently became "no expiry" — block it so the
+    // user fixes the typo instead of losing the expiry, reminder and sort.
+    if (s === STEP_EXPIRY && displayDate.trim() && isCompleteButInvalidDate(displayDate)) {
+      toast.error(t('form.error.date.invalid')); return false
+    }
     return true
   }
 
@@ -364,6 +386,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (e) e.preventDefault()
     if (!storeName) return toast.error(t('form.error.store.required'))
     if (!code) return toast.error(t('form.error.code.required'))
+    // Guard the quick-save and edit paths too (they bypass the per-step gate)
+    if (displayDate.trim() && isCompleteButInvalidDate(displayDate)) return toast.error(t('form.error.date.invalid'))
     // Duplicates are surfaced inline on the code step (duplicateVoucher warning) —
     // the extra native confirm() here was a blocking OS dialog repeating the same
     // information, so it's gone.
@@ -971,16 +995,29 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
-              {step !== STEP_STORE && (
-                <button onClick={goBack} className="px-6 py-3.5 rounded-2xl font-bold text-text2 bg-bg">{t('form.back')}</button>
-              )}
-              {step === STEP_DETAILS ? (
-                <button onClick={() => handleSubmit()} disabled={loading} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab disabled:opacity-70">
-                  {loading ? t('app.loading') : t('form.add.voucher')}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {step !== STEP_STORE && (
+                  <button onClick={goBack} className="px-6 py-3.5 rounded-2xl font-bold text-text2 bg-bg">{t('form.back')}</button>
+                )}
+                {step === STEP_DETAILS ? (
+                  <button onClick={() => handleSubmit()} disabled={loading} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab disabled:opacity-70">
+                    {loading ? t('app.loading') : t('form.add.voucher')}
+                  </button>
+                ) : (
+                  <button onClick={goNext} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab">{t('form.next')}</button>
+                )}
+              </div>
+              {/* Once the two required fields are in, let the user save immediately
+                  instead of tapping through the remaining optional steps. */}
+              {!isEdit && step !== STEP_DETAILS && storeName.trim() && code.trim() && (
+                <button
+                  onClick={() => { if (validateStep(step)) handleSubmit() }}
+                  disabled={loading}
+                  className="w-full py-2.5 rounded-2xl font-semibold text-primary bg-primary-light disabled:opacity-60"
+                >
+                  {t('form.save.now')}
                 </button>
-              ) : (
-                <button onClick={goNext} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab">{t('form.next')}</button>
               )}
             </div>
           )}

@@ -891,6 +891,10 @@ const translations: Record<string, string> = {
   'instore.go.voucher.en': 'Go to Voucher',
   'instore.decrypt.error': 'שגיאת פענוח',
   'instore.decrypt.error.en': 'Decryption error',
+  'instore.zero.confirm.title': 'לאפס את השובר?',
+  'instore.zero.confirm.title.en': 'Zero out this voucher?',
+  'instore.zero.confirm.msg': 'הסכום שהוזן מנצל את כל היתרה של "{store}". פעולה זו אינה הפיכה.',
+  'instore.zero.confirm.msg.en': 'This uses the entire balance of "{store}". This cannot be undone.',
 
   // ── Checkout Page ─────────────────────────────────────────────
   'checkout.back': 'חזור',
@@ -2914,6 +2918,10 @@ const translations: Record<string, string> = {
   'form.error.code.required.en': 'Please enter a voucher code',
   'form.e2ee.unlock.to.edit': 'פתח את הכספת כדי לערוך שובר מוצפן',
   'form.e2ee.unlock.to.edit.en': 'Unlock the vault to edit an encrypted voucher',
+  'form.error.date.invalid': 'תאריך לא תקין — בדוק את היום והחודש',
+  'form.error.date.invalid.en': 'Invalid date — check the day and month',
+  'form.save.now': 'שמור עכשיו',
+  'form.save.now.en': 'Save now',
   'form.error.item.required': 'יש להזין שם פריט',
   'form.error.item.required.en': 'Please enter an item name',
   'form.store.add.new': 'הוסף "{name}" כחנות חדשה',
