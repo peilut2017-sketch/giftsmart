@@ -70,10 +70,17 @@ export default function HomePage() {
   }, [showForm, pendingCalendar])
 
   function openGoogleCalendar(id: string, storeName: string, expiryDate: string, days: number) {
-    const expiry = new Date(expiryDate)
+    // Work on the calendar date components directly, never via toISOString():
+    // "YYYY-MM-DD" parses as UTC midnight, and .getDate()/.toISOString() mixed
+    // local and UTC, shifting the all-day reminder ±1 day in western timezones —
+    // and toISOString() throws outright on an invalid date.
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(expiryDate)
+    if (!m) { toast.error(t('app.error')); return }
+    const safeDays = Number.isFinite(days) ? days : 14
+    const expiry = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
     const eventDay = new Date(expiry)
-    eventDay.setDate(expiry.getDate() - days)
-    const fmt = (d: Date) => d.toISOString().replace(/-/g, '').split('T')[0]
+    eventDay.setDate(expiry.getDate() - safeDays)
+    const fmt = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
     const start = fmt(eventDay)
     const end = fmt(new Date(eventDay.getTime() + 86_400_000))
     const appUrl = import.meta.env.VITE_APP_URL || window.location.origin

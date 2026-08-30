@@ -124,17 +124,23 @@ export function DiscountsProvider({ children }: { children: ReactNode }) {
       if (error) throw error
       let all = (data as DiscountDeal[]) || []
 
-      // Merge real view_count from DB
+      // Merge real view_count AND image_url from DB — the list RPCs
+      // (get_my_deals / get_recent_deals) return neither, so uploaded deal images
+      // were stored but never displayed.
       if (all.length > 0) {
         const { data: vcData } = await supabase
           .from('discount_deals')
-          .select('id, view_count')
+          .select('id, view_count, image_url')
           .in('id', all.map(d => d.deal_id))
         if (vcData) {
-          const vcMap = new Map<string, number>(
-            vcData.map((r: { id: string; view_count: number }) => [r.id, r.view_count ?? 0])
+          const metaMap = new Map<string, { view_count: number; image_url?: string }>(
+            (vcData as { id: string; view_count: number; image_url?: string }[])
+              .map(r => [r.id, { view_count: r.view_count ?? 0, image_url: r.image_url ?? undefined }])
           )
-          all = all.map(d => ({ ...d, view_count: vcMap.get(d.deal_id) ?? d.view_count ?? 0 }))
+          all = all.map(d => {
+            const m = metaMap.get(d.deal_id)
+            return { ...d, view_count: m?.view_count ?? d.view_count ?? 0, image_url: d.image_url ?? m?.image_url }
+          })
         }
       }
 

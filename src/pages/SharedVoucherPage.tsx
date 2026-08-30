@@ -271,7 +271,7 @@ export default function SharedVoucherPage() {
                   )}
                 </div>
                 <p className="text-xs text-text3 mb-1">{t('shared.voucher_code')}</p>
-                <p className="text-xl font-mono font-bold text-text tracking-wider mb-3">{voucher.code}</p>
+                <p dir="ltr" className="text-xl font-mono font-bold text-text tracking-wider mb-3 text-center">{voucher.code}</p>
                 <button
                   onClick={copyCode}
                   className={`flex items-center gap-2 mx-auto px-5 py-2.5 rounded-2xl text-sm font-semibold transition-colors duration-150 ${
