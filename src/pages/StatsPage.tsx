@@ -16,7 +16,7 @@ import { useT } from '../lib/i18n'
 import { usePageView } from '../hooks/usePageView'
 
 export default function StatsPage() {
-  const { vouchers, archivedVouchers } = useVouchers()
+  const { vouchers, archivedVouchers, loading } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const { isVaultUnlocked, decryptedMap } = useE2EE()
   const { t } = useT()
@@ -309,7 +309,18 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {vouchers.length === 0 && archivedVouchers.length === 0 ? (
+      {loading && vouchers.length === 0 && archivedVouchers.length === 0 ? (
+        // Don't flash the "you have no vouchers" empty state during the initial
+        // load — a returning user with 40 vouchers saw "add your first voucher".
+        <div className="p-4 pb-28 space-y-4">
+          <div className="h-40 rounded-[20px] bg-bg animate-pulse" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-24 rounded-2xl bg-bg animate-pulse" />
+            <div className="h-24 rounded-2xl bg-bg animate-pulse" />
+          </div>
+          <div className="h-64 rounded-2xl bg-bg animate-pulse" />
+        </div>
+      ) : vouchers.length === 0 && archivedVouchers.length === 0 ? (
         <div className="text-center py-20 px-6">
           <Icon name="monitoring" size={48} color="var(--c-border)" />
           <p className="text-text font-bold mt-4">{t('stats.empty.title')}</p>

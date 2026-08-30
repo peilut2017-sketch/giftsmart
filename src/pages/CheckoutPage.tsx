@@ -38,16 +38,20 @@ function isSafeUrl(url: string | undefined): boolean {
 
 type TabKey = 'voucher' | 'use' | 'share' | 'sell' | 'activity'
 
-function drawBarcode(el: SVGSVGElement | null, value: string, opts: { height: number; displayValue: boolean }) {
-  if (!el) return
+function drawBarcode(el: SVGSVGElement | null, value: string, opts: { height: number; displayValue: boolean }): boolean {
+  if (!el) return true
   try {
     JsBarcode(el, value, { format: 'CODE128', width: 2, height: opts.height, displayValue: opts.displayValue, fontSize: 14, margin: opts.displayValue ? 10 : 4 })
-  } catch {}
+    return true
+  } catch { return false }
 }
 
-function drawQr(el: HTMLCanvasElement | null, value: string, size: number) {
-  if (!el) return
-  QRCode.toCanvas(el, value, { width: size, margin: 1, color: { dark: '#1e293b', light: '#ffffff' } }).catch(() => {})
+// QR quiet zone: 2 modules is the practical minimum for reliable scanning; 1 was
+// below spec and could fail on marginal scanners.
+function drawQr(el: HTMLCanvasElement | null, value: string, size: number): Promise<boolean> {
+  if (!el) return Promise.resolve(true)
+  return QRCode.toCanvas(el, value, { width: size, margin: 2, color: { dark: '#1e293b', light: '#ffffff' } })
+    .then(() => true).catch(() => false)
 }
 
 // Small inline spinner (Material Symbols has no animated spinner glyph)
@@ -107,6 +111,7 @@ export default function CheckoutPage() {
   const [customAmount, setCustomAmount] = useState('')
   const [customStore, setCustomStore] = useState('')
   const [copied, setCopied] = useState(false)
+  const [codeRenderFailed, setCodeRenderFailed] = useState(false)
   const wakeLockRef = useRef<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
   // Generic confirmation for the destructive share/gift actions (unshare, delete
@@ -215,10 +220,15 @@ export default function CheckoutPage() {
   // Generate barcode or QR — the code itself is not a secret (only the CVV is), so the
   // barcode always prints its digits and the code text is always visible.
   useEffect(() => {
-    if (!effectiveCode) return
+    if (!effectiveCode) { setCodeRenderFailed(false); return }
+    let cancelled = false
     const isAlpha = isAlphanumeric(effectiveCode)
-    if (isAlpha) drawQr(qrRef.current, effectiveCode, 220)
-    else drawBarcode(barcodeRef.current, effectiveCode, { height: 80, displayValue: true })
+    if (isAlpha) {
+      drawQr(qrRef.current, effectiveCode, 220).then(ok => { if (!cancelled) setCodeRenderFailed(!ok) })
+    } else {
+      setCodeRenderFailed(!drawBarcode(barcodeRef.current, effectiveCode, { height: 80, displayValue: true }))
+    }
+    return () => { cancelled = true }
   }, [effectiveCode, lockConfirmed])
 
   // Mini scan strip (pinned under the header once the real code scrolls out of view)
@@ -1076,15 +1086,24 @@ export default function CheckoutPage() {
                 title={t('checkout.tap.to.copy')}
                 className="w-full active:opacity-70 transition-opacity"
               >
-                <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4">
+                <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4" hidden={codeRenderFailed}>
                   {isAlpha ? <canvas ref={qrRef} className="rounded-xl" /> : <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />}
                 </div>
+                {/* Fallback: if the symbology can't encode this code, never leave a
+                    blank box at the register — show the code large and copyable. */}
+                {codeRenderFailed && effectiveCode && (
+                  <div className="mb-4 px-4 py-6 rounded-2xl bg-bg border border-border">
+                    <p className="text-xs text-text3 mb-2">{t('checkout.barcode.failed')}</p>
+                    <span className="font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">{effectiveCode}</span>
+                  </div>
+                )}
                 {/* A CODE128 barcode already prints its own digits under the bars — showing
                     them again here would just duplicate that. Only QR codes (which never
-                    print text themselves) need this line. */}
-                {isAlpha && (
+                    print text themselves) need this line. Never fall back to voucher.code
+                    (raw ciphertext for a failed E2EE decrypt). */}
+                {isAlpha && !codeRenderFailed && effectiveCode && (
                   <span className="font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">
-                    {effectiveCode ?? voucher.code}
+                    {effectiveCode}
                   </span>
                 )}
               </button>

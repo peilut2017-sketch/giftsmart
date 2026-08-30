@@ -921,6 +921,8 @@ const translations: Record<string, string> = {
   'checkout.copy.decrypt.failed.en': 'Could not decrypt the code — reopen the vault and try again',
   'checkout.copy.failed': 'ההעתקה נכשלה',
   'checkout.copy.failed.en': 'Copy failed',
+  'checkout.barcode.failed': 'לא ניתן להציג ברקוד לקוד זה — הצג את הקוד לקופאי/ת',
+  'checkout.barcode.failed.en': 'Can’t render a barcode for this code — show the code to the cashier',
   'checkout.code.copied': 'קוד הועתק',
   'checkout.code.copied.en': 'Code copied',
   'checkout.offline': 'לא ניתן לעדכן יתרה במצב לא מקוון',
