@@ -84,10 +84,6 @@ export function voucherMatchesQuery(
   return parts.some(p => p != null && p.toLowerCase().includes(q))
 }
 
-export function generateId(): string {
-  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
-}
-
 export function defaultExpiryDate(): string {
   const d = new Date()
   d.setFullYear(d.getFullYear() + 5)
@@ -117,22 +113,4 @@ export function getCategoryColor(category: string): string {
 
 export function getStoreInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
-}
-
-/**
- * Parses a combined "amount + store name" input string.
- * Examples:
- *   "150 קופיקס"  → { amount: 150, storeName: "קופיקס" }
- *   "150"         → { amount: 150, storeName: null }
- *   "קופיקס 150"  → { amount: 150, storeName: "קופיקס" }
- *   "150.5 רמי לוי" → { amount: 150.5, storeName: "רמי לוי" }
- */
-export function parseBalanceInput(input: string): { amount: number | null; storeName: string | null } {
-  const trimmed = input.trim()
-  if (!trimmed) return { amount: null, storeName: null }
-  const numberMatch = trimmed.match(/\d+([.,]\d+)?/)
-  if (!numberMatch) return { amount: null, storeName: null }
-  const amount = parseFloat(numberMatch[0].replace(',', '.'))
-  const storeName = trimmed.replaceAll(numberMatch[0], '').trim() || null
-  return { amount, storeName }
 }

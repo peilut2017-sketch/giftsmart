@@ -28,6 +28,19 @@ if ('serviceWorker' in navigator) {
       // SW registration failed - not critical
     })
   })
+  // The SW calls skipWaiting()+clients.claim(), so a new deploy's SW seizes an
+  // open tab immediately. The already-loaded HTML still references the OLD hashed
+  // chunks; a later lazy import() would then 404 against the new cache. Reload
+  // once when control passes to a new SW so HTML and chunks stay consistent.
+  // Guard: on a first-ever visit there is no controller yet, and the initial
+  // claim must NOT trigger a reload.
+  const hadController = !!navigator.serviceWorker.controller
+  let reloadedForSW = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloadedForSW) return
+    reloadedForSW = true
+    window.location.reload()
+  })
 }
 
 createRoot(document.getElementById('root')!).render(

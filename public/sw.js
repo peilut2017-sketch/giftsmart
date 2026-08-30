@@ -1,8 +1,18 @@
-const CACHE_VERSION = 'v9'
+const CACHE_VERSION = 'v10'
 const CACHE_NAME = `voucher-wallet-${CACHE_VERSION}`
 
-self.addEventListener('install', () => {
-  self.skipWaiting()
+// Precache the app shell so the offline navigation fallback below actually has
+// something to serve. Without this, the fallback resolved `undefined` on a cold
+// install that went offline, and the browser showed its network-error page.
+const SHELL_URLS = ['/', '/index.html']
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(SHELL_URLS))
+      .catch(() => {})
+      .then(() => self.skipWaiting())
+  )
 })
 
 self.addEventListener('activate', (event) => {
@@ -20,12 +30,14 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
-  // Never cache Supabase API calls
-  if (event.request.url.includes('supabase.co')) return
-
   const url = new URL(event.request.url)
 
-  // HTML / navigation requests: network-first
+  // Never touch cross-origin requests (Supabase API, Gemini, analytics, fonts) —
+  // hostname check, not a substring, so a URL that merely CONTAINS the string in
+  // a query param isn't mishandled.
+  if (url.origin !== self.location.origin) return
+
+  // HTML / navigation requests: network-first, fall back to the cached shell.
   if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
     event.respondWith(
       fetch(event.request)
@@ -34,13 +46,18 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
           return response
         })
-        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+        .catch(async () =>
+          (await caches.match(event.request)) ||
+          (await caches.match('/')) ||
+          (await caches.match('/index.html')) ||
+          Response.error()
+        )
     )
     return
   }
 
-  // Static assets with content hash: cache-first
-  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/)) {
+  // Vite build output under /assets/ is content-hashed and immutable → cache-first.
+  if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached
@@ -49,6 +66,23 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
           return response
         })
+      })
+    )
+    return
+  }
+
+  // Other same-origin static files (root logo/favicon/manifest) are NOT hashed, so
+  // stale-while-revalidate: serve cache immediately but refresh it in the
+  // background, otherwise a changed logo/icon stayed frozen until CACHE_VERSION.
+  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff2?|json|webmanifest)$/)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        const network = fetch(event.request).then((response) => {
+          const clone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          return response
+        }).catch(() => cached)
+        return cached || network
       })
     )
     return
