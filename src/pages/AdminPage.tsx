@@ -1151,6 +1151,19 @@ export default function AdminPage() {
     supabase.rpc('admin_get_broadcasts').then(({ data }) => { if (data) setBroadcasts(data) })
   }, [showBroadcasts])
 
+  // Inbox counts (fetched on every load).
+  // Declared BEFORE the !isAdmin early return: hooks below an early return run
+  // conditionally, so the hook count changed the moment isAdmin flipped
+  // false→true (profile finished loading) and React crashed the page.
+  const [inboxCounts, setInboxCounts] = useState<{ support_unread: number; reports_pending: number; submissions_pending: number } | null>(null)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.rpc('admin_get_inbox_counts').then(({ data }) => {
+      if (data) setInboxCounts(data as typeof inboxCounts)
+    })
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!isAdmin) {
     // Profile is still being fetched — don't flash "access restricted" for a real admin
     if (user && !profile) {
@@ -1282,16 +1295,6 @@ export default function AdminPage() {
   }
 
   const usersCount = systemStats?.total_users ?? null
-
-  // Inbox counts (fetched on every load)
-  const [inboxCounts, setInboxCounts] = useState<{ support_unread: number; reports_pending: number; submissions_pending: number } | null>(null)
-
-  useEffect(() => {
-    if (!isAdmin) return
-    supabase.rpc('admin_get_inbox_counts').then(({ data }) => {
-      if (data) setInboxCounts(data as typeof inboxCounts)
-    })
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const inboxTotal = (inboxCounts?.support_unread ?? 0) + (inboxCounts?.reports_pending ?? 0) + (inboxCounts?.submissions_pending ?? 0)
 

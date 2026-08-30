@@ -276,7 +276,9 @@ export default function SearchPage() {
       message: t('confirm.bulk.archive.message', { count }),
       onConfirm: async () => {
         setConfirm(null)
-        for (const id of selectedIds) await archiveVoucher(id)
+        try {
+          for (const id of selectedIds) await archiveVoucher(id)
+        } catch { return } // context rolled back + toasted; keep selection for retry
         toast.success(`${count} ${t('confirm.bulk.archive.success')}`)
         setSelectedIds(new Set()); setIsSelectMode(false)
       },
@@ -321,7 +323,7 @@ export default function SearchPage() {
           onConfirm={async () => {
             const id = archiveTarget
             setArchiveTarget(null)
-            await archiveVoucher(id, archiveReason || undefined)
+            try { await archiveVoucher(id, archiveReason || undefined) } catch { return }
             toast.success(t('confirm.archive.success'))
           }}
           onCancel={() => { setArchiveTarget(null); setArchiveReason('') }}

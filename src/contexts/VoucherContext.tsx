@@ -8,6 +8,7 @@ import { useAuth } from './AuthContext'
 import type { Voucher, SuperVoucher, Category, Store } from '../types'
 import { DEFAULT_CATEGORIES } from '../types'
 import { sendInviteEmail } from '../lib/emailService'
+import { getExpiryStatus } from '../utils/helpers'
 
 export interface VoucherShare {
   id: string
@@ -116,6 +117,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   const [walletId, setWalletId] = useState<string | null>(null)
   const walletIdRef = useRef<string | null>(null)
   const vouchersRef = useRef<Voucher[]>([])
+  const archivedVouchersRef = useRef<Voucher[]>([])
   const [walletName, setWalletName] = useState('ארנק השוברים שלי')
   const [walletError, setWalletError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -125,8 +127,9 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   const prevIsOnlineRef = useRef(navigator.onLine)
 
-  // Keep ref in sync so async functions always read the latest vouchers
+  // Keep refs in sync so async functions always read the latest lists
   useEffect(() => { vouchersRef.current = vouchers }, [vouchers])
+  useEffect(() => { archivedVouchersRef.current = archivedVouchers }, [archivedVouchers])
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -155,6 +158,18 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(CACHE_KEY_PREFIX + userId, JSON.stringify({ active, archived }))
     } catch {}
   }, [])
+
+  // Single commit point for voucher-list mutations. Reads/writes go through the
+  // refs SYNCHRONOUSLY so a bulk loop (archive/delete several in one tick) chains
+  // correctly instead of each call clobbering the previous with a stale closure
+  // array — the "deleted rows reappear" bug. Cache is derived from the same arrays.
+  const commitVoucherState = useCallback((nextActive: Voucher[], nextArchived: Voucher[]) => {
+    vouchersRef.current = nextActive
+    archivedVouchersRef.current = nextArchived
+    setVouchers(nextActive)
+    setArchivedVouchers(nextArchived)
+    if (user) saveToCache(user.id, nextActive, nextArchived)
+  }, [user, saveToCache])
 
   const loadPendingOps = useCallback((userId: string) => {
     try {
@@ -186,15 +201,21 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     const failed: PendingOp[] = []
     for (const op of ops) {
       try {
+        // supabase-js RESOLVES with { error } instead of throwing, so a rejected
+        // write used to look like success and get dropped from the queue. Inspect
+        // the returned error and re-queue on failure so offline edits survive a
+        // transient reconnect error instead of vanishing.
+        let opError: unknown = null
         if (op.type === 'update') {
-          await supabase.from(VOUCHERS_VIEW).update(op.data).eq('id', op.id)
+          opError = (await supabase.from(VOUCHERS_VIEW).update(op.data).eq('id', op.id)).error
         } else if (op.type === 'delete') {
-          await supabase.from('vouchers').delete().eq('id', op.id)
+          opError = (await supabase.from('vouchers').delete().eq('id', op.id)).error
         } else if (op.type === 'archive') {
-          await supabase.from('vouchers').update({ is_archived: true }).eq('id', op.id)
+          opError = (await supabase.from('vouchers').update({ is_archived: true }).eq('id', op.id)).error
         } else if (op.type === 'unarchive') {
-          await supabase.from('vouchers').update({ is_archived: false }).eq('id', op.id)
+          opError = (await supabase.from('vouchers').update({ is_archived: false }).eq('id', op.id)).error
         }
+        if (opError) { failed.push(op); continue }
         // Log the action to activity_log now that we're online
         if (op.voucherName) {
           let action: ActivityLogEntry['action']
@@ -534,9 +555,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
-      const newActive = [...vouchersRef.current, localVoucher]
-      setVouchers(newActive)
-      saveToCache(user.id, newActive, archivedVouchers)
+      commitVoucherState([...vouchersRef.current, localVoucher], archivedVouchersRef.current)
       return localVoucher
     }
 
@@ -590,9 +609,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       throw new Error(error.message)
     }
 
-    const newActive = [...vouchers, data]
-    setVouchers(newActive)
-    if (user) saveToCache(user.id, newActive, archivedVouchers)
+    commitVoucherState([...vouchersRef.current, data], archivedVouchersRef.current)
     logAction('add', data.store_name, data.id, { amount: data.amount, balance: data.balance })
     track('voucher_added', { store_name: data.store_name, amount: data.amount })
     phCapture('voucher_added', { store_name: data.store_name, amount: data.amount })
@@ -600,9 +617,12 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateVoucher(id: string, vData: Partial<Voucher>, storeUsed?: string | null) {
-    const existing = [...vouchers, ...archivedVouchers].find(v => v.id === id)
+    const existing = [...vouchersRef.current, ...archivedVouchersRef.current].find(v => v.id === id)
     const updated = { ...vData, updated_at: new Date().toISOString() }
-    setVouchers(prev => prev.map(v => v.id === id ? { ...v, ...updated } : v))
+    // Apply optimistically through the ref-backed commit (works for a voucher in
+    // either list; edits to an archived voucher used to be silently dropped).
+    const applyPatch = (list: Voucher[]) => list.map(v => v.id === id ? { ...v, ...updated } : v)
+    commitVoucherState(applyPatch(vouchersRef.current), applyPatch(archivedVouchersRef.current))
 
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
@@ -611,11 +631,19 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
         enqueuePendingOp({ type: 'update', id, data: updated, storeUsed, voucherName: existing?.store_name, previousBalance: existing?.balance }, user.id)
       } else {
         // Update through the view so pgsodium re-encrypts code/cvv if they changed
-        await supabase.from(VOUCHERS_VIEW).update(updated).eq('id', id)
+        const { error } = await supabase.from(VOUCHERS_VIEW).update(updated).eq('id', id)
+        if (error) {
+          // Roll back the optimistic update — the UI must never show a value the
+          // server rejected (the user would believe it was saved).
+          if (existing) {
+            const restore = (list: Voucher[]) => list.map(v => v.id === id ? existing : v)
+            commitVoucherState(restore(vouchersRef.current), restore(archivedVouchersRef.current))
+          }
+          toast.error(translate('ctx.update.failed'))
+          throw new Error(error.message)
+        }
       }
     }
-    const newActive = vouchers.map(v => v.id === id ? { ...v, ...updated } : v)
-    if (user) saveToCache(user.id, newActive, archivedVouchers)
 
     if (existing) {
       const keys = Object.keys(vData)
@@ -649,75 +677,107 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
   }
 
   async function deleteVoucher(id: string) {
-    const target = [...vouchers, ...archivedVouchers].find(v => v.id === id)
-    const newActive = vouchers.filter(v => v.id !== id)
-    const newArchived = archivedVouchers.filter(v => v.id !== id)
-    setVouchers(newActive)
-    setArchivedVouchers(newArchived)
+    const target = [...vouchersRef.current, ...archivedVouchersRef.current].find(v => v.id === id)
+    commitVoucherState(
+      vouchersRef.current.filter(v => v.id !== id),
+      archivedVouchersRef.current.filter(v => v.id !== id),
+    )
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
         if (!user) return
         enqueuePendingOp({ type: 'delete', id, voucherName: target?.store_name, balance: target?.balance }, user.id)
       } else {
-        await supabase.from('vouchers').delete().eq('id', id)
+        const { error } = await supabase.from('vouchers').delete().eq('id', id)
+        if (error) {
+          // Restore the voucher — it still exists on the server
+          if (target) {
+            if (target.is_archived) commitVoucherState(vouchersRef.current, [...archivedVouchersRef.current, target])
+            else commitVoucherState([...vouchersRef.current, target], archivedVouchersRef.current)
+          }
+          toast.error(translate('ctx.delete.failed'))
+          throw new Error(error.message)
+        }
       }
     }
-    if (user) saveToCache(user.id, newActive, newArchived)
     if (target) logAction('delete', target.store_name, id, { balance: target.balance })
   }
 
   async function archiveVoucher(id: string, reason?: string) {
-    const voucher = vouchers.find(v => v.id === id)
+    const voucher = vouchersRef.current.find(v => v.id === id)
     if (!voucher) return
     const archiveReason = reason?.trim() || null
     const archived = { ...voucher, is_archived: true, archive_reason: archiveReason, updated_at: new Date().toISOString() }
-    const newActive = vouchers.filter(v => v.id !== id)
-    const newArchived = [...archivedVouchers, archived]
-    setVouchers(newActive)
-    setArchivedVouchers(newArchived)
+    commitVoucherState(
+      vouchersRef.current.filter(v => v.id !== id),
+      [...archivedVouchersRef.current, archived],
+    )
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
         if (!user) return
         enqueuePendingOp({ type: 'archive', id, voucherName: voucher.store_name, balance: voucher.balance }, user.id)
       } else {
-        await supabase.from('vouchers').update({ is_archived: true, archive_reason: archiveReason }).eq('id', id)
+        const { error } = await supabase.from('vouchers').update({ is_archived: true, archive_reason: archiveReason }).eq('id', id)
+        if (error) {
+          commitVoucherState(
+            [...vouchersRef.current, voucher],
+            archivedVouchersRef.current.filter(v => v.id !== id),
+          )
+          toast.error(translate('ctx.update.failed'))
+          throw new Error(error.message)
+        }
       }
     }
-    if (user) saveToCache(user.id, newActive, newArchived)
     logAction('archive', voucher.store_name, id, { balance: voucher.balance, reason: archiveReason })
   }
 
   async function unarchiveVoucher(id: string) {
-    const voucher = archivedVouchers.find(v => v.id === id)
+    const voucher = archivedVouchersRef.current.find(v => v.id === id)
     if (!voucher) return
     const unarchived = { ...voucher, is_archived: false, updated_at: new Date().toISOString() }
-    const newArchived = archivedVouchers.filter(v => v.id !== id)
-    const newActive = [...vouchers, unarchived]
-    setVouchers(newActive)
-    setArchivedVouchers(newArchived)
+    commitVoucherState(
+      [...vouchersRef.current, unarchived],
+      archivedVouchersRef.current.filter(v => v.id !== id),
+    )
     if (!id.startsWith('local-')) {
       if (!navigator.onLine) {
         if (!user) return
         enqueuePendingOp({ type: 'unarchive', id, voucherName: voucher.store_name, balance: voucher.balance }, user.id)
       } else {
-        await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
+        const { error } = await supabase.from('vouchers').update({ is_archived: false }).eq('id', id)
+        if (error) {
+          commitVoucherState(
+            vouchersRef.current.filter(v => v.id !== id),
+            [...archivedVouchersRef.current, voucher],
+          )
+          toast.error(translate('ctx.update.failed'))
+          throw new Error(error.message)
+        }
       }
     }
-    if (user) saveToCache(user.id, newActive, newArchived)
     logAction('unarchive', voucher.store_name, id)
   }
 
   async function archiveExpired() {
-    const now = new Date()
-    const expired = vouchers.filter(v => v.expiry_date && new Date(v.expiry_date) < now)
+    // Use the SAME expiry definition as the UI count (getExpiryStatus, local
+    // midnight) — the old `new Date(expiry) < now` treated a voucher expiring
+    // TODAY as already expired and archived still-valid vouchers.
+    const expired = vouchersRef.current.filter(v => getExpiryStatus(v.expiry_date) === 'expired')
     if (expired.length === 0) return
     const ids = expired.map(v => v.id)
-    const newActive = vouchers.filter(v => !ids.includes(v.id))
-    const newArchived = [...archivedVouchers, ...expired.map(v => ({ ...v, is_archived: true }))]
-    setVouchers(newActive)
-    setArchivedVouchers(newArchived)
-    await supabase.from('vouchers').update({ is_archived: true }).in('id', ids.filter(id => !id.startsWith('local-')))
-    if (user) saveToCache(user.id, newActive, newArchived)
+    const serverIds = ids.filter(id => !id.startsWith('local-'))
+    if (navigator.onLine && serverIds.length > 0) {
+      const { error } = await supabase.from('vouchers').update({ is_archived: true }).in('id', serverIds)
+      if (error) { toast.error(translate('ctx.update.failed')); throw new Error(error.message) }
+    } else if (!navigator.onLine && user) {
+      for (const v of expired) {
+        if (v.id.startsWith('local-')) continue
+        enqueuePendingOp({ type: 'archive', id: v.id, voucherName: v.store_name, balance: v.balance }, user.id)
+      }
+    }
+    commitVoucherState(
+      vouchersRef.current.filter(v => !ids.includes(v.id)),
+      [...archivedVouchersRef.current, ...expired.map(v => ({ ...v, is_archived: true }))],
+    )
     for (const v of expired) {
       logAction('archive', v.store_name, v.id, { balance: v.balance })
     }
@@ -764,9 +824,18 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
   async function addCategory(name: string, emoji = '🏷️') {
     if (!walletId) return
-    const newCat: Category = { id: `cat-${Date.now()}`, name, emoji, wallet_id: walletId }
-    await supabase.from('categories').insert({ ...newCat, wallet_id: walletId })
-    setCategories(prev => [...prev, newCat])
+    // id is a UUID column with a DB default — sending a client-made "cat-…" id
+    // failed the insert silently, so custom categories vanished on reload.
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({ name, emoji, wallet_id: walletId })
+      .select()
+      .single()
+    if (error || !data) {
+      toast.error(translate('ctx.category.add.error'))
+      throw new Error(error?.message || 'category insert failed')
+    }
+    setCategories(prev => [...prev, data as Category])
   }
 
   async function inviteMember(email: string): Promise<'added' | 'not_found'> {

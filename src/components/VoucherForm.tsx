@@ -323,7 +323,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   async function handleAddCat() {
     if (!newCatName.trim()) return
-    await addCategory(newCatName.trim())
+    // addCategory toasts + throws on failure — keep the input open so the user can retry
+    try { await addCategory(newCatName.trim()) } catch { return }
     setSelectedCats(prev => [...prev, newCatName.trim()])
     setNewCatName('')
     setShowCatInput(false)

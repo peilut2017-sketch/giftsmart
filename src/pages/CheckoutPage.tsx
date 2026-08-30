@@ -280,9 +280,20 @@ export default function CheckoutPage() {
     }
     const clamped = Math.max(0, newBalance)
     if (isSharedVoucher) {
-      await updateSharedVoucherBalance(voucher.id, clamped, storeUsed)
+      try {
+        await updateSharedVoucherBalance(voucher.id, clamped, storeUsed)
+      } catch {
+        toast.error(t('checkout.list.error'))
+        return
+      }
     } else {
-      await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
+      // On failure the context rolls back the optimistic balance and shows its
+      // own error toast — just stop here so no success toast appears.
+      try {
+        await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
+      } catch {
+        return
+      }
       if (!isOnline) {
         toast.success(t('checkout.balance.updated.offline'))
         if (clamped <= 0) openArchiveConfirm(true)
@@ -763,7 +774,9 @@ export default function CheckoutPage() {
           title={t('checkout.archive.confirm.title')}
           onConfirm={() => {
             setConfirmArchive(false)
-            archiveVoucher(voucher.id, archiveReason || undefined).then(() => { toast.success(t('checkout.archived')); navigate(-1) })
+            archiveVoucher(voucher.id, archiveReason || undefined)
+              .then(() => { toast.success(t('checkout.archived')); navigate(-1) })
+              .catch(() => {}) // context already rolled back + toasted
           }}
           onCancel={() => { setConfirmArchive(false); setArchiveReason('') }}
         >
@@ -784,7 +797,7 @@ export default function CheckoutPage() {
             danger
             onConfirm={async () => {
               setConfirmDelete(false)
-              await deleteVoucher(voucher.id)
+              try { await deleteVoucher(voucher.id) } catch { return } // context restored + toasted
               toast.success(t('checkout.deleted'))
               navigate(-1)
             }}
