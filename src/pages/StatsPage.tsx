@@ -5,7 +5,7 @@ import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
-import { formatCurrency, getExpiryStatus } from '../utils/helpers'
+import { formatCurrency, getExpiryStatus, csvCell } from '../utils/helpers'
 import Icon from '../components/ui/Icon'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
@@ -16,7 +16,7 @@ import { useT } from '../lib/i18n'
 import { usePageView } from '../hooks/usePageView'
 
 export default function StatsPage() {
-  const { vouchers, archivedVouchers } = useVouchers()
+  const { vouchers, archivedVouchers, loading } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
   const { isVaultUnlocked, decryptedMap } = useE2EE()
   const { t } = useT()
@@ -186,7 +186,7 @@ export default function StatsPage() {
       // The file must say rows are missing — a silent skip reads as a complete export
       if (omitted > 0) rows.push([t('stats.export.omitted', { count: omitted }), '', '', '', ''])
 
-      const csvContent = '﻿' + rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
+      const csvContent = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -309,7 +309,18 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {vouchers.length === 0 && archivedVouchers.length === 0 ? (
+      {loading && vouchers.length === 0 && archivedVouchers.length === 0 ? (
+        // Don't flash the "you have no vouchers" empty state during the initial
+        // load — a returning user with 40 vouchers saw "add your first voucher".
+        <div className="p-4 pb-28 space-y-4">
+          <div className="h-40 rounded-[20px] bg-bg animate-pulse" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-24 rounded-2xl bg-bg animate-pulse" />
+            <div className="h-24 rounded-2xl bg-bg animate-pulse" />
+          </div>
+          <div className="h-64 rounded-2xl bg-bg animate-pulse" />
+        </div>
+      ) : vouchers.length === 0 && archivedVouchers.length === 0 ? (
         <div className="text-center py-20 px-6">
           <Icon name="monitoring" size={48} color="var(--c-border)" />
           <p className="text-text font-bold mt-4">{t('stats.empty.title')}</p>

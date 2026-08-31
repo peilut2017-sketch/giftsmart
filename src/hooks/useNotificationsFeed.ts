@@ -27,8 +27,15 @@ export interface NotificationItem {
 // Module-level cache so Home (just checking for a badge) and the Notifications page
 // (rendering the full list) don't each fire their own round of network requests —
 // whichever mounts first within the TTL window fetches, the other reuses it.
-let rawCache: { items: NotificationItem[]; at: number } | null = null
+// Keyed by userId: it holds per-user private rows (support replies, shared-balance
+// updates), so on a sign-out→different-login in the same tab within the TTL the
+// cache must NOT be reused for the new user.
+let rawCache: { userId: string; items: NotificationItem[]; at: number } | null = null
 let inflight: Promise<NotificationItem[]> | null = null
+
+function cacheFor(userId: string | undefined) {
+  return userId && rawCache && rawCache.userId === userId ? rawCache : null
+}
 
 function seenKey(userId: string) { return `notif_seen_${userId}` }
 function dismissedKey(userId: string) { return `notif_dismissed_${userId}` }
@@ -99,8 +106,8 @@ export function useNotificationsFeed() {
   const { vouchers } = useVouchers()
   const { t } = useT()
 
-  const [rawItems, setRawItems] = useState<NotificationItem[]>(rawCache?.items ?? [])
-  const [loading, setLoading] = useState(!rawCache)
+  const [rawItems, setRawItems] = useState<NotificationItem[]>(cacheFor(user?.id)?.items ?? [])
+  const [loading, setLoading] = useState(!cacheFor(user?.id))
   const [loadError, setLoadError] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [dismissed, setDismissed] = useState<Set<string>>(() => user ? readIdSet(dismissedKey(user.id)) : new Set())
@@ -112,16 +119,21 @@ export function useNotificationsFeed() {
   useEffect(() => {
     if (!user) return
 
+    const uid = user.id
     async function load() {
-      if (rawCache && Date.now() - rawCache.at < CACHE_TTL_MS) {
-        setRawItems(rawCache.items)
+      const fresh = cacheFor(uid)
+      if (fresh && Date.now() - fresh.at < CACHE_TTL_MS) {
+        setRawItems(fresh.items)
         setLoading(false)
         return
       }
-      if (!inflight) inflight = fetchRaw().finally(() => { inflight = null })
+      // A different user's inflight fetch must not be reused
+      if (!inflight || (rawCache && rawCache.userId !== uid)) {
+        inflight = fetchRaw().finally(() => { inflight = null })
+      }
       try {
         const items = await inflight
-        rawCache = { items, at: Date.now() }
+        rawCache = { userId: uid, items, at: Date.now() }
         setRawItems(items)
         setLoadError(false)
       } catch (err) {
@@ -132,7 +144,7 @@ export function useNotificationsFeed() {
       }
     }
     load()
-  }, [user, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, reloadKey])  
 
   const refresh = useCallback(() => {
     rawCache = null

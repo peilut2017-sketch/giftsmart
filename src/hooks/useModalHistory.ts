@@ -19,7 +19,7 @@ const MODAL_STATE_KEY = '__gsModal'
 
 type StackEntry = { id: number; onClose: () => void }
 
-let stack: StackEntry[] = []
+const stack: StackEntry[] = []
 let nextId = 1
 // Counter (not boolean): two modals closing programmatically in the same frame
 // queue two pops — each must consume exactly one suppression.

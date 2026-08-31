@@ -38,9 +38,14 @@ export default function SettingsAboutPage() {
   const [sendingUserReply, setSendingUserReply] = useState<string | null>(null)
 
   const [adminBroadcasts, setAdminBroadcasts] = useState<AdminBroadcast[]>([])
-  const [seenBroadcastIds, setSeenBroadcastIds] = useState<Set<string>>(
-    () => new Set(JSON.parse(localStorage.getItem('seen_broadcast_ids') || '[]'))
-  )
+  const [seenBroadcastIds, setSeenBroadcastIds] = useState<Set<string>>(() => {
+    // Guarded: a corrupt/non-array value here used to throw inside the render
+    // initializer and white-screen the whole page permanently for that user.
+    try {
+      const parsed = JSON.parse(localStorage.getItem('seen_broadcast_ids') || '[]')
+      return new Set(Array.isArray(parsed) ? parsed : [])
+    } catch { return new Set() }
+  })
 
   useEffect(() => {
     if (!user) return

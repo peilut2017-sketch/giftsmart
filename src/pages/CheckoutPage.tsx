@@ -38,16 +38,20 @@ function isSafeUrl(url: string | undefined): boolean {
 
 type TabKey = 'voucher' | 'use' | 'share' | 'sell' | 'activity'
 
-function drawBarcode(el: SVGSVGElement | null, value: string, opts: { height: number; displayValue: boolean }) {
-  if (!el) return
+function drawBarcode(el: SVGSVGElement | null, value: string, opts: { height: number; displayValue: boolean }): boolean {
+  if (!el) return true
   try {
     JsBarcode(el, value, { format: 'CODE128', width: 2, height: opts.height, displayValue: opts.displayValue, fontSize: 14, margin: opts.displayValue ? 10 : 4 })
-  } catch {}
+    return true
+  } catch { return false }
 }
 
-function drawQr(el: HTMLCanvasElement | null, value: string, size: number) {
-  if (!el) return
-  QRCode.toCanvas(el, value, { width: size, margin: 1, color: { dark: '#1e293b', light: '#ffffff' } }).catch(() => {})
+// QR quiet zone: 2 modules is the practical minimum for reliable scanning; 1 was
+// below spec and could fail on marginal scanners.
+function drawQr(el: HTMLCanvasElement | null, value: string, size: number): Promise<boolean> {
+  if (!el) return Promise.resolve(true)
+  return QRCode.toCanvas(el, value, { width: size, margin: 2, color: { dark: '#1e293b', light: '#ffffff' } })
+    .then(() => true).catch(() => false)
 }
 
 // Small inline spinner (Material Symbols has no animated spinner glyph)
@@ -107,6 +111,7 @@ export default function CheckoutPage() {
   const [customAmount, setCustomAmount] = useState('')
   const [customStore, setCustomStore] = useState('')
   const [copied, setCopied] = useState(false)
+  const [codeRenderFailed, setCodeRenderFailed] = useState(false)
   const wakeLockRef = useRef<any>(null)
   const [confirmArchive, setConfirmArchive] = useState(false)
   // Generic confirmation for the destructive share/gift actions (unshare, delete
@@ -215,10 +220,15 @@ export default function CheckoutPage() {
   // Generate barcode or QR — the code itself is not a secret (only the CVV is), so the
   // barcode always prints its digits and the code text is always visible.
   useEffect(() => {
-    if (!effectiveCode) return
+    if (!effectiveCode) { setCodeRenderFailed(false); return }
+    let cancelled = false
     const isAlpha = isAlphanumeric(effectiveCode)
-    if (isAlpha) drawQr(qrRef.current, effectiveCode, 220)
-    else drawBarcode(barcodeRef.current, effectiveCode, { height: 80, displayValue: true })
+    if (isAlpha) {
+      drawQr(qrRef.current, effectiveCode, 220).then(ok => { if (!cancelled) setCodeRenderFailed(!ok) })
+    } else {
+      setCodeRenderFailed(!drawBarcode(barcodeRef.current, effectiveCode, { height: 80, displayValue: true }))
+    }
+    return () => { cancelled = true }
   }, [effectiveCode, lockConfirmed])
 
   // Mini scan strip (pinned under the header once the real code scrolls out of view)
@@ -247,14 +257,29 @@ export default function CheckoutPage() {
     window.scrollTo({ top: window.scrollY + rect.top - 64 - 12, behavior: 'smooth' })
   }
 
+  // Honest copy: only claim success if the write actually succeeded (iOS Safari,
+  // non-secure contexts and denied permission all reject).
+  async function copyToClipboard(text: string) {
+    const ok = await navigator.clipboard.writeText(text).then(() => true).catch(() => false)
+    if (ok) toast.success(t('checkout.copied'))
+    else toast.error(t('checkout.copy.failed'))
+  }
+
   async function copyCode() {
     if (voucher?.is_e2ee && !isVaultUnlocked) {
       toast.error(t('checkout.copy.vault.locked'))
       return
     }
-    const codeToCopy = effectiveCode ?? voucher?.code
-    if (!codeToCopy) return
-    await navigator.clipboard.writeText(codeToCopy).catch(() => {})
+    // For E2EE vouchers use ONLY the decrypted value — never fall back to
+    // voucher.code, which is raw ciphertext when decryption failed (copying
+    // "e2ee:iv:ct" to the clipboard is worse than useless at a register).
+    const codeToCopy = voucher?.is_e2ee ? effectiveCode : (effectiveCode ?? voucher?.code)
+    if (!codeToCopy || isEncryptedField(codeToCopy)) {
+      toast.error(t('checkout.copy.decrypt.failed'))
+      return
+    }
+    const ok = await navigator.clipboard.writeText(codeToCopy).then(() => true).catch(() => false)
+    if (!ok) { toast.error(t('checkout.copy.failed')); return }
     setCopied(true)
     toast.success(t('checkout.code.copied'))
     setTimeout(() => setCopied(false), 2000)
@@ -267,8 +292,12 @@ export default function CheckoutPage() {
       return
     }
     const cvvToCopy = voucher.is_e2ee ? plainCvv : voucher.cvv
-    if (!cvvToCopy) return
-    await navigator.clipboard.writeText(cvvToCopy).catch(() => {})
+    if (!cvvToCopy || isEncryptedField(cvvToCopy)) {
+      toast.error(t('checkout.copy.decrypt.failed'))
+      return
+    }
+    const ok = await navigator.clipboard.writeText(cvvToCopy).then(() => true).catch(() => false)
+    if (!ok) { toast.error(t('checkout.copy.failed')); return }
     toast.success(t('checkout.code.copied'))
   }
 
@@ -280,9 +309,20 @@ export default function CheckoutPage() {
     }
     const clamped = Math.max(0, newBalance)
     if (isSharedVoucher) {
-      await updateSharedVoucherBalance(voucher.id, clamped, storeUsed)
+      try {
+        await updateSharedVoucherBalance(voucher.id, clamped, storeUsed)
+      } catch {
+        toast.error(t('checkout.list.error'))
+        return
+      }
     } else {
-      await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
+      // On failure the context rolls back the optimistic balance and shows its
+      // own error toast — just stop here so no success toast appears.
+      try {
+        await updateVoucher(voucher.id, { balance: clamped }, storeUsed)
+      } catch {
+        return
+      }
       if (!isOnline) {
         toast.success(t('checkout.balance.updated.offline'))
         if (clamped <= 0) openArchiveConfirm(true)
@@ -392,13 +432,21 @@ export default function CheckoutPage() {
       toast.error(t('checkout.share.vault.locked'))
       return
     }
+    // Vault unlocked but decryption failed → effectiveCode is null/ciphertext.
+    // Sending would hand the recipient unreadable ciphertext, so block it.
+    if (voucher.is_e2ee && (!effectiveCode || isEncryptedField(effectiveCode))) {
+      toast.error(t('checkout.copy.decrypt.failed'))
+      return
+    }
     const sendAt = giftScheduled && giftDate ? new Date(giftDate) : new Date()
     setGiftSending(true)
     setGiftLink(null)
     try {
       const email = giftMode === 'email' ? giftEmail.trim() : null
       const codeOverride = voucher.is_e2ee && effectiveCode ? effectiveCode : undefined
-      const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt, codeOverride)
+      // Carry the decrypted CVV too, or the recipient's copy gets ciphertext in cvv
+      const cvvOverride = voucher.is_e2ee && plainCvv && !isEncryptedField(plainCvv) ? plainCvv : undefined
+      const token = await createGift(voucher.id, email, giftMessage.trim(), sendAt, codeOverride, cvvOverride)
       if (!token) { toast.error(t('checkout.gift.create.error')); return }
 
       const link = `${APP_BASE}/gift/${token}`
@@ -480,6 +528,10 @@ export default function CheckoutPage() {
       toast.error(t('checkout.share.vault.locked'))
       return
     }
+    if (voucher.is_e2ee && (!effectiveCode || isEncryptedField(effectiveCode))) {
+      toast.error(t('checkout.copy.decrypt.failed'))
+      return
+    }
     setShareLoading(true)
     try {
       const codeOverride = voucher.is_e2ee && effectiveCode ? effectiveCode : undefined
@@ -529,7 +581,7 @@ export default function CheckoutPage() {
     setLockToggling(true)
     try {
       const nowLocked = !voucher.is_locked
-      await updateVoucher(voucher.id, { is_locked: nowLocked, ...(nowLocked ? {} : { lock_reason: null }) } as any)
+      await updateVoucher(voucher.id, { is_locked: nowLocked, ...(nowLocked ? {} : { lock_reason: null }) })
       toast.success(nowLocked ? t('checkout.locked.now') : t('checkout.unlocked.now'))
       setShowMoreMenu(false)
       await refreshVouchers()
@@ -763,7 +815,9 @@ export default function CheckoutPage() {
           title={t('checkout.archive.confirm.title')}
           onConfirm={() => {
             setConfirmArchive(false)
-            archiveVoucher(voucher.id, archiveReason || undefined).then(() => { toast.success(t('checkout.archived')); navigate(-1) })
+            archiveVoucher(voucher.id, archiveReason || undefined)
+              .then(() => { toast.success(t('checkout.archived')); navigate(-1) })
+              .catch(() => {}) // context already rolled back + toasted
           }}
           onCancel={() => { setConfirmArchive(false); setArchiveReason('') }}
         >
@@ -784,7 +838,7 @@ export default function CheckoutPage() {
             danger
             onConfirm={async () => {
               setConfirmDelete(false)
-              await deleteVoucher(voucher.id)
+              try { await deleteVoucher(voucher.id) } catch { return } // context restored + toasted
               toast.success(t('checkout.deleted'))
               navigate(-1)
             }}
@@ -1040,15 +1094,24 @@ export default function CheckoutPage() {
                 title={t('checkout.tap.to.copy')}
                 className="w-full active:opacity-70 transition-opacity"
               >
-                <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4">
+                <div ref={codeImgRef} className="w-full overflow-hidden flex items-center justify-center mb-4" hidden={codeRenderFailed}>
                   {isAlpha ? <canvas ref={qrRef} className="rounded-xl" /> : <svg ref={barcodeRef} style={{ width: '100%', height: 'auto' }} />}
                 </div>
+                {/* Fallback: if the symbology can't encode this code, never leave a
+                    blank box at the register — show the code large and copyable. */}
+                {codeRenderFailed && effectiveCode && (
+                  <div className="mb-4 px-4 py-6 rounded-2xl bg-bg border border-border">
+                    <p className="text-xs text-text3 mb-2">{t('checkout.barcode.failed')}</p>
+                    <span className="font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">{effectiveCode}</span>
+                  </div>
+                )}
                 {/* A CODE128 barcode already prints its own digits under the bars — showing
                     them again here would just duplicate that. Only QR codes (which never
-                    print text themselves) need this line. */}
-                {isAlpha && (
+                    print text themselves) need this line. Never fall back to voucher.code
+                    (raw ciphertext for a failed E2EE decrypt). */}
+                {isAlpha && !codeRenderFailed && effectiveCode && (
                   <span className="font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">
-                    {effectiveCode ?? voucher.code}
+                    {effectiveCode}
                   </span>
                 )}
               </button>
@@ -1277,8 +1340,8 @@ export default function CheckoutPage() {
                                 {' · '}{tok.view_count} {t('checkout.share.link.views')}
                               </p>
                             </div>
-                            <button onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
-                            <button onClick={() => handleDeleteShareToken(tok.token)} className="p-2 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
+                            <button onClick={() => copyToClipboard(url)} aria-label={t('checkout.share.copy.link')} title={t('checkout.share.copy.link')} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
+                            <button onClick={() => handleDeleteShareToken(tok.token)} aria-label={t('checkout.share.link.deleted')} title={t('checkout.share.link.deleted')} className="p-2 text-error hover:bg-error/10 rounded-lg"><Icon name="delete" size={16} /></button>
                           </div>
                         )
                       })}
@@ -1380,7 +1443,7 @@ export default function CheckoutPage() {
                       <p className="text-xs font-medium text-primary-dark flex items-center gap-1"><Icon name="redeem" size={14} /> {t('checkout.gift.link.label')}:</p>
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-primary-dark font-mono break-all flex-1">{giftLink}</p>
-                        <button onClick={() => { navigator.clipboard.writeText(giftLink).catch(() => {}); toast.success(t('checkout.copied')) }} className="flex-shrink-0 p-2 bg-primary/10 hover:bg-primary/20 rounded-xl"><Icon name="content_copy" size={16} color="var(--c-primary-dark)" /></button>
+                        <button onClick={() => copyToClipboard(giftLink)} aria-label={t('checkout.share.copy.link')} title={t('checkout.share.copy.link')} className="flex-shrink-0 p-2 bg-primary/10 hover:bg-primary/20 rounded-xl"><Icon name="content_copy" size={16} color="var(--c-primary-dark)" /></button>
                       </div>
                     </div>
                   )}
@@ -1424,7 +1487,7 @@ export default function CheckoutPage() {
                   return (
                     <div key={tok.token} className="flex items-center gap-2 p-3 rounded-2xl border bg-bg border-border">
                       <p className="flex-1 min-w-0 text-xs font-mono text-text2 truncate">{url}</p>
-                      <button onClick={async () => { await navigator.clipboard.writeText(url); toast.success(t('checkout.copied')) }} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
+                      <button onClick={() => copyToClipboard(url)} aria-label={t('checkout.share.copy.link')} title={t('checkout.share.copy.link')} className="p-2 text-primary hover:bg-primary-light rounded-lg"><Icon name="content_copy" size={16} /></button>
                     </div>
                   )
                 })}

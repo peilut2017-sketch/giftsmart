@@ -8,9 +8,13 @@ function currentLocale(): 'he' | 'en' {
   try { return (localStorage.getItem('gs_locale') as 'he' | 'en') || 'he' } catch { return 'he' }
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | null | undefined): string {
+  // Guard null/undefined/NaN: callers pass voucher.balance directly, and a single
+  // bad/legacy row used to throw here or render "₪NaN".
+  const n = typeof amount === 'number' && Number.isFinite(amount) ? amount : Number(amount)
+  const safe = Number.isFinite(n) ? n : 0
   const locale = currentLocale() === 'he' ? 'he-IL' : 'en-US'
-  return `₪${amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+  return `₪${safe.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
 export function formatDate(dateStr?: string): string {
@@ -59,8 +63,29 @@ export function isAlphanumeric(code: string): boolean {
   return /[A-Za-z]/.test(code)
 }
 
-export function generateId(): string {
-  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+// Single source of truth for "does this voucher match the search box".
+// Previously four screens each searched a different subset of fields, so the
+// same query found a voucher in one place and not another, and item_name was
+// searchable nowhere. `resolveCode` lets callers pass the DECRYPTED code for
+// E2EE vouchers (raw v.code is ciphertext); super-voucher store names can be
+// folded in via `extraHaystack`.
+export function voucherMatchesQuery(
+  v: {
+    store_name: string; code: string; is_e2ee?: boolean
+    categories?: string[]; tags?: string[]; notes?: string
+    source?: string; item_name?: string
+  },
+  query: string,
+  opts?: { resolveCode?: (v: any) => string; extraHaystack?: string },
+): boolean {
+  const q = query.toLowerCase().trim()
+  if (!q) return true
+  const code = opts?.resolveCode ? opts.resolveCode(v) : (v.is_e2ee ? '' : v.code)
+  const parts: (string | undefined)[] = [
+    v.store_name, code, v.notes, v.source, v.item_name, opts?.extraHaystack,
+    ...(v.categories ?? []), ...(v.tags ?? []),
+  ]
+  return parts.some(p => p != null && p.toLowerCase().includes(q))
 }
 
 export function defaultExpiryDate(): string {
@@ -94,20 +119,12 @@ export function getStoreInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
 }
 
-/**
- * Parses a combined "amount + store name" input string.
- * Examples:
- *   "150 קופיקס"  → { amount: 150, storeName: "קופיקס" }
- *   "150"         → { amount: 150, storeName: null }
- *   "קופיקס 150"  → { amount: 150, storeName: "קופיקס" }
- *   "150.5 רמי לוי" → { amount: 150.5, storeName: "רמי לוי" }
- */
-export function parseBalanceInput(input: string): { amount: number | null; storeName: string | null } {
-  const trimmed = input.trim()
-  if (!trimmed) return { amount: null, storeName: null }
-  const numberMatch = trimmed.match(/\d+([.,]\d+)?/)
-  if (!numberMatch) return { amount: null, storeName: null }
-  const amount = parseFloat(numberMatch[0].replace(',', '.'))
-  const storeName = trimmed.replaceAll(numberMatch[0], '').trim() || null
-  return { amount, storeName }
+// Quote a CSV cell AND neutralize spreadsheet formula injection: a user-controlled
+// value like "=HYPERLINK(...)" or "@SUM(...)" executes as a formula when the CSV is
+// opened in Excel/Sheets. Prefixing a leading =,+,-,@,tab,CR with an apostrophe
+// makes the cell inert text.
+export function csvCell(value: unknown): string {
+  let s = String(value ?? '')
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  return `"${s.replace(/"/g, '""')}"`
 }

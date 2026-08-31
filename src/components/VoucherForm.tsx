@@ -6,6 +6,8 @@ import type { Voucher } from '../types'
 import { useVouchers } from '../contexts/VoucherContext'
 import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
+import { extractFromSMS, type ExtractedVoucher } from '../utils/smsExtractor'
+import { analyzeVoucherImage } from '../lib/gemini'
 import Icon from './ui/Icon'
 import VaultUnlockSheet from './VaultUnlockSheet'
 import VaultSetupSheet from './VaultSetupSheet'
@@ -40,23 +42,40 @@ function isoToDisplay(iso: string): string {
   return iso
 }
 
+// Builds an ISO date only if the day/month/year form a REAL calendar date.
+// "31.02.2026" or "31.04.2026" used to pass the naive 1-31 check and produce an
+// invalid ISO string that silently became "no expiry".
+function buildISO(dStr: string, mStr: string, y: string): string | null {
+  const d = +dStr, m = +mStr
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null
+  const dt = new Date(Number(y), m - 1, d)
+  if (dt.getFullYear() !== Number(y) || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null
+  return `${y}-${mStr}-${dStr}`
+}
+
 function parseDisplayToISO(val: string): string | null {
   const digitsOnly = val.replace(/\D/g, '')
   if (/^\d{6}$/.test(digitsOnly)) {
-    const d = digitsOnly.slice(0, 2), m = digitsOnly.slice(2, 4), y = '20' + digitsOnly.slice(4, 6)
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+    return buildISO(digitsOnly.slice(0, 2), digitsOnly.slice(2, 4), '20' + digitsOnly.slice(4, 6))
   }
   if (/^\d{8}$/.test(digitsOnly)) {
-    const d = digitsOnly.slice(0, 2), m = digitsOnly.slice(2, 4), y = digitsOnly.slice(4, 8)
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+    return buildISO(digitsOnly.slice(0, 2), digitsOnly.slice(2, 4), digitsOnly.slice(4, 8))
   }
   const match = val.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/)
   if (match) {
-    const d = match[1].padStart(2, '0'), m = match[2].padStart(2, '0')
     let y = match[3]; if (y.length === 2) y = '20' + y
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) return `${y}-${m}-${d}`
+    return buildISO(match[1].padStart(2, '0'), match[2].padStart(2, '0'), y)
   }
   return null
+}
+
+// True when the field holds a complete-looking date (6 or 8 digits, or d.m.y)
+// that does NOT resolve to a real calendar date — used to warn at save time.
+function isCompleteButInvalidDate(val: string): boolean {
+  const digitsOnly = val.replace(/\D/g, '')
+  const looksComplete = /^\d{6}$/.test(digitsOnly) || /^\d{8}$/.test(digitsOnly) ||
+    /^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}$/.test(val)
+  return looksComplete && parseDisplayToISO(val) === null
 }
 
 interface Props {
@@ -97,6 +116,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   })
   const [usageAmount, setUsageAmount] = useState('')
   const [storeUsedInput, setStoreUsedInput] = useState('')
+  // Paste-from-SMS / photo quick fill (add mode only)
+  const [showSmsPaste, setShowSmsPaste] = useState(false)
+  const [smsText, setSmsText] = useState('')
+  const [analyzingImage, setAnalyzingImage] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const [actualCost, setActualCost] = useState(voucher?.actual_cost?.toString() || '')
   const [code, setCode] = useState(voucher?.code || '')
   const [cvv, setCvv] = useState(voucher?.cvv || '')
@@ -203,7 +227,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     return () => { document.removeEventListener('mousedown', onOutside); document.removeEventListener('touchstart', onOutside) }
   }, [showOperatorPicker])
 
-  useEffect(() => () => { stopScanner() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { stopScanner() }, [])  
 
   async function openOperatorPicker() {
     if (!operatorsLoaded) {
@@ -321,9 +345,54 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setShowStoreDropdown(false)
   }
 
+  // Fill the form from an extracted voucher; returns how many fields were set.
+  function applyExtracted(ex: ExtractedVoucher): number {
+    let filled = 0
+    if (ex.store_name) { setStoreName(ex.store_name); setStoreSearch(ex.store_name); filled++ }
+    if (ex.code) { setCode(ex.code); filled++ }
+    if (ex.cvv) { setCvv(ex.cvv); filled++ }
+    if (ex.amount != null) { setAmount(String(ex.amount)); filled++ }
+    if (ex.link) { setLink(ex.link); filled++ }
+    if (Array.isArray(ex.categories) && ex.categories.length > 0) { setSelectedCats(ex.categories); filled++ }
+    if (ex.expiry_date && /^\d{4}-\d{2}-\d{2}$/.test(ex.expiry_date)) {
+      setExpiryDate(ex.expiry_date); setDisplayDate(isoToDisplay(ex.expiry_date)); filled++
+    }
+    return filled
+  }
+
+  // Parse a pasted voucher SMS/email — client-side regex, works offline. The
+  // promised "paste SMS" input the onboarding advertised but was never wired up.
+  function applySms() {
+    const text = smsText.trim()
+    if (!text) return
+    const filled = applyExtracted(extractFromSMS(text))
+    if (filled === 0) { toast.error(t('form.sms.none')); return }
+    toast.success(t('form.sms.filled', { count: filled }))
+    setShowSmsPaste(false); setSmsText('')
+  }
+
+  // Analyze a voucher photo via the analyze-voucher Edge Function (Gemini). The
+  // API key is server-side; on any failure we degrade to a clear toast.
+  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-picking the same file
+    if (!file) return
+    setAnalyzingImage(true)
+    try {
+      const filled = applyExtracted(await analyzeVoucherImage(file))
+      if (filled === 0) toast.error(t('form.sms.none'))
+      else { toast.success(t('form.sms.filled', { count: filled })); setShowSmsPaste(false) }
+    } catch (err: any) {
+      toast.error(err?.message?.includes('GEMINI_API_KEY') ? t('form.scan.unavailable') : t('form.scan.error'))
+    } finally {
+      setAnalyzingImage(false)
+    }
+  }
+
   async function handleAddCat() {
     if (!newCatName.trim()) return
-    await addCategory(newCatName.trim())
+    // addCategory toasts + throws on failure — keep the input open so the user can retry
+    try { await addCategory(newCatName.trim()) } catch { return }
     setSelectedCats(prev => [...prev, newCatName.trim()])
     setNewCatName('')
     setShowCatInput(false)
@@ -334,6 +403,11 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     if (s === STEP_STORE && !storeName.trim()) { toast.error(t('form.error.store.required')); return false }
     if (s === STEP_CODE && !code.trim()) { toast.error(t('form.error.code.required')); return false }
     if (s === STEP_BALANCE && amountUnit === 'פריט' && !itemName.trim()) { toast.error(t('form.error.item.required')); return false }
+    // An impossible date (31.02) silently became "no expiry" — block it so the
+    // user fixes the typo instead of losing the expiry, reminder and sort.
+    if (s === STEP_EXPIRY && displayDate.trim() && isCompleteButInvalidDate(displayDate)) {
+      toast.error(t('form.error.date.invalid')); return false
+    }
     return true
   }
 
@@ -361,8 +435,14 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
 
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault()
+    // Synchronous re-entry guard: `disabled={loading}` on the button isn't applied
+    // until React commits, so a fast double-tap could fire addVoucher twice and
+    // create a duplicate voucher.
+    if (loading) return
     if (!storeName) return toast.error(t('form.error.store.required'))
     if (!code) return toast.error(t('form.error.code.required'))
+    // Guard the quick-save and edit paths too (they bypass the per-step gate)
+    if (displayDate.trim() && isCompleteButInvalidDate(displayDate)) return toast.error(t('form.error.date.invalid'))
     // Duplicates are surfaced inline on the code step (duplicateVoucher warning) —
     // the extra native confirm() here was a blocking OS dialog repeating the same
     // information, so it's gone.
@@ -393,6 +473,18 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       if (effectiveE2EE) {
         if (!isEncryptedField(finalCode)) finalCode = await encrypt(finalCode)
         if (finalCvv && !isEncryptedField(finalCvv)) finalCvv = await encrypt(finalCvv)
+      } else if (isEncryptedField(finalCode) || (finalCvv && isEncryptedField(finalCvv))) {
+        // Saving as plaintext, but the field is still ciphertext — this only
+        // happens when editing an E2EE voucher whose vault is locked (the input
+        // shows nothing but state still holds "e2ee:iv:ct"). Writing it with
+        // is_e2ee:false would store ciphertext as plaintext and lose the code
+        // forever. Force the vault open instead of destroying the voucher.
+        setLoading(false)
+        plainOverrideRef.current = false
+        toast.error(t('form.e2ee.unlock.to.edit'))
+        setPendingSubmitAfterUnlock(true)
+        openVaultGate()
+        return
       }
 
       const v = {
@@ -410,8 +502,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         notes: notesValue || undefined,
         link: link.trim() || undefined,
         source: source.trim() || undefined,
-        is_archived: false,
-        is_shared: false,
+        // Only set on CREATE. On edit these were unconditionally written false,
+        // silently clearing is_shared (who can spend this voucher) and is_archived
+        // on every unrelated edit.
+        ...(isEdit ? {} : { is_archived: false, is_shared: false }),
         is_locked: isLocked,
         lock_reason: isLocked ? lockReason.trim() || undefined : undefined,
         is_e2ee: effectiveE2EE,
@@ -581,6 +675,51 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
                 <p className="text-lg font-extrabold text-text">
                   {step === STEP_STORE ? t('form.store') : step === STEP_CODE ? t('form.code') : step === STEP_BALANCE ? t('form.amount') : step === STEP_EXPIRY ? t('form.expiry') : t('form.more.details')}
                 </p>
+              </div>
+            )}
+
+            {/* Quick-fill the whole form from an SMS/text or a photo (add mode only) */}
+            {show(STEP_STORE) && !isEdit && (
+              <div>
+                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+                {!showSmsPaste ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={analyzingImage}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-primary/40 text-primary text-sm font-medium hover:bg-primary-light transition disabled:opacity-60"
+                    >
+                      {analyzingImage
+                        ? <><Icon name="progress_activity" size={18} className="animate-spin" aria-hidden /> {t('form.scan.analyzing')}</>
+                        : <><Icon name="photo_camera" size={18} aria-hidden /> {t('form.scan.photo')}</>}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSmsPaste(true)}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-primary/40 text-primary text-sm font-medium hover:bg-primary-light transition"
+                    >
+                      <Icon name="content_paste" size={18} aria-hidden /> {t('form.sms.cta.short')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-border bg-bg p-3 space-y-2">
+                    <label htmlFor="vf-sms" className="text-sm font-medium text-text2 block">{t('form.sms.label')}</label>
+                    <textarea
+                      id="vf-sms" value={smsText} onChange={e => setSmsText(e.target.value)}
+                      rows={4} autoFocus placeholder={t('form.sms.placeholder')}
+                      className={`${inputCls} resize-none`}
+                    />
+                    <div className="flex gap-2">
+                      <button type="button" onClick={applySms} disabled={!smsText.trim()} className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-50">
+                        {t('form.sms.analyze')}
+                      </button>
+                      <button type="button" onClick={() => { setShowSmsPaste(false); setSmsText('') }} className="px-4 py-2.5 rounded-xl bg-surface border border-border text-text2 text-sm">
+                        {t('app.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -956,16 +1095,29 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
-              {step !== STEP_STORE && (
-                <button onClick={goBack} className="px-6 py-3.5 rounded-2xl font-bold text-text2 bg-bg">{t('form.back')}</button>
-              )}
-              {step === STEP_DETAILS ? (
-                <button onClick={() => handleSubmit()} disabled={loading} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab disabled:opacity-70">
-                  {loading ? t('app.loading') : t('form.add.voucher')}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {step !== STEP_STORE && (
+                  <button onClick={goBack} className="px-6 py-3.5 rounded-2xl font-bold text-text2 bg-bg">{t('form.back')}</button>
+                )}
+                {step === STEP_DETAILS ? (
+                  <button onClick={() => handleSubmit()} disabled={loading} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab disabled:opacity-70">
+                    {loading ? t('app.loading') : t('form.add.voucher')}
+                  </button>
+                ) : (
+                  <button onClick={goNext} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab">{t('form.next')}</button>
+                )}
+              </div>
+              {/* Once the two required fields are in, let the user save immediately
+                  instead of tapping through the remaining optional steps. */}
+              {!isEdit && step !== STEP_DETAILS && storeName.trim() && code.trim() && (
+                <button
+                  onClick={() => { if (validateStep(step)) handleSubmit() }}
+                  disabled={loading}
+                  className="w-full py-2.5 rounded-2xl font-semibold text-primary bg-primary-light disabled:opacity-60"
+                >
+                  {t('form.save.now')}
                 </button>
-              ) : (
-                <button onClick={goNext} className="flex-1 bg-gradient-to-r from-primary-mid to-primary-dark text-white py-3.5 rounded-2xl font-semibold shadow-fab">{t('form.next')}</button>
               )}
             </div>
           )}

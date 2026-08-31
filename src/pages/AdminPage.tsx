@@ -791,7 +791,7 @@ export default function AdminPage() {
     supabase.rpc('admin_get_pro_count').then(({ data }) => { if (data !== null) setProCount(data) })
     supabase.rpc('get_premium_enabled').then(({ data }) => { setPremiumEnabled(parsePremiumFlag(data)) })
     supabase.rpc('get_marketplace_mode').then(({ data }) => { if (data) setMarketplaceMode(data as 'enabled' | 'disabled' | 'selective') })
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin])  
 
   // Realtime on profiles is blocked by RLS (users see only their own row).
   // Instead: re-fetch when the admin returns to the tab, and poll every 60s.
@@ -804,7 +804,7 @@ export default function AdminPage() {
       document.removeEventListener('visibilitychange', onVisible)
       clearInterval(interval)
     }
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin])  
 
   async function handleTogglePremium() {
     if (premiumEnabled === null) return
@@ -1151,6 +1151,19 @@ export default function AdminPage() {
     supabase.rpc('admin_get_broadcasts').then(({ data }) => { if (data) setBroadcasts(data) })
   }, [showBroadcasts])
 
+  // Inbox counts (fetched on every load).
+  // Declared BEFORE the !isAdmin early return: hooks below an early return run
+  // conditionally, so the hook count changed the moment isAdmin flipped
+  // false→true (profile finished loading) and React crashed the page.
+  const [inboxCounts, setInboxCounts] = useState<{ support_unread: number; reports_pending: number; submissions_pending: number } | null>(null)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.rpc('admin_get_inbox_counts').then(({ data }) => {
+      if (data) setInboxCounts(data as typeof inboxCounts)
+    })
+  }, [isAdmin])  
+
   if (!isAdmin) {
     // Profile is still being fetched — don't flash "access restricted" for a real admin
     if (user && !profile) {
@@ -1244,7 +1257,11 @@ export default function AdminPage() {
 
   // A store name or code containing a comma/quote/newline must not shift columns
   function csvCell(c: unknown): string {
-    return `"${String(c ?? '').replace(/"/g, '""')}"`
+    // Neutralize spreadsheet formula injection from user-controlled fields
+    // (store names, emails, notes) before quoting.
+    let s = String(c ?? '')
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+    return `"${s.replace(/"/g, '""')}"`
   }
 
   async function exportCSV() {
@@ -1282,16 +1299,6 @@ export default function AdminPage() {
   }
 
   const usersCount = systemStats?.total_users ?? null
-
-  // Inbox counts (fetched on every load)
-  const [inboxCounts, setInboxCounts] = useState<{ support_unread: number; reports_pending: number; submissions_pending: number } | null>(null)
-
-  useEffect(() => {
-    if (!isAdmin) return
-    supabase.rpc('admin_get_inbox_counts').then(({ data }) => {
-      if (data) setInboxCounts(data as typeof inboxCounts)
-    })
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const inboxTotal = (inboxCounts?.support_unread ?? 0) + (inboxCounts?.reports_pending ?? 0) + (inboxCounts?.submissions_pending ?? 0)
 

@@ -1,6 +1,7 @@
 import type React from 'react'
 import { useNavigate } from 'react-router-dom'
 import Icon from '../ui/Icon'
+import { useT } from '../../lib/i18n'
 
 /** Shared header for every settings sub-page — back button + title, normal flow (not
     fixed/sticky; these are short simple pages so a header that scrolls away with the
@@ -8,9 +9,10 @@ import Icon from '../ui/Icon'
     that only matter for long, complex pages like Checkout). */
 export function SettingsSubHeader({ title, action }: { title: string; action?: React.ReactNode }) {
   const navigate = useNavigate()
+  const { t } = useT()
   return (
     <div className="bg-surface border-b border-border px-4 py-3 flex items-center gap-3">
-      <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-bg">
+      <button onClick={() => navigate(-1)} aria-label={t('app.back')} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-bg">
         <Icon name="arrow_forward" size={22} color="var(--c-text)" />
       </button>
       <h1 className="text-base font-bold text-text flex-1 min-w-0 truncate">{title}</h1>

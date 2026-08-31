@@ -169,6 +169,8 @@ export default function SettingsAccountPage() {
       setCurrentPass(''); setNewPass(''); setNewPass2('')
       setShowCurrentPass(false); setShowNewPass(false); setShowNewPass2(false); setShowPassStrength(false)
       logAction('system_password_change', 'מערכת')
+    } catch (e: any) {
+      toast.error(e?.message || t('account.pass.change.error', { error: '' }))
     } finally {
       setPasswordChanging(false)
     }

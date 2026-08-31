@@ -7,6 +7,7 @@
 // is exactly what makes new-device unlock and real recovery work.
 
 import { supabase } from './supabase'
+import { clearDeviceVaultKey } from './vaultKeyStore'
 import {
   deriveKek,
   deriveVaultKey,
@@ -36,6 +37,23 @@ const CHECK_KEY = 'gs_e2ee_chk'
 const VAULT_V2_FLAG = 'gs_e2ee_v2'
 const BIOMETRIC_WRAPPED_LOCAL = 'gs_e2ee_biometric_wrapped_v2'
 const BIOMETRIC_CRED_LOCAL = 'biometric_credential_id'
+
+// Wipe ALL in-memory/device vault key material. Callable from AuthContext.signOut
+// (which lives OUTSIDE E2EEProvider), because E2EEProvider unmounts the instant
+// `user` becomes null — so its own `!user` cleanup effect never runs on sign-out,
+// which used to leave the exported AES master key sitting in sessionStorage after
+// an in-tab sign-out (and readable by the next account signing in on the same tab).
+export function wipeVaultSessionKeys(): void {
+  try {
+    sessionStorage.removeItem(SESSION_KEY_V2)
+    sessionStorage.removeItem(PENDING_PHRASE_KEY)
+    sessionStorage.removeItem(PW_STALE_KEY)
+    sessionStorage.removeItem('gs_e2ee_session')   // legacy plain passphrase
+    sessionStorage.removeItem('gs_vault_migrate_pw') // legacy migration helper
+  } catch { /* sessionStorage unavailable — nothing cached to wipe */ }
+  // IndexedDB device-persisted key (best-effort, async)
+  void clearDeviceVaultKey()
+}
 
 export interface VaultWrapKdf {
   v?: number

@@ -631,6 +631,11 @@ function ToasterWithLocale() {
           borderRadius: '16px',
           fontSize: '14px',
           fontWeight: '500',
+          // Theme-aware: react-hot-toast defaults to a white card, which was a
+          // bright rectangle in dark mode. These tokens follow the app theme.
+          background: 'var(--c-surface)',
+          color: 'var(--c-text)',
+          border: '1px solid var(--c-border)',
         },
       }}
     />

@@ -10,6 +10,23 @@ const UNDO_MS = 5000
 // them — two contradictory behaviors for the same interaction.)
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 const pending = new Set<string>()
+// Each pending id's "complete the delete now" thunk, so a page-hide can flush
+// the delete before the tab is frozen/killed. Without this, closing the app
+// inside the 5s window let the setTimeout die and the "deleted" voucher came
+// back on next launch.
+const finishers = new Map<string, () => void>()
+
+function flushPending() {
+  // Run every outstanding delete immediately. Mobile fires pagehide/visibility
+  // hidden before suspending the tab, so this is the last safe moment.
+  finishers.forEach(fn => fn())
+}
+
+if (typeof window !== 'undefined') {
+  const onHide = () => { if (document.visibilityState === 'hidden') flushPending() }
+  document.addEventListener('visibilitychange', onHide)
+  window.addEventListener('pagehide', flushPending)
+}
 
 interface UndoLabels {
   message: string
@@ -37,17 +54,24 @@ export function useUndoableDelete(
     setHiddenIds(prev => new Set([...prev, ...ids]))
 
     const finishOne = async (id: string) => {
-      timers.delete(id)
+      // Idempotent: a page-hide flush and the timer must not both delete.
+      if (!pending.has(id)) return
+      pending.delete(id)
+      finishers.delete(id)
+      const timer = timers.get(id)
+      if (timer) { clearTimeout(timer); timers.delete(id) }
       try {
         await onDelete(id)
       } catch {
         if (failed) toast.error(failed)
       } finally {
-        pending.delete(id)
         setHiddenIds(prev => { const s = new Set(prev); s.delete(id); return s })
       }
     }
-    ids.forEach(id => timers.set(id, setTimeout(() => finishOne(id), UNDO_MS)))
+    ids.forEach(id => {
+      finishers.set(id, () => { void finishOne(id) })
+      timers.set(id, setTimeout(() => finishOne(id), UNDO_MS))
+    })
 
     toast(
       tst => (
@@ -60,6 +84,7 @@ export function useUndoableDelete(
                 if (timer) clearTimeout(timer)
                 timers.delete(id)
                 pending.delete(id)
+                finishers.delete(id)
               })
               setHiddenIds(prev => { const s = new Set(prev); ids.forEach(id => s.delete(id)); return s })
               toast.dismiss(tst.id)
