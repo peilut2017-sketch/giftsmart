@@ -54,11 +54,11 @@ END $$;
 DO $$
 DECLARE cname text;
 BEGIN
-  -- coupon_redemptions.user_id → CASCADE
+  -- coupon_redemptions.user_id → CASCADE (its only FK to auth.users)
   SELECT conname INTO cname FROM pg_constraint
    WHERE conrelid = 'public.coupon_redemptions'::regclass AND contype = 'f'
      AND confrelid = 'auth.users'::regclass
-     AND conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'public.coupon_redemptions'::regclass AND attname = 'user_id')];
+   ORDER BY conname LIMIT 1;
   IF cname IS NOT NULL THEN EXECUTE format('ALTER TABLE public.coupon_redemptions DROP CONSTRAINT %I', cname); END IF;
   ALTER TABLE public.coupon_redemptions
     ADD CONSTRAINT coupon_redemptions_user_id_fkey FOREIGN KEY (user_id)
@@ -69,11 +69,11 @@ END $$;
 DO $$
 DECLARE cname text;
 BEGIN
-  -- support_messages.user_id → CASCADE
+  -- support_messages.user_id → CASCADE (its only FK to auth.users)
   SELECT conname INTO cname FROM pg_constraint
    WHERE conrelid = 'public.support_messages'::regclass AND contype = 'f'
      AND confrelid = 'auth.users'::regclass
-     AND conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'public.support_messages'::regclass AND attname = 'user_id')];
+   ORDER BY conname LIMIT 1;
   IF cname IS NOT NULL THEN EXECUTE format('ALTER TABLE public.support_messages DROP CONSTRAINT %I', cname); END IF;
   ALTER TABLE public.support_messages
     ADD CONSTRAINT support_messages_user_id_fkey FOREIGN KEY (user_id)
@@ -84,11 +84,11 @@ END $$;
 DO $$
 DECLARE cname text;
 BEGIN
-  -- coupons.created_by → SET NULL (keep the coupon, drop the creator link)
+  -- coupons.created_by → SET NULL (its only FK to auth.users; keep the coupon)
   SELECT conname INTO cname FROM pg_constraint
    WHERE conrelid = 'public.coupons'::regclass AND contype = 'f'
      AND confrelid = 'auth.users'::regclass
-     AND conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'public.coupons'::regclass AND attname = 'created_by')];
+   ORDER BY conname LIMIT 1;
   IF cname IS NOT NULL THEN EXECUTE format('ALTER TABLE public.coupons DROP CONSTRAINT %I', cname); END IF;
   ALTER TABLE public.coupons
     ADD CONSTRAINT coupons_created_by_fkey FOREIGN KEY (created_by)
