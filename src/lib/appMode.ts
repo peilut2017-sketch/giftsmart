@@ -1,15 +1,19 @@
 /**
- * "App mode" = running as the installed Android app (TWA) or an installed PWA —
- * the contexts where guest (anonymous) usage is allowed. The regular website
- * keeps its normal login wall.
+ * "App mode" = running as the installed Android app (TWA), the native iOS shell
+ * (Capacitor), or an installed/standalone PWA — the contexts where guest
+ * (anonymous) usage is allowed. The regular website keeps its normal login wall.
  *
- * Detection is by presentation only (display-mode / TWA referrer). Never by
- * IP, device fingerprinting or hardware identifiers — identity itself always
- * comes from the Supabase Auth session.
+ * Detection is by presentation only (native shell / display-mode / TWA referrer).
+ * Never by IP, device fingerprinting or hardware identifiers — identity itself
+ * always comes from the Supabase Auth session.
  *
- * The result is latched in localStorage: the TWA referrer is only present on
- * the very first navigation, and a later in-app deep link shouldn't demote the
- * user back to website rules.
+ * IMPORTANT: the TWA-referrer latch lives in **sessionStorage**, not
+ * localStorage. On Android the TWA and Chrome share the same localStorage
+ * origin, so a localStorage latch leaked "app mode" into every regular browser
+ * tab forever — which made the website try (and fail) a guest session instead
+ * of showing the landing page. sessionStorage is per browsing context, so the
+ * TWA keeps its latch across in-app navigations without contaminating browser
+ * tabs. Every other signal below is evaluated live on each call.
  */
 const APP_MODE_KEY = 'gs_app_mode'
 const EXPLICIT_SIGNOUT_KEY = 'gs_explicit_signout'
@@ -28,15 +32,31 @@ export function clearExplicitSignOut() {
 
 export function isAppMode(): boolean {
   try {
-    if (localStorage.getItem(APP_MODE_KEY) === '1') return true
+    // One-time cleanup of the old leaky localStorage latch (see note above), so
+    // existing browser users who were wrongly flagged as app-mode recover.
+    try { localStorage.removeItem(APP_MODE_KEY) } catch { /* ignore */ }
+
+    // Native shell (Capacitor iOS/Android) — definitive.
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; isNative?: boolean } }).Capacitor
+    if (cap?.isNativePlatform?.() || cap?.isNative) return true
+
+    // Installed / standalone PWA — a live, per-context signal (a normal browser
+    // tab reports display-mode: browser and standalone: false).
     const standalone =
       window.matchMedia?.('(display-mode: standalone)').matches ||
+      window.matchMedia?.('(display-mode: fullscreen)').matches ||
+      window.matchMedia?.('(display-mode: minimal-ui)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true
-    const fromTwa = document.referrer.startsWith('android-app://')
-    if (standalone || fromTwa) {
-      localStorage.setItem(APP_MODE_KEY, '1')
+    if (standalone) return true
+
+    // TWA: the android-app:// referrer is only present on the entry navigation,
+    // so latch it in sessionStorage (per browsing context — does NOT leak to a
+    // separate Chrome browser tab the way a localStorage latch did).
+    if (document.referrer.startsWith('android-app://')) {
+      sessionStorage.setItem(APP_MODE_KEY, '1')
       return true
     }
+    if (sessionStorage.getItem(APP_MODE_KEY) === '1') return true
   } catch { /* storage unavailable — fall through to false */ }
   return false
 }
