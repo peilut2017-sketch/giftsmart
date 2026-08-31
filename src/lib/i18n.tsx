@@ -2853,6 +2853,8 @@ const translations: Record<string, string> = {
   'guest.offline.title.en': "Couldn't connect right now",
   'guest.offline.message': 'בדוק את החיבור לאינטרנט ונסה שוב.',
   'guest.offline.message.en': 'Check your internet connection and try again.',
+  'guest.offline.signin': 'התחבר עם חשבון',
+  'guest.offline.signin.en': 'Sign in with an account',
   'guest.merge.ticket.failed': 'לא ניתן להבטיח את צירוף שוברי האורח לחשבון — בדוק את החיבור ונסה שוב',
   'guest.merge.ticket.failed.en': "Couldn't secure your guest vouchers for the account switch — check your connection and try again",
   'guest.merge.vault.locked': 'יש לך שוברים מוצפנים — פתח קודם את הכספת כדי שיעברו איתך, ואז נסה שוב',
