@@ -232,7 +232,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
 
         {/* Search + which-store (recorded in the activity log) */}
         <div className="flex gap-2">
-          <div className="flex-1 flex items-center gap-2 rounded-2xl px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.15)' }}>
+          <div className="flex-1 min-w-0 flex items-center gap-2 rounded-2xl px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.15)' }}>
             <Icon name="search" size={16} color="rgba(255,255,255,0.7)" className="shrink-0" />
             <input
               type="text"
@@ -248,7 +248,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
               </button>
             )}
           </div>
-          <div className="flex-1 flex items-center gap-2 rounded-2xl px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.15)' }}>
+          <div className="flex-1 min-w-0 flex items-center gap-2 rounded-2xl px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.15)' }}>
             <Icon name="storefront" size={16} color="rgba(255,255,255,0.7)" className="shrink-0" />
             <input
               type="text"

@@ -152,21 +152,24 @@ function getSpotlightStyle(rect: DOMRect, padding: number): React.CSSProperties 
 
 function getTooltipStyle(rect: DOMRect | null, tipSide?: 'top' | 'bottom'): React.CSSProperties {
   const margin = 12
-  if (!rect) {
-    return {
-      position: 'fixed',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: Math.min(TOOLTIP_W, window.innerWidth - margin * 2),
-      zIndex: 10000,
-    }
-  }
-
   const vH = window.innerHeight
   const vW = window.innerWidth
   // Compute actual width first so left clamping is always in sync
   const actualWidth = Math.min(TOOLTIP_W, vW - margin * 2)
+
+  if (!rect) {
+    // Centred card. The horizontal centre is a plain numeric `left` and the
+    // vertical one is Framer's `y: '-50%'` (set on the motion.div) — a CSS
+    // `transform: translate(-50%,-50%)` here is silently overwritten by the
+    // scale animation, which left the card hanging off the right edge on phones.
+    return {
+      position: 'fixed',
+      top: '50%',
+      left: (vW - actualWidth) / 2,
+      width: actualWidth,
+      zIndex: 10000,
+    }
+  }
   const idealLeft = rect.left + rect.width / 2 - actualWidth / 2
   const left = Math.max(margin, Math.min(vW - actualWidth - margin, idealLeft))
 
@@ -282,7 +285,7 @@ export default function OnboardingGuide() {
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ layout: { duration: 0.25, ease: EASE_IN_OUT }, duration: 0.2, ease: 'easeOut' }}
-        style={tooltipStyle}
+        style={{ ...tooltipStyle, y: rect ? 0 : '-50%' }}
         dir="rtl"
         onClick={e => e.stopPropagation()}
       >

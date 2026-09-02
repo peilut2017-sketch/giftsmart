@@ -136,7 +136,7 @@ export default function HomePage() {
 
   const totalBalance = vouchers.reduce((s, v) => s + v.balance, 0)
   // In-place balance changes count toward the new value instead of teleporting
-  const balanceRef = useCountUp<HTMLDivElement>(totalBalance, v => formatCurrency(Math.round(v)))
+  const balanceRef = useCountUp<HTMLDivElement>(totalBalance, v => formatCurrency(Math.abs(v - totalBalance) < 0.5 ? totalBalance : Math.round(v)))
 
   const topCategories = useMemo(() => {
     const counts = new Map<string, number>()

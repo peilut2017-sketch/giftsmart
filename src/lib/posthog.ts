@@ -11,8 +11,13 @@ export function initPostHog() {
     capture_pageview: true,
     capture_pageleave: true,
     session_recording: {
-      maskAllInputs: false,           // we mask specific fields with ph-no-capture
-      maskInputOptions: { password: true },
+      // Gift-card codes and CVVs are bearer instruments: never let a session
+      // replay ship them to a third party. Mask EVERY input by default (the old
+      // opt-in via ph-no-capture covered only two fields), and mask displayed
+      // secrets too — anything tagged ph-no-capture (code/CVV read-outs) or
+      // rendered as monospace (all code displays in the app).
+      maskAllInputs: true,
+      maskTextSelector: '.ph-no-capture, .font-mono',
     },
   })
 }
