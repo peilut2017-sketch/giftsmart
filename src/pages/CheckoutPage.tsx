@@ -248,10 +248,12 @@ export default function CheckoutPage() {
       if (r.height === 0) return
       setBarcodeVisible(r.bottom > 64 && r.top < window.innerHeight)
     }
-    check()
+    // First measurement after layout has settled (and no synchronous setState in the effect)
+    const raf = requestAnimationFrame(check)
     window.addEventListener('scroll', check, { passive: true })
     window.addEventListener('resize', check)
     return () => {
+      cancelAnimationFrame(raf)
       window.removeEventListener('scroll', check)
       window.removeEventListener('resize', check)
     }
