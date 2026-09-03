@@ -99,6 +99,18 @@ DROP POLICY IF EXISTS "Buyer or seller can update purchase" ON marketplace_purch
 -- 4. Admin-only functions — add the is_admin guard, revoke PUBLIC/anon execute
 -- ============================================================================
 
+-- CREATE OR REPLACE cannot change a function's return-row type, and the live
+-- versions of these RETURNS TABLE/SETOF readers may have a different column set,
+-- so drop them first. (Safe: they're only called from the client, nothing in the
+-- DB depends on them.)
+DROP FUNCTION IF EXISTS public.admin_get_banners();
+DROP FUNCTION IF EXISTS public.admin_get_message_replies(uuid);
+DROP FUNCTION IF EXISTS public.admin_get_verified_sellers();
+DROP FUNCTION IF EXISTS public.admin_get_submissions(text);
+DROP FUNCTION IF EXISTS public.admin_get_all_clubs();
+DROP FUNCTION IF EXISTS public.admin_get_all_businesses();
+DROP FUNCTION IF EXISTS public.admin_get_all_deals();
+
 -- ── Banners ──────────────────────────────────────────────────────────────────
 -- Remove the ambiguous 1-arg variant; the 3-arg version (with defaults) covers
 -- every existing call site.

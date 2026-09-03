@@ -7,6 +7,9 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Max AI scans per user per rolling hour (cost protection — see rate limit below)
+const HOURLY_SCAN_LIMIT = 30
+
 // ─── Category IDs used in the app ────────────────────────────────────────────
 const VALID_CATEGORIES = new Set([
   'fashion', 'food', 'electronics', 'beauty', 'home',
@@ -126,6 +129,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const userId = await requireAuth(req)
   if (!userId) {
     return errorResponse('Unauthorized — sign in first')
+  }
+
+  // Per-user rate limit. Every call here costs real money (a Gemini request),
+  // and any signed-in account — guests included — could loop this endpoint and
+  // run up the bill. Mirrors send-email's email_send_log pattern; fails OPEN if
+  // the ocr_scan_log migration hasn't been applied so a missed migration never
+  // breaks scanning.
+  const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+  if (SERVICE_KEY && SUPABASE_URL) {
+    try {
+      const admin = createClient(SUPABASE_URL, SERVICE_KEY)
+      const oneHourAgo = new Date(Date.now() - 3600_000).toISOString()
+      const { count, error } = await admin
+        .from('ocr_scan_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', oneHourAgo)
+      if (!error && (count ?? 0) >= HOURLY_SCAN_LIMIT) {
+        return new Response(JSON.stringify({ error: 'rate_limited' }), {
+          status: 429, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        })
+      }
+      await admin.from('ocr_scan_log').insert({ user_id: userId })
+    } catch (rlErr) {
+      console.warn('rate-limit check skipped:', rlErr)
+    }
   }
 
   // Read API key from Supabase Secrets

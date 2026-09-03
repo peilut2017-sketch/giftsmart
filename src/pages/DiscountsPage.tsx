@@ -33,6 +33,7 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
     discount_value: '', promo_code: '', external_link: '',
     tags: '', start_date: '', expiration_date: '',
   })
+  const MAX_DEAL_IMAGE_BYTES = 5 * 1024 * 1024
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -190,7 +191,13 @@ function SubmitDealModal({ onClose }: { onClose: () => void }) {
                 className="hidden"
                 onChange={e => {
                   const f = e.target.files?.[0]
+                  e.target.value = ''
                   if (!f) return
+                  // accept="image/*" is only a picker hint — validate for real.
+                  // Uploads land in a PUBLIC bucket and count against storage +
+                  // egress quota, so reject non-images and oversized files.
+                  if (!f.type.startsWith('image/')) { toast.error(t('deals.submit.image.invalid')); return }
+                  if (f.size > MAX_DEAL_IMAGE_BYTES) { toast.error(t('deals.submit.image.too.large')); return }
                   setImageFile(f)
                   setImagePreview(URL.createObjectURL(f))
                 }}

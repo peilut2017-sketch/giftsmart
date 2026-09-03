@@ -5,7 +5,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react'
 import AnimatedRoutes from './components/AnimatedRoutes'
 import toast, { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { isAppMode, hasExplicitSignOut } from './lib/appMode'
+import { isAppMode, hasExplicitSignOut, markExplicitSignOut } from './lib/appMode'
 import { VoucherProvider, useVouchers } from './contexts/VoucherContext'
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext'
 import { MarketplaceProvider } from './contexts/MarketplaceContext'
@@ -394,6 +394,16 @@ function GuestBootstrap() {
         <p className="text-sm text-text3 max-w-xs">{t('guest.offline.message')}</p>
         <button onClick={() => { setFailed(false); attempt() }} className="mt-3 px-8 py-3 rounded-2xl bg-primary text-white font-bold">
           {t('app.retry')}
+        </button>
+        {/* Escape hatch: guest (anonymous) sign-in can fail for reasons a retry
+            won't fix (anonymous auth disabled, project paused, auth rate-limit).
+            Normal login/registration is a separate path that still works, so offer
+            it instead of trapping the user on a retry-only dead end. */}
+        <button
+          onClick={() => { markExplicitSignOut(); window.location.reload() }}
+          className="mt-1 px-8 py-3 rounded-2xl border border-border text-text2 font-semibold"
+        >
+          {t('guest.offline.signin')}
         </button>
       </div>
     )

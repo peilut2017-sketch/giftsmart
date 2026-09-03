@@ -70,6 +70,7 @@ $$;
 -- only ever inserts the user into a wallet they own.
 
 DROP POLICY IF EXISTS "Users can join wallets" ON wallet_members;
+DROP POLICY IF EXISTS "Users can join own wallet" ON wallet_members;  -- re-run safe
 CREATE POLICY "Users can join own wallet"
   ON wallet_members FOR INSERT
   WITH CHECK (

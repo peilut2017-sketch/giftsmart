@@ -122,6 +122,7 @@ export default function CheckoutPage() {
   const [showEditForm, setShowEditForm] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('voucher')
+  const tabBarRef = useRef<HTMLDivElement>(null)
   const [headerScrolled, setHeaderScrolled] = useState(false)
   const [shareTokens, setShareTokens] = useState<Array<{ token: string; expires_at: string | null; view_count: number; created_at: string }>>([])
   const [shareLoading, setShareLoading] = useState(false)
@@ -153,7 +154,10 @@ export default function CheckoutPage() {
   const [sellLoading, setSellLoading] = useState(false)
   const [removingFromSale, setRemovingFromSale] = useState(false)
 
-  const balanceRef = useCountUp<HTMLDivElement>(voucher?.balance ?? 0, v => formatCurrency(Math.round(v)))
+  // Whole shekels while the number is ticking, the exact balance once it lands —
+  // Math.round on the resting value showed ₪1,251 for a ₪1,250.5 voucher.
+  const heroBalance = voucher?.balance ?? 0
+  const balanceRef = useCountUp<HTMLDivElement>(heroBalance, v => formatCurrency(Math.abs(v - heroBalance) < 0.5 ? heroBalance : Math.round(v)))
   const reduceMotion = useReducedMotion()
 
   // Shared-voucher "share" tab has no accordion trigger to lazy-load its tokens —
@@ -231,17 +235,29 @@ export default function CheckoutPage() {
     return () => { cancelled = true }
   }, [effectiveCode, lockConfirmed])
 
-  // Mini scan strip (pinned under the header once the real code scrolls out of view)
+  // Mini scan strip (pinned under the header once the real code scrolls out of view).
+  // Driven by scroll/resize geometry rather than an IntersectionObserver: the observer
+  // also fired while the code box was being redrawn (0-height for a frame on a
+  // viewport resize — URL-bar collapse, rotation, keyboard) and could latch "hidden"
+  // with the real barcode still on screen, painting the strip over the hero.
   useEffect(() => {
-    const el = codeImgRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => setBarcodeVisible(entry.isIntersecting),
-      { rootMargin: '-64px 0px 0px 0px', threshold: 0 },
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
+    function check() {
+      const el = codeImgRef.current
+      if (!el) { setBarcodeVisible(true); return }
+      const r = el.getBoundingClientRect()
+      if (r.height === 0) return
+      setBarcodeVisible(r.bottom > 64 && r.top < window.innerHeight)
+    }
+    // First measurement after layout has settled (and no synchronous setState in the effect)
+    const raf = requestAnimationFrame(check)
+    window.addEventListener('scroll', check, { passive: true })
+    window.addEventListener('resize', check)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', check)
+      window.removeEventListener('resize', check)
+    }
+  }, [effectiveCode, codeRenderFailed])
 
   useEffect(() => {
     if (!effectiveCode || barcodeVisible) return
@@ -758,7 +774,19 @@ export default function CheckoutPage() {
   // ── Floating action — the one task-focused CTA for the active tab ──
   let fab: { label: string; icon: string; onClick: () => void; disabled?: boolean; loading?: boolean } | null = null
   if (currentTab === 'voucher' && !isArchived) {
-    fab = { label: t('checkout.use.voucher'), icon: 'shopping_bag', onClick: () => setActiveTab('use') }
+    fab = {
+      label: t('checkout.use.voucher'), icon: 'shopping_bag',
+      onClick: () => {
+        setActiveTab('use')
+        // Bring the use panel up under the header — at the top of the page the
+        // store/amount fields sat behind this very button and the bottom nav.
+        requestAnimationFrame(() => {
+          const el = tabBarRef.current
+          if (!el) return
+          window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - 64 - 8, behavior: reduceMotion ? 'auto' : 'smooth' })
+        })
+      },
+    }
   } else if (currentTab === 'use') {
     // No amount typed → the button is "שימוש מלא" (burn the whole balance).
     // An amount typed → it becomes "עדכן יתרה" for a partial redemption.
@@ -881,9 +909,12 @@ export default function CheckoutPage() {
         {createPortal(
           <>
           <div
-            className={`fixed top-0 inset-x-0 z-30 flex items-center justify-between px-3 transition-colors duration-200 ${headerScrolled ? 'bg-surface/95 backdrop-blur-xl shadow-sm border-b border-border' : ''}`}
+            className={`fixed top-0 inset-x-0 z-30 transition-colors duration-200 ${headerScrolled ? 'bg-surface/95 backdrop-blur-xl shadow-sm border-b border-border' : ''}`}
             style={{ height: 64 }}
           >
+          {/* Inner row mirrors the app column (max-w-2xl) so on desktop the back/menu
+              buttons sit at the edges of the content, not the edges of the window. */}
+          <div className="max-w-2xl mx-auto h-full flex items-center justify-between px-3">
             <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl flex items-center justify-center transition" style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}>
               <Icon name="arrow_forward" size={20} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
             </button>
@@ -899,6 +930,7 @@ export default function CheckoutPage() {
               <Icon name="more_horiz" size={22} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
             </button>
           </div>
+          </div>
 
           {/* Anchored more-menu — drops down from the header dots. The previous
               bottom sheet opened behind the bottom nav and the redeem button. */}
@@ -912,6 +944,7 @@ export default function CheckoutPage() {
                 transition={{ duration: 0.15 }}
                 onClick={() => setShowMoreMenu(false)}
               >
+              <div className="relative max-w-2xl mx-auto h-full">
                 <motion.div
                   role="menu"
                   className="absolute w-60 bg-surface rounded-2xl shadow-2xl border border-border overflow-hidden"
@@ -948,6 +981,7 @@ export default function CheckoutPage() {
                     )}
                   </div>
                 </motion.div>
+              </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -975,7 +1009,7 @@ export default function CheckoutPage() {
             </div>
             <div className="min-w-0">
               <div className="text-[13px] font-medium mb-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{t('checkout.current.balance')}</div>
-              <div ref={balanceRef} className="text-white font-black tabular-nums" style={{ fontSize: 44, letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(Math.round(voucher.balance))}</div>
+              <div ref={balanceRef} className="text-white font-black tabular-nums" style={{ fontSize: 44, letterSpacing: '-1px', lineHeight: 1 }}>{formatCurrency(voucher.balance)}</div>
               {voucher.amount > 0 && voucher.amount !== voucher.balance && (
                 <div className="text-xs mt-1.5" style={{ color: 'rgba(255,255,255,0.6)' }}>
                   {t('checkout.original.of')} {formatCurrency(voucher.amount)} {t('checkout.original.label')}
@@ -1014,13 +1048,14 @@ export default function CheckoutPage() {
       {/* Mini scan strip — pinned just under the header once the real barcode/QR scrolls
           out of view, so the voucher stays scannable without scrolling back up. Portaled
           for the same reason as the header above. */}
-      {!barcodeVisible && effectiveCode && (!voucher.is_e2ee || isVaultUnlocked) && createPortal(
+      {!barcodeVisible && !codeRenderFailed && effectiveCode && (!voucher.is_e2ee || isVaultUnlocked) && createPortal(
         <button
           onClick={scrollToCard}
           aria-label={t('checkout.mini.scan.tap')}
           className="fixed inset-x-0 flex items-center justify-center bg-surface/95 backdrop-blur-xl border-b border-border shadow-sm"
-          style={{ top: 64, height: 40, zIndex: 25 }}
+          style={{ top: 64, height: isAlpha ? 64 : 40, zIndex: 25 }}
         >
+          {/* 56px QR needs the taller strip — in the 40px one it hung out of the bottom */}
           {isAlpha ? <canvas ref={miniQrRef} /> : <svg ref={miniBarcodeRef} style={{ height: 28 }} />}
         </button>,
         document.body,
@@ -1176,7 +1211,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* ── Segment tabs ── */}
-        <div className="grid relative bg-bg rounded-2xl p-1" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+        <div ref={tabBarRef} className="grid relative bg-bg rounded-2xl p-1" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
           <div
             className="absolute rounded-xl bg-surface shadow-sm"
             style={{

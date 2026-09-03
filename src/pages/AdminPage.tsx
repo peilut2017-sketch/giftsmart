@@ -828,6 +828,9 @@ export default function AdminPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) { toast.error(t('admin.banner.image.required')); return }
+    // Banners are served to every user before login — a huge file burns egress
+    // quota on every app open. Cap the upload size.
+    if (file.size > 3 * 1024 * 1024) { toast.error(t('admin.banner.image.too.large')); return }
     setUploadingBanner(true)
     try {
       const ext = file.name.split('.').pop() ?? 'jpg'
