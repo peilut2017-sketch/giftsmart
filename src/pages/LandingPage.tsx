@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './LandingPage.css'
 import AccessibilityWidget from '../components/AccessibilityWidget'
+import Icon from '../components/ui/Icon'
 
 // ── Types ─────────────────────────────────────────────────────────
 interface DemoCard {
@@ -100,24 +101,24 @@ function InteractiveDemo() {
   const NavBar = ({ active }: { active: DemoScreen }) => (
     <div className="lp-dpf-nav">
       <button className={`lp-dpf-nb ${active==='wallet'?'lp-active':''}`} onClick={() => setScreen('wallet')}>
-        <ph-icon name="wallet" weight="duotone" size="18"></ph-icon>
+        <Icon name="account_balance_wallet" size={18} />
         <span>ארנק</span>
       </button>
       <button className="lp-dpf-nb" onClick={() => setScreen('add')}>
         <div className="lp-dpf-add-btn">
-          <ph-icon name="plus" weight="bold" size="20" color="white"></ph-icon>
+          <Icon name="add" size={20} color="white" />
         </div>
       </button>
       <button className={`lp-dpf-nb ${active==='alerts'?'lp-active':''}`} onClick={() => setScreen('alerts')}>
-        <ph-icon name="bell" weight="duotone" size="18"></ph-icon>
+        <Icon name="notifications" size={18} />
         <span>התראות</span>
       </button>
       <button className={`lp-dpf-nb ${active==='share'?'lp-active':''}`} onClick={() => setScreen('share')}>
-        <ph-icon name="users-three" weight="duotone" size="18"></ph-icon>
+        <Icon name="group" size={18} />
         <span>שיתוף</span>
       </button>
       <button className={`lp-dpf-nb ${active==='stats'?'lp-active':''}`} onClick={() => setScreen('stats')}>
-        <ph-icon name="chart-bar" weight="duotone" size="18"></ph-icon>
+        <Icon name="bar_chart" size={18} />
         <span>סטטיסטיקות</span>
       </button>
     </div>
@@ -187,7 +188,7 @@ function InteractiveDemo() {
           <div className={`lp-dscreen${screen==='add'?'':' hidden'}`}>
             <div className="lp-dadd-header">
               <button className="lp-dadd-back" onClick={() => setScreen('wallet')}>
-                <ph-icon name="arrow-right" weight="bold" size="16"></ph-icon>
+                <Icon name="arrow_forward" size={16} />
               </button>
               <div className="lp-dadd-title">הוסף שובר</div>
             </div>
@@ -233,7 +234,7 @@ function InteractiveDemo() {
               </div>
               <button className="lp-dadd-submit" onClick={addCard}>
                 הוסף לארנק
-                <ph-icon name="plus" weight="bold" size="16"></ph-icon>
+                <Icon name="add" size={16} />
               </button>
             </div>
             <NavBar active="add" />
@@ -243,7 +244,7 @@ function InteractiveDemo() {
           <div className={`lp-dscreen${screen==='alerts'?'':' hidden'}`}>
             <div className="lp-dadd-header">
               <button className="lp-dadd-back" onClick={() => setScreen('wallet')}>
-                <ph-icon name="arrow-right" weight="bold" size="16"></ph-icon>
+                <Icon name="arrow_forward" size={16} />
               </button>
               <div className="lp-dadd-title">התראות</div>
             </div>
@@ -267,7 +268,7 @@ function InteractiveDemo() {
           <div className={`lp-dscreen${screen==='share'?'':' hidden'}`}>
             <div className="lp-dadd-header">
               <button className="lp-dadd-back" onClick={() => setScreen('wallet')}>
-                <ph-icon name="arrow-right" weight="bold" size="16"></ph-icon>
+                <Icon name="arrow_forward" size={16} />
               </button>
               <div className="lp-dadd-title">ארנק משותף</div>
             </div>
@@ -294,7 +295,7 @@ function InteractiveDemo() {
           <div className={`lp-dscreen${screen==='stats'?'':' hidden'}`}>
             <div className="lp-dadd-header">
               <button className="lp-dadd-back" onClick={() => setScreen('wallet')}>
-                <ph-icon name="arrow-right" weight="bold" size="16"></ph-icon>
+                <Icon name="arrow_forward" size={16} />
               </button>
               <div className="lp-dadd-title">סטטיסטיקות</div>
             </div>
@@ -430,7 +431,7 @@ export default function LandingPage() {
       <nav id="lp-nav" ref={navRef}>
         <a className="lp-nav-logo" href="#lp-hero">
           <div className="lp-nl-mark">
-            <ph-icon name="check-fat" weight="bold" color="white" size="18"></ph-icon>
+            <Icon name="check" size={18} color="white" />
           </div>
           <span className="lp-nl-text">GiftSmart</span>
         </a>
@@ -449,7 +450,7 @@ export default function LandingPage() {
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(v => !v)}
           >
-            <ph-icon name={menuOpen ? 'x' : 'list'} weight="bold" size="22"></ph-icon>
+            <Icon name={menuOpen ? 'close' : 'menu'} size={22} />
           </button>
         </div>
       </nav>
@@ -484,7 +485,7 @@ export default function LandingPage() {
             <button className="lp-btn-hero-p" onClick={goToRegister}>התחל עכשיו</button>
             <a className="lp-btn-hero-g" href="#lp-feat">
               גלה את הפיצ'רים
-              <ph-icon name="caret-down" weight="bold" size="16"></ph-icon>
+              <Icon name="keyboard_arrow_down" size={16} />
             </a>
           </div>
 
@@ -492,7 +493,7 @@ export default function LandingPage() {
 
           <div className="lp-scroll-cue">
             <span>גלול</span>
-            <ph-icon name="caret-down" weight="bold" size="16"></ph-icon>
+            <Icon name="keyboard_arrow_down" size={16} />
           </div>
         </div>
       </section>
@@ -551,7 +552,7 @@ export default function LandingPage() {
         <div className="lp-prob-handoff">
           <div className="lp-prob-handoff-line" />
           <div className="lp-prob-handoff-pill">
-            <ph-icon name="arrow-down" weight="bold" size="16"></ph-icon>
+            <Icon name="arrow_downward" size={16} />
             <span>GiftSmart פותרת את שלושתם</span>
           </div>
           <div className="lp-prob-handoff-line" />
@@ -576,7 +577,7 @@ export default function LandingPage() {
           <div className="lp-bc lp-c7 lp-bc-wallet lp-rv">
             <div className="lp-bc-inner-lg">
               <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:16}}>
-                <div className="lp-bico"><ph-icon name="wallet" weight="duotone" size="28" color="#16a34a"></ph-icon></div>
+                <div className="lp-bico"><Icon name="account_balance_wallet" size={28} color="#16a34a" /></div>
                 <div>
                   <div className="lp-btt" style={{marginBottom:2}}>ארנק שוברים</div>
                   <div className="lp-bsd">כל כרטיסי המתנה שלך במקום אחד</div>
@@ -593,7 +594,7 @@ export default function LandingPage() {
           {/* Expiry — c5 */}
           <div className="lp-bc lp-c5 lp-rv">
             <div className="lp-bc-inner">
-              <div className="lp-bico"><ph-icon name="bell-ringing" weight="duotone" size="28" color="#ef4444"></ph-icon></div>
+              <div className="lp-bico"><Icon name="notifications_active" size={28} color="#ef4444" /></div>
               <div className="lp-btt">תזכורות תוקף</div>
               <div className="lp-bsd">קבל התראה לפני שפג תוקף ואף שובר לא ייעלם.</div>
               <div className="lp-exp-alert">
@@ -609,7 +610,7 @@ export default function LandingPage() {
           {/* Marketplace — c8 */}
           <div className="lp-bc lp-c8 lp-rv">
             <div className="lp-bc-inner">
-              <div className="lp-bico"><ph-icon name="storefront" weight="duotone" size="28" color="#9333ea"></ph-icon></div>
+              <div className="lp-bico"><Icon name="storefront" size={28} color="#9333ea" /></div>
               <div className="lp-btt">בקרוב... שוק השוברים</div>
               <div className="lp-bsd">קנה שוברים בהנחה ממשתמשים אחרים, או מכור שוברים שלא תצטרך.</div>
               <div className="lp-m-tiles">
@@ -623,7 +624,7 @@ export default function LandingPage() {
           {/* Stats — c4 */}
           <div className="lp-bc lp-c4 lp-rv">
             <div className="lp-bc-inner">
-              <div className="lp-bico"><ph-icon name="chart-bar" weight="duotone" size="28" color="#2563eb"></ph-icon></div>
+              <div className="lp-bico"><Icon name="bar_chart" size={28} color="#2563eb" /></div>
               <div className="lp-btt">סטטיסטיקות</div>
               <div className="lp-bsd">תובנות על ההוצאות שלך לפי קטגוריה.</div>
               <div className="lp-chart">
@@ -636,7 +637,7 @@ export default function LandingPage() {
           {/* AI Scan — c4 */}
           <div className="lp-bc lp-c4 lp-rv">
             <div className="lp-bc-inner" style={{alignItems:'flex-start'}}>
-              <div className="lp-bico"><ph-icon name="scan" weight="duotone" size="28" color="#16a34a"></ph-icon></div>
+              <div className="lp-bico"><Icon name="qr_code_scanner" size={28} color="#16a34a" /></div>
               <div className="lp-btt">סריקה חכמה</div>
               <div className="lp-bsd">צלם שובר - הבינה המלאכותית תחלץ את הפרטים.</div>
               <div className="lp-scan">
@@ -652,7 +653,7 @@ export default function LandingPage() {
           {/* Shared Wallet — c4 */}
           <div className="lp-bc lp-c4 lp-rv">
             <div className="lp-bc-inner">
-              <div className="lp-bico"><ph-icon name="users-three" weight="duotone" size="28" color="#c8880f"></ph-icon></div>
+              <div className="lp-bico"><Icon name="group" size={28} color="#c8880f" /></div>
               <div className="lp-btt">ארנק משותף</div>
               <div className="lp-bsd">שתף את הארנק עם בני המשפחה.</div>
               <div className="lp-avs">
@@ -667,14 +668,14 @@ export default function LandingPage() {
           {/* Encrypted Vault — c4 */}
           <div className="lp-bc lp-c4 lp-rv">
             <div className="lp-bc-inner">
-              <div className="lp-bico"><ph-icon name="lock-key" weight="duotone" size="28" color="#dc2626"></ph-icon></div>
+              <div className="lp-bico"><Icon name="lock" size={28} color="#dc2626" /></div>
               <div className="lp-btt">כספת מוצפנת</div>
               <div className="lp-bsd">הקודים שלך מוצפנים מקצה לקצה — רק אתה רואה אותם, גם אנחנו לא.</div>
               <div style={{marginTop:18,display:'flex',flexDirection:'column',gap:7}}>
                 {['הצפנת AES-256','אימות דו-שלבי','גיבוי מאובטח בענן'].map(txt => (
                   <div key={txt} style={{display:'flex',alignItems:'center',gap:8,fontSize:12,fontWeight:600,color:'#4a6260'}}>
                     <div style={{width:18,height:18,borderRadius:5,background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                      <ph-icon name="check" weight="bold" size="11" color="#dc2626"></ph-icon>
+                      <Icon name="check" size={11} color="#dc2626" />
                     </div>
                     {txt}
                   </div>
@@ -686,12 +687,12 @@ export default function LandingPage() {
           {/* Send Gift — c4 */}
           <div className="lp-bc lp-c4 lp-rv" style={{transitionDelay:'80ms'}}>
             <div className="lp-bc-inner">
-              <div className="lp-bico"><ph-icon name="gift" weight="duotone" size="28" color="#ea580c"></ph-icon></div>
+              <div className="lp-bico"><Icon name="redeem" size={28} color="#ea580c" /></div>
               <div className="lp-btt">שליחת מתנות</div>
               <div className="lp-bsd">שלח שובר כמתנה לחבר ישירות מהאפליקציה - בלי לרוץ לחנות.</div>
               <div style={{marginTop:18,background:'linear-gradient(135deg,#fff7ed,#ffedd5)',border:'1px solid #fed7aa',borderRadius:14,padding:'14px 16px',display:'flex',alignItems:'center',gap:12}}>
                 <div style={{width:38,height:38,borderRadius:12,background:'linear-gradient(135deg,#ea580c,#f97316)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 4px 12px rgba(234,88,12,0.25)'}}>
-                  <ph-icon name="paper-plane-tilt" weight="bold" size="18" color="white"></ph-icon>
+                  <Icon name="send" size={18} color="white" />
                 </div>
                 <div>
                   <div style={{fontSize:13,fontWeight:700,color:'#9a3412'}}>שובר נשלח לדנה! 🎉</div>
@@ -704,7 +705,7 @@ export default function LandingPage() {
           {/* Offline — c4 */}
           <div className="lp-bc lp-c4 lp-rv" style={{transitionDelay:'160ms'}}>
             <div className="lp-bc-inner">
-              <div className="lp-bico"><ph-icon name="wifi-slash" weight="duotone" size="28" color="#16a34a"></ph-icon></div>
+              <div className="lp-bico"><Icon name="wifi_off" size={28} color="#16a34a" /></div>
               <div className="lp-btt">עובד אופליין</div>
               <div className="lp-bsd">התקן כ-PWA והשוברים תמיד זמינים, גם ללא אינטרנט.</div>
               <div className="lp-offline-badge">
@@ -737,7 +738,7 @@ export default function LandingPage() {
               <p className="lp-how-step-body">צלם את השובר במצלמה — הבינה המלאכותית מזהה את החנות, היתרה ותאריך התוקף אוטומטית. או הקלד ידנית אם זה יותר נוח.</p>
             </div>
             <div className="lp-how-art" style={{background:'linear-gradient(135deg,#f0fdf4,#dcfce7)'}}>
-              <ph-icon name="camera" weight="duotone" size="84" color="#16a34a"></ph-icon>
+              <Icon name="photo_camera" size={84} color="#16a34a" />
               <div className="lp-how-art-tag" style={{background:'#16a34a'}}>מזהה אוטומטית</div>
             </div>
           </article>
@@ -749,7 +750,7 @@ export default function LandingPage() {
               <p className="lp-how-step-body">עדכן את היתרה בלחיצה אחרי כל קנייה. חיפוש מהיר, מיון לפי תוקף, סינון לפי קטגוריה.</p>
             </div>
             <div className="lp-how-art" style={{background:'linear-gradient(135deg,#eff6ff,#dbeafe)'}}>
-              <ph-icon name="credit-card" weight="duotone" size="84" color="#2563eb"></ph-icon>
+              <Icon name="credit_card" size={84} color="#2563eb" />
               <div className="lp-how-art-tag" style={{background:'#2563eb'}}>סנכרון חי</div>
             </div>
           </article>
@@ -761,7 +762,7 @@ export default function LandingPage() {
               <p className="lp-how-step-body">התראות 30, 14 ו-3 ימים לפני פקיעת תוקף. הצעות "השתמש או מכור" כשנשארה הזדמנות. אף שובר לא נשכח.</p>
             </div>
             <div className="lp-how-art" style={{background:'linear-gradient(135deg,#fef3c7,#fde68a)'}}>
-              <ph-icon name="bell-ringing" weight="duotone" size="84" color="#c8880f"></ph-icon>
+              <Icon name="notifications_active" size={84} color="#c8880f" />
               <div className="lp-how-art-tag" style={{background:'#c8880f'}}>3 התראות</div>
             </div>
           </article>
@@ -779,13 +780,13 @@ export default function LandingPage() {
             <h2 className="lp-ms-title lp-rv">קנה ומכור שוברים<br /><em style={{color:'#c084fc',fontStyle:'normal'}}>ממשתמשים אחרים</em></h2>
             <p className="lp-ms-body lp-rv">שוק פנימי מאובטח — מצא שוברים במחיר מוזל, מכור שוברים שאינך צריך. תשלום ידני, אימות מוכר, מערכת דירוג.</p>
             <div className="lp-ms-pills lp-rv">
-              <div className="lp-ms-pill"><ph-icon name="chat-circle" weight="duotone" size="16" color="#c084fc"></ph-icon> צ'אט מובנה</div>
-              <div className="lp-ms-pill"><ph-icon name="star" weight="duotone" size="16" color="#c084fc"></ph-icon> מערכת דירוג</div>
-              <div className="lp-ms-pill"><ph-icon name="seal-check" weight="duotone" size="16" color="#c084fc"></ph-icon> מוכרים מאומתים</div>
+              <div className="lp-ms-pill"><Icon name="chat" size={16} color="#c084fc" /> צ'אט מובנה</div>
+              <div className="lp-ms-pill"><Icon name="star" size={16} color="#c084fc" /> מערכת דירוג</div>
+              <div className="lp-ms-pill"><Icon name="verified" size={16} color="#c084fc" /> מוכרים מאומתים</div>
             </div>
             <button className="lp-btn-ms lp-rv" onClick={goToRegister}>
               גלה את השוק
-              <ph-icon name="arrow-left" weight="bold" size="17"></ph-icon>
+              <Icon name="arrow_back" size={17} />
             </button>
           </div>
           <div className="lp-ms-visual">
@@ -838,7 +839,7 @@ export default function LandingPage() {
               ].map(row => (
                 <div key={row.feat} className={`lp-pr-row${row.ok?'':' lp-pr-dim'}`}>
                   <div className={`lp-pr-icon ${row.ok?'lp-pr-check':'lp-pr-x'}`}>
-                    <ph-icon name={row.ok?'check':'x'} weight="bold" size="12" color={row.ok?'#16a34a':'#d1d5db'}></ph-icon>
+                    <Icon name={row.ok?'check':'close'} size={12} color={row.ok?'#16a34a':'#d1d5db'} />
                   </div>
                   <span className="lp-pr-feat">{row.feat}</span>
                   <span className={`lp-pr-val${row.ok?'':' lp-pr-na'}`}>{row.val}</span>
@@ -869,7 +870,7 @@ export default function LandingPage() {
               ].map(row => (
                 <div key={row.feat} className="lp-pr-row lp-pr-dark">
                   <div className="lp-pr-icon lp-pr-check-d">
-                    <ph-icon name="check" weight="bold" size="12" color="#22c55e"></ph-icon>
+                    <Icon name="check" size={12} color="#22c55e" />
                   </div>
                   <span className="lp-pr-feat-d">{row.feat}</span>
                   <span className="lp-pr-val-d">{row.val}</span>
@@ -908,7 +909,7 @@ export default function LandingPage() {
             </div>
             <div className="lp-aud-row-art">
               <div className="lp-aud-art-bg" style={{background:'linear-gradient(135deg,#dcfce7 0%,#bbf7d0 100%)'}} />
-              <ph-icon name="gift" weight="duotone" size="120" color="#16a34a" style={{position:'relative',opacity:0.55}}></ph-icon>
+              <span style={{position:'relative',opacity:0.55,display:'inline-flex'}}><Icon name="redeem" size={120} color="#16a34a" /></span>
               <div className="lp-aud-art-tag" style={{background:'#16a34a'}}>+₪450 חדש</div>
             </div>
           </article>
@@ -916,7 +917,7 @@ export default function LandingPage() {
             <div className="lp-aud-row-num" style={{color:'#c8880f'}}>02</div>
             <div className="lp-aud-row-art">
               <div className="lp-aud-art-bg" style={{background:'linear-gradient(135deg,#fef3c7 0%,#fde68a 100%)'}} />
-              <ph-icon name="house-line" weight="duotone" size="120" color="#c8880f" style={{position:'relative',opacity:0.55}}></ph-icon>
+              <span style={{position:'relative',opacity:0.55,display:'inline-flex'}}><Icon name="home" size={120} color="#c8880f" /></span>
               <div className="lp-aud-art-tag" style={{background:'#c8880f'}}>משותף · 4</div>
             </div>
             <div className="lp-aud-row-side">
@@ -944,7 +945,7 @@ export default function LandingPage() {
             </div>
             <div className="lp-aud-row-art">
               <div className="lp-aud-art-bg" style={{background:'linear-gradient(135deg,#f3e8ff 0%,#e9d5ff 100%)'}} />
-              <ph-icon name="storefront" weight="duotone" size="120" color="#9333ea" style={{position:'relative',opacity:0.55}}></ph-icon>
+              <span style={{position:'relative',opacity:0.55,display:'inline-flex'}}><Icon name="storefront" size={120} color="#9333ea" /></span>
               <div className="lp-aud-art-tag" style={{background:'#9333ea'}}>−18% הנחה</div>
             </div>
           </article>
@@ -975,13 +976,13 @@ export default function LandingPage() {
             <button className="lp-btn-cta" onClick={goToRegister}>התחל עכשיו</button>
             <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',justifyContent:'center'}}>
               {[
-                {icon:'shield-check',text:'מוצפן ומאובטח'},
-                {icon:'device-mobile',text:'iOS ו-Android'},
+                {icon:'verified_user',text:'מוצפן ומאובטח'},
+                {icon:'devices',text:'iOS ו-Android'},
               ].map((item, i) => (
                 <Fragment key={item.text}>
                   {i > 0 && <div style={{width:3,height:3,borderRadius:'50%',background:'rgba(255,255,255,0.2)'}} />}
                   <div style={{display:'flex',alignItems:'center',gap:6,fontSize:13,color:'rgba(255,255,255,0.45)'}}>
-                    <ph-icon name={item.icon} weight="fill" size="14" color="rgba(255,255,255,0.35)"></ph-icon>
+                    <Icon name={item.icon} size={14} color="rgba(255,255,255,0.35)" filled />
                     {item.text}
                   </div>
                 </Fragment>
@@ -995,7 +996,7 @@ export default function LandingPage() {
       {/* ── FOOTER ── */}
       <footer id="lp-footer">
         <a className="lp-fl" href="#lp-hero">
-          <div className="lp-fl-m"><ph-icon name="check-fat" weight="bold" color="white" size="15"></ph-icon></div>
+          <div className="lp-fl-m"><Icon name="check" size={15} color="white" /></div>
           <span className="lp-fl-t">GiftSmart</span>
         </a>
         <div className="lp-flinks">
