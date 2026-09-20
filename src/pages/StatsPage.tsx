@@ -15,6 +15,49 @@ import autoTable from 'jspdf-autotable'
 import { useT } from '../lib/i18n'
 import { usePageView } from '../hooks/usePageView'
 
+// Module scope on purpose: defined inside StatsPage these got a fresh identity on
+// every render, so React remounted the entire stat grid instead of updating it.
+function StatCard({ icon, label, value, sub, color, className = '' }: { icon: string; label: string; value: string | number; sub?: string; color?: string; className?: string }) {
+  return (
+    <div className={`bg-surface rounded-2xl p-4 shadow-card ${className}`}>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-bg">
+          <Icon name={icon} size={20} color={color || 'var(--c-text2)'} />
+        </div>
+        <div>
+          <p className="text-sm text-text3">{label}</p>
+          <p className="text-xl font-bold" style={{ color: color || 'var(--c-text)' }}>{value}</p>
+          {sub && <p className="text-xs text-text3">{sub}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TimeStatRow({ label, today, todayAmount, week, weekAmount, month, monthAmount }: {
+  label: string; today: number; todayAmount: number; week: number; weekAmount: number; month: number; monthAmount: number
+}) {
+  const { t } = useT()
+  return (
+    <div>
+      <span className="text-sm font-medium text-text2 mb-2 block">{label}</span>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { period: t('stats.today'), count: today, amount: todayAmount },
+          { period: t('stats.this.week'), count: week, amount: weekAmount },
+          { period: t('stats.this.month'), count: month, amount: monthAmount },
+        ].map(({ period, count, amount }) => (
+          <div key={period} className="bg-bg rounded-xl px-2 py-2.5 text-center">
+            <p className="text-xs text-text3 mb-1">{period}</p>
+            <p className="text-lg font-bold text-text leading-none">{count}</p>
+            <p className="text-xs text-text2 mt-1">{formatCurrency(amount)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function StatsPage() {
   const { vouchers, archivedVouchers, loading } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
@@ -248,42 +291,6 @@ export default function StatsPage() {
     }
   }
 
-  const StatCard = ({ icon, label, value, sub, color }: { icon: string; label: string; value: string | number; sub?: string; color?: string }) => (
-    <div className="bg-surface rounded-2xl p-4 shadow-card">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-bg">
-          <Icon name={icon} size={20} color={color || 'var(--c-text2)'} />
-        </div>
-        <div>
-          <p className="text-sm text-text3">{label}</p>
-          <p className="text-xl font-bold" style={{ color: color || 'var(--c-text)' }}>{value}</p>
-          {sub && <p className="text-xs text-text3">{sub}</p>}
-        </div>
-      </div>
-    </div>
-  )
-
-  const TimeStatRow = ({ label, today, todayAmount, week, weekAmount, month, monthAmount }: {
-    label: string; today: number; todayAmount: number; week: number; weekAmount: number; month: number; monthAmount: number
-  }) => (
-    <div>
-      <span className="text-sm font-medium text-text2 mb-2 block">{label}</span>
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { period: t('stats.today'), count: today, amount: todayAmount },
-          { period: t('stats.this.week'), count: week, amount: weekAmount },
-          { period: t('stats.this.month'), count: month, amount: monthAmount },
-        ].map(({ period, count, amount }) => (
-          <div key={period} className="bg-bg rounded-xl px-2 py-2.5 text-center">
-            <p className="text-xs text-text3 mb-1">{period}</p>
-            <p className="text-lg font-bold text-text leading-none">{count}</p>
-            <p className="text-xs text-text2 mt-1">{formatCurrency(amount)}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-
   return (
     <div className="flex-1 bg-bg">
       <div className="bg-surface border-b border-border px-5 pt-5 pb-4">
@@ -402,7 +409,9 @@ export default function StatsPage() {
           <StatCard icon="group" label={t('stats.shared.count')} value={stats.shared} color="#3b82f6" />
           <StatCard icon="shopping_bag" label={t('stats.near.empty')} value={stats.nearZero} color={stats.nearZero > 0 ? 'var(--c-gold)' : 'var(--c-text3)'} sub={stats.nearZero > 0 ? t('stats.near.empty.hint') : undefined} />
           {stats.giftVouchers > 0 && <StatCard icon="redeem" label={t('stats.gift.count')} value={stats.giftVouchers} color="#ec4899" />}
-          <StatCard icon="add_circle" label={t('stats.added.month')} value={stats.addedThisMonth} color="#6366f1" />
+          {/* Gift tile is conditional, so the grid flips between odd and even —
+              the trailing card stretches when it would otherwise sit alone. */}
+          <StatCard icon="add_circle" label={t('stats.added.month')} value={stats.addedThisMonth} color="#6366f1" className={stats.giftVouchers > 0 ? '' : 'col-span-2'} />
         </div>
 
         {/* Top stores */}

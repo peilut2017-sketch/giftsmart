@@ -65,7 +65,7 @@
 /* ── Dark Mode Tokens ─────────────────────────────────────────── */
 [data-theme="dark"] {
   --c-primary:       #22c55e;
-  --c-primary-light: #14532d;
+  --c-primary-light: #114726;
   --c-primary-mid:   #4ade80;
   --c-primary-dark:  #86efac;
   --c-gold:          #f59e0b;
@@ -177,6 +177,34 @@
 [data-theme="dark"] .text-rose-600 { color: #fb7185 !important; }
 [data-theme="dark"] .text-violet-600 { color: #a78bfa !important; }
 [data-theme="dark"] .text-amber-600 { color: #fbbf24 !important; }
+/* -700/-800 text shades: these ride on the -50/-100 chip backgrounds above, so
+   without an override they stayed dark-on-dark. Mapped to the same -400/-300
+   shades the -600 rules already use. */
+[data-theme="dark"] .text-blue-700    { color: #60a5fa !important; }
+[data-theme="dark"] .text-blue-800    { color: #93c5fd !important; }
+[data-theme="dark"] .text-green-700   { color: #4ade80 !important; }
+[data-theme="dark"] .text-green-800   { color: #86efac !important; }
+[data-theme="dark"] .text-emerald-700 { color: #34d399 !important; }
+[data-theme="dark"] .text-purple-700  { color: #c084fc !important; }
+[data-theme="dark"] .text-indigo-700  { color: #818cf8 !important; }
+[data-theme="dark"] .text-teal-700    { color: #2dd4bf !important; }
+[data-theme="dark"] .text-amber-700   { color: #fbbf24 !important; }
+[data-theme="dark"] .text-yellow-700  { color: #facc15 !important; }
+[data-theme="dark"] .text-red-700     { color: #f87171 !important; }
+/* Chip backgrounds still missing from the list above */
+[data-theme="dark"] .bg-emerald-50  { background-color: #05190f !important; }
+[data-theme="dark"] .bg-emerald-100 { background-color: #082418 !important; }
+[data-theme="dark"] .bg-yellow-50   { background-color: #1c1603 !important; }
+[data-theme="dark"] .bg-yellow-100  { background-color: #262005 !important; }
+/* Pastel borders — bright hairlines against a dark card otherwise */
+[data-theme="dark"] .border-blue-200   { border-color: #1e3a5f !important; }
+[data-theme="dark"] .border-green-200  { border-color: #14532d !important; }
+[data-theme="dark"] .border-indigo-200 { border-color: #312e81 !important; }
+[data-theme="dark"] .border-purple-200 { border-color: #4c1d95 !important; }
+[data-theme="dark"] .border-purple-300 { border-color: #5b21b6 !important; }
+[data-theme="dark"] .border-red-200    { border-color: #7f1d1d !important; }
+[data-theme="dark"] .border-teal-200   { border-color: #134e4a !important; }
+[data-theme="dark"] .border-yellow-200 { border-color: #713f12 !important; }
 [data-theme="dark"] ::-webkit-scrollbar-track { background: #161b22; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
 

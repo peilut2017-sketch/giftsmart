@@ -320,7 +320,7 @@ export default function ChatModal({
           {showOfferInput && (
             <div className="px-4 py-3 bg-primary-light border-t border-primary/20 shrink-0">
               <p className="text-xs font-medium text-primary mb-2">
-                {isSeller ? `${t('chat.offer.new.price')} (${t('chat.offer.below')} ₪${currentAskingPrice})` : `${t('chat.offer.propose')} (${t('chat.offer.below')} ₪${currentAskingPrice})`}
+                {`${isSeller ? t('chat.offer.new.price') : t('chat.offer.propose')} (${t('chat.offer.below', { min: currentAskingPrice })})`}
               </p>
               <div className="flex gap-2">
                 <input
@@ -328,7 +328,7 @@ export default function ChatModal({
                   inputMode="decimal"
                   value={offerAmount}
                   onChange={e => setOfferAmount(e.target.value)}
-                  placeholder={`${t('chat.offer.up.to')} ₪${currentAskingPrice - 1}`}
+                  placeholder={t('chat.offer.up.to', { price: currentAskingPrice - 1 })}
                   className="flex-1 border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
                   autoFocus
                 />
