@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview",
     "ios:sync": "npm run build && cap copy ios",
     "ios:assets": "capacitor-assets generate --ios"

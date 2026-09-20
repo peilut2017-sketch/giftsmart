@@ -45,14 +45,19 @@ function parseAmount(raw: string): number {
 export function extractFromSMS(text: string): ExtractedVoucher {
   const result: ExtractedVoucher = {}
 
-  // Extract amount
+  // Extract amount.
+  // NUM allows several separator groups ("1,500.25", "1.500,25") — capturing only
+  // one group meant "1.500,25" matched as "1.500" and parsed to ₪1.5, and
+  // "1,500.25" silently lost its agorot. parseAmount below decides which
+  // separator is the decimal point.
+  const NUM = String.raw`\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?`
   const amountPatterns = [
-    /(?:סכום|שובר|ערך|יתרה)[:\s]*(?:של\s*)?₪?\s*(\d+(?:[,.]\d+)?)/i,
-    /₪\s*(\d+(?:[,.]\d+)?)/,
-    /(\d+(?:[,.]\d+)?)\s*₪/,
-    /(\d+(?:[,.]\d+)?)\s*שקל/i,
-    /(\d+(?:[,.]\d+)?)\s*ש"ח/i,
-    /(\d+(?:[,.]\d+)?)\s*NIS/i,
+    new RegExp(String.raw`(?:סכום|שובר|ערך|יתרה)[:\s]*(?:של\s*)?₪?\s*(${NUM})`, 'i'),
+    new RegExp(String.raw`₪\s*(${NUM})`),
+    new RegExp(String.raw`(${NUM})\s*₪`),
+    new RegExp(String.raw`(${NUM})\s*שקל`, 'i'),
+    new RegExp(String.raw`(${NUM})\s*ש"ח`, 'i'),
+    new RegExp(String.raw`(${NUM})\s*NIS`, 'i'),
   ]
   for (const pattern of amountPatterns) {
     const match = text.match(pattern)

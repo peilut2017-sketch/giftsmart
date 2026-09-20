@@ -34,10 +34,15 @@ Gemini API key and email credentials live in **Supabase Secrets** (never in the 
 npm run dev       # dev server with HMR
 npm run build     # tsc -b && vite build  (always run before pushing)
 npm run lint      # eslint
+npm run test      # vitest run (unit tests for the pure logic)
 npm run preview   # preview the production build locally
 ```
 
-There are no automated tests.
+Tests cover the pure logic where a mistake is expensive and invisible: money
+formatting, expiry bands, the shared search matcher, CSV formula-injection
+escaping, SMS amount parsing and the E2EE field guard (`src/**/__tests__`).
+Everything with a UI or a Supabase dependency is still verified by running
+`npm run build` and exercising the app.
 
 ## Architecture & Patterns
 
