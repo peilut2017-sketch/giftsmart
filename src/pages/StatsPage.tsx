@@ -289,7 +289,7 @@ export default function StatsPage() {
       <div className="bg-surface border-b border-border px-5 pt-5 pb-4">
         <div className="flex justify-between items-center">
           <div>
-            <div className="text-[22px] font-extrabold text-text">{t('stats.title')}</div>
+            <h1 className="text-[22px] font-extrabold text-text">{t('stats.title')}</h1>
             <div className="text-[13px] text-text3 mt-0.5">{t('stats.subtitle')}</div>
           </div>
           <div className="flex items-center gap-2">
@@ -364,7 +364,7 @@ export default function StatsPage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Icon name="stars" size={20} color="#e9d5ff" />
-                <h3 className="font-bold text-white">{t('stats.savings.title')}</h3>
+                <h2 className="font-bold text-white">{t('stats.savings.title')}</h2>
               </div>
               <button onClick={() => setShowSavingsInfo(v => !v)} className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30">
                 <Icon name="info" size={16} color="#fff" />
@@ -385,7 +385,7 @@ export default function StatsPage() {
 
         {/* Activity over time */}
         <div className="bg-surface rounded-card shadow-card p-5">
-          <h3 className="font-semibold text-text2 mb-4 flex items-center gap-2"><Icon name="schedule" size={16} color="#3b82f6" /> {t('stats.activity.title')}</h3>
+          <h2 className="font-semibold text-text2 mb-4 flex items-center gap-2"><Icon name="schedule" size={16} color="#3b82f6" /> {t('stats.activity.title')}</h2>
           <div className="space-y-4">
             <TimeStatRow label={t('stats.added.count')} today={stats.addedToday} todayAmount={stats.addedTodayAmount} week={stats.addedThisWeek} weekAmount={stats.addedThisWeekAmount} month={stats.addedThisMonth} monthAmount={stats.addedThisMonthAmount} />
             <TimeStatRow label={t('stats.utilized.count')} today={stats.usedToday} todayAmount={stats.usedTodayAmount} week={stats.usedThisWeek} weekAmount={stats.usedThisWeekAmount} month={stats.usedThisMonth} monthAmount={stats.usedThisMonthAmount} />
@@ -408,7 +408,7 @@ export default function StatsPage() {
         {/* Top stores */}
         {stats.topStores.length > 0 && (
           <div className="bg-surface rounded-card shadow-card p-5">
-            <h3 className="font-semibold text-text2 mb-4">{t('stats.top.stores')}</h3>
+            <h2 className="font-semibold text-text2 mb-4">{t('stats.top.stores')}</h2>
             <div className="space-y-3">
               {stats.topStores.map((store, i) => {
                 const maxBalance = stats.topStores[0].balance
@@ -436,7 +436,7 @@ export default function StatsPage() {
         {/* Category chart */}
         {stats.categoryData.length > 0 && (
           <div className="bg-surface rounded-card shadow-card p-5">
-            <h3 className="font-semibold text-text2 mb-1">{t('stats.by.category')}</h3>
+            <h2 className="font-semibold text-text2 mb-1">{t('stats.by.category')}</h2>
             {stats.multiCategoryCount > 0 && (
               <p className="text-xs text-text3 mb-3 flex items-start gap-1"><Icon name="info" size={13} color="var(--c-text3)" className="mt-0.5 shrink-0" /> {t('stats.multi.cat.note')}</p>
             )}

@@ -103,7 +103,7 @@ export default function ArchivePage() {
       <div className="bg-surface border-b border-border sticky top-0 z-20 px-5 pt-5 pb-4">
         <div className="flex items-center gap-2 mb-1">
           <div className="flex-1">
-            <div className="text-[22px] font-extrabold text-text">{t('nav.archive')}</div>
+            <h1 className="text-[22px] font-extrabold text-text">{t('nav.archive')}</h1>
             <div className="text-[13px] text-text3 mt-0.5">{t('archive.subtitle')}</div>
           </div>
           <button
@@ -169,38 +169,43 @@ export default function ArchivePage() {
                 animate={{ opacity: 0.8, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.18, ease: EASE_OUT }}
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/checkout/${v.id}`)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/checkout/${v.id}`) } }}
-                className="flex overflow-hidden rounded-card shadow-card bg-surface cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="flex overflow-hidden rounded-card shadow-card bg-surface"
               >
                 <div className="w-1.5 flex-shrink-0 bg-text3" />
                 <div className="flex items-center flex-1 gap-3 py-3 pe-2.5 ps-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-bg text-text3 font-extrabold">
-                    {getStoreInitials(v.store_name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-semibold text-text2 truncate">{v.store_name}</div>
-                    {(() => {
-                      const isE2EE = isEncryptedField(v.code)
-                      const decrypted = decryptedMap.get(v.id)
-                      if (isE2EE && !isVaultUnlocked) return null
-                      // Never render raw ciphertext: if an E2EE entry couldn't be
-                      // decrypted, show a lock placeholder instead of "e2ee:iv:ct".
-                      if (isE2EE && !decrypted) {
-                        return <div className="text-[11px] text-text3 font-mono mt-0.5">••••••</div>
-                      }
-                      const displayCode = isE2EE && decrypted ? decrypted.code : v.code
-                      return <div className="text-[11px] text-text3 font-mono mt-0.5">{displayCode}</div>
-                    })()}
-                    {v.archive_reason && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-text3/10 text-text2 px-2 py-0.5 rounded-full mt-1">
-                        {t('archive.reason.label')} {v.archive_reason}
-                      </span>
-                    )}
-                    {v.expiry_date && <div className="text-[11px] text-text3 mt-0.5">{t('archive.expiry.prefix')}: {formatDate(v.expiry_date)}</div>}
-                  </div>
+                  {/* Own <button>, not a role="button" on the whole row — the row also
+                      holds the restore/delete buttons, and nesting a real button inside
+                      an ARIA button is invalid (breaks keyboard/screen-reader traversal). */}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/checkout/${v.id}`)}
+                    className="flex items-center flex-1 min-w-0 gap-3 text-start rounded-lg -m-1 p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-bg text-text3 font-extrabold">
+                      {getStoreInitials(v.store_name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-semibold text-text2 truncate">{v.store_name}</div>
+                      {(() => {
+                        const isE2EE = isEncryptedField(v.code)
+                        const decrypted = decryptedMap.get(v.id)
+                        if (isE2EE && !isVaultUnlocked) return null
+                        // Never render raw ciphertext: if an E2EE entry couldn't be
+                        // decrypted, show a lock placeholder instead of "e2ee:iv:ct".
+                        if (isE2EE && !decrypted) {
+                          return <div className="text-[11px] text-text3 font-mono mt-0.5">••••••</div>
+                        }
+                        const displayCode = isE2EE && decrypted ? decrypted.code : v.code
+                        return <div className="text-[11px] text-text3 font-mono mt-0.5">{displayCode}</div>
+                      })()}
+                      {v.archive_reason && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-text3/10 text-text2 px-2 py-0.5 rounded-full mt-1">
+                          {t('archive.reason.label')} {v.archive_reason}
+                        </span>
+                      )}
+                      {v.expiry_date && <div className="text-[11px] text-text3 mt-0.5">{t('archive.expiry.prefix')}: {formatDate(v.expiry_date)}</div>}
+                    </div>
+                  </button>
                   <div className="flex items-center gap-2.5 flex-shrink-0">
                     <div className="text-sm font-bold text-text3">{formatCurrency(v.balance)}</div>
                     <button

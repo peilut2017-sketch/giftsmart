@@ -54,17 +54,6 @@ export function GiftSmartIcon({ size = 80, variant = 'color', className = '' }: 
   )
 }
 
-/** Full logo: icon + "GiftSmart" text + Hebrew subtitle */
-export function GiftSmartLogoFull({ iconSize = 72 }: { iconSize?: number }) {
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <GiftSmartIcon size={iconSize} variant="color" />
-      <p className="text-3xl font-extrabold text-gray-800 tracking-tight mt-1">GiftSmart</p>
-      <p className="text-sm text-gray-500">ניהול שוברים וכרטיסי מתנה</p>
-    </div>
-  )
-}
-
 /** Splash variant: full logo lockup (icon + wordmark + tagline are baked into logo.png
     itself), used on loading / splash screen. */
 export function GiftSmartSplash() {

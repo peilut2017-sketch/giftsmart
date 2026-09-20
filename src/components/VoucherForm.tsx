@@ -19,7 +19,7 @@ import { useT } from '../lib/i18n'
 // (no currency column), so a "$40" voucher silently displayed and summed as ₪40.
 type AmountUnit = '₪' | '$' | '€' | 'אחר' | 'פריט'
 import toast from 'react-hot-toast'
-import { Html5Qrcode } from 'html5-qrcode'
+import type { Html5Qrcode } from 'html5-qrcode'
 import { supabase } from '../lib/supabase'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
@@ -281,6 +281,8 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setShowScanner(true)
     setTimeout(async () => {
       try {
+        // Loaded on demand — the scanner library is ~375 KB and most sessions never open it
+        const { Html5Qrcode } = await import('html5-qrcode')
         const scanner = new Html5Qrcode(scannerDivId)
         scannerRef.current = scanner
         await scanner.start(

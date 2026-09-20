@@ -33,7 +33,7 @@ export default function SettingsAccountPage() {
   const { t } = useT()
   const { user, profile, updateProfile, signOut, isAnonymous } = useAuth()
   const navigate = useNavigate()
-  const { vouchers, archivedVouchers, logAction, updateVoucher } = useVouchers()
+  const { logAction, updateVoucher } = useVouchers()
   const { isUnifiedVault, isVaultUnlocked, reDeriveVaultKeyFromPassword } = useE2EE()
 
   const [editName, setEditName] = useState(false)
@@ -147,8 +147,7 @@ export default function SettingsAccountPage() {
 
       if (isUnifiedVault) {
         if (!isVaultUnlocked) return toast.error(t('account.unlock.vault.first'))
-        const e2eeVouchers = [...vouchers, ...archivedVouchers].filter(v => v.is_e2ee)
-        const { ok, entries } = await reDeriveVaultKeyFromPassword(newPass, e2eeVouchers)
+        const { ok, entries } = await reDeriveVaultKeyFromPassword(newPass)
         if (!ok) return toast.error(t('account.vault.update.error'))
         vaultEntries = entries
       }
@@ -192,7 +191,7 @@ export default function SettingsAccountPage() {
                   <p className="text-xs text-text3 truncate">{isAnonymous ? t('guest.profile.desc') : user?.email}</p>
                   {phone && <p className="text-xs text-text3">{phone}</p>}
                 </div>
-                <button onClick={() => { setEmail(user?.email || ''); setEditName(true) }} className="w-9 h-9 rounded-xl bg-bg flex items-center justify-center shrink-0">
+                <button onClick={() => { setEmail(user?.email || ''); setEditName(true) }} aria-label={t('settings.edit.profile.aria')} className="w-9 h-9 rounded-xl bg-bg flex items-center justify-center shrink-0">
                   <Icon name="edit" size={16} color="var(--c-text2)" />
                 </button>
               </div>

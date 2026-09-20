@@ -12,7 +12,7 @@
 
 /* ── Design System Tokens ─────────────────────────────────────── */
 :root {
-  --c-primary:       #16a34a;
+  --c-primary:       #117f3a;
   --c-primary-light: #dcfce7;
   --c-primary-mid:   #22c55e;
   --c-primary-dark:  #15803d;
@@ -24,11 +24,11 @@
   --c-border:        #e0e8e6;
   --c-text:          #0f1c1a;
   --c-text2:         #4a6260;
-  --c-text3:         #8da5a2;
-  --c-error:         #dc2626;
-  --c-warning:       #d97706;
-  --c-success:       #16a34a;
-  --c-urgent:        #ef4444;
+  --c-text3:         #5a726f;
+  --c-error:         #d52222;
+  --c-warning:       #a75c05;
+  --c-success:       #117f3a;
+  --c-urgent:        #de1313;
   --c-urgent-bg:     #fef2f2;
   --r-card:          18px;
   --r-btn:           12px;
@@ -76,7 +76,7 @@
   --c-border:        #30363d;
   --c-text:          #e6edf3;
   --c-text2:         #8b949e;
-  --c-text3:         #6e7681;
+  --c-text3:         #7a838e;
   --c-error:         #f85149;
   --c-warning:       #d29922;
   --c-success:       #3fb950;

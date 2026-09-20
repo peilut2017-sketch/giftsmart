@@ -10,7 +10,7 @@ import type { ExtractedVoucher } from '../utils/smsExtractor'
  * Handles HEIC (iPhone), WebP, PNG, etc.
  * Resizes to max 1600px — keeps well under Gemini's inline-data limit.
  */
-export function prepareImage(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' }> {
+function prepareImage(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const objectUrl = URL.createObjectURL(file)
@@ -137,11 +137,6 @@ function normalise(raw: Record<string, unknown>): ExtractedVoucher {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/** Always true — the edge function is always deployed; key availability is server-side. */
-export function isGeminiAvailable(): boolean {
-  return true
-}
-
 /**
  * Send an image to the analyze-voucher Edge Function.
  * The image is converted to JPEG client-side before upload.
@@ -149,13 +144,4 @@ export function isGeminiAvailable(): boolean {
 export async function analyzeVoucherImage(file: File): Promise<ExtractedVoucher> {
   const { base64, mimeType } = await prepareImage(file)
   return normalise(await invoke({ image_base64: base64, mime_type: mimeType }))
-}
-
-/**
- * Send SMS / free text to the analyze-voucher Edge Function.
- */
-const MAX_TEXT_INPUT_CHARS = 5000
-
-export async function analyzeVoucherText(text: string): Promise<ExtractedVoucher> {
-  return normalise(await invoke({ text: text.slice(0, MAX_TEXT_INPUT_CHARS) }))
 }

@@ -3828,8 +3828,14 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem('gs_locale', locale)
+    const dir = locale === 'he' ? 'rtl' : 'ltr'
     document.documentElement.setAttribute('lang', locale)
-    document.body.setAttribute('dir', locale === 'he' ? 'rtl' : 'ltr')
+    // index.html hardcodes dir="rtl" on <html> for the pre-hydration paint; keep both
+    // <html> and <body> in sync once we know the real locale — CSS logical properties,
+    // native form-validation bubbles and the scrollbar gutter all key off <html>'s dir,
+    // not just <body>'s.
+    document.documentElement.setAttribute('dir', dir)
+    document.body.setAttribute('dir', dir)
   }, [locale])
 
   function setLocale(l: Locale) { setLocaleState(l) }
