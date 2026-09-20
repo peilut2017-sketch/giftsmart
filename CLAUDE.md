@@ -126,7 +126,7 @@ All `supabase-*.sql` files at the repo root are incremental migration scripts. A
 
 ## Known Challenges & Decisions
 
-- **No tests.** Verify all changes by running `npm run build` (catches TS errors) and manually testing in the browser.
+- **Tests cover pure logic only** (`npm run test`). Anything touching the UI or Supabase is verified by running `npm run build` (catches TS errors, including the TS1117 duplicate-key trap) and exercising the app in the browser.
 - **All Supabase RPC functions are SECURITY DEFINER** to avoid RLS recursion issues with shared-wallet queries. Do not bypass this by switching to client-side table writes.
 - **Hebrew is the UI default; RTL layout is assumed everywhere.** Use `dir="rtl"` or the `dir` value from `useLocale()` when rendering dynamic containers that must match locale.
 - **Biometric is a local UI gate only**, not real auth. The Supabase session stays active; `BiometricGate` just blocks the UI until the platform authenticator succeeds.
