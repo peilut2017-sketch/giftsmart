@@ -10,8 +10,6 @@ import Icon from '../components/ui/Icon'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import toast from 'react-hot-toast'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { useT } from '../lib/i18n'
 import { usePageView } from '../hooks/usePageView'
 
@@ -243,8 +241,14 @@ export default function StatsPage() {
     }
   }
 
-  function exportPDF() {
+  // jsPDF + autotable (and the html2canvas they drag in) are ~500 KB — a third of
+  // this route's chunk — for a button most sessions never press. Pulled on click.
+  async function exportPDF() {
     try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ])
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       doc.setFontSize(18)
       doc.setFont('helvetica', 'bold')
