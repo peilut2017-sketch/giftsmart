@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <div style={{ background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)', padding: '16px 20px', position: 'sticky', top: 0, zIndex: 20 }}>
         <div className="flex items-center gap-3 max-w-2xl mx-auto">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
-            <ArrowRight className="w-5 h-5" style={{ color: 'var(--c-text2)' }} />
+            <ArrowRight className="w-5 h-5 dir-flip" style={{ color: 'var(--c-text2)' }} />
           </button>
           <div>
             <h1 className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>מדיניות פרטיות</h1>

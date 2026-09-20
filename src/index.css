@@ -208,6 +208,11 @@
 [data-theme="dark"] ::-webkit-scrollbar-track { background: #161b22; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
 
+/* Directional glyphs (back arrows, drill-in chevrons) were drawn for the
+   Hebrew-first RTL layout. In LTR they have to point the other way — mirror
+   them rather than branching on locale at every call site. */
+[dir="ltr"] .dir-flip { transform: scaleX(-1); }
+
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -223,7 +228,10 @@
 body {
   margin: 0;
   font-family: 'Heebo', system-ui, sans-serif;
-  direction: rtl;
+  /* No `direction` here: a CSS declaration outranks the dir attribute, so this
+     pinned the whole app to RTL and the English locale rendered mirrored —
+     right-aligned text, icons and chevrons on the wrong side. index.html ships
+     dir="rtl" for the first paint and LocaleProvider updates it per locale. */
   background-color: var(--c-bg);
   color: var(--c-text);
   -webkit-text-size-adjust: 100%;

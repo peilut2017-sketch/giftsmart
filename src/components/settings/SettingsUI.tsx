@@ -13,7 +13,7 @@ export function SettingsSubHeader({ title, action }: { title: string; action?: R
   return (
     <div className="bg-surface border-b border-border px-4 py-3 flex items-center gap-3">
       <button onClick={() => navigate(-1)} aria-label={t('app.back')} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-bg">
-        <Icon name="arrow_forward" size={22} color="var(--c-text)" />
+        <Icon name="arrow_forward" size={22} color="var(--c-text)" className="dir-flip" />
       </button>
       <h1 className="text-base font-bold text-text flex-1 min-w-0 truncate">{title}</h1>
       {action}
@@ -25,7 +25,7 @@ export function MenuItem({ icon, label, desc, onClick, danger = false, right }: 
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-4 transition-colors rounded-2xl text-right hover:bg-bg"
+      className="w-full flex items-center gap-3 p-4 transition-colors rounded-2xl text-start hover:bg-bg"
     >
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${danger ? 'bg-error/10' : 'bg-bg'}`}>
         <Icon name={icon} size={20} color={danger ? 'var(--c-error)' : 'var(--c-text2)'} />
@@ -34,7 +34,7 @@ export function MenuItem({ icon, label, desc, onClick, danger = false, right }: 
         <p className={`text-sm font-medium ${danger ? 'text-error' : 'text-text'}`}>{label}</p>
         {desc && <p className="text-xs text-text3">{desc}</p>}
       </div>
-      {right || <Icon name="chevron_left" size={16} color="var(--c-text3)" />}
+      {right || <Icon name="chevron_left" size={16} color="var(--c-text3)" className="dir-flip" />}
     </button>
   )
 }

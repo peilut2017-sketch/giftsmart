@@ -666,7 +666,7 @@ export default function CheckoutPage() {
         <div className="bg-surface border-b border-border sticky top-0 z-20">
           <div className="flex items-center gap-3 px-4 py-3">
             <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-bg">
-              <Icon name="arrow_forward" size={22} color="var(--c-text)" />
+              <Icon name="arrow_forward" size={22} color="var(--c-text)" className="dir-flip" />
             </button>
             <h1 className="font-bold text-text">{voucher.store_name}</h1>
           </div>
@@ -916,7 +916,7 @@ export default function CheckoutPage() {
               buttons sit at the edges of the content, not the edges of the window. */}
           <div className="max-w-2xl mx-auto h-full flex items-center justify-between px-3">
             <button onClick={() => navigate(-1)} aria-label={t('checkout.back')} className="w-9 h-9 rounded-xl flex items-center justify-center transition" style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}>
-              <Icon name="arrow_forward" size={20} color={headerScrolled ? 'var(--c-text)' : '#fff'} />
+              <Icon name="arrow_forward" size={20} color={headerScrolled ? 'var(--c-text)' : '#fff'} className="dir-flip" />
             </button>
             <h1 className={`text-base font-bold truncate max-w-[55%] transition-colors ${headerScrolled ? 'text-text' : 'text-white'}`}>{sv?.name || voucher.store_name}</h1>
             <button
