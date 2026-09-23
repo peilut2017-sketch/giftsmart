@@ -254,8 +254,15 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* PWA safe area */
-.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+/* PWA safe area — ADDS the inset on top of whatever padding-bottom the element
+   already has (p-4 in both current usages), rather than replacing it. As a bare
+   `padding-bottom: env(...)` this had the same specificity as Tailwind's .p-4 and
+   came later in the cascade, so it WON on every device: env() resolves to 0 with
+   no safe area (desktop, Android, most of iOS Safari), silently zeroing the
+   bottom padding and letting the footer's own rounded corners get clipped by the
+   card's outer border-radius — the save/next button appeared to be cut off by
+   the bottom of the card. */
+.safe-area-bottom { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 
 /* ── Animations ───────────────────────────────────────────────── */
 @keyframes gs-shimmer {

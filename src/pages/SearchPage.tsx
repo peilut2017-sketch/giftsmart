@@ -47,7 +47,7 @@ export default function SearchPage() {
   // redeeming a voucher and coming back must not force the user to re-search the
   // same store. Cleared naturally when the tab/PWA session ends.
   const [search, setSearch] = useState(() => sessionStorage.getItem('searchQuery') || '')
-  const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('hpSortKey') as SortKey) || 'store')
+  const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('hpSortKey') as SortKey) || 'added')
   const [filterTab, setFilterTab] = useState<FilterTab>(() => (sessionStorage.getItem('searchFilterTab') as FilterTab) || 'all')
   const [filterCats, setFilterCats] = useState<string[]>(() => {
     try { return JSON.parse(sessionStorage.getItem('searchFilterCats') || '[]') } catch { return [] }
@@ -93,7 +93,7 @@ export default function SearchPage() {
     }
   }, [location.state])
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('hpViewMode') as ViewMode) || 'grid')
-  const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('hpSortDir') as SortDir) || 'asc')
+  const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('hpSortDir') as SortDir) || 'desc')
 
   const [editingVoucher, setEditingVoucher] = useState<Voucher | undefined>()
   const [showForm, setShowForm] = useState(false)
