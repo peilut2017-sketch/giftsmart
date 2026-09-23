@@ -2962,6 +2962,8 @@ const translations: Record<string, string> = {
   'form.scan.error.en': 'Image analysis failed — try again or enter manually',
   'form.scan.unavailable': 'סריקת AI אינה זמינה כרגע — הזן ידנית',
   'form.scan.unavailable.en': 'AI scan is unavailable right now — enter manually',
+  'form.scan.fallback.local': 'סריקת AI לא הייתה זמינה — נעשה שימוש בסריקה הבסיסית',
+  'form.scan.fallback.local.en': 'AI scan wasn’t available — used the basic scan instead',
   'form.sms.label': 'הדבק כאן את הודעת השובר',
   'form.sms.label.en': 'Paste the voucher message here',
   'form.sms.placeholder': 'לדוגמה: שובר BuyMe על סך 150 ₪, קוד: ABC123, בתוקף עד 12/26',
