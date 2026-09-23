@@ -11,6 +11,7 @@ import { useT } from '../lib/i18n'
 import Icon from '../components/ui/Icon'
 import VaultSetupSheet from '../components/VaultSetupSheet'
 import { MenuItem, SL } from '../components/settings/SettingsUI'
+import { APP_VERSION } from '../lib/version'
 
 interface CategoryDef { key: string; icon: string; title: string; desc: string; path: string; keywords: string }
 
@@ -257,7 +258,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-text3">GiftSmart v1.1.0</p>
+        <p className="text-center text-xs text-text3">GiftSmart v{APP_VERSION}</p>
       </div>
 
       <VaultSetupSheet open={showVaultSetup} onClose={() => setShowVaultSetup(false)} />

@@ -20,7 +20,7 @@ export default function SettingsAppearancePage() {
 
   return (
     <div className="flex-1 bg-bg">
-      <SettingsSubHeader title="מראה" />
+      <SettingsSubHeader title={t('settings.appearance')} />
       <div className="p-4 space-y-4 pb-10">
         <Card>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -28,7 +28,7 @@ export default function SettingsAppearancePage() {
               <Icon name={theme === 'dark' ? 'dark_mode' : 'light_mode'} size={20} color="var(--c-primary)" />
               <div>
                 <div className="font-medium text-sm text-text">{t('settings.dark.mode')}</div>
-                <div className="text-xs text-text3">{theme === 'dark' ? 'פעיל' : 'כבוי'}</div>
+                <div className="text-xs text-text3">{theme === 'dark' ? t('settings.toggle.on') : t('settings.toggle.off')}</div>
               </div>
             </div>
             <button

@@ -32,15 +32,16 @@ describe('formatCurrency', () => {
 
 describe('getDaysUntilExpiry / getExpiryStatus', () => {
   it('classifies each band at its boundary', () => {
-    // differenceInDays truncates, so a date is only "N days out" once the full
-    // N days have passed — midday "now" against a midnight expiry rounds down.
-    expect(getDaysUntilExpiry('2026-06-23')).toBe(7)
+    // getDaysUntilExpiry counts CALENDAR days crossed (differenceInCalendarDays),
+    // not full 24-hour periods — a midday "now" still counts a midnight expiry
+    // 8 calendar-days out as 8, not 7.
+    expect(getDaysUntilExpiry('2026-06-23')).toBe(8)
     expect(getExpiryStatus('2026-06-14')).toBe('expired')   // -1
     expect(getExpiryStatus('2026-06-15')).toBe('critical')  //  0, expires today
-    expect(getExpiryStatus('2026-06-23')).toBe('critical')  //  7, last critical day
-    expect(getExpiryStatus('2026-06-24')).toBe('warning')   //  8
-    expect(getExpiryStatus('2026-06-30')).toBe('warning')   // 14, last warning day
-    expect(getExpiryStatus('2026-07-01')).toBe('ok')        // 15
+    expect(getExpiryStatus('2026-06-22')).toBe('critical')  //  7, last critical day
+    expect(getExpiryStatus('2026-06-23')).toBe('warning')   //  8
+    expect(getExpiryStatus('2026-06-29')).toBe('warning')   // 14, last warning day
+    expect(getExpiryStatus('2026-06-30')).toBe('ok')        // 15
   })
 
   it('treats a missing or unparseable date as "no expiry", not as expired', () => {
@@ -122,7 +123,7 @@ describe('getStoreInitials', () => {
 })
 
 describe('defaultExpiryDate', () => {
-  it('is five years out and ISO-formatted', () => {
-    expect(defaultExpiryDate()).toBe('2031-06-15')
+  it('is one year out and ISO-formatted', () => {
+    expect(defaultExpiryDate()).toBe('2027-06-15')
   })
 })

@@ -15,6 +15,12 @@ interface Props {
   onUnlocked?: () => void
   /** Optional context line, e.g. "כדי להציג את הקוד של H&M". */
   contextLabel?: string
+  /** Optional explicit "skip" action (e.g. "save without encryption"), shown as
+      a plain text button alongside the unlock form. Without it, the only way
+      to proceed without unlocking is the generic ✕/backdrop dismiss, which
+      doesn't communicate that skipping is a valid, intentional choice here. */
+  skipLabel?: string
+  onSkip?: () => void
 }
 
 /**
@@ -23,7 +29,7 @@ interface Props {
  * hand-rolled unlock modals (HomePage / VoucherForm / BiometricGate vault step),
  * which each supported a different subset of unlock methods.
  */
-export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLabel }: Props) {
+export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLabel, skipLabel, onSkip }: Props) {
   const { t } = useT()
   const { unlockWithPassword, unlockVaultFromRecovery, unlockVaultWithBiometric, hint, passwordWrapStale, doors } = useE2EE()
   const { isAnonymous } = useAuth()
@@ -207,6 +213,12 @@ export default function VaultUnlockSheet({ open, onClose, onUnlocked, contextLab
             {t('vault.unlock.stay')}
           </label>
         </div>
+
+        {onSkip && (
+          <button onClick={onSkip} className="w-full text-sm text-text3 py-1">
+            {skipLabel}
+          </button>
+        )}
       </div>
     </BottomSheet>
   )

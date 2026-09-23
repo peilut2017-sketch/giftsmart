@@ -17,9 +17,20 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
   const [copied, setCopied] = useState(false)
   const [step, setStep] = useState<'show' | 'verify'>('show')
   const groups = phrase.split('-')
-  // Verify groups 2 and 5 (indexes 1 and 4)
-  const [check1, setCheck1] = useState('')
-  const [check2, setCheck2] = useState('')
+  // Previously always verified the SAME two groups (indexes 1 and 4) — a
+  // screenshot or partial glimpse of the phrase that happened to include
+  // those two groups was enough to pass, regardless of whether the rest was
+  // ever actually saved. Picking 3 of the 6 groups at random each time this
+  // modal mounts means no fixed subset of the phrase is ever sufficient.
+  const [verifyIndices] = useState<number[]>(() => {
+    const idx = [0, 1, 2, 3, 4, 5]
+    for (let i = idx.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[idx[i], idx[j]] = [idx[j], idx[i]]
+    }
+    return idx.slice(0, 3).sort((a, b) => a - b)
+  })
+  const [checks, setChecks] = useState<Record<number, string>>({})
   const [verifyError, setVerifyError] = useState(false)
 
   async function handleCopy() {
@@ -53,9 +64,9 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
   }
 
   function handleVerify() {
-    const ok =
-      check1.trim().toUpperCase() === groups[1]?.toUpperCase() &&
-      check2.trim().toUpperCase() === groups[4]?.toUpperCase()
+    const ok = verifyIndices.every(
+      i => (checks[i] || '').trim().toUpperCase() === groups[i]?.toUpperCase()
+    )
     if (!ok) {
       setVerifyError(true)
       return
@@ -126,28 +137,23 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
               {t('recovery.verify.subtitle')}
             </p>
 
-            <div dir="ltr" className="flex items-center justify-center gap-1.5 mb-4 font-mono text-sm text-text3">
-              <span>{groups[0]}</span>
-              <input
-                value={check1}
-                onChange={e => { setCheck1(e.target.value); setVerifyError(false) }}
-                maxLength={4}
-                className={`w-16 text-center py-1.5 border rounded-lg bg-surface text-text font-bold uppercase focus:outline-none focus:ring-2 focus:ring-primary/40 ${verifyError ? 'border-error' : 'border-border'}`}
-                autoCapitalize="characters"
-                autoFocus
-                aria-label={t('recovery.group2')}
-              />
-              <span>{groups[2]}</span>
-              <span>{groups[3]}</span>
-              <input
-                value={check2}
-                onChange={e => { setCheck2(e.target.value); setVerifyError(false) }}
-                maxLength={4}
-                className={`w-16 text-center py-1.5 border rounded-lg bg-surface text-text font-bold uppercase focus:outline-none focus:ring-2 focus:ring-primary/40 ${verifyError ? 'border-error' : 'border-border'}`}
-                autoCapitalize="characters"
-                aria-label={t('recovery.group5')}
-              />
-              <span>{groups[5]}</span>
+            <div dir="ltr" className="flex flex-wrap items-center justify-center gap-1.5 mb-4 font-mono text-sm text-text3">
+              {groups.map((g, i) =>
+                verifyIndices.includes(i) ? (
+                  <input
+                    key={i}
+                    value={checks[i] || ''}
+                    onChange={e => { setChecks(c => ({ ...c, [i]: e.target.value })); setVerifyError(false) }}
+                    maxLength={4}
+                    className={`w-16 text-center py-1.5 border rounded-lg bg-surface text-text font-bold uppercase focus:outline-none focus:ring-2 focus:ring-primary/40 ${verifyError ? 'border-error' : 'border-border'}`}
+                    autoCapitalize="characters"
+                    autoFocus={i === verifyIndices[0]}
+                    aria-label={t('recovery.group.n', { n: i + 1 })}
+                  />
+                ) : (
+                  <span key={i}>{g}</span>
+                )
+              )}
             </div>
 
             {verifyError && (
@@ -156,7 +162,7 @@ export default function RecoveryKeyModal({ phrase, onDone }: Props) {
 
             <button
               onClick={handleVerify}
-              disabled={check1.length < 4 || check2.length < 4}
+              disabled={verifyIndices.some(i => (checks[i] || '').length < 4)}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-2xl font-semibold text-sm shadow-md disabled:opacity-40 transition-opacity duration-150 mb-2"
             >
               {t('app.done')}

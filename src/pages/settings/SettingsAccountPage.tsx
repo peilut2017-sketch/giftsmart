@@ -13,6 +13,17 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import { SettingsSubHeader, Card, Spinner, MenuItem, SL } from '../../components/settings/SettingsUI'
 import { usePageView } from '../../hooks/usePageView'
 
+// Phone had zero validation before this — anything, including "123", saved
+// straight through. Only checks shape (digit count after stripping separators),
+// not a specific country format, since the app has users outside Israel.
+function isValidPhone(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed) return true // optional field
+  if (!/^[\d\s\-+()]+$/.test(trimmed)) return false
+  const digits = trimmed.replace(/\D/g, '')
+  return digits.length >= 7 && digits.length <= 15
+}
+
 interface PasswordStrength { score: number; label: string; color: string; checks: { label: string; ok: boolean }[] }
 function getPasswordStrength(password: string, t: (k: string) => string): PasswordStrength {
   const checks = [
@@ -79,6 +90,10 @@ export default function SettingsAccountPage() {
           return
         }
         toast.success(t('account.email.confirm.sent'), { duration: 8000 })
+      }
+      if (!isValidPhone(phone)) {
+        toast.error(t('account.phone.invalid'))
+        return
       }
       await updateProfile({ name, phone })
       setEditName(false)

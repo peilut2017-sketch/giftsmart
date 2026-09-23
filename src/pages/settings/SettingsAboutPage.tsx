@@ -9,6 +9,7 @@ import { useT } from '../../lib/i18n'
 import Icon from '../../components/ui/Icon'
 import { SettingsSubHeader, Card, SL, MenuItem } from '../../components/settings/SettingsUI'
 import { usePageView } from '../../hooks/usePageView'
+import { APP_VERSION } from '../../lib/version'
 // Delete-account / sign-out live in the hub's Danger Zone, not here — About is purely
 // informational (onboarding replay, legal links, admin link).
 
@@ -277,7 +278,7 @@ export default function SettingsAboutPage() {
           </div>
         </Card>
 
-        <p className="text-center text-xs text-text3">GiftSmart v1.1.0</p>
+        <p className="text-center text-xs text-text3">GiftSmart v{APP_VERSION}</p>
       </div>
     </div>
   )

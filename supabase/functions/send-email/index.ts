@@ -19,6 +19,13 @@ function json(body: unknown, status = 200) {
   })
 }
 
+// Thrown by sendMail() when no email provider could deliver the message —
+// either both SES and Gmail failed, or neither is configured at all. Kept
+// distinct from a generic thrown error so the top-level handler can return a
+// clear `email_unavailable` (503) instead of a bare 500 with a stringified
+// exception, which the client used to show the user verbatim.
+class EmailUnavailableError extends Error {}
+
 // ── HTML escaping ────────────────────────────────────────────────────────────
 
 function esc(str: string): string {
@@ -228,7 +235,13 @@ serve(async (req) => {
       }
     }
 
-    // Try SES first; if it fails (e.g. still in sandbox) fall back to Gmail
+    // Try SES first; if it fails (e.g. still in sandbox) fall back to Gmail.
+    // Previously only the SES attempt was wrapped in try/catch — if the Gmail
+    // fallback's own credentials were missing or expired, it threw straight
+    // out of sendMail() with no fallback of its own, which the outer catch
+    // turned into a raw `500 {error: String(err)}` — exactly the generic
+    // "Edge Function returned a non-2xx status code" the user saw with no
+    // indication of what actually went wrong or whether retrying would help.
     async function sendMail(mailOptions: Record<string, unknown>) {
       const sesUser = Deno.env.get('SES_SMTP_USER')
       const sesPass = Deno.env.get('SES_SMTP_PASS')
@@ -249,18 +262,25 @@ serve(async (req) => {
           console.warn('SES failed, falling back to Gmail:', sesErr)
         }
       }
-      // Gmail fallback
-      const gmail = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: Deno.env.get('GMAIL_USER')!,
-          pass: Deno.env.get('GMAIL_APP_PASSWORD')!,
-        },
-      })
-      await gmail.sendMail({
-        ...mailOptions,
-        from: `"${BRAND}" <${Deno.env.get('GMAIL_USER')}>`,
-      })
+
+      const gmailUser = Deno.env.get('GMAIL_USER')
+      const gmailPass = Deno.env.get('GMAIL_APP_PASSWORD')
+      if (!gmailUser || !gmailPass) {
+        throw new EmailUnavailableError('No email provider configured (SES and Gmail secrets both missing)')
+      }
+      try {
+        const gmail = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user: gmailUser, pass: gmailPass },
+        })
+        await gmail.sendMail({
+          ...mailOptions,
+          from: `"${BRAND}" <${gmailUser}>`,
+        })
+      } catch (gmailErr) {
+        console.error('Gmail fallback also failed:', gmailErr)
+        throw new EmailUnavailableError('Both SES and Gmail failed to send')
+      }
     }
 
     if (type === 'invite') {
@@ -312,6 +332,9 @@ serve(async (req) => {
     return json({ success: true })
   } catch (err) {
     console.error('send-email error:', err)
+    if (err instanceof EmailUnavailableError) {
+      return json({ error: 'email_unavailable' }, 503)
+    }
     return json({ error: String(err) }, 500)
   }
 })

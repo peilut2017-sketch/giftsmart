@@ -55,11 +55,18 @@ export function GiftSmartIcon({ size = 80, variant = 'color', className = '' }: 
 }
 
 /** Splash variant: full logo lockup (icon + wordmark + tagline are baked into logo.png
-    itself), used on loading / splash screen. */
+    itself), used on loading / splash screen. A slow breathing pulse on the logo plus a
+    slim indeterminate bar in the brand gradient replace the previous static logo +
+    separate bouncing-dots loader for a calmer, more contemporary boot state. */
 export function GiftSmartSplash() {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <img src="/logo.png" alt="GiftSmart — ניהול שוברים וכרטיסי מתנה" className="w-48 h-48 object-contain" />
+    <div className="flex flex-col items-center gap-6">
+      <img
+        src="/logo.png"
+        alt="GiftSmart — ניהול שוברים וכרטיסי מתנה"
+        className="w-48 h-48 object-contain gs-splash-breathe"
+      />
+      <div className="gs-splash-bar" role="status" aria-label="טוען…" />
     </div>
   )
 }

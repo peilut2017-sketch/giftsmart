@@ -167,9 +167,14 @@ export default function CheckoutPage() {
     if (activeTab === 'share' && isSharedVoucher) openShareModal()
   }, [activeTab, isSharedVoucher]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load voucher activity log
+  // Load voucher activity log. Re-fetches whenever the "activity" tab is opened
+  // (not just when the voucher id changes) — a usage/balance update recorded
+  // while this page is already open used to leave this list showing only the
+  // stale, page-load snapshot (e.g. just the "added" entry) even though the
+  // balance itself updates live from the reactive voucher object.
   useEffect(() => {
     if (!voucher?.id) return
+    if (activeTab !== 'activity') return
     let cancelled = false
     setLogLoading(true)
     getVoucherActivityLog(voucher.id)
@@ -177,7 +182,7 @@ export default function CheckoutPage() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLogLoading(false) })
     return () => { cancelled = true }
-  }, [voucher?.id])
+  }, [voucher?.id, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // WakeLock
   useEffect(() => {
@@ -600,6 +605,13 @@ export default function CheckoutPage() {
       await updateVoucher(voucher.id, { is_locked: nowLocked, ...(nowLocked ? {} : { lock_reason: null }) })
       toast.success(nowLocked ? t('checkout.locked.now') : t('checkout.unlocked.now'))
       setShowMoreMenu(false)
+      // A real unlock closes the lock gate immediately rather than waiting on
+      // refreshVouchers() to land — previously the gate's own "Unlock" button
+      // only set local lockConfirmed state without ever calling this real
+      // toggle, so voucher.is_locked stayed true forever: the "locked" badge
+      // persisted next to "active" and the owner kept seeing the
+      // contact-the-owner hint on their own voucher.
+      if (!nowLocked) setLockConfirmed(true)
       await refreshVouchers()
     } catch {
       toast.error(t('checkout.list.error'))
@@ -724,10 +736,25 @@ export default function CheckoutPage() {
               ) : (
                 <p className="text-sm text-text2 mb-6">{t('checkout.locked.desc')}</p>
               )}
-              <p className="text-xs text-text3 mb-6">{t('checkout.locked.hint')}</p>
-              <Button variant="primary" fullWidth onClick={() => setLockConfirmed(true)}>
-                <Icon name="lock_open" size={18} /> {t('checkout.unlock.voucher')}
-              </Button>
+              {/* "Contact the owner" only makes sense for someone the voucher was
+                  shared WITH — it used to show even to the owner viewing their
+                  own locked voucher. */}
+              {isSharedVoucher && <p className="text-xs text-text3 mb-6">{t('checkout.locked.hint')}</p>}
+              {isSharedVoucher ? (
+                // Not the owner — can't actually unlock it, just proceed past the
+                // gate for this viewing session. Deliberately NOT labeled "unlock"
+                // (that used to reuse the real unlock button's text, implying it
+                // had unlocked the voucher when it hadn't).
+                <Button variant="primary" fullWidth onClick={() => setLockConfirmed(true)}>
+                  {t('checkout.locked.continue.anyway')}
+                </Button>
+              ) : (
+                // The owner — this really unlocks it (handleToggleLock), so the
+                // "locked" badge and this gate don't come back next visit.
+                <Button variant="primary" fullWidth loading={lockToggling} onClick={handleToggleLock}>
+                  <Icon name="lock_open" size={18} /> {t('checkout.unlock.voucher')}
+                </Button>
+              )}
               <button onClick={() => navigate(-1)} className="w-full mt-3 py-3 text-text2 text-sm font-medium">{t('checkout.back')}</button>
             </div>
           )}

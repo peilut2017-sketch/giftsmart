@@ -160,9 +160,15 @@ export default function StatsPage() {
     const allVouchersWithCost = [...vouchers, ...archivedVouchers].filter(
       v => v.actual_cost != null && v.actual_cost >= 0 && v.amount > 0
     )
-    const totalSavings = allVouchersWithCost.reduce(
-      (s, v) => s + (v.amount - (v.actual_cost ?? 0)), 0
-    )
+    // Only count the REALIZED portion of the discount — i.e. prorated by how
+    // much of the voucher has actually been redeemed. A discounted voucher
+    // that hasn't been used yet hasn't saved anyone anything yet; counting
+    // its full discount the moment it's added overstated "total savings".
+    const totalSavings = allVouchersWithCost.reduce((s, v) => {
+      const discount = v.amount - (v.actual_cost ?? 0)
+      const usedFraction = Math.min(Math.max((v.amount - v.balance) / v.amount, 0), 1)
+      return s + discount * usedFraction
+    }, 0)
     const savingsCount = allVouchersWithCost.length
     const avgSavingsPct = savingsCount > 0
       ? Math.round(

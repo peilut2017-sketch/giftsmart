@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
@@ -68,17 +68,14 @@ const SettingsAboutPage         = lazy(() => import('./pages/settings/SettingsAb
 const GiftPage         = lazy(() => import('./pages/GiftPage'))
 
 function LoadingDots({ size = 'md' }: { size?: 'sm' | 'md' }) {
-  const dotClass = size === 'sm' ? 'w-2 h-2' : 'w-2.5 h-2.5'
+  const px = size === 'sm' ? 16 : 22
   return (
-    <div className="flex items-center gap-1.5">
-      {[0, 1, 2].map(i => (
-        <div
-          key={i}
-          className={`${dotClass} rounded-full bg-green-500 animate-bounce`}
-          style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }}
-        />
-      ))}
-    </div>
+    <div
+      className="gs-spinner"
+      style={{ width: px, height: px, borderWidth: size === 'sm' ? 2 : 2.5 }}
+      role="status"
+      aria-label="טוען…"
+    />
   )
 }
 
@@ -98,8 +95,16 @@ function PageSpinner() {
 }
 
 
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
-  constructor(props: { children: ReactNode }) {
+// `compact` renders a smaller, page-sized fallback (used around the routed
+// page content) instead of the full-screen one (used once at the very top,
+// as the last-resort safety net). Previously there was only ONE ErrorBoundary
+// wrapping the entire app — a render crash on any single page (e.g. the
+// support-message form) white-screened the whole app with no way back short
+// of a full reload. Wrapping the routes separately means a page-level crash
+// stays contained to that page, and — via the `key={pathname}` the caller
+// passes — resets itself the moment the user navigates elsewhere.
+class ErrorBoundary extends Component<{ children: ReactNode; compact?: boolean }, { hasError: boolean; message: string }> {
+  constructor(props: { children: ReactNode; compact?: boolean }) {
     super(props)
     this.state = { hasError: false, message: '' }
   }
@@ -111,6 +116,21 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
   render() {
     if (this.state.hasError) {
+      if (this.props.compact) {
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center min-h-[300px]" dir="rtl">
+            <AlertTriangle className="w-10 h-10 text-amber-500" />
+            <h2 className="text-base font-bold">משהו השתבש בעמוד הזה</h2>
+            <p className="text-xs text-gray-500">{this.state.message}</p>
+            <button
+              className="mt-1 px-6 py-2.5 bg-green-600 text-white rounded-full text-sm font-medium"
+              onClick={() => { window.location.href = '/' }}
+            >
+              חזרה לדף הבית
+            </button>
+          </div>
+        )
+      }
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center" dir="rtl">
           <AlertTriangle className="w-12 h-12 text-amber-500" />
@@ -428,9 +448,8 @@ function GuestBootstrap() {
   }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-gray-50">
+    <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-bg">
       <GiftSmartSplash />
-      <LoadingDots />
     </div>
   )
 }
@@ -438,6 +457,7 @@ function GuestBootstrap() {
 function AppRoutes() {
   const { user, loading, passwordRecovery, signOut } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [biometricLocked, setBiometricLocked] = useState(false)
   const [biometricSyncChecking, setBiometricSyncChecking] = useState(false)
 
@@ -517,9 +537,8 @@ function AppRoutes() {
 
   if (loading || biometricSyncChecking) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-gray-50">
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-bg">
         <GiftSmartSplash />
-        <LoadingDots />
       </div>
     )
   }
@@ -598,6 +617,7 @@ function AppRoutes() {
         <OfflineBanner />
         <main id="main-content" className="flex-1 flex flex-col">
           <Suspense fallback={<PageSpinner />}>
+            <ErrorBoundary compact key={location.pathname}>
             <AnimatedRoutes>
               <Route path="/" element={<HomePage />} />
               {/* In-app account screen: lets a GUEST register (upgrade in place)
@@ -629,6 +649,7 @@ function AppRoutes() {
               <Route path="/terms" element={<TermsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </AnimatedRoutes>
+            </ErrorBoundary>
           </Suspense>
         </main>
         <PWAInstallBanner />
