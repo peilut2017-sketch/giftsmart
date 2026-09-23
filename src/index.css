@@ -12,7 +12,7 @@
 
 /* ── Design System Tokens ─────────────────────────────────────── */
 :root {
-  --c-primary:       #16a34a;
+  --c-primary:       #117f3a;
   --c-primary-light: #dcfce7;
   --c-primary-mid:   #22c55e;
   --c-primary-dark:  #15803d;
@@ -24,11 +24,11 @@
   --c-border:        #e0e8e6;
   --c-text:          #0f1c1a;
   --c-text2:         #4a6260;
-  --c-text3:         #8da5a2;
-  --c-error:         #dc2626;
-  --c-warning:       #d97706;
-  --c-success:       #16a34a;
-  --c-urgent:        #ef4444;
+  --c-text3:         #5a726f;
+  --c-error:         #d52222;
+  --c-warning:       #a75c05;
+  --c-success:       #117f3a;
+  --c-urgent:        #de1313;
   --c-urgent-bg:     #fef2f2;
   --r-card:          18px;
   --r-btn:           12px;
@@ -65,7 +65,7 @@
 /* ── Dark Mode Tokens ─────────────────────────────────────────── */
 [data-theme="dark"] {
   --c-primary:       #22c55e;
-  --c-primary-light: #14532d;
+  --c-primary-light: #114726;
   --c-primary-mid:   #4ade80;
   --c-primary-dark:  #86efac;
   --c-gold:          #f59e0b;
@@ -76,7 +76,7 @@
   --c-border:        #30363d;
   --c-text:          #e6edf3;
   --c-text2:         #8b949e;
-  --c-text3:         #6e7681;
+  --c-text3:         #7a838e;
   --c-error:         #f85149;
   --c-warning:       #d29922;
   --c-success:       #3fb950;
@@ -177,8 +177,41 @@
 [data-theme="dark"] .text-rose-600 { color: #fb7185 !important; }
 [data-theme="dark"] .text-violet-600 { color: #a78bfa !important; }
 [data-theme="dark"] .text-amber-600 { color: #fbbf24 !important; }
+/* -700/-800 text shades: these ride on the -50/-100 chip backgrounds above, so
+   without an override they stayed dark-on-dark. Mapped to the same -400/-300
+   shades the -600 rules already use. */
+[data-theme="dark"] .text-blue-700    { color: #60a5fa !important; }
+[data-theme="dark"] .text-blue-800    { color: #93c5fd !important; }
+[data-theme="dark"] .text-green-700   { color: #4ade80 !important; }
+[data-theme="dark"] .text-green-800   { color: #86efac !important; }
+[data-theme="dark"] .text-emerald-700 { color: #34d399 !important; }
+[data-theme="dark"] .text-purple-700  { color: #c084fc !important; }
+[data-theme="dark"] .text-indigo-700  { color: #818cf8 !important; }
+[data-theme="dark"] .text-teal-700    { color: #2dd4bf !important; }
+[data-theme="dark"] .text-amber-700   { color: #fbbf24 !important; }
+[data-theme="dark"] .text-yellow-700  { color: #facc15 !important; }
+[data-theme="dark"] .text-red-700     { color: #f87171 !important; }
+/* Chip backgrounds still missing from the list above */
+[data-theme="dark"] .bg-emerald-50  { background-color: #05190f !important; }
+[data-theme="dark"] .bg-emerald-100 { background-color: #082418 !important; }
+[data-theme="dark"] .bg-yellow-50   { background-color: #1c1603 !important; }
+[data-theme="dark"] .bg-yellow-100  { background-color: #262005 !important; }
+/* Pastel borders — bright hairlines against a dark card otherwise */
+[data-theme="dark"] .border-blue-200   { border-color: #1e3a5f !important; }
+[data-theme="dark"] .border-green-200  { border-color: #14532d !important; }
+[data-theme="dark"] .border-indigo-200 { border-color: #312e81 !important; }
+[data-theme="dark"] .border-purple-200 { border-color: #4c1d95 !important; }
+[data-theme="dark"] .border-purple-300 { border-color: #5b21b6 !important; }
+[data-theme="dark"] .border-red-200    { border-color: #7f1d1d !important; }
+[data-theme="dark"] .border-teal-200   { border-color: #134e4a !important; }
+[data-theme="dark"] .border-yellow-200 { border-color: #713f12 !important; }
 [data-theme="dark"] ::-webkit-scrollbar-track { background: #161b22; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
+
+/* Directional glyphs (back arrows, drill-in chevrons) were drawn for the
+   Hebrew-first RTL layout. In LTR they have to point the other way — mirror
+   them rather than branching on locale at every call site. */
+[dir="ltr"] .dir-flip { transform: scaleX(-1); }
 
 .scrollbar-hide {
   scrollbar-width: none;
@@ -195,7 +228,10 @@
 body {
   margin: 0;
   font-family: 'Heebo', system-ui, sans-serif;
-  direction: rtl;
+  /* No `direction` here: a CSS declaration outranks the dir attribute, so this
+     pinned the whole app to RTL and the English locale rendered mirrored —
+     right-aligned text, icons and chevrons on the wrong side. index.html ships
+     dir="rtl" for the first paint and LocaleProvider updates it per locale. */
   background-color: var(--c-bg);
   color: var(--c-text);
   -webkit-text-size-adjust: 100%;

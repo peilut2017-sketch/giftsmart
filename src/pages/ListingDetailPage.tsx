@@ -477,7 +477,7 @@ export default function ListingDetailPage() {
       <div className="bg-surface border-b border-border sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-3">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-bg text-text2">
-            <Icon name="arrow_forward" size={20} />
+            <Icon name="arrow_forward" size={20} className="dir-flip" />
           </button>
           <h1 className="font-bold text-lg flex-1 text-text">{listing.store_name}</h1>
           {!isOwnListing && listing.status === 'active' && (

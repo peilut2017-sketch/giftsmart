@@ -1159,6 +1159,13 @@ export default function AdminPage() {
   // conditionally, so the hook count changed the moment isAdmin flipped
   // false→true (profile finished loading) and React crashed the page.
   const [inboxCounts, setInboxCounts] = useState<{ support_unread: number; reports_pending: number; submissions_pending: number } | null>(null)
+  const [profileTimedOut, setProfileTimedOut] = useState(false)
+
+  useEffect(() => {
+    if (profile) { setProfileTimedOut(false); return }
+    const timer = setTimeout(() => setProfileTimedOut(true), 6000)
+    return () => clearTimeout(timer)
+  }, [profile])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -1168,19 +1175,31 @@ export default function AdminPage() {
   }, [isAdmin])  
 
   if (!isAdmin) {
-    // Profile is still being fetched — don't flash "access restricted" for a real admin
-    if (user && !profile) {
+    // Profile is still being fetched — don't flash "access restricted" for a real admin.
+    // profileTimedOut breaks the other way out: if that fetch never resolves (offline,
+    // a 5xx), this used to spin forever with nothing to read and nothing to press.
+    if (user && !profile && !profileTimedOut) {
       return (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--c-primary)' }} />
+          <p className="text-sm text-text3">{t('admin.access.checking')}</p>
         </div>
       )
     }
+    const unverified = user && !profile
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center p-8">
-          <Shield className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-          <p className="text-gray-500">גישה מוגבלת למנהל ראשי</p>
+          <Shield className="w-16 h-16 text-border mx-auto mb-4" />
+          <p className="text-text2">{t(unverified ? 'admin.access.check.failed' : 'admin.access.restricted')}</p>
+          {unverified && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-5 py-2.5 rounded-2xl bg-primary-light text-primary-dark text-sm font-bold"
+            >
+              {t('admin.access.retry')}
+            </button>
+          )}
         </div>
       </div>
     )

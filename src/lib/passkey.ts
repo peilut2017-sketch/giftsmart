@@ -195,11 +195,6 @@ export async function registerBiometricWithVault(
 }
 
 // Standard biometric check (UI gate only). Returns true/false.
-export async function verifyBiometric(): Promise<boolean> {
-  const result = await verifyBiometricForVaultUnlock()
-  return result.authenticated
-}
-
 // Biometric check that also tries to unwrap the vault key via PRF.
 // Returns { authenticated, vaultKey, prfBytes }
 // - vaultKey: unwrapped key if a stored wrapped key was found; null otherwise

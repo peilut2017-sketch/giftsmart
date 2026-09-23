@@ -180,7 +180,7 @@ export default function SettingsWalletPage() {
               <p className="text-sm font-medium text-text">{t('wallet.show.value')}</p>
               <p className="text-xs text-text3 mt-0.5">{t('wallet.show.value.desc')}</p>
             </div>
-            <Switch checked={!!profile?.show_voucher_value} onChange={v => updateProfile({ show_voucher_value: v })} />
+            <Switch checked={!!profile?.show_voucher_value} onChange={v => updateProfile({ show_voucher_value: v })} ariaLabel={t('wallet.show.value')} />
           </div>
         </Card>
 

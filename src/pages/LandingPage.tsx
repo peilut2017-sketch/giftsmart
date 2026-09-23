@@ -46,6 +46,36 @@ function daysLeft(expiry: string): number | null {
 }
 
 // ── Interactive Demo ───────────────────────────────────────────────
+// Module-level so React keeps the same component identity across renders (defining it
+// inside the demo component recreated it on every clock tick → full remount each time).
+function DemoNavBar({ active, setScreen }: { active: DemoScreen; setScreen: (s: DemoScreen) => void }) {
+  return (
+    <div className="lp-dpf-nav">
+      <button className={`lp-dpf-nb ${active==='wallet'?'lp-active':''}`} onClick={() => setScreen('wallet')}>
+        <Icon name="account_balance_wallet" size={18} />
+        <span>ארנק</span>
+      </button>
+      <button className="lp-dpf-nb" onClick={() => setScreen('add')}>
+        <div className="lp-dpf-add-btn">
+          <Icon name="add" size={20} color="white" />
+        </div>
+      </button>
+      <button className={`lp-dpf-nb ${active==='alerts'?'lp-active':''}`} onClick={() => setScreen('alerts')}>
+        <Icon name="notifications" size={18} />
+        <span>התראות</span>
+      </button>
+      <button className={`lp-dpf-nb ${active==='share'?'lp-active':''}`} onClick={() => setScreen('share')}>
+        <Icon name="group" size={18} />
+        <span>שיתוף</span>
+      </button>
+      <button className={`lp-dpf-nb ${active==='stats'?'lp-active':''}`} onClick={() => setScreen('stats')}>
+        <Icon name="bar_chart" size={18} />
+        <span>סטטיסטיקות</span>
+      </button>
+    </div>
+  )
+}
+
 function InteractiveDemo() {
   const [cards, setCards] = useState<DemoCard[]>([])
   const [screen, setScreen] = useState<DemoScreen>('wallet')
@@ -98,31 +128,6 @@ function InteractiveDemo() {
   const total = cards.reduce((s, c) => s + c.amount, 0)
   const expiringSoon = cards.filter(c => { const d = daysLeft(c.expiry); return d !== null && d >= 0 && d <= 30 })
 
-  const NavBar = ({ active }: { active: DemoScreen }) => (
-    <div className="lp-dpf-nav">
-      <button className={`lp-dpf-nb ${active==='wallet'?'lp-active':''}`} onClick={() => setScreen('wallet')}>
-        <Icon name="account_balance_wallet" size={18} />
-        <span>ארנק</span>
-      </button>
-      <button className="lp-dpf-nb" onClick={() => setScreen('add')}>
-        <div className="lp-dpf-add-btn">
-          <Icon name="add" size={20} color="white" />
-        </div>
-      </button>
-      <button className={`lp-dpf-nb ${active==='alerts'?'lp-active':''}`} onClick={() => setScreen('alerts')}>
-        <Icon name="notifications" size={18} />
-        <span>התראות</span>
-      </button>
-      <button className={`lp-dpf-nb ${active==='share'?'lp-active':''}`} onClick={() => setScreen('share')}>
-        <Icon name="group" size={18} />
-        <span>שיתוף</span>
-      </button>
-      <button className={`lp-dpf-nb ${active==='stats'?'lp-active':''}`} onClick={() => setScreen('stats')}>
-        <Icon name="bar_chart" size={18} />
-        <span>סטטיסטיקות</span>
-      </button>
-    </div>
-  )
 
   return (
     <div className="lp-demo-wrap">
@@ -181,7 +186,7 @@ function InteractiveDemo() {
                 })
               )}
             </div>
-            <NavBar active="wallet" />
+            <DemoNavBar active="wallet" setScreen={setScreen} />
           </div>
 
           {/* Add screen */}
@@ -237,7 +242,7 @@ function InteractiveDemo() {
                 <Icon name="add" size={16} />
               </button>
             </div>
-            <NavBar active="add" />
+            <DemoNavBar active="add" setScreen={setScreen} />
           </div>
 
           {/* Alerts screen */}
@@ -261,7 +266,7 @@ function InteractiveDemo() {
                 </div>
               ))}
             </div>
-            <NavBar active="alerts" />
+            <DemoNavBar active="alerts" setScreen={setScreen} />
           </div>
 
           {/* Share screen */}
@@ -288,7 +293,7 @@ function InteractiveDemo() {
                 ))}
               </div>
             </div>
-            <NavBar active="share" />
+            <DemoNavBar active="share" setScreen={setScreen} />
           </div>
 
           {/* Stats screen */}
@@ -332,7 +337,7 @@ function InteractiveDemo() {
                 </>
               )}
             </div>
-            <NavBar active="stats" />
+            <DemoNavBar active="stats" setScreen={setScreen} />
           </div>
 
           {/* Toast */}

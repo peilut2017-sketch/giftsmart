@@ -220,7 +220,7 @@ export default function HomePage() {
           )}
         </button>
         <div className="text-center">
-          <div className="text-[19px] font-extrabold text-text">{walletName || t('wallet.main')}</div>
+          <h1 className="text-[19px] font-extrabold text-text">{walletName || t('wallet.main')}</h1>
           <div className="text-[13px] text-text3 mt-0.5 flex items-center gap-1.5 justify-center">
             {!isOnline && <Icon name="wifi_off" size={13} />}
             {t('home.your.wallet')}

@@ -178,7 +178,7 @@ export default function BulkListPage() {
             <Icon name="arrow_forward" size={20} />
           </button>
           <h1 className="font-bold text-lg flex-1 text-text">{t('bulk.title')}</h1>
-          <span className="text-sm text-text3">{selected.length} {t('bulk.selected')}</span>
+          <span className="text-sm text-text3">{t('bulk.selected', { count: selected.length })}</span>
         </div>
       </div>
 

@@ -32,7 +32,7 @@ import {
   ensureV3Wraps,
 } from '../lib/vaultBundle'
 import type { VaultWrap } from '../lib/vaultBundle'
-import { registerBiometricWithVault, hasBiometricWrappedVaultKey } from '../lib/passkey'
+import { registerBiometricWithVault } from '../lib/passkey'
 import { saveDeviceVaultKey, loadDeviceVaultKey, clearDeviceVaultKey, isVaultPersistEnabled } from '../lib/vaultKeyStore'
 import { useAuth } from './AuthContext'
 import { supabase } from '../lib/supabase'
@@ -84,7 +84,7 @@ interface E2EEContextValue {
   setupVaultWithMasterKey: (opts?: { registerBiometric?: { userName: string; email?: string } }) => Promise<string>
   unlockVault: (passphrase: string) => Promise<boolean>
   unlockWithPassword: (password: string) => Promise<UnlockStatus>
-  unlockVaultFromPassword: (password: string, userId: string) => Promise<boolean>
+  unlockVaultFromPassword: (password: string) => Promise<boolean>
   unlockVaultFromRecovery: (phrase: string) => Promise<boolean>
   lockVault: () => void
   resetVault: () => void
@@ -98,7 +98,6 @@ interface E2EEContextValue {
   // v3: password changes re-wrap the master key — no data is re-encrypted.
   reDeriveVaultKeyFromPassword: (
     newPassword: string,
-    e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   rewrapPassword: (newPassword: string) => Promise<boolean>
   regenerateRecoveryKey: () => Promise<string>
@@ -517,10 +516,7 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   }, [user?.id, user?.email, afterUnlock])
 
   // Boolean wrapper for existing call sites
-  const unlockVaultFromPassword = useCallback(async (
-    password: string,
-    _userId: string,
-  ): Promise<boolean> => {
+  const unlockVaultFromPassword = useCallback(async (password: string): Promise<boolean> => {
     return (await unlockWithPassword(password)) === 'ok'
   }, [unlockWithPassword])
 
@@ -670,7 +666,6 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   // data is re-encrypted anymore; the master key stays, only its password door moves.
   const reDeriveVaultKeyFromPassword = useCallback(async (
     newPassword: string,
-    _e2eeVouchers: Array<{id: string; code?: string|null; cvv?: string|null}>,
   ): Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}> => {
     const ok = await rewrapPassword(newPassword)
     return { ok, entries: [] }
@@ -1002,4 +997,3 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export { hasBiometricWrappedVaultKey }

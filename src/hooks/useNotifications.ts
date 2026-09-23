@@ -165,12 +165,6 @@ export function useExpiryNotifications(
 }
 
 // Request push permission proactively (call from Settings page or first launch)
-export async function requestPushPermission(): Promise<NotificationPermission> {
-  if (!('Notification' in window)) return 'denied'
-  if (Notification.permission !== 'default') return Notification.permission
-  return await Notification.requestPermission()
-}
-
 // Send an immediate push notification when a voucher is used
 export async function sendUsageNotification(
   storeName: string,
@@ -213,7 +207,3 @@ export async function sendUsageNotification(
   }
 }
 
-export function getNotificationStatus(): 'granted' | 'denied' | 'default' | 'unsupported' {
-  if (!('Notification' in window)) return 'unsupported'
-  return Notification.permission
-}

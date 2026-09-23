@@ -97,7 +97,7 @@ function NotificationRow({ item, onClick }: { item: NotificationItem & { unseen:
         <p className="text-xs text-text3 mt-0.5 line-clamp-2">{item.desc}</p>
         <p className="text-[11px] text-text3 mt-1">{timeAgo(item.timestamp)}</p>
       </div>
-      {interactive && <Icon name="chevron_left" size={16} color="var(--c-text3)" />}
+      {interactive && <Icon name="chevron_left" size={16} color="var(--c-text3)" className="dir-flip" />}
     </>
   )
   // Rows without a destination (system broadcasts) are informational — rendering

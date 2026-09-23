@@ -160,6 +160,30 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // useCallback + declared above its callers on purpose: as a plain function it was
+  // rebuilt every render, and syncToCloud lists it as a dependency — so that callback
+  // (and every effect keyed on it) was invalidated on every single render.
+  const logAction = useCallback(async (
+    action: ActivityLogEntry['action'],
+    voucherName: string,
+    voucherId?: string,
+    details: Record<string, any> = {}
+  ) => {
+    if (!user) return
+    // voucher_id is a UUID column — offline "local-…" ids would make the whole
+    // insert silently fail, which is how entries used to go missing.
+    const safeVoucherId = voucherId && !voucherId.startsWith('local-') ? voucherId : null
+    // Fire and forget — don't block the main operation on logging
+    Promise.resolve(supabase.from('activity_log').insert({
+      user_id: user.id,
+      wallet_id: walletIdRef.current,
+      action,
+      voucher_id: safeVoucherId,
+      voucher_name: voucherName,
+      details,
+    })).then(() => {}).catch(() => {})
+  }, [user])
+
   const loadFromCache = useCallback((userId: string) => {
     try {
       const cached = localStorage.getItem(CACHE_KEY_PREFIX + userId)
@@ -1021,27 +1045,6 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       .eq('voucher_id', voucherId)
       .order('created_at', { ascending: false })
     return data || []
-  }
-
-  async function logAction(
-    action: ActivityLogEntry['action'],
-    voucherName: string,
-    voucherId?: string,
-    details: Record<string, any> = {}
-  ) {
-    if (!user) return
-    // voucher_id is a UUID column — offline "local-…" ids would make the whole
-    // insert silently fail, which is how entries used to go missing.
-    const safeVoucherId = voucherId && !voucherId.startsWith('local-') ? voucherId : null
-    // Fire and forget — don't block the main operation on logging
-    Promise.resolve(supabase.from('activity_log').insert({
-      user_id: user.id,
-      wallet_id: walletIdRef.current,
-      action,
-      voucher_id: safeVoucherId,
-      voucher_name: voucherName,
-      details,
-    })).then(() => {}).catch(() => {})
   }
 
   async function getActivityLog(limit = 100): Promise<ActivityLogEntry[]> {

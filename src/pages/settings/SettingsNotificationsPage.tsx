@@ -316,15 +316,17 @@ export default function SettingsNotificationsPage() {
                   </div>
                   <Switch checked={notifChannels.email} onChange={v => updateNotifChannel('email', v)} size="sm" />
                 </label>
-                <label className={`flex items-center justify-between ${!telegramLinked ? 'opacity-50' : 'cursor-pointer'}`}>
+                <label className={`flex items-center justify-between ${telegramLinked ? 'cursor-pointer' : ''}`}>
                   <div className="flex items-center gap-2">
-                    <Icon name="send" size={16} color="#0ea5e9" />
+                    {/* Dimming the icon (not the text) signals "unavailable" without
+                        dropping the label/hint below readable contrast. */}
+                    <Icon name="send" size={16} color="#0ea5e9" className={telegramLinked ? undefined : 'opacity-50'} />
                     <div>
                       <span className="text-sm text-text2">{t('settings.notif.telegram')}</span>
                       {!telegramLinked && <p className="text-[10px] text-text3">{t('notifset.telegram.link.first')}</p>}
                     </div>
                   </div>
-                  <Switch checked={notifChannels.telegram && !!telegramLinked} onChange={v => telegramLinked && updateNotifChannel('telegram', v)} size="sm" />
+                  <Switch checked={notifChannels.telegram && !!telegramLinked} onChange={v => telegramLinked && updateNotifChannel('telegram', v)} size="sm" disabled={!telegramLinked} />
                 </label>
               </div>
             </div>

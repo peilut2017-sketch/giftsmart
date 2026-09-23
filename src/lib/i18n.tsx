@@ -1636,6 +1636,14 @@ const translations: Record<string, string> = {
   'admin.premium.enabled.en': 'Premium enabled',
   'admin.premium.disabled': 'פרמיום בוטל',
   'admin.premium.disabled.en': 'Premium disabled',
+  'admin.access.restricted': 'גישה מוגבלת למנהל ראשי',
+  'admin.access.restricted.en': 'Restricted to the main administrator',
+  'admin.access.checking': 'בודק הרשאות…',
+  'admin.access.checking.en': 'Checking permissions…',
+  'admin.access.check.failed': 'לא הצלחנו לאמת את ההרשאות שלך',
+  'admin.access.check.failed.en': "We couldn't verify your permissions",
+  'admin.access.retry': 'נסה שוב',
+  'admin.access.retry.en': 'Try again',
   'admin.access.approved': 'גישה אושרה',
   'admin.access.approved.en': 'Access approved',
   'admin.access.rejected': 'גישה נדחתה',
@@ -3828,8 +3836,14 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem('gs_locale', locale)
+    const dir = locale === 'he' ? 'rtl' : 'ltr'
     document.documentElement.setAttribute('lang', locale)
-    document.body.setAttribute('dir', locale === 'he' ? 'rtl' : 'ltr')
+    // index.html hardcodes dir="rtl" on <html> for the pre-hydration paint; keep both
+    // <html> and <body> in sync once we know the real locale — CSS logical properties,
+    // native form-validation bubbles and the scrollbar gutter all key off <html>'s dir,
+    // not just <body>'s.
+    document.documentElement.setAttribute('dir', dir)
+    document.body.setAttribute('dir', dir)
   }, [locale])
 
   function setLocale(l: Locale) { setLocaleState(l) }

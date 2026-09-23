@@ -116,9 +116,9 @@ export default function VoucherCard({
   // Expiry chip colours — shown for every voucher that has a date
   const expiryChip = (() => {
     if (!voucher.expiry_date) return null
-    if (expiryStatus === 'expired')  return { color: '#6b7280', bg: '#f3f4f6' }
-    if (expiryStatus === 'critical') return { color: '#ef4444', bg: '#fef2f2' }
-    if (expiryStatus === 'warning')  return { color: '#d97706', bg: '#fffbeb' }
+    if (expiryStatus === 'expired')  return { color: '#69707d', bg: '#f3f4f6' }
+    if (expiryStatus === 'critical') return { color: '#de1313', bg: '#fef2f2' }
+    if (expiryStatus === 'warning')  return { color: '#a75c05', bg: '#fffbeb' }
     return { color: 'var(--c-text3)', bg: 'var(--c-bg)' }
   })()
 

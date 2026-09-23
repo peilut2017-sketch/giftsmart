@@ -84,7 +84,7 @@ function ConversationsModal({
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="text-xs text-text3">{c.message_count} {t('market.messages')}</span>
-                  <Icon name="chevron_left" size={16} color="var(--c-border)" />
+                  <Icon name="chevron_left" size={16} color="var(--c-border)" className="dir-flip" />
                 </div>
               </button>
             )

@@ -247,7 +247,6 @@ export default function BottomNav() {
         <div
           ref={navRef}
           className="relative flex items-center justify-around w-full h-full px-1"
-          role="list"
           style={{ touchAction: 'none', cursor: draggingVisual ? 'grabbing' : 'auto' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

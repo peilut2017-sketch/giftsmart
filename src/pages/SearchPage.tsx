@@ -193,6 +193,36 @@ export default function SearchPage() {
     [filtered, hiddenIds]
   )
 
+  // Render the list in pages. A wallet with a few hundred vouchers put ~16k nodes
+  // on this screen at once, and every keystroke re-rendered all of them — around
+  // 200ms of lag per character. Cards keep their swipe handlers and animations, so
+  // paging beats virtualising them. Counts, select-all and bulk actions still work
+  // off the full result set.
+  const PAGE = 60
+  const [visibleCount, setVisibleCount] = useState(PAGE)
+  const moreRef = useRef<HTMLDivElement>(null)
+
+  // Any change to the result set starts the paging over.
+  const resultKey = `${displayVouchers.length}|${search}|${filterTab}|${sortKey}|${sortDir}|${filterCats.join()}`
+  useEffect(() => { setVisibleCount(PAGE) }, [resultKey])
+
+  useEffect(() => {
+    const el = moreRef.current
+    if (!el || visibleCount >= displayVouchers.length) return
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) {
+        setVisibleCount(c => Math.min(c + PAGE, displayVouchers.length))
+      }
+    }, { rootMargin: '600px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [visibleCount, displayVouchers.length])
+
+  const pagedVouchers = useMemo(
+    () => displayVouchers.slice(0, visibleCount),
+    [displayVouchers, visibleCount]
+  )
+
   const searchedArchived = useMemo(() => {
     if (!search) return []
     const resolveCode = (v: Voucher) => v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code
@@ -530,7 +560,7 @@ export default function SearchPage() {
                     (layout) instead of the list teleporting; an undone card fades
                     back in the same way. */}
                 <AnimatePresence initial={false} mode="popLayout">
-                  {displayVouchers.map(v => {
+                  {pagedVouchers.map(v => {
                     const sv = superVouchers.find(s => s.id === v.super_voucher_id)
                     return (
                       <motion.div
@@ -557,6 +587,14 @@ export default function SearchPage() {
                     )
                   })}
                 </AnimatePresence>
+              </div>
+            )}
+
+            {/* Scroll sentinel: pulls in the next page before it reaches the viewport,
+                so the list feels continuous rather than paginated. */}
+            {visibleCount < displayVouchers.length && (
+              <div ref={moreRef} className="flex justify-center py-6" aria-hidden="true">
+                <div className="h-6 w-6 rounded-full border-2 border-border border-t-primary animate-spin" />
               </div>
             )}
 

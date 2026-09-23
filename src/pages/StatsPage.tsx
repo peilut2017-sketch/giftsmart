@@ -10,10 +10,51 @@ import Icon from '../components/ui/Icon'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import toast from 'react-hot-toast'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { useT } from '../lib/i18n'
 import { usePageView } from '../hooks/usePageView'
+
+// Module scope on purpose: defined inside StatsPage these got a fresh identity on
+// every render, so React remounted the entire stat grid instead of updating it.
+function StatCard({ icon, label, value, sub, color, className = '' }: { icon: string; label: string; value: string | number; sub?: string; color?: string; className?: string }) {
+  return (
+    <div className={`bg-surface rounded-2xl p-4 shadow-card ${className}`}>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-bg">
+          <Icon name={icon} size={20} color={color || 'var(--c-text2)'} />
+        </div>
+        <div>
+          <p className="text-sm text-text3">{label}</p>
+          <p className="text-xl font-bold" style={{ color: color || 'var(--c-text)' }}>{value}</p>
+          {sub && <p className="text-xs text-text3">{sub}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TimeStatRow({ label, today, todayAmount, week, weekAmount, month, monthAmount }: {
+  label: string; today: number; todayAmount: number; week: number; weekAmount: number; month: number; monthAmount: number
+}) {
+  const { t } = useT()
+  return (
+    <div>
+      <span className="text-sm font-medium text-text2 mb-2 block">{label}</span>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { period: t('stats.today'), count: today, amount: todayAmount },
+          { period: t('stats.this.week'), count: week, amount: weekAmount },
+          { period: t('stats.this.month'), count: month, amount: monthAmount },
+        ].map(({ period, count, amount }) => (
+          <div key={period} className="bg-bg rounded-xl px-2 py-2.5 text-center">
+            <p className="text-xs text-text3 mb-1">{period}</p>
+            <p className="text-lg font-bold text-text leading-none">{count}</p>
+            <p className="text-xs text-text2 mt-1">{formatCurrency(amount)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function StatsPage() {
   const { vouchers, archivedVouchers, loading } = useVouchers()
@@ -200,8 +241,14 @@ export default function StatsPage() {
     }
   }
 
-  function exportPDF() {
+  // jsPDF + autotable (and the html2canvas they drag in) are ~500 KB — a third of
+  // this route's chunk — for a button most sessions never press. Pulled on click.
+  async function exportPDF() {
     try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ])
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       doc.setFontSize(18)
       doc.setFont('helvetica', 'bold')
@@ -248,48 +295,12 @@ export default function StatsPage() {
     }
   }
 
-  const StatCard = ({ icon, label, value, sub, color }: { icon: string; label: string; value: string | number; sub?: string; color?: string }) => (
-    <div className="bg-surface rounded-2xl p-4 shadow-card">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-bg">
-          <Icon name={icon} size={20} color={color || 'var(--c-text2)'} />
-        </div>
-        <div>
-          <p className="text-sm text-text3">{label}</p>
-          <p className="text-xl font-bold" style={{ color: color || 'var(--c-text)' }}>{value}</p>
-          {sub && <p className="text-xs text-text3">{sub}</p>}
-        </div>
-      </div>
-    </div>
-  )
-
-  const TimeStatRow = ({ label, today, todayAmount, week, weekAmount, month, monthAmount }: {
-    label: string; today: number; todayAmount: number; week: number; weekAmount: number; month: number; monthAmount: number
-  }) => (
-    <div>
-      <span className="text-sm font-medium text-text2 mb-2 block">{label}</span>
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { period: t('stats.today'), count: today, amount: todayAmount },
-          { period: t('stats.this.week'), count: week, amount: weekAmount },
-          { period: t('stats.this.month'), count: month, amount: monthAmount },
-        ].map(({ period, count, amount }) => (
-          <div key={period} className="bg-bg rounded-xl px-2 py-2.5 text-center">
-            <p className="text-xs text-text3 mb-1">{period}</p>
-            <p className="text-lg font-bold text-text leading-none">{count}</p>
-            <p className="text-xs text-text2 mt-1">{formatCurrency(amount)}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-
   return (
     <div className="flex-1 bg-bg">
       <div className="bg-surface border-b border-border px-5 pt-5 pb-4">
         <div className="flex justify-between items-center">
           <div>
-            <div className="text-[22px] font-extrabold text-text">{t('stats.title')}</div>
+            <h1 className="text-[22px] font-extrabold text-text">{t('stats.title')}</h1>
             <div className="text-[13px] text-text3 mt-0.5">{t('stats.subtitle')}</div>
           </div>
           <div className="flex items-center gap-2">
@@ -364,7 +375,7 @@ export default function StatsPage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Icon name="stars" size={20} color="#e9d5ff" />
-                <h3 className="font-bold text-white">{t('stats.savings.title')}</h3>
+                <h2 className="font-bold text-white">{t('stats.savings.title')}</h2>
               </div>
               <button onClick={() => setShowSavingsInfo(v => !v)} className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30">
                 <Icon name="info" size={16} color="#fff" />
@@ -385,7 +396,7 @@ export default function StatsPage() {
 
         {/* Activity over time */}
         <div className="bg-surface rounded-card shadow-card p-5">
-          <h3 className="font-semibold text-text2 mb-4 flex items-center gap-2"><Icon name="schedule" size={16} color="#3b82f6" /> {t('stats.activity.title')}</h3>
+          <h2 className="font-semibold text-text2 mb-4 flex items-center gap-2"><Icon name="schedule" size={16} color="#3b82f6" /> {t('stats.activity.title')}</h2>
           <div className="space-y-4">
             <TimeStatRow label={t('stats.added.count')} today={stats.addedToday} todayAmount={stats.addedTodayAmount} week={stats.addedThisWeek} weekAmount={stats.addedThisWeekAmount} month={stats.addedThisMonth} monthAmount={stats.addedThisMonthAmount} />
             <TimeStatRow label={t('stats.utilized.count')} today={stats.usedToday} todayAmount={stats.usedTodayAmount} week={stats.usedThisWeek} weekAmount={stats.usedThisWeekAmount} month={stats.usedThisMonth} monthAmount={stats.usedThisMonthAmount} />
@@ -402,13 +413,15 @@ export default function StatsPage() {
           <StatCard icon="group" label={t('stats.shared.count')} value={stats.shared} color="#3b82f6" />
           <StatCard icon="shopping_bag" label={t('stats.near.empty')} value={stats.nearZero} color={stats.nearZero > 0 ? 'var(--c-gold)' : 'var(--c-text3)'} sub={stats.nearZero > 0 ? t('stats.near.empty.hint') : undefined} />
           {stats.giftVouchers > 0 && <StatCard icon="redeem" label={t('stats.gift.count')} value={stats.giftVouchers} color="#ec4899" />}
-          <StatCard icon="add_circle" label={t('stats.added.month')} value={stats.addedThisMonth} color="#6366f1" />
+          {/* Gift tile is conditional, so the grid flips between odd and even —
+              the trailing card stretches when it would otherwise sit alone. */}
+          <StatCard icon="add_circle" label={t('stats.added.month')} value={stats.addedThisMonth} color="#6366f1" className={stats.giftVouchers > 0 ? '' : 'col-span-2'} />
         </div>
 
         {/* Top stores */}
         {stats.topStores.length > 0 && (
           <div className="bg-surface rounded-card shadow-card p-5">
-            <h3 className="font-semibold text-text2 mb-4">{t('stats.top.stores')}</h3>
+            <h2 className="font-semibold text-text2 mb-4">{t('stats.top.stores')}</h2>
             <div className="space-y-3">
               {stats.topStores.map((store, i) => {
                 const maxBalance = stats.topStores[0].balance
@@ -436,7 +449,7 @@ export default function StatsPage() {
         {/* Category chart */}
         {stats.categoryData.length > 0 && (
           <div className="bg-surface rounded-card shadow-card p-5">
-            <h3 className="font-semibold text-text2 mb-1">{t('stats.by.category')}</h3>
+            <h2 className="font-semibold text-text2 mb-1">{t('stats.by.category')}</h2>
             {stats.multiCategoryCount > 0 && (
               <p className="text-xs text-text3 mb-3 flex items-start gap-1"><Icon name="info" size={13} color="var(--c-text3)" className="mt-0.5 shrink-0" /> {t('stats.multi.cat.note')}</p>
             )}

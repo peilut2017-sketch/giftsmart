@@ -162,7 +162,7 @@ export default function SettingsPage() {
             {isAdmin && (
               <button
                 onClick={() => navigate('/admin')}
-                className="w-full flex items-center gap-3 mt-4 pt-4 border-t border-white/20 text-right active:opacity-80 transition-opacity"
+                className="w-full flex items-center gap-3 mt-4 pt-4 border-t border-white/20 text-start active:opacity-80 transition-opacity"
               >
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
                   <Icon name="verified_user" size={18} color="#fff" filled />
@@ -171,7 +171,7 @@ export default function SettingsPage() {
                   <div className="text-sm font-bold text-white">{t('settings.admin.link')}</div>
                   <div className="text-[11px] text-white/70 mt-0.5 truncate">{t('settings.admin.link.desc')}</div>
                 </div>
-                <Icon name="chevron_left" size={18} color="rgba(255,255,255,0.7)" />
+                <Icon name="chevron_left" size={18} color="rgba(255,255,255,0.7)" className="dir-flip" />
               </button>
             )}
           </div>
@@ -193,7 +193,7 @@ export default function SettingsPage() {
                   <div className="text-[15px] font-extrabold text-white">{t('hub.upgrade.title')}</div>
                   <div className="text-xs text-white/60 mt-0.5">{t('hub.upgrade.desc')}</div>
                 </div>
-                <Icon name="chevron_left" size={16} color="rgba(255,255,255,0.5)" />
+                <Icon name="chevron_left" size={16} color="rgba(255,255,255,0.5)" className="dir-flip" />
               </div>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function SettingsPage() {
             <button
               key={c.key}
               onClick={() => navigate(c.path)}
-              className="w-full flex items-center gap-3 bg-surface rounded-card shadow-card p-4 text-right hover:opacity-90 transition"
+              className="w-full flex items-center gap-3 bg-surface rounded-card shadow-card p-4 text-start hover:opacity-90 transition"
             >
               <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center shrink-0">
                 <Icon name={c.icon} size={22} color="var(--c-primary)" />
@@ -228,7 +228,7 @@ export default function SettingsPage() {
                 <p className="text-[15px] font-semibold text-text">{c.title}</p>
                 <p className="text-xs text-text3 mt-0.5">{c.desc}</p>
               </div>
-              <Icon name="chevron_left" size={18} color="var(--c-text3)" />
+              <Icon name="chevron_left" size={18} color="var(--c-text3)" className="dir-flip" />
             </button>
           ))}
           {filteredCategories.length === 0 && (

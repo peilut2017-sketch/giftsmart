@@ -94,25 +94,28 @@ export function defaultExpiryDate(): string {
   return d.toISOString().split('T')[0]
 }
 
+// Darkened from the raw Tailwind-500 shades: those read fine as decoration but every
+// one of them fell short of 4.5:1 for the white text/icons rendered directly on top of
+// them (store-avatar circles, category chips) — same hue, just deep enough to read.
 export function getCategoryColor(category: string): string {
   const colors: Record<string, string> = {
-    'אופנה': '#ec4899',
-    'מזון': '#f97316',
-    'אלקטרוניקה': '#3b82f6',
-    'יופי': '#a855f7',
-    'בית': '#84cc16',
-    'ספורט': '#06b6d4',
-    'נסיעות': '#f59e0b',
-    'בידור': '#ef4444',
-    'ילדים': '#8b5cf6',
-    'בריאות': '#10b981',
-    'ספרים': '#6366f1',
-    'מסעדות': '#f97316',
-    'סופר': '#22c55e',
-    'מתנה': '#ec4899',
-    'אחר': '#94a3b8',
+    'אופנה': '#e0177a',
+    'מזון': '#c35305',
+    'אלקטרוניקה': '#1e6ff5',
+    'יופי': '#9e42f6',
+    'בית': '#54820e',
+    'ספורט': '#047f94',
+    'נסיעות': '#a36907',
+    'בידור': '#eb1515',
+    'ילדים': '#8452f5',
+    'בריאות': '#0c855d',
+    'ספרים': '#5e61f1',
+    'מסעדות': '#c35305',
+    'סופר': '#178841',
+    'מתנה': '#e0177a',
+    'אחר': '#627793',
   }
-  return colors[category] || '#94a3b8'
+  return colors[category] || '#627793'
 }
 
 export function getStoreInitials(name: string): string {
