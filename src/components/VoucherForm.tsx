@@ -8,6 +8,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS, type ExtractedVoucher } from '../utils/smsExtractor'
 import { analyzeVoucherImage } from '../lib/gemini'
+import { scanVoucherImageLocally } from '../lib/ocr'
 import Icon from './ui/Icon'
 import VaultUnlockSheet from './VaultUnlockSheet'
 import VaultSetupSheet from './VaultSetupSheet'
@@ -87,7 +88,7 @@ interface Props {
 
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
-  useSubscription()
+  const { isPro } = useSubscription()
   const { hasVault, isVaultUnlocked, encrypt, decrypt, decryptedMap } = useE2EE()
   const { t } = useT()
   const navigate = useNavigate()
@@ -388,15 +389,21 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setShowSmsPaste(false); setSmsText('')
   }
 
-  // Analyze a voucher photo via the analyze-voucher Edge Function (Gemini). The
-  // API key is server-side; on any failure we degrade to a clear toast.
+  // Analyze a voucher photo. Pro gets the more accurate Gemini "smart scan"
+  // (analyze-voucher Edge Function — a per-call cost, so reserved for Pro);
+  // everyone else gets a fully client-side Tesseract.js OCR pass (ocr.ts) —
+  // free and unlimited, since it runs entirely in the browser with no server
+  // call. Weaker on a hard photo (glare, an angle, an unusual font) than the
+  // Gemini path, but real, immediate, and costs nothing to offer to everyone.
   async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-picking the same file
     if (!file) return
     setAnalyzingImage(true)
     try {
-      const filled = applyExtracted(await analyzeVoucherImage(file))
+      const knownStores = stores.map(s => s.name)
+      const extracted = isPro ? await analyzeVoucherImage(file) : await scanVoucherImageLocally(file, knownStores)
+      const filled = applyExtracted(extracted)
       if (filled === 0) toast.error(t('form.sms.none'))
       else { toast.success(t('form.sms.filled', { count: filled })); setShowSmsPaste(false) }
     } catch (err: any) {
