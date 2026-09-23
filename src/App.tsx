@@ -34,6 +34,7 @@ import VaultSetupSheet from './components/VaultSetupSheet'
 import { isBiometricEnabled, getBiometricEmail, syncBiometricFromSupabase } from './lib/passkey'
 import { readParkedGuestKey, readResealIds, clearMergeArtifacts } from './lib/e2eeMerge'
 import { importVaultKey, decryptField, isEncryptedField } from './lib/e2ee'
+import { fetchVaultBundle } from './lib/vaultBundle'
 import { GiftSmartSplash } from './components/GiftSmartLogo'
 import OnboardingGuide from './components/OnboardingGuide'
 import { AlertTriangle } from 'lucide-react'
@@ -198,25 +199,42 @@ function E2EEBridge() {
       if (resealBusy.current) return
       const ids = readResealIds()
       if (!ids.length) return
-      if (!hasVault || !isVaultUnlocked) return // waits for vault setup/unlock
+      // Used to wait for `hasVault && isVaultUnlocked` unconditionally — an account
+      // that merged guest data but has never turned E2EE on of its own accord has
+      // no vault to wait for, so this stalled forever and the merged fields stayed
+      // sealed under a key that lived only in localStorage. A vault the user HAS
+      // but simply hasn't unlocked yet this session must still be waited for
+      // (unsealing behind its back would silently drop their own encryption
+      // choice) — only the "no vault at all" case gets the fallback.
+      if (hasVault && !isVaultUnlocked) return // has a vault, just locked — keep waiting
+      const targetHasOpenVault = hasVault && isVaultUnlocked
+      if (!targetHasOpenVault) {
+        // `hasVault` is seeded from a LOCAL cache and only corrected once E2EEContext's
+        // own server check resolves — on a fresh device for an account that has a real
+        // vault elsewhere, that leaves a window where it reads false before it's true.
+        // Ask the server directly rather than trust that timing: a genuine vault here
+        // means "wait", never "unseal".
+        const serverBundle = await fetchVaultBundle()
+        if (serverBundle) return // a vault exists server-side — wait for it to unlock
+      }
       resealBusy.current = true
       try {
         const parked = readParkedGuestKey()
         const guestKey = parked ? await importVaultKey(parked) : null
+        if (!guestKey) { clearMergeArtifacts(); return } // parked key lost — nothing more we can do
         const { data: rows, error } = await supabase
           .from('vouchers').select('id, code, cvv, is_e2ee').in('id', ids)
         if (error) return
         let allDone = true
         for (const r of rows ?? []) {
           if (!r.is_e2ee) continue
-          if (!guestKey) { allDone = false; continue } // parked key lost — leave sealed
           try {
             const codePlain = isEncryptedField(r.code) ? await decryptField(guestKey, r.code) : r.code
             const cvvPlain = r.cvv && isEncryptedField(r.cvv) ? await decryptField(guestKey, r.cvv) : r.cvv
-            const code = codePlain ? await encrypt(codePlain) : codePlain
-            const cvv = cvvPlain ? await encrypt(cvvPlain) : cvvPlain
+            const code = codePlain && targetHasOpenVault ? await encrypt(codePlain) : codePlain
+            const cvv = cvvPlain && targetHasOpenVault ? await encrypt(cvvPlain) : cvvPlain
             const { error: upErr } = await supabase.from('vouchers')
-              .update({ code, cvv, is_e2ee: true }).eq('id', r.id)
+              .update({ code, cvv, is_e2ee: targetHasOpenVault }).eq('id', r.id)
             if (upErr) allDone = false
           } catch { allDone = false }
         }
