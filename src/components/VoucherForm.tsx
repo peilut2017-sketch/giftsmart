@@ -395,6 +395,13 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   // free and unlimited, since it runs entirely in the browser with no server
   // call. Weaker on a hard photo (glare, an angle, an unusual font) than the
   // Gemini path, but real, immediate, and costs nothing to offer to everyone.
+  //
+  // If the Gemini call itself fails for ANY reason — no API key configured
+  // server-side, a network error, the edge function being down, a rate limit
+  // — Pro used to just see an error with no scan result at all, even though
+  // a free fallback exists and could still deliver something. Scanning is
+  // never gated on having a working AI API connection: any Gemini failure
+  // falls straight through to the same local OCR everyone else gets.
   async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-picking the same file
@@ -402,10 +409,26 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
     setAnalyzingImage(true)
     try {
       const knownStores = stores.map(s => s.name)
-      const extracted = isPro ? await analyzeVoucherImage(file) : await scanVoucherImageLocally(file, knownStores)
+      let extracted: ExtractedVoucher
+      let usedFallback = false
+      if (isPro) {
+        try {
+          extracted = await analyzeVoucherImage(file)
+        } catch (err) {
+          console.warn('[scan] Gemini smart scan failed, falling back to local OCR', err)
+          extracted = await scanVoucherImageLocally(file, knownStores)
+          usedFallback = true
+        }
+      } else {
+        extracted = await scanVoucherImageLocally(file, knownStores)
+      }
       const filled = applyExtracted(extracted)
       if (filled === 0) toast.error(t('form.sms.none'))
-      else { toast.success(t('form.sms.filled', { count: filled })); setShowSmsPaste(false) }
+      else {
+        toast.success(t('form.sms.filled', { count: filled }))
+        if (usedFallback) toast(t('form.scan.fallback.local'), { icon: 'ℹ️' })
+        setShowSmsPaste(false)
+      }
     } catch (err: any) {
       toast.error(err?.message?.includes('GEMINI_API_KEY') ? t('form.scan.unavailable') : t('form.scan.error'))
     } finally {
