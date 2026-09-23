@@ -1,4 +1,4 @@
-import { differenceInDays, format, isValid, parseISO } from 'date-fns'
+import { differenceInCalendarDays, format, isValid, parseISO } from 'date-fns'
 import { he } from 'date-fns/locale'
 
 // These helpers are called from everywhere without access to useT(), so they
@@ -33,7 +33,11 @@ export function getDaysUntilExpiry(dateStr?: string): number | null {
   try {
     const date = parseISO(dateStr)
     if (!isValid(date)) return null
-    return differenceInDays(date, new Date())
+    // differenceInCalendarDays counts calendar-day boundaries crossed, not full
+    // 24-hour periods — differenceInDays (used previously) under-counted by 1
+    // for any "now" after local midnight, e.g. a voucher expiring in 5 calendar
+    // days showed "4 days left" once the clock passed 00:00 on the current day.
+    return differenceInCalendarDays(date, new Date())
   } catch {
     return null
   }
@@ -90,7 +94,7 @@ export function voucherMatchesQuery(
 
 export function defaultExpiryDate(): string {
   const d = new Date()
-  d.setFullYear(d.getFullYear() + 5)
+  d.setFullYear(d.getFullYear() + 1)
   return d.toISOString().split('T')[0]
 }
 

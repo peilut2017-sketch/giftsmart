@@ -8,6 +8,7 @@ import { useSubscription } from '../contexts/SubscriptionContext'
 import { defaultExpiryDate } from '../utils/helpers'
 import { extractFromSMS, type ExtractedVoucher } from '../utils/smsExtractor'
 import { analyzeVoucherImage } from '../lib/gemini'
+import { scanVoucherImageLocally } from '../lib/ocr'
 import Icon from './ui/Icon'
 import VaultUnlockSheet from './VaultUnlockSheet'
 import VaultSetupSheet from './VaultSetupSheet'
@@ -87,7 +88,7 @@ interface Props {
 
 export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   const { categories, stores, superVouchers, addStore, addCategory, vouchers, archivedVouchers } = useVouchers()
-  useSubscription()
+  const { isPro } = useSubscription()
   const { hasVault, isVaultUnlocked, encrypt, decrypt, decryptedMap } = useE2EE()
   const { t } = useT()
   const navigate = useNavigate()
@@ -181,6 +182,20 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
       setPendingSubmitAfterUnlock(false)
       setShowPlainFallback(true)
     }, 250)
+  }
+
+  // Explicit "save without encryption" action offered directly inside the vault
+  // sheets — previously the only way there was dismissing the sheet (✕/backdrop,
+  // which reads as "cancel", not "skip encryption") and waiting ~250ms for a
+  // SEPARATE confirm dialog to appear. This button's own label already states
+  // the choice unambiguously, so it acts immediately with no extra prompt.
+  function handleSkipEncryption() {
+    setShowVaultUnlock(false)
+    setShowVaultSetup(false)
+    setShowPlainFallback(false)
+    setPendingSubmitAfterUnlock(false)
+    plainOverrideRef.current = true
+    handleSubmit()
   }
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
@@ -368,21 +383,27 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
   function applySms() {
     const text = smsText.trim()
     if (!text) return
-    const filled = applyExtracted(extractFromSMS(text))
+    const filled = applyExtracted(extractFromSMS(text, stores.map(s => s.name)))
     if (filled === 0) { toast.error(t('form.sms.none')); return }
     toast.success(t('form.sms.filled', { count: filled }))
     setShowSmsPaste(false); setSmsText('')
   }
 
-  // Analyze a voucher photo via the analyze-voucher Edge Function (Gemini). The
-  // API key is server-side; on any failure we degrade to a clear toast.
+  // Analyze a voucher photo. Pro gets the more accurate Gemini "smart scan"
+  // (analyze-voucher Edge Function — a per-call cost, so reserved for Pro);
+  // everyone else gets a fully client-side Tesseract.js OCR pass (ocr.ts) —
+  // free and unlimited, since it runs entirely in the browser with no server
+  // call. Weaker on a hard photo (glare, an angle, an unusual font) than the
+  // Gemini path, but real, immediate, and costs nothing to offer to everyone.
   async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-picking the same file
     if (!file) return
     setAnalyzingImage(true)
     try {
-      const filled = applyExtracted(await analyzeVoucherImage(file))
+      const knownStores = stores.map(s => s.name)
+      const extracted = isPro ? await analyzeVoucherImage(file) : await scanVoucherImageLocally(file, knownStores)
+      const filled = applyExtracted(extracted)
       if (filled === 0) toast.error(t('form.sms.none'))
       else { toast.success(t('form.sms.filled', { count: filled })); setShowSmsPaste(false) }
     } catch (err: any) {
@@ -586,7 +607,10 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
             <Icon name="close" size={20} />
           </button>
           <h2 className="text-base font-extrabold text-text">
-            {isEdit ? t('form.edit.voucher') : (step === STEP_SUCCESS ? t('voucher.added') : t('form.add.voucher'))}
+            {/* On the success step the big celebratory heading below already
+                says "voucher added" — repeating it here as the modal title
+                too made it appear twice on the same screen. */}
+            {isEdit ? t('form.edit.voucher') : (step === STEP_SUCCESS ? '' : t('form.add.voucher'))}
           </h2>
           {/* Step dots (add mode, input steps only) */}
           {!showAll && step !== STEP_SUCCESS ? (
@@ -1144,11 +1168,15 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
           onClose={handleVaultGateClosed}
           onUnlocked={() => setE2eeEnabled(true)}
           contextLabel={t('form.vault.context')}
+          skipLabel={t('form.plain.fallback.confirm')}
+          onSkip={pendingSubmitAfterUnlock ? handleSkipEncryption : undefined}
         />
         <VaultSetupSheet
           open={showVaultSetup}
           onClose={handleVaultGateClosed}
           onDone={() => setE2eeEnabled(true)}
+          skipLabel={t('form.plain.fallback.confirm')}
+          onSkip={pendingSubmitAfterUnlock ? handleSkipEncryption : undefined}
         />
 
         <AnimatePresence>

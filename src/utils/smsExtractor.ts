@@ -42,7 +42,22 @@ function parseAmount(raw: string): number {
   return parseFloat(s)
 }
 
-export function extractFromSMS(text: string): ExtractedVoucher {
+// Hebrew-aware "whole word" match: JS regex \b only understands ASCII \w, so
+// it doesn't work as a boundary around Hebrew letters. A store name is
+// considered found only when it isn't directly glued to another Hebrew
+// letter or word character on either side (so "שופרסל" doesn't also match
+// inside some longer, unrelated word).
+function containsWholeWord(text: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // A single Hebrew prefix letter (ו/ב/ל/כ/מ/ש — "and/at/to/like/from/that")
+  // is routinely glued directly onto the next word with no space of its own
+  // ("לשופרסל" = "to Shufersal"), so one is allowed (and excluded from the
+  // match) immediately before the store name, not just a hard boundary.
+  const re = new RegExp(`(?:^|[^\\wא-ת])[ובלכמש]?${escaped}(?:[^\\wא-ת]|$)`, 'i')
+  return re.test(text)
+}
+
+export function extractFromSMS(text: string, knownStores?: string[]): ExtractedVoucher {
   const result: ExtractedVoucher = {}
 
   // Extract amount.
@@ -92,14 +107,26 @@ export function extractFromSMS(text: string): ExtractedVoucher {
   const expiryPatterns = [
     /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[/.-]\d{2,4})/i,
     /(?:תוקף|valid)[:\s]*(\d{1,2}\/\d{2,4})/i,
+    // Full DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY — tried before the lossy
+    // 2-part pattern below so a complete date isn't truncated to its first
+    // two components ("31.12.2026" would otherwise match only "31.12", which
+    // parseDate then misreads as a MM/YY pair — month 31 is invalid, so the
+    // whole date, year included, was silently dropped).
+    // No lookbehind (Safari <16.4 doesn't support it) — the leading boundary
+    // is consumed into the match instead, group 1 still excludes it.
+    /(?:^|[^\d])(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})(?!\d)/,
     /(\d{1,2}[/.]\d{2,4})/,
-    /(\d{2}[/-]\d{2}[/-]\d{2,4})/,
-    /(\d{4}[/-]\d{2}[/-]\d{2})/,
+    // ISO-ish YYYY-MM-DD / YYYY.MM.DD, boundary-guarded so it can't match a
+    // sub-run of a longer digit sequence (e.g. "26-12-31" out of "2026-12-31").
+    /(?:^|[^\d])(\d{4}[/.-]\d{2}[/.-]\d{2})(?!\d)/,
   ]
 
-  // First try labeled expiry
+  // First try labeled expiry — now also tolerates "תוקף עד <date>" / "valid
+  // until <date>", not just "תוקף: <date>". The "עד" ("until") that
+  // typically sits between the keyword and the date used to break this
+  // match entirely, falling through to the much weaker unlabeled patterns.
   let foundExpiry = false
-  const labeledExpiryRe = /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)[:\s]*(\d{1,2}[/.-][\d/.-]{2,9})/i
+  const labeledExpiryRe = /(?:תוקף|תאריך תפוגה|valid\s*until|expires?)\s*(?:עד|until)?[:\s]*(\d{1,2}[/.-][\d/.-]{2,9})/i
   const labeledMatch = text.match(labeledExpiryRe)
   if (labeledMatch) {
     const parsed = parseDate(labeledMatch[1])
@@ -129,7 +156,13 @@ export function extractFromSMS(text: string): ExtractedVoucher {
 
   // Extract store name
   const storePatterns = [
-    /(?:חנות|store|מ?ב?|ב?:)\s*([א-ת\w\s]{2,20}?)(?:\s|,|\.|$)/i,
+    // The third alternative used to be `מ?ב?` — BOTH letters optional, so it
+    // could (and typically did) match an empty string right at position 0,
+    // meaning this pattern effectively just grabbed the message's FIRST word
+    // regardless of any real keyword — e.g. "שובר שופרסל בסך 150 ש״ח" came
+    // out with store_name "שובר" (a generic word) instead of "שופרסל". A
+    // single leading מ/ב ("from"/"at") is now required, not optional.
+    /(?:חנות|store|[מב])\s*([א-ת\w\s]{2,20}?)(?:\s|,|\.|$)/i,
     /ב?-?\s*([א-ת]{3,15}(?:\s[א-ת]{2,10})?)\s*(?:בע"מ|מכבדת|ניתן|לרכישה)/i,
     /שובר\s+ל?([א-ת\w\s]{3,20})/i,
     /(?:BuyMe|buyme)\s*[-–]\s*([^,\n]+)/i,
@@ -141,6 +174,18 @@ export function extractFromSMS(text: string): ExtractedVoucher {
     if (text.includes(name)) {
       result.store_name = name
       break
+    }
+  }
+
+  // Match against the caller's known/saved store list before falling back to
+  // free-text guessing — a store the user (or another user, via the shared
+  // catalog) has already saved is an unambiguous, exact answer, where the
+  // regex fallback below can at best guess. Longest name first so e.g.
+  // "רמי לוי" isn't pre-empted by a shorter, unrelated match.
+  if (!result.store_name && knownStores?.length) {
+    const sorted = [...new Set(knownStores.filter(Boolean))].sort((a, b) => b.length - a.length)
+    for (const name of sorted) {
+      if (containsWholeWord(text, name)) { result.store_name = name; break }
     }
   }
 

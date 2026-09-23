@@ -269,6 +269,53 @@ body {
   0%   { background-position: -200% center; }
   100% { background-position:  200% center; }
 }
+
+/* ── App loading / splash ─────────────────────────────────────────
+   Replaces the old static logo + three bouncing dots: a slow, calm breathing
+   pulse on the logo plus a slim indeterminate bar in the brand gradient —
+   reads as a modern app boot state rather than a generic spinner. Both
+   respect prefers-reduced-motion / the a11y "reduce motion" toggle via the
+   global override above, which freezes any animation-duration to ~0. */
+@keyframes gs-splash-breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(0.94); opacity: 0.85; }
+}
+.gs-splash-breathe {
+  animation: gs-splash-breathe 2.2s ease-in-out infinite;
+}
+@keyframes gs-splash-slide {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(350%); }
+}
+.gs-splash-bar {
+  position: relative;
+  width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--c-border);
+  overflow: hidden;
+}
+.gs-splash-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--c-primary), #9333ea);
+  animation: gs-splash-slide 1.3s ease-in-out infinite;
+}
+
+/* Compact in-app loading spinner (Suspense fallbacks, small inline waits) —
+   replaces the previous three-bouncing-dots indicator with a slim rotating
+   arc in the brand color, matching the splash bar's calmer, more modern feel. */
+@keyframes gs-spin { to { transform: rotate(360deg); } }
+.gs-spinner {
+  border-style: solid;
+  border-color: var(--c-border);
+  border-top-color: var(--c-primary);
+  border-radius: 50%;
+  animation: gs-spin 0.7s linear infinite;
+}
 @keyframes swipe-card-demo {
   0%   { transform: translateX(0); }
   15%  { transform: translateX(-52px); }

@@ -44,6 +44,8 @@ export default function SettingsPrivacyPage() {
   const [vaultDisabling, setVaultDisabling] = useState(false)
   const [vaultDisableConfirm, setVaultDisableConfirm] = useState(false)
   const [regeneratingKey, setRegeneratingKey] = useState(false)
+  const [regenConfirm, setRegenConfirm] = useState(false)
+  const [regenPass, setRegenPass] = useState('')
 
   const [e2eeDefaultNew, setE2eeDefaultNew] = useState(() => localStorage.getItem('gs_e2ee_default') !== 'false')
   const [vaultPersist, setVaultPersist] = useState(isVaultPersistEnabled)
@@ -101,13 +103,16 @@ export default function SettingsPrivacyPage() {
   }
 
   async function handleRegenerateRecovery() {
-    if (regeneratingKey) return
+    if (regeneratingKey || !regenPass) return
     setRegeneratingKey(true)
     try {
-      await regenerateRecoveryKey()
+      await regenerateRecoveryKey(regenPass)
       // The new phrase is shown once via the global RecoveryKeyModal
-    } catch {
-      toast.error(t('privacy.recovery.error'))
+      setRegenConfirm(false); setRegenPass('')
+    } catch (err) {
+      toast.error(err instanceof Error && err.message === 'wrong passphrase'
+        ? t('vault.wrong.password')
+        : t('privacy.recovery.error'))
     } finally {
       setRegeneratingKey(false)
     }
@@ -295,15 +300,41 @@ export default function SettingsPrivacyPage() {
                   <DoorChip ok={doors.prf > 0} label={t('privacy.door.fingerprint')} />
                 </div>
               )}
-              {isVaultUnlocked && (
+              {isVaultUnlocked && !regenConfirm && (
                 <button
-                  onClick={handleRegenerateRecovery}
-                  disabled={regeneratingKey}
-                  className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary disabled:opacity-50"
+                  onClick={() => setRegenConfirm(true)}
+                  className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary"
                 >
-                  {regeneratingKey ? <Spinner size={13} /> : <Icon name="key" size={13} />}
+                  <Icon name="key" size={13} />
                   {doors?.recovery ? t('privacy.recovery.regen') : t('privacy.recovery.create')}
                 </button>
+              )}
+              {isVaultUnlocked && regenConfirm && (
+                // Rotating the recovery code used to need nothing beyond an
+                // already-open session — anyone with the device unlocked could
+                // silently replace it and lock the real owner out later. Now
+                // requires re-typing the vault password first, same as
+                // disabling the vault or changing its password below.
+                <div className="mt-3 bg-bg border border-border rounded-xl p-3 space-y-2">
+                  <p className="text-xs text-text3">{t('privacy.enter.current.pass')}</p>
+                  <input
+                    type="password"
+                    placeholder={t('privacy.vault.pass.current.placeholder')}
+                    value={regenPass}
+                    onChange={e => setRegenPass(e.target.value)}
+                    className="w-full border border-border rounded-xl px-3 py-2.5 text-base bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    dir="ltr"
+                    autoComplete="current-password"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleRegenerateRecovery} disabled={regeneratingKey || !regenPass} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5">
+                      {regeneratingKey && <Spinner size={13} />}
+                      {doors?.recovery ? t('privacy.recovery.regen') : t('privacy.recovery.create')}
+                    </button>
+                    <button onClick={() => { setRegenConfirm(false); setRegenPass('') }} className="flex-1 py-2.5 bg-bg text-text2 rounded-xl text-xs">{t('app.cancel')}</button>
+                  </div>
+                </div>
               )}
             </div>
 

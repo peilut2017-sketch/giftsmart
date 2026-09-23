@@ -10,8 +10,7 @@ import { exportVaultKey } from '../lib/e2ee'
 import { attemptVaultUnlockAtLogin } from '../lib/vaultBundle'
 import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
-
-const APP_VERSION = '1.0.0'
+import { APP_VERSION } from '../lib/version'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

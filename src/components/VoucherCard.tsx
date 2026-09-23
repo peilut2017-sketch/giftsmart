@@ -143,6 +143,18 @@ export default function VoucherCard({
     if (isSelectMode) onSelect?.()
     else onClick()
   }
+  // The card's clickable root was a plain <div onClick> — invisible to Tab
+  // order and not announced as interactive by screen readers. This wires up
+  // the same keyboard activation a real <button> gets for free, without
+  // changing the element (swipe gestures and the inner action buttons that
+  // stopPropagation() still need the root to stay a div).
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleClick()
+    }
+  }
+  const cardAriaLabel = `${superVoucherName || voucher.store_name} — ${formatCurrency(voucher.balance)}`
 
   const swipeHandlers = useSwipeable({
     onSwipeStart: () => {
@@ -259,10 +271,15 @@ export default function VoucherCard({
         <div
           {...swipeHandlers}
           ref={bindSlide}
+          role="button"
+          tabIndex={0}
+          aria-label={cardAriaLabel}
           style={{ ...slideStyle, display: 'flex', background: 'var(--c-surface)' }}
           onClick={handleClick}
+          onKeyDown={handleKeyDown}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
         >
           {/* Color strip (RTL start = right) */}
           <div style={{ width: 5, background: catColor, flexShrink: 0 }} />
@@ -352,10 +369,15 @@ export default function VoucherCard({
       <div
         {...swipeHandlers}
         ref={bindSlide}
+        role="button"
+        tabIndex={0}
+        aria-label={cardAriaLabel}
         style={{ ...slideStyle, display: 'flex', background: 'var(--c-surface)' }}
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
       >
         {/* Category color strip (RTL → appears on the right, which is the start) */}
         <div style={{ width: 5, background: catColor, flexShrink: 0 }} />

@@ -15,6 +15,15 @@ interface Props {
   onDone?: () => void
   /** When true the sheet can't be dismissed without a decision (first-run OAuth prompt). */
   blocking?: boolean
+  /** Optional explicit "skip encryption for this" action, shown alongside setup
+      regardless of `blocking`. Previously the only way to proceed unencrypted
+      from a non-blocking sheet was to dismiss it (backdrop/✕/Escape) — with no
+      inline hint that doing so was even a valid option, not just a cancel —
+      and wait for a SEPARATE confirm dialog to appear a moment later. Passing
+      this makes "save without encryption" an immediate, explicit choice
+      instead of an implied side effect of dismissal. */
+  skipLabel?: string
+  onSkip?: () => void
 }
 
 /**
@@ -27,7 +36,7 @@ interface Props {
  * Email users:  the vault opens with the login password (verified via re-auth).
  * OAuth users:  passkey (PRF) is the primary door; recovery code is the safety net.
  */
-export default function VaultSetupSheet({ open, onClose, onDone, blocking = false }: Props) {
+export default function VaultSetupSheet({ open, onClose, onDone, blocking = false, skipLabel, onSkip }: Props) {
   const { t } = useT()
   const { setupVaultFromPassword, setupVaultWithMasterKey } = useE2EE()
   const { user, profile, isAnonymous } = useAuth()
@@ -190,6 +199,11 @@ export default function VaultSetupSheet({ open, onClose, onDone, blocking = fals
         {blocking && (
           <button onClick={onClose} className="w-full text-sm text-text3 py-1">
             {t('vault.setup.not.now')}
+          </button>
+        )}
+        {!blocking && onSkip && (
+          <button onClick={onSkip} className="w-full text-sm text-text3 py-1">
+            {skipLabel ?? t('vault.setup.not.now')}
           </button>
         )}
       </div>

@@ -100,7 +100,7 @@ interface E2EEContextValue {
     newPassword: string,
   ) => Promise<{ok: boolean; entries: Array<{id: string; code: string; cvv: string|null}>}>
   rewrapPassword: (newPassword: string) => Promise<boolean>
-  regenerateRecoveryKey: () => Promise<string>
+  regenerateRecoveryKey: (passphrase: string) => Promise<string>
   refreshDoors: () => Promise<void>
   dismissRecoveryPhrase: () => void
 
@@ -140,6 +140,33 @@ function doorsFromWraps(wraps: VaultWrap[], version: number): VaultDoors {
     recovery: wraps.some(w => w.method === 'recovery' && w.kdf?.v === 3),
     prf: wraps.filter(w => w.method === 'prf').length,
     version,
+  }
+}
+
+// Re-verifies the vault CAN be opened with `passphrase` right now, without
+// touching any stored/session state — used to gate a sensitive action (like
+// rotating the recovery code) on the user re-typing their password even
+// though the vault is already open in this tab/session. Mirrors disableVault's
+// own verification ladder (v3 wrap → legacy derive), kept as a separate,
+// read-only check so it can never accidentally mutate vault state.
+async function verifyVaultPassphrase(passphrase: string, userId?: string): Promise<boolean> {
+  const check = localStorage.getItem(CHECK_KEY)
+  if (!check) return false
+  if (isV2Vault() && userId) {
+    const bundle = await fetchVaultBundle()
+    if (bundle) {
+      const res = await tryUnlockWithPassword(bundle, passphrase, userId)
+      if (res) return true
+    }
+  }
+  const saltB64 = localStorage.getItem(SALT_KEY)
+  if (!saltB64) return false
+  try {
+    const legacyKey = await deriveKey(passphrase, saltFromB64(saltB64))
+    const dec = await decryptField(legacyKey, check)
+    return dec === VERIFY_PLAINTEXT
+  } catch {
+    return false
   }
 }
 
@@ -671,16 +698,25 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
     return { ok, entries: [] }
   }, [rewrapPassword])
 
-  // ── Regenerate recovery key (vault must be unlocked) ────────────────────
-  const regenerateRecoveryKey = useCallback(async (): Promise<string> => {
+  // ── Regenerate recovery key (vault must be unlocked, password re-verified) ──
+  // Used to trust an already-open session alone — anyone who got hold of an
+  // unlocked device/tab (or called the upsert_vault_wrap RPC directly) could
+  // silently replace the recovery code and lock the real owner out later,
+  // with no extra confirmation, unlike every other sensitive vault action on
+  // this page (password change, disable vault). Now requires re-typing the
+  // vault password immediately before rotating it, verified independently of
+  // the cached in-memory key via verifyVaultPassphrase.
+  const regenerateRecoveryKey = useCallback(async (passphrase: string): Promise<string> => {
     if (!vaultKey) throw new Error('vault is locked')
+    const verified = await verifyVaultPassphrase(passphrase, user?.id)
+    if (!verified) throw new Error('wrong passphrase')
     const { wrap, phrase } = await buildRecoveryWrap(vaultKey)
     const ok = await upsertWrap(wrap)
     if (!ok) throw new Error('recovery wrap sync failed')
     setPendingRecoveryPhrase(phrase)
     await refreshDoors()
     return phrase
-  }, [vaultKey, refreshDoors])
+  }, [vaultKey, user?.id, refreshDoors])
 
   // ── Enable biometric vault unlock (registers PRF credential) ─────────────
   const enableBiometricVaultUnlock = useCallback(async (

@@ -111,10 +111,17 @@ shareTokens.map(tok => <div>{tok.token}</div>)
 
 RTL-aware tab sliding via Framer Motion. Tab order is defined in `TAB_ORDER` (index 0 = rightmost in RTL). Routes not in `TAB_ORDER` (e.g. `/checkout/:id`) are treated as deep pushes and get a subtle scale/fade instead of a slide.
 
+### Voucher-photo scanning
+
+Two independent OCR paths behind the "scan photo" button in `VoucherForm.tsx`, gated on `isPro` from `useSubscription()`:
+
+- **Everyone (free, unlimited)** — `src/lib/ocr.ts`'s `scanVoucherImageLocally`: Tesseract.js runs entirely client-side (WASM), no server call and no per-scan cost. The raw OCR text is run through the same free-text field extractor used for pasted SMS/email (`src/utils/smsExtractor.ts`'s `extractFromSMS`), including matching against the user's saved store list.
+- **Pro only** — `src/lib/gemini.ts`'s `analyzeVoucherImage`: calls the `analyze-voucher` Supabase Edge Function (Gemini Vision, a paid API call), meaningfully more accurate on a hard photo (glare, an angle, an unusual font, a busy background).
+
 ### Subscription / limits
 
-Free plan: 25 vouchers, 5 shared, 3 OCR scans/month, 7-day activity history, no export, no push.
-Pro plan: unlimited everything. The `isPremium` flag is admin-toggled via `get_premium_enabled` RPC and cached in `localStorage` (`gs_premium_enabled`). `openUpgradeSheet(reason)` from `useSubscription()` triggers the upsell UI.
+Free plan: 25 vouchers, 5 shared, basic (Tesseract) photo scan — unlimited, 7-day activity history, no export, no push.
+Pro plan: unlimited everything, including the more accurate Gemini-based smart photo scan (see "Voucher-photo scanning" above). The `isPremium` flag is admin-toggled via `get_premium_enabled` RPC and cached in `localStorage` (`gs_premium_enabled`). `openUpgradeSheet(reason)` from `useSubscription()` triggers the upsell UI.
 
 ### Profile caching
 

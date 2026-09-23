@@ -243,8 +243,13 @@ export default function SettingsNotificationsPage() {
         .join('\n')
       await sendExpiryReminderEmail({ to_email: user.email, to_name: profile?.name || user.email, count: expiring.length, vouchers_list })
       toast.success(t('notifset.reminder.sent', { email: user.email }))
-    } catch (err: any) {
-      toast.error(t('notifset.reminder.error') + (err?.message ? ': ' + err.message : ''))
+    } catch (err) {
+      // Used to append the raw SDK error (e.g. "Edge Function returned a
+      // non-2xx status code") straight into the toast — a technical string
+      // that tells the user nothing actionable. The real detail goes to the
+      // console for debugging; the user gets one consistent, friendly message.
+      console.error('[expiry reminder] send failed', err)
+      toast.error(t('notifset.reminder.error'))
     } finally {
       setSendingReminder(false)
     }
