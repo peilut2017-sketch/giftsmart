@@ -6,9 +6,11 @@ import { STAGE_H, STAGE_W } from './layout'
 import { DURATION, TIME_SCALE, ep } from './timeline'
 import Captions from './Captions'
 import Chaos from './Chaos'
-import Brand from './Brand'
+import Brand, { BalanceCallout } from './Brand'
 import Phone from './Phone'
 import { HeroBack, HeroFront, HeroWash } from './Hero'
+import { preloadScreens } from './screens'
+import markUrl from './assets/logo-mark.png'
 
 /**
  * /promo/ — the Gift Smart vertical ad (1080×1920 logical stage).
@@ -61,6 +63,7 @@ function Frame({ t }: { t: number }) {
       <Chaos t={t} />
       <Phone t={t} />
       <Brand t={t} />
+      <BalanceCallout t={t} />
       <HeroFront t={t} />
       <div style={{ position: 'absolute', inset: 0, zIndex: 50, pointerEvents: 'none' }}>
         <Captions t={t} />
@@ -133,7 +136,10 @@ export default function PromoApp() {
 
   // ── Wait for fonts, then autoplay; expose the seek API for the exporter ──
   useEffect(() => {
-    const ready = document.fonts.ready.then(() => undefined)
+    // Fonts + every real screenshot + the logo must be decoded before frame 0.
+    const logo = new Image()
+    logo.src = markUrl
+    const ready = Promise.all([document.fonts.ready, preloadScreens(), logo.decode().catch(() => undefined)]).then(() => undefined)
     window.__promo = {
       duration: DURATION,
       fps: 60,

@@ -1,7 +1,7 @@
 import { ArrowLeft, Globe } from 'lucide-react'
 import { BRAND, HERO } from './config'
 import { HERO_AT, phoneState } from './layout'
-import Mark from './Mark'
+import { LogoMark, Wordmark } from './Logo'
 import { SPR, ease, ep, lerp, spring } from './timeline'
 import { GiftCardFace } from './ui'
 
@@ -11,7 +11,7 @@ const CARDS = [
   { brand: 'ZARA',  from: '#111827', to: '#374151', value: '₪160', dx: -300, dy: -250, rot: -14, depth: 0.9 },
   { brand: 'BUYME', from: '#fb923c', to: '#ea580c', value: '₪320', dx: 300,  dy: -170, rot: 12,  depth: 1 },
   { brand: 'FOX',   from: '#6366f1', to: '#4338ca', value: '₪175', dx: -305, dy: 250,  rot: 9,   depth: 1 },
-  { brand: 'Gift Smart', from: '#22c55e', to: '#15803d', value: '₪855', dx: 300, dy: 300, rot: -10, depth: 0.9 },
+  { brand: 'שופרסל', from: '#e11d48', to: '#be123c', value: '₪110', dx: 300, dy: 300, rot: -10, depth: 0.9 },
 ]
 
 export function HeroBack({ t }: { t: number }) {
@@ -45,7 +45,7 @@ export function HeroBack({ t }: { t: number }) {
 export function HeroFront({ t }: { t: number }) {
   if (t < HERO_AT + 0.3) return null
   const m = spring(t, HERO_AT + 0.45, SPR.pop)
-  const draw = ep(t, HERO_AT + 0.45, HERO_AT + 1.35, ease.soft)
+  const reveal = ep(t, HERO_AT + 0.4, HERO_AT + 1.0, ease.out)
   const title = ep(t, HERO_AT + 0.7, HERO_AT + 1.35)
   const tag = ep(t, HERO_AT + 1.05, HERO_AT + 1.7)
   const cta = spring(t, HERO_AT + 1.6, SPR.ui)
@@ -58,14 +58,14 @@ export function HeroFront({ t }: { t: number }) {
   const shineX = shine >= 0 && shine < 0.9 ? lerp(-140, 560, ease.inOut(shine / 0.9)) : -200
   return (
     <>
-      <div style={{ position: 'absolute', top: 200, left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', transform: `scale(${bounce})`, transformOrigin: '50% 40%', zIndex: 30 }}>
-        <div style={{ transform: `scale(${m})`, filter: 'drop-shadow(0 12px 24px rgba(34,197,94,.3))' }}>
-          <Mark size={128} draw={draw} />
+      <div style={{ position: 'absolute', top: 150, left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', transform: `scale(${bounce})`, transformOrigin: '50% 40%', zIndex: 30 }}>
+        <div style={{ transform: `scale(${m})`, filter: 'drop-shadow(0 12px 24px rgba(34,197,94,.25))' }}>
+          <LogoMark size={150} reveal={reveal} />
         </div>
-        <div style={{ marginTop: 6, fontSize: 118, fontWeight: 900, letterSpacing: '-0.045em', lineHeight: 1.05, color: BRAND.text, direction: 'ltr', opacity: title, transform: `translateY(${lerp(30, 0, title)}px)`, filter: title < 1 ? `blur(${lerp(10, 0, title)}px)` : undefined }}>
-          {HERO.title.slice(0, 4)}<span style={{ color: BRAND.green }}>{HERO.title.slice(4)}</span>
+        <div style={{ marginTop: 14, opacity: title, transform: `translateY(${lerp(30, 0, title)}px)`, filter: title < 1 ? `blur(${lerp(10, 0, title)}px)` : undefined }}>
+          <Wordmark width={560} />
         </div>
-        <div style={{ marginTop: 10, fontSize: 44, fontWeight: 600, color: BRAND.text2, opacity: tag, transform: `translateY(${lerp(20, 0, tag)}px)` }}>
+        <div style={{ marginTop: 22, fontSize: 44, fontWeight: 600, color: BRAND.text2, opacity: tag, transform: `translateY(${lerp(20, 0, tag)}px)` }}>
           {HERO.tagline}
         </div>
       </div>

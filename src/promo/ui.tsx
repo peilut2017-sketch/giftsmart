@@ -1,22 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { rand } from './timeline'
 
-/** Same store avatar as the app's VoucherCard (tinted square with the initial). */
-export function StoreAvatar({ name, color, size }: { name: string; color: string; size: number }) {
-  return (
-    <div
-      style={{
-        width: size, height: size, borderRadius: Math.round(size * 0.27),
-        background: color + '1f', border: `1.5px solid ${color}40`, color,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontWeight: 800, fontSize: Math.round(size * 0.4), flexShrink: 0,
-      }}
-    >
-      {name[0].toUpperCase()}
-    </div>
-  )
-}
-
 /** Deterministic fake barcode (Code-128-looking bars from a seed). Never a real code. */
 export function Barcode({ seed, width, height, color = '#0f1c1a' }: { seed: number; width: number; height: number; color?: string }) {
   const bars: { x: number; w: number }[] = []
@@ -55,7 +39,7 @@ export function GiftCardFace({
     >
       {/* sheen */}
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 42%)' }} />
-      <div style={{ position: 'absolute', top: width * 0.07, left: width * 0.08, fontWeight: 900, fontSize: width * 0.1, letterSpacing: '-0.02em' }}>
+      <div style={{ position: 'absolute', top: width * 0.07, left: width * 0.08, fontWeight: 900, fontSize: width * 0.1, letterSpacing: '-0.02em', unicodeBidi: 'plaintext' }}>
         {brand}
       </div>
       <div style={{ position: 'absolute', top: width * 0.085, right: width * 0.08, fontSize: width * 0.045, fontWeight: 700, opacity: 0.75, letterSpacing: '0.08em' }}>
