@@ -15,11 +15,11 @@
 /**
  * All timings in the code are written on a 30-second "design" timeline.
  * To make the whole promo longer or shorter, change TIME_SCALE only:
- *   1    → 30s   (default)
- *   1.1  → 33s   (everything 10% slower)
- *   0.85 → 25.5s (snappier)
+ *   1    → 32s   (default)
+ *   1.1  → 35.2s (everything 10% slower)
+ *   0.9  → 28.8s (snappier)
  */
-export const DESIGN_DURATION = 30
+export const DESIGN_DURATION = 32
 export const TIME_SCALE = 1
 /** Real length of the promo in seconds. */
 export const DURATION = DESIGN_DURATION * TIME_SCALE
@@ -32,7 +32,7 @@ export const SCENES = {
   search:     { start: 12, end: 17 },
   balance:    { start: 17, end: 21 },
   expiry:     { start: 21, end: 25 },
-  hero:       { start: 25, end: 30 },
+  hero:       { start: 25, end: 32 },
 } as const
 
 // ── Basic math ──────────────────────────────────────────────────────────────

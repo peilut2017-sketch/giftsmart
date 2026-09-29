@@ -23,7 +23,8 @@ export const BRAND = {
 }
 
 // ── Captions ────────────────────────────────────────────────────────────────
-// `at` / `out` are seconds on the 30s design timeline (see timeline.ts).
+// `at` / `out` are seconds on the 32s design timeline (see timeline.ts).
+// Keep them in step with the narration cues in scripts/promo-voice/build-narration.sh.
 // `accent` colors a line green; `highlightWords` lights words one by one.
 export interface CaptionLine {
   text: string
@@ -38,14 +39,15 @@ export interface CaptionBlock { lines: CaptionLine[]; out: number }
 export const CAPTIONS: CaptionBlock[] = [
   { out: 3.95, lines: [
     { text: 'כמה גיפט קארדים יש לך עכשיו?', at: 0.3 },
-    { text: 'ואיפה הם?', at: 1.75, accent: true },
+    { text: 'ואיפה הם?', at: 2.35, accent: true },
   ] },
   { out: 6.8, lines: [
     { text: 'הכירו את Gift Smart', at: 5.05 },
     { text: 'כל השוברים שלך. במקום אחד.', at: 5.4, sub: true },
   ] },
   { out: 9.95, lines: [
-    { text: 'הכול מסודר.', at: 7.25 },
+    { text: 'כל השוברים במקום אחד.', at: 7.15 },
+    { text: 'הכול מסודר.', at: 8.95, accent: true },
   ] },
   { out: 11.9, lines: [
     { text: 'יתרה. תוקף. קוד.', at: 10.1, highlightWords: [[0, 10.3], [1, 10.85], [2, 11.4]] },
@@ -59,8 +61,8 @@ export const CAPTIONS: CaptionBlock[] = [
     { text: 'היתרה נשארת איתך.', at: 19.45, accent: true },
   ] },
   { out: 24.8, lines: [
-    { text: 'לא נותנים', at: 21.65 },
-    { text: 'לכסף לפוג.', at: 21.85, accent: true },
+    { text: 'לא נותנים', at: 21.55 },
+    { text: 'לכסף לפוג.', at: 21.75, accent: true },
   ] },
 ]
 

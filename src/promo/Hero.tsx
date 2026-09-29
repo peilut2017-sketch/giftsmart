@@ -47,14 +47,14 @@ export function HeroFront({ t }: { t: number }) {
   const m = spring(t, HERO_AT + 0.45, SPR.pop)
   const reveal = ep(t, HERO_AT + 0.4, HERO_AT + 1.0, ease.out)
   const title = ep(t, HERO_AT + 0.7, HERO_AT + 1.35)
-  const tag = ep(t, HERO_AT + 1.05, HERO_AT + 1.7)
-  const cta = spring(t, HERO_AT + 1.6, SPR.ui)
-  const url = ep(t, HERO_AT + 2.0, HERO_AT + 2.6)
+  const tag = ep(t, HERO_AT + 1.85, HERO_AT + 2.5)      // with the spoken tagline (26.85s)
+  const cta = spring(t, HERO_AT + 4.5, SPR.ui)          // with "התחילו עכשיו" (29.55s)
+  const url = ep(t, HERO_AT + 4.95, HERO_AT + 5.55)
   // Final "bounce" of the logo lockup — a small, damped scale impulse
-  const bt = t - 28.9
+  const bt = t - 31.25
   const bounce = bt > 0 ? 1 + 0.07 * Math.sin(bt * 14) * Math.exp(-bt * 5) : 1
   // Shine sweep across the CTA
-  const shine = (t - (HERO_AT + 2.3)) % 2.2
+  const shine = (t - (HERO_AT + 5.1)) % 2.2
   const shineX = shine >= 0 && shine < 0.9 ? lerp(-140, 560, ease.inOut(shine / 0.9)) : -200
   return (
     <>

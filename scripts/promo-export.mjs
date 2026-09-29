@@ -15,8 +15,12 @@
  *   npm run build && npx vite preview --port 4173 &
  *   node scripts/promo-export.mjs                      → giftsmart-promo.mp4
  *   node scripts/promo-export.mjs --fps 30 --out a.mp4 --url http://localhost:5173/promo/
+ *   node scripts/promo-export.mjs --audio none         (silent video)
  */
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
@@ -24,6 +28,9 @@ const args = Object.fromEntries(
 const FPS = Number(args.fps ?? 60)
 const OUT = args.out ?? 'giftsmart-promo.mp4'
 const URL_BASE = args.url ?? 'http://localhost:4173/promo/'
+// Narration track (built by scripts/promo-voice/build-narration.sh). --audio none to skip.
+const defaultAudio = resolve(dirname(fileURLToPath(import.meta.url)), '../src/promo/assets/narration.mp3')
+const AUDIO = args.audio === 'none' ? null : (args.audio ?? (existsSync(defaultAudio) ? defaultAudio : null))
 
 const { chromium } = await import('playwright').catch(() => {
   console.error('Playwright is missing. Run:  npm i --no-save playwright && npx playwright install chromium')
@@ -41,6 +48,7 @@ const total = Math.round(duration * FPS)
 const ff = spawn('ffmpeg', [
   '-y', '-loglevel', 'error',
   '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-',
+  ...(AUDIO ? ['-i', AUDIO, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '192k', '-shortest'] : []),
   '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p',
   '-profile:v', 'high', '-movflags', '+faststart',
   OUT,
@@ -57,4 +65,4 @@ for (let i = 0; i <= total; i++) {
 ff.stdin.end()
 await new Promise((res, rej) => ff.on('close', code => (code === 0 ? res() : rej(new Error(`ffmpeg exited ${code}`)))))
 await browser.close()
-console.log(`\n✓ ${OUT}  ${total} frames @ ${FPS}fps`)
+console.log(`\n✓ ${OUT}  ${total} frames @ ${FPS}fps${AUDIO ? ' + narration' : ''}`)

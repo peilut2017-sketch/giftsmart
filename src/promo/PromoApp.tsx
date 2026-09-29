@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Pause, Play, RotateCcw } from 'lucide-react'
+import { Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react'
+import narrationUrl from './assets/narration.mp3'
 import { BRAND } from './config'
 import { STAGE_H, STAGE_W } from './layout'
 import { DURATION, TIME_SCALE, ep } from './timeline'
@@ -20,6 +21,7 @@ import markUrl from './assets/logo-mark.png'
  *   ?loop=true       loop forever
  *   ?t=12.5          freeze on a single frame (seconds)
  *   ?ui=0            hide the player controls (for screen recording)
+ *   ?sound=0         start muted (browsers may also block sound until the first tap)
  *   ?export=1        stage at 1:1, no controls — used by scripts/promo-export.mjs
  *
  * Keyboard: Space = play/pause, R = replay, ←/→ = ±1s.
@@ -88,6 +90,21 @@ export default function PromoApp() {
   const tRef = useRef(t)
   useLayoutEffect(() => { tRef.current = t }, [t])
 
+  // ── Narration: while it plays, the audio element IS the clock (no drift) ──
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [soundOn, setSoundOn] = useState(() => !exportMode && params.get('sound') !== '0')
+  const soundRef = useRef(soundOn)
+  useLayoutEffect(() => { soundRef.current = soundOn }, [soundOn])
+  const startAudio = useCallback((at: number) => {
+    const a = audioRef.current
+    if (!a || !soundRef.current) return
+    a.currentTime = at / TIME_SCALE
+    a.playbackRate = 1 / TIME_SCALE
+    // Autoplay with sound is blocked until the viewer interacts — fall back to muted.
+    a.play().catch(() => setSoundOn(false))
+  }, [])
+  const stopAudio = useCallback(() => { audioRef.current?.pause() }, [])
+
   // ── Fit the 1080×1920 stage into the window ──
   useLayoutEffect(() => {
     if (exportMode) return
@@ -102,28 +119,46 @@ export default function PromoApp() {
     origin.current = { wall: performance.now(), t: start }
     setT(start)
     setPlaying(true)
-  }, [])
-  const pause = useCallback(() => setPlaying(false), [])
+    startAudio(start)
+  }, [startAudio])
+  const pause = useCallback(() => { setPlaying(false); stopAudio() }, [stopAudio])
   const replay = useCallback(() => play(0), [play])
   const seek = useCallback((s: number) => {
     const v = Math.min(DURATION, Math.max(0, s))
     origin.current = { wall: performance.now(), t: v }
     setT(v)
+    if (audioRef.current) audioRef.current.currentTime = v / TIME_SCALE
   }, [])
+  const toggleSound = useCallback(() => {
+    const next = !soundRef.current
+    soundRef.current = next
+    setSoundOn(next)
+    if (next && playing) startAudio(tRef.current)
+    if (!next) stopAudio()
+  }, [playing, startAudio, stopAudio])
 
   // ── Master clock ──
   useEffect(() => {
     if (!playing) return
     let raf = 0
     const tick = (now: number) => {
-      let next = origin.current.t + (now - origin.current.wall) / 1000
+      const a = audioRef.current
+      let next: number
+      if (a && soundRef.current && !a.paused) {
+        next = a.currentTime * TIME_SCALE
+        origin.current = { wall: now, t: next }   // keep the fallback clock anchored, so muting never jumps
+      } else {
+        next = origin.current.t + (now - origin.current.wall) / 1000
+      }
       if (next >= DURATION) {
         if (loop) {
           origin.current = { wall: now, t: 0 }
           next = 0
+          startAudio(0)
         } else {
           setT(DURATION)
           setPlaying(false)
+          a?.pause()
           return
         }
       }
@@ -132,7 +167,7 @@ export default function PromoApp() {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [playing, loop])
+  }, [playing, loop, startAudio])
 
   // ── Wait for fonts, then autoplay; expose the seek API for the exporter ──
   useEffect(() => {
@@ -200,6 +235,7 @@ export default function PromoApp() {
 
   return (
     <div className="promo-viewport">
+      {!exportMode && <audio ref={audioRef} src={narrationUrl} preload="auto" />}
       <div className="promo-stage" id="promo-stage" dir="rtl" lang="he" style={stageStyle}>
         <Frame t={designT} />
       </div>
@@ -211,6 +247,9 @@ export default function PromoApp() {
           </button>
           <button className="promo-btn" onClick={() => (playing ? pause() : play())} aria-label={playing ? 'Pause' : 'Play'}>
             {playing ? <Pause size={16} strokeWidth={2.6} /> : <Play size={16} strokeWidth={2.6} />}
+          </button>
+          <button className="promo-btn" onClick={toggleSound} aria-label={soundOn ? 'Mute' : 'Unmute'} aria-pressed={soundOn}>
+            {soundOn ? <Volume2 size={16} strokeWidth={2.4} /> : <VolumeX size={16} strokeWidth={2.4} />}
           </button>
           <input
             className="promo-scrub"
