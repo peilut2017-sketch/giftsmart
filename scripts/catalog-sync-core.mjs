@@ -8,7 +8,7 @@
 //  - one source failing never blocks the others.
 //  - manual additions (stores_manual) are untouched: this only posts the
 //    source's own list to ingest-catalog.
-import { parseBuymeAll, parseSwishPlusHtml, parseGiftaHtml, planIngestFromParseResult } from '../src/lib/catalogSourceParsers.ts'
+import { parseBuymeAll, parseSwishPlusHtml, parseGiftaHtml, parseStyleRestaurants, planIngestFromParseResult } from '../src/lib/catalogSourceParsers.ts'
 
 export const SOURCES = [
   {
@@ -26,6 +26,18 @@ export const SOURCES = [
     sourceKey: 'buyme-brands-13438880',
     url: 'https://buyme.co.il/brands/13438880/options',
     parse: (raw) => parseBuymeAll(raw, 13438880),
+  },
+  {
+    // Official WordPress REST collection behind food.style.co.il. Fetched
+    // page by page (100 per page) and merged into one JSON array.
+    id: 'style',
+    productKey: 'style_restaurants',
+    sourceKey: 'style-restaurants-wp-rest',
+    url: 'https://food.style.co.il/wp-json/wp/v2/rest?per_page=100&_fields=id,status,title',
+    pageParam: 'page',
+    pageSize: 100,
+    maxPages: 5,
+    parse: parseStyleRestaurants,
   },
   {
     id: 'swish',
@@ -50,11 +62,30 @@ export function looksLikeChallengePage(text) {
   return CHALLENGE_MARKERS.some(m => head.includes(m))
 }
 
+// Paged JSON-array sources: fetch page 1, 2, ... until a page returns fewer
+// than pageSize items, then return one merged JSON array. Any non-200, bad
+// JSON or non-array page makes the whole fetch fail (nothing is posted).
+// Hitting maxPages with full pages is treated as an error, never a silent cut.
+async function fetchAllPages(source, fetchText) {
+  const all = []
+  for (let page = 1; page <= source.maxPages; page++) {
+    const res = await fetchText(`${source.url}&${source.pageParam}=${page}`)
+    if (res.status !== 200) return { status: res.status, text: res.text }
+    if (looksLikeChallengePage(res.text)) return { status: 200, text: res.text }
+    let arr
+    try { arr = JSON.parse(res.text) } catch { return { status: 200, text: 'invalid' } }
+    if (!Array.isArray(arr)) return { status: 200, text: 'invalid' }
+    all.push(...arr)
+    if (arr.length < source.pageSize) return { status: 200, text: JSON.stringify(all) }
+  }
+  throw new Error('too_many_pages')
+}
+
 // fetchText(url) -> { status, text }; post(payload) -> { status, body }
 export async function syncOne(source, { fetchText, post, now = () => new Date() }) {
   let res
   try {
-    res = await fetchText(source.url)
+    res = source.pageParam ? await fetchAllPages(source, fetchText) : await fetchText(source.url)
   } catch (e) {
     return { source: source.id, outcome: 'skipped', reason: 'fetch_error' }
   }
