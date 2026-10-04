@@ -91,6 +91,6 @@ describe('catalog sync core', () => {
     expect(looksLikeChallengePage('x'.repeat(5000) + 'Just a moment')).toBe(false)
   })
   it('registers the three sources with the source_keys used by the SQL proofs', () => {
-    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'swish-product-105379', 'gifta-rashatot-mechabdot'])
+    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'buyme-brands-13438880', 'swish-product-105379', 'gifta-rashatot-mechabdot'])
   })
 })
