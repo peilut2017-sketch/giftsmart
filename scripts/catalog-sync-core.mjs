@@ -9,6 +9,7 @@
 //  - manual additions (stores_manual) are untouched: this only posts the
 //    source's own list to ingest-catalog.
 import { parseBuymeAll, parseSwishPlusHtml, parseGiftaHtml, parseStyleRestaurants, planIngestFromParseResult } from '../src/lib/catalogSourceParsers.ts'
+import { parseGiftzone } from '../src/lib/giftzoneParser.ts'
 
 export const SOURCES = [
   {
@@ -58,6 +59,15 @@ export const SOURCES = [
       { url: 'https://swish.co.il/home/all-gifts-giftcard/product-56478', parse: (raw) => parseSwishPlusHtml(raw, 56478) },
       { url: 'https://swish.co.il/business/all-gifts-giftcard/product-103980', parse: (raw) => parseSwishPlusHtml(raw, 103980) },
     ],
+  },
+  {
+    // Official GiftZone page (htzone.co.il zone 4). The full list is embedded
+    // in the page HTML; the parser rejects any page of another zone.
+    id: 'giftzone',
+    productKey: 'giftzone',
+    sourceKey: 'htzone-voucher-zone-4',
+    url: 'https://www.htzone.co.il/voucher-zone/4',
+    parse: parseGiftzone,
   },
   {
     id: 'gifta',
