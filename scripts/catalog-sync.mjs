@@ -3,7 +3,7 @@
 // non-zero when any source was skipped or rejected so the failure is visible
 // in the Actions UI; sources are independent, so the others still apply.
 // Run (Node >= 22.18): node scripts/catalog-sync.mjs [--dry-run]
-import { syncAll } from './catalog-sync-core.mjs'
+import { syncAll, SOURCES } from './catalog-sync-core.mjs'
 
 const dryRun = process.argv.includes('--dry-run')
 const url = process.env.INGEST_URL
@@ -36,7 +36,9 @@ const post = dryRun
       return { status: r.status, body }
     }
 
-const results = await syncAll({ fetchText, post })
+// Gifta stays manual: its page sits behind a bot challenge, so it is not part of the
+// scheduled run (a skip would fail the job every day). BUYME ALL and Swish Plus only.
+const results = await syncAll({ fetchText, post }, SOURCES.filter(s => s.id !== 'gifta'))
 for (const r of results) console.log(JSON.stringify(r))
 const count = (o) => results.filter(r => r.outcome === o).length
 console.log(JSON.stringify({ summary: true, applied: count('applied'), skipped: count('skipped'), rejected: count('rejected'), total: results.length }))
