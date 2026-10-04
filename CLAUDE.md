@@ -131,6 +131,8 @@ Pro plan: unlimited everything, including the more accurate Gemini-based smart p
 
 All `supabase-*.sql` files at the repo root are incremental migration scripts. Apply them manually in the Supabase SQL Editor — there is no automated migration runner. Each new feature gets its own file.
 
+Newer work (starting with the managed multi-voucher catalog, see `docs/ADD_MULTI_VOUCHER.md`) also lives under `supabase/migrations/<timestamp>_<name>.sql`, with a matching rollback script under `supabase/rollback/<timestamp>_<name>_down.sql` (deliberately NOT inside `supabase/migrations/`, so an automated runner — if one is ever adopted — can't auto-discover and apply the rollback as the next migration). Still applied manually, same as the root-level files.
+
 ## Known Challenges & Decisions
 
 - **Tests cover pure logic only** (`npm run test`). Anything touching the UI or Supabase is verified by running `npm run build` (catches TS errors, including the TS1117 duplicate-key trap) and exercising the app in the browser.

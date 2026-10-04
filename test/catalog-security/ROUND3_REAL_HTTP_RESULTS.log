@@ -1,0 +1,70 @@
+Round 3 real-environment re-verification: real PostgREST v12.2.3 + real Deno v2.1.4
+running the unmodified ingest-catalog/index.ts (one disclosed substitution: the
+`https://deno.land/...` import replaced with Deno 2's built-in `Deno.serve`,
+required because this sandbox's network policy blocks deno.land —
+confirmed connect_rejected; confirmed byte-identical to the real file
+otherwise via `diff <(sed '24d' ...) <(sed '24d' ...)`), against the
+fixed round-3 migration stack (20261001000000 + 20261002000000 applied
+together on a fresh harness-seeded database).
+
+Purpose: confirm the finding-1 and finding-2 fixes hold through the real
+HTTP/Deno/PostgREST/Postgres path, not only via raw SQL (already proven in
+test/catalog-security/proofs/04_cache_unification.sql).
+
+── Finding 1 (trigger) — real HTTP PATCH via PostgREST ─────────────────────
+
+GET  /rest/v1/super_vouchers?id=eq.cccccccc-...&select=stores,description
+  → [{"stores":["Shop X"],"description":null}]
+
+PATCH /rest/v1/super_vouchers?id=eq.cccccccc-...  body: {"description":"patched via real http round3-rerun"}
+  → [{"id":"cccccccc-...", ..., "description":"patched via real http round3-rerun",
+      "stores":["Shop X"], "stores_manual":["Shop X"], "search_terms":["Shop X"], ...}]
+
+RESULT: stores unchanged by an unrelated field PATCH, over real HTTP. Finding 1 fixed.
+
+── Finding 2 (catalog_apply_snapshot) — real HTTP POST via the real Deno Edge Function ──
+
+Product: deno_f2_prod_v2 (schema_version=1, source_identity.source_key=deno-f2-v2)
+
+POST / (X-Ingest-Secret: round3-ingest-secret)
+  A, fetched_at=2026-10-01T10:00:00Z, items=[A1,A2]
+  → {"status":"applied","item_count":2,"snapshot_version":1,...}
+
+POST / — wrong source_identity (source_key=WRONG-SOURCE), fetched_at=2026-10-01T12:00:00Z
+  → {"status":"rejected","reject_reason":"source_identity_mismatch","item_count":0,"snapshot_version":2,...}
+  (consumes snapshot_version 2 — this is what would wrongly become "latest" under
+   the pre-fix ORDER BY snapshot_version DESC with no status='applied' filter)
+
+POST / — B, fetched_at=2026-10-01T11:00:00Z (between A's 10:00 and the rejected
+  snapshot's 12:00), items=[A1,A2,A3]
+  → {"status":"applied","item_count":3,"snapshot_version":3,...}
+
+RESULT: B applied successfully (snapshot_version 3) — NOT wrongly rejected as
+stale_snapshot against the rejected snapshot's version/fetched_at. Finding 2 fixed,
+confirmed through the real HTTP/Deno path, matching the raw-SQL proof in
+04_cache_unification.sql.
+
+Note: an attempt to reproduce this scenario using a bad schema_version instead
+of a bad source_identity was intercepted earlier, by the Edge Function's own
+SUPPORTED_SCHEMA_VERSIONS allow-list (schema_version=99 never reaches
+catalog_apply_snapshot at all — no version number is consumed, since the
+Edge Function itself returns 400 unsupported_schema_version first). This is
+expected, correct layering, not a test error; source_identity_mismatch was
+used instead to exercise the SQL-level rejection-still-consumes-a-version
+path for real.
+
+── admin_link_catalog_product — real HTTP POST via PostgREST RPC ───────────
+
+POST /rest/v1/rpc/admin_link_catalog_product
+  body: {"p_super_voucher_id":"dddddddd-...","p_product_key":"deno_f2_prod_v2","p_manual_extras":["HTTP Extra"]}
+  → stores: ["Deno F2 Store A1","Deno F2 Store A2","Deno F2 Store A3","HTTP Extra"]
+    stores_manual: ["HTTP Extra"]
+    catalog_product_key: "deno_f2_prod_v2"
+
+RESULT: manual extras + catalog content merge correctly over real HTTP, same
+as the raw-SQL proofs.
+
+All three checks ran against the SAME real local stack already used in round 2
+(same PostgREST/Deno binaries, same JWT-minting approach, same /rest/v1 rewrite
+proxy) — no new simulation introduced, no claim made about any path not
+actually exercised here.

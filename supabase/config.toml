@@ -387,6 +387,9 @@ deno_version = 2
 [functions.telegram-bot]
 verify_jwt = false
 
+[functions.ingest-catalog]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

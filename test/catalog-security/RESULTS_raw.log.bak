@@ -1,0 +1,1179 @@
+=== test/catalog-security/harness.sql ===
+DROP DATABASE
+CREATE DATABASE
+You are now connected to database "giftsmart_test" as user "postgres".
+CREATE EXTENSION
+DO
+psql:test/catalog-security/harness.sql:34: NOTICE:  role "postgres" has already been granted membership in role "anon" by role "postgres"
+GRANT ROLE
+psql:test/catalog-security/harness.sql:35: NOTICE:  role "postgres" has already been granted membership in role "authenticated" by role "postgres"
+GRANT ROLE
+psql:test/catalog-security/harness.sql:36: NOTICE:  role "postgres" has already been granted membership in role "service_role" by role "postgres"
+GRANT ROLE
+CREATE SCHEMA
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+GRANT
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE TABLE
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+GRANT
+GRANT
+CREATE POLICY
+REVOKE
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+INSERT 0 3
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+exit=0
+=== supabase/migrations/20261001000000_catalog_foundation.sql ===
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+REVOKE
+GRANT
+GRANT
+ALTER TABLE
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+REVOKE
+GRANT
+GRANT
+DROP POLICY
+psql:supabase/migrations/20261001000000_catalog_foundation.sql:180: NOTICE:  policy "sv_select_owner" for relation "public.super_vouchers" does not exist, skipping
+DROP POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE FUNCTION
+REVOKE
+psql:supabase/migrations/20261001000000_catalog_foundation.sql:234: NOTICE:  trigger "sv_prevent_identity_change" for relation "public.super_vouchers" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+psql:supabase/migrations/20261001000000_catalog_foundation.sql:265: NOTICE:  trigger "sv_protect_managed_fields" for relation "public.super_vouchers" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+psql:supabase/migrations/20261001000000_catalog_foundation.sql:290: NOTICE:  trigger "sv_sync_cache" for relation "public.super_vouchers" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+psql:supabase/migrations/20261001000000_catalog_foundation.sql:322: NOTICE:  trigger "wallets_block_managed_delete" for relation "public.wallets" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+REVOKE
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+ pg_notify 
+-----------
+ 
+(1 row)
+
+exit=0
+=== supabase/migrations/20261002000000_catalog_cache_unification.sql ===
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+REVOKE
+GRANT
+SET
+INSERT 0 2
+UPDATE 2
+RESET
+ pg_notify 
+-----------
+ 
+(1 row)
+
+exit=0
+=== test/catalog-security/proofs/01_identity_probe.sql ===
+You are now connected to database "giftsmart_test" as user "postgres".
+CREATE TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+psql:test/catalog-security/proofs/01_identity_probe.sql:60: NOTICE:  trigger "t_invoker" for relation "probe_target" does not exist, skipping
+DROP TRIGGER
+psql:test/catalog-security/proofs/01_identity_probe.sql:61: NOTICE:  trigger "t_definer" for relation "probe_target" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+GRANT
+GRANT
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+SET
+SET
+SET
+SET
+INSERT 0 1
+RESET
+SET
+SET
+SET
+SET
+INSERT 0 1
+RESET
+SET
+SET
+SET
+SET
+ probe_rpc_wrapper 
+-------------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+SET
+SET
+INSERT 0 1
+RESET
+DROP TRIGGER
+CREATE TRIGGER
+SET
+SET
+SET
+SET
+INSERT 0 1
+RESET
+SET
+SET
+SET
+SET
+INSERT 0 1
+RESET
+SET
+SET
+SET
+SET
+ probe_rpc_wrapper 
+-------------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+SET
+SET
+INSERT 0 1
+RESET
+ trig_kind |      path      |         caller_label          |   cur_user    | sess_user |               auth_uid               |   auth_role   
+-----------+----------------+-------------------------------+---------------+-----------+--------------------------------------+---------------
+ invoker   | direct_dml     | anon_direct                   | anon          | postgres  |                                      | anon
+ invoker   | direct_dml     | authenticated_direct          | authenticated | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ invoker   | via_definer_fn | authenticated_via_definer_rpc | postgres      | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ invoker   | direct_dml     | service_role_direct           | service_role  | postgres  |                                      | service_role
+ definer   | direct_dml     | anon_direct                   | postgres      | postgres  |                                      | anon
+ definer   | direct_dml     | authenticated_direct          | postgres      | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ definer   | via_definer_fn | authenticated_via_definer_rpc | postgres      | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ definer   | direct_dml     | service_role_direct           | postgres      | postgres  |                                      | service_role
+(8 rows)
+
+exit=0
+=== test/catalog-security/proofs/02_full_matrix.sql ===
+You are now connected to database "giftsmart_test" as user "postgres".
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+INSERT 0 1
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:63: NOTICE:  PASS: wrong schema_version rejected
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/02_full_matrix.sql:66: NOTICE:  PASS: wrong source_identity rejected
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/02_full_matrix.sql:69: NOTICE:  PASS: blank-name padding does not fake min_expected_count=2 (counts the normalized set, fix #5)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:75: NOTICE:  PASS: seed apply (v1) succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:81: NOTICE:  PASS: seed link succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:86: NOTICE:  PASS: user_a sees own private SV
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/02_full_matrix.sql:87: NOTICE:  PASS: user_a sees the global/linked SV
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:92: NOTICE:  PASS: user_b does NOT see user_a's private SV (no cross-wallet leak)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/02_full_matrix.sql:94: NOTICE:  PASS: user_b still sees the global SV (visibility not hidden from non-owner)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+INSERT 0 1
+SET
+SET
+INSERT 0 1
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:104: NOTICE:  PASS: owner without wallet_members membership still sees their own SV (fix #3)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:109: NOTICE:  PASS: baseline count before is_global insert attempt
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/02_full_matrix.sql:124: NOTICE:  PASS: regular user blocked from inserting is_global=true (P0001), no row added
+DO
+psql:test/catalog-security/proofs/02_full_matrix.sql:140: NOTICE:  PASS: regular user blocked from setting catalog_product_key (P0001), no row added
+DO
+psql:test/catalog-security/proofs/02_full_matrix.sql:149: NOTICE:  PASS: regular user cannot edit the global/linked row (RLS silently affects 0 rows, name unchanged)
+DO
+psql:test/catalog-security/proofs/02_full_matrix.sql:165: NOTICE:  PASS: wallet_id is immutable even for the owning user (P0001), value unchanged
+DO
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:171: NOTICE:  PASS: admin can create a super voucher via RPC, with explicit server-verified wallet_id (fix #8)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/02_full_matrix.sql:191: NOTICE:  PASS: non-admin rejected from admin RPC (P0001) with NO row mutation
+DO
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:195: NOTICE:  PASS: anon rejected outright from admin RPC (no EXECUTE grant) (correctly rejected, SQLSTATE 42501)
+ probe_expect_sqlstate 
+-----------------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:214: NOTICE:  PASS: authenticated user cannot self-promote is_admin (42501), value unchanged
+DO
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:219: NOTICE:  PASS: authenticated has no SELECT on catalog_items (correctly rejected, SQLSTATE 42501)
+ probe_expect_sqlstate 
+-----------------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:222: NOTICE:  PASS: anon has no SELECT on catalog_products (correctly rejected, SQLSTATE 42501)
+ probe_expect_sqlstate 
+-----------------------
+ 
+(1 row)
+
+RESET
+DO
+psql:test/catalog-security/proofs/02_full_matrix.sql:238: NOTICE:  PASS: the managed row and its wallet still exist after the blocked delete attempt
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/02_full_matrix.sql:241: NOTICE:  PASS: an ordinary wallet with no managed rows still deletes fine (guard is not over-broad)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:246: NOTICE:  PASS: even an admin (authenticated) cannot call catalog_apply_snapshot (correctly rejected, SQLSTATE 42501)
+ probe_expect_sqlstate 
+-----------------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+RESET
+SET
+SET
+UPDATE 1
+RESET
+psql:test/catalog-security/proofs/02_full_matrix.sql:257: NOTICE:  PASS: linking materializes stores immediately via the sync-cache trigger (fix #9)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:263: NOTICE:  PASS: identical resend (same hash h1) succeeds as a no-op
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/02_full_matrix.sql:266: NOTICE:  PASS: identical resend created NO new snapshot version (fix #1)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/02_full_matrix.sql:267: NOTICE:  PASS: identical resend backfilled the newly-linked row (fix #1)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:272: NOTICE:  PASS: different content with an earlier-or-equal fetched_at is rejected as stale (fix #1/#6)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/02_full_matrix.sql:274: NOTICE:  PASS: catalog_items unchanged after the stale rejection
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:283: NOTICE:  PASS: newer, different content applies as a new version (pure addition, under the removal-ratio cap)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/02_full_matrix.sql:285: NOTICE:  PASS: linked rows reflect the new content
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+psql:test/catalog-security/proofs/02_full_matrix.sql:292: NOTICE:  PASS: removal-ratio-exceeded rejected, catalog_items untouched
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/02_full_matrix.sql:295: NOTICE:  PASS: catalog_items still show all 5 after the rejected removal-ratio attempt
+ probe_assert 
+--------------
+ 
+(1 row)
+
+=== identity/log table from the earlier probe (for reference) ===
+ trig_kind |      path      |         caller_label          |   cur_user    | sess_user |               auth_uid               |   auth_role   
+-----------+----------------+-------------------------------+---------------+-----------+--------------------------------------+---------------
+ invoker   | direct_dml     | anon_direct                   | anon          | postgres  |                                      | anon
+ invoker   | direct_dml     | authenticated_direct          | authenticated | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ invoker   | via_definer_fn | authenticated_via_definer_rpc | postgres      | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ invoker   | direct_dml     | service_role_direct           | service_role  | postgres  |                                      | service_role
+ definer   | direct_dml     | anon_direct                   | postgres      | postgres  |                                      | anon
+ definer   | direct_dml     | authenticated_direct          | postgres      | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ definer   | via_definer_fn | authenticated_via_definer_rpc | postgres      | postgres  | 22222222-2222-2222-2222-222222222222 | authenticated
+ definer   | direct_dml     | service_role_direct           | postgres      | postgres  |                                      | service_role
+(8 rows)
+
+ALL ASSERTIONS PASSED
+exit=0
+=== test/catalog-security/proofs/03_search_path_hardening.sql ===
+You are now connected to database "giftsmart_test" as user "postgres".
+=== schema CREATE privilege on public (must be false for anon/authenticated) ===
+     role      | can_create_in_public 
+---------------+----------------------
+ anon          | f
+ authenticated | f
+(2 rows)
+
+=== proconfig (search_path setting) for every function this migration created ===
+                proname                 | is_security_definer |      raw_config      | search_path_setting 
+----------------------------------------+---------------------+----------------------+---------------------
+ admin_delete_super_voucher             | t                   | {"search_path=\"\""} | search_path=""
+ admin_upsert_super_voucher             | t                   | {"search_path=\"\""} | search_path=""
+ catalog_apply_snapshot                 | t                   | {"search_path=\"\""} | search_path=""
+ catalog_effective_search_terms         | f                   | {"search_path=\"\""} | search_path=""
+ catalog_effective_stores               | f                   | {"search_path=\"\""} | search_path=""
+ super_vouchers_prevent_identity_change | t                   | {"search_path=\"\""} | search_path=""
+ super_vouchers_protect_managed_fields  | t                   | {"search_path=\"\""} | search_path=""
+(7 rows)
+
+=== any of the above WITHOUT a search_path setting at all? (should be zero rows) ===
+ proname 
+---------
+(0 rows)
+
+=== table grants on the new catalog tables (must show nothing for anon/authenticated) ===
+ grantee | table_name | privilege_type 
+---------+------------+----------------
+(0 rows)
+
+=== TRUNCATE/REFERENCES/TRIGGER grants on super_vouchers for anon/authenticated (must show nothing) ===
+ grantee | privilege_type 
+---------+----------------
+(0 rows)
+
+exit=0
+=== test/catalog-security/proofs/04_cache_unification.sql ===
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+SET
+SET
+UPDATE 1
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:72: NOTICE:  PASS: scenario 1: unrelated UPDATE preserves stores exactly (finding 1 fixed)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:74: NOTICE:  PASS: scenario 1: description actually changed (the update itself took effect)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+INSERT 0 1
+psql:test/catalog-security/proofs/04_cache_unification.sql:88: NOTICE:  PASS: scenario 2 (INSERT): stores_manual adopted the old-client stores value
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:90: NOTICE:  PASS: scenario 2 (INSERT): stores reflects the same content
+ probe_assert 
+--------------
+ 
+(1 row)
+
+INSERT 0 1
+UPDATE 1
+psql:test/catalog-security/proofs/04_cache_unification.sql:100: NOTICE:  PASS: scenario 2 (UPDATE): old-client raw stores write adopted into stores_manual
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:102: NOTICE:  PASS: scenario 2 (UPDATE): cache reflects the adopted value
+ probe_assert 
+--------------
+ 
+(1 row)
+
+INSERT 0 1
+SET
+SET
+                                                                                          admin_upsert_super_voucher                                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (33333333-aaaa-aaaa-aaaa-333333333333,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,"Admin Edit SV",,"{""New B""}",,f,,"2026-10-03 17:27:01.225436+00","2026-10-03 17:27:01.226531+00",,"{""New B""}",,"{""New B""}")
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:118: NOTICE:  PASS: scenario 3: explicit manual edit fully replaces the cache (no stale value revived)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:120: NOTICE:  PASS: scenario 3: "Old A" does not linger anywhere in the result
+ probe_assert 
+--------------
+ 
+(1 row)
+
+INSERT 0 1
+SET
+SET
+                                                                                           admin_upsert_super_voucher                                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (99999999-aaaa-aaaa-aaaa-999999999999,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,"Renamed SV",,"{""Keep Me""}",,f,,"2026-10-03 17:27:01.228835+00","2026-10-03 17:27:01.230103+00",,"{""Keep Me""}",,"{""Keep Me""}")
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:137: NOTICE:  PASS: name-only save (p_stores_manual=NULL) preserves stores_manual exactly
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:139: NOTICE:  PASS: name-only save preserves the cache too (no wipe via the trigger)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:141: NOTICE:  PASS: name-only save actually renamed the row
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+                                                                        admin_upsert_super_voucher                                                                        
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (99999999-aaaa-aaaa-aaaa-999999999999,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,"Renamed SV",,{},,f,,"2026-10-03 17:27:01.228835+00","2026-10-03 17:27:01.231622+00",,{},,{})
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:150: NOTICE:  PASS: explicit empty array still genuinely clears stores_manual
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+INSERT 0 1
+psql:test/catalog-security/proofs/04_cache_unification.sql:162: NOTICE:  PASS: scenario 4: seed apply succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+INSERT 0 1
+SET
+SET
+                                                                                                                                              admin_link_catalog_product                                                                                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (44444444-aaaa-aaaa-aaaa-444444444444,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,"Link Unlink SV",,"{""Catalog Store X"",""Catalog Store Y"",""My Extra""}",,f,,"2026-10-03 17:27:01.238732+00","2026-10-03 17:27:01.240414+00",scenario4_prod,"{""My Extra""}",,"{""Catalog Store X"",""Catalog Store Y"",""My Extra""}")
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:174: NOTICE:  PASS: scenario 4: linked row shows manual extra + catalog content
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+                                                                                              admin_unlink_catalog_product                                                                                              
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (44444444-aaaa-aaaa-aaaa-444444444444,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,"Link Unlink SV",,"{""My Extra""}",,f,,"2026-10-03 17:27:01.238732+00","2026-10-03 17:27:01.243404+00",,"{""My Extra""}",,"{""My Extra""}")
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:181: NOTICE:  PASS: scenario 4: after unlink, only the manual extra remains (catalog not absorbed)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:183: NOTICE:  PASS: scenario 4: stores_manual itself never picked up catalog content
+ probe_assert 
+--------------
+ 
+(1 row)
+
+INSERT 0 1
+SET
+SET
+                                                                                                                                                  admin_link_catalog_product                                                                                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (55555555-aaaa-aaaa-aaaa-555555555555,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,"Linked Resync SV",,"{""Catalog Store X"",""Catalog Store Y"",""Kept Extra""}",,f,,"2026-10-03 17:27:01.245611+00","2026-10-03 17:27:01.246812+00",scenario4_prod,"{""Kept Extra""}",,"{""Catalog Store X"",""Catalog Store Y"",""Kept Extra""}")
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/04_cache_unification.sql:201: NOTICE:  PASS: scenario 5: new snapshot applies
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+UPDATE 1
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:213: NOTICE:  PASS: scenario 5: after a new snapshot + an unrelated update elsewhere, manual extra survives
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:216: NOTICE:  PASS: scenario 5: catalog content reflects the NEW snapshot (X and Z, not stale Y)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+INSERT 0 1
+UPDATE 1
+psql:test/catalog-security/proofs/04_cache_unification.sql:232: NOTICE:  PASS: both-changed: manual wins over a simultaneous raw stores write
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+INSERT 0 1
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:249: NOTICE:  PASS: INSERT-adoption negative: stores_manual stays empty/NULL-derived when catalog_product_key is set on INSERT
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:252: NOTICE:  PASS: INSERT-adoption negative: stores reflects catalog content, not the raw stores value sent
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+INSERT 0 1
+psql:test/catalog-security/proofs/04_cache_unification.sql:266: NOTICE:  PASS: finding 2: A applied @ t1
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:270: NOTICE:  PASS: finding 2: bad-schema-version snapshot rejected @ t3 (consumes a version number)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:274: NOTICE:  PASS: finding 2 FIX: valid B @ t2 (between t1 and t3) applies — NOT wrongly rejected as stale
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:278: NOTICE:  PASS: finding 2: exactly 3 snapshot rows exist (1 applied, 1 rejected, 1 applied) — not short-circuited
+ probe_assert 
+--------------
+ 
+(1 row)
+
+ALTER TABLE
+INSERT 0 1
+ALTER TABLE
+SET
+UPDATE 1
+RESET
+psql:test/catalog-security/proofs/04_cache_unification.sql:302: NOTICE:  PASS: backfill: business content preserved (normalized-set equality)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+CREATE FUNCTION
+psql:test/catalog-security/proofs/04_cache_unification.sql:318: NOTICE:  INFO (non-blocking, expected): backfill order/duplicate-count for Legacy Messy SV — before={"Zeta Shop","Alpha Shop","  Alpha Shop  ","Beta Shop","Alpha Shop"} after={"Alpha Shop","Beta Shop","Zeta Shop"} (business content unchanged; set-equality already asserted above)
+ probe_report_order_diff 
+-------------------------
+ 
+(1 row)
+
+SELECT 13
+                  id                  |    name    | catalog_product_key | written_stores_manual | current_stores_manual |          status           
+--------------------------------------+------------+---------------------+-----------------------+-----------------------+---------------------------
+ dddddddd-dddd-dddd-dddd-dddddddddddd | BUYME ALL  | buyme_all           | {"Shop Y","Shop Z"}   | {"Original Manual"}   | now_linked_since_backfill
+ cccccccc-cccc-cccc-cccc-cccccccccccc | Private SV |                     | {"Shop X"}            | {"Shop X"}            | untouched_since_backfill
+(2 rows)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:335: NOTICE:  PASS: unification rollback performed zero mutation (row count unchanged)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/04_cache_unification.sql:346: NOTICE:  PASS: unification rollback left stores_manual, stores, search_terms, catalog_product_key, updated_at byte-identical on every row
+ probe_assert 
+--------------
+ 
+(1 row)
+
+ALL CACHE UNIFICATION PROOFS PASSED
+exit=0
+=== test/catalog-security/proofs/06_real_scale_ingest.sql ===
+CREATE FUNCTION
+SET
+INSERT 0 3
+Timing is on.
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:36: NOTICE:  PASS: BUYME ALL real-scale apply: 1320 items
+ probe_assert 
+--------------
+ 
+(1 row)
+
+Time: 30.114 ms
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:39: NOTICE:  PASS: Swish Plus real-scale apply: 1005 items
+ probe_assert 
+--------------
+ 
+(1 row)
+
+Time: 19.888 ms
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:42: NOTICE:  PASS: Gifta real-scale apply: 149 items
+ probe_assert 
+--------------
+ 
+(1 row)
+
+Time: 4.288 ms
+Timing is off.
+RESET
+INSERT 0 3
+SET
+SET
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:53: NOTICE:  PASS: link BUYME ALL succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:54: NOTICE:  PASS: link Swish Plus succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:55: NOTICE:  PASS: link Gifta succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:60: NOTICE:  PASS: BUYME ALL: stores/search_terms both have exactly 1320 entries
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:63: NOTICE:  PASS: Swish Plus: stores/search_terms both have exactly 1005 entries
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:66: NOTICE:  PASS: Gifta: stores/search_terms both have exactly 149 entries
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:70: NOTICE:  PASS: "גולף" search matches real BUYME ALL entries
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:72: NOTICE:  PASS: "גולף" search matches real Gifta entries (including exact "גולף")
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:74: NOTICE:  PASS: "גולף" search matches real Swish Plus entries (including exact "גולף")
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:80: NOTICE:  PASS: admin adds a manual test item to the Gifta-linked voucher
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:87: NOTICE:  PASS: identical resend of the same 149-item snapshot is a true no-op (same version, same count)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:98: NOTICE:  PASS: next real sync (one item removed) applies as a new version with the reduced count
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:102: NOTICE:  PASS: manual test addition survived the real sync
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:104: NOTICE:  PASS: the removed real item ("גולף") is actually gone from the cache
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:106: NOTICE:  PASS: a different, still-present real item ("גולף אנד קו") remains
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/06_real_scale_ingest.sql:108: NOTICE:  PASS: final count is 148 real items + 1 manual = 149
+ probe_assert 
+--------------
+ 
+(1 row)
+
+ALL REAL-SCALE INGEST PROOFS PASSED
+exit=0
+=== test/catalog-security/proofs/07_parse_failure_boundary.sql ===
+CREATE FUNCTION
+SET
+INSERT 0 1
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:34: NOTICE:  PASS: seed (last-good) apply succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+INSERT 0 1
+SET
+SET
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:41: NOTICE:  PASS: link succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:51: NOTICE:  PASS: sanity: 3 items, 1 snapshot, stores populated before either scenario
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:62: NOTICE:  PASS: scenario A (parser failure -> no RPC call at all): catalog_items unchanged
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:64: NOTICE:  PASS: scenario A: catalog_snapshots unchanged — no new row, not even a rejected one
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:66: NOTICE:  PASS: scenario A: super_vouchers.stores unchanged (last-good list retained)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:79: NOTICE:  PASS: scenario B: a real attempt with too few items is rejected, not silently dropped
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:83: NOTICE:  PASS: scenario B: catalog_items STILL unchanged (last-good retained, same as scenario A)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:85: NOTICE:  PASS: scenario B: unlike scenario A, a NEW snapshot row WAS recorded (the RPC really ran this time)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/07_parse_failure_boundary.sql:87: NOTICE:  PASS: scenario B: super_vouchers.stores STILL unchanged (last-good list retained)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+ALL PARSE-FAILURE BOUNDARY PROOFS PASSED
+exit=0
+=== test/catalog-security/proofs/05_rollback_safety.sql ===
+CREATE FUNCTION
+CREATE FUNCTION
+SET
+SET
+INSERT 0 1
+psql:test/catalog-security/proofs/05_rollback_safety.sql:66: NOTICE:  PASS: seed apply succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/05_rollback_safety.sql:72: NOTICE:  PASS: seed link succeeds
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+SET
+SET
+psql:test/catalog-security/proofs/05_rollback_safety.sql:89: NOTICE:  PASS: pre-rollback: owner cannot set is_global directly (gap closed)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/05_rollback_safety.sql:95: NOTICE:  PASS: dry-run probe left no side effect
+ probe_assert 
+--------------
+ 
+(1 row)
+
+DO
+SELECT 17
+REVOKE
+GRANT
+DO
+ pg_notify 
+-----------
+ 
+(1 row)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+GRANT
+DROP TRIGGER
+DROP FUNCTION
+DROP TRIGGER
+DROP FUNCTION
+DROP TRIGGER
+DROP FUNCTION
+DROP TRIGGER
+DROP FUNCTION
+DROP POLICY
+DROP POLICY
+DROP POLICY
+DROP POLICY
+CREATE POLICY
+DROP FUNCTION
+DROP FUNCTION
+ALTER TABLE
+DROP TABLE
+DROP TABLE
+DROP TABLE
+DROP TABLE
+DROP TABLE
+ pg_notify 
+-----------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:103: NOTICE:  PASS: super_vouchers_rollback_backup row count matches pre-rollback live count
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:106: NOTICE:  PASS: super_vouchers_rollback_backup preserved sv_private.stores_manual exactly
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:109: NOTICE:  PASS: super_vouchers_rollback_backup preserved sv_global.catalog_product_key exactly
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:112: NOTICE:  PASS: catalog_products_rollback_backup row count matches pre-rollback live count
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:114: NOTICE:  PASS: catalog_snapshots_rollback_backup row count matches pre-rollback live count
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:116: NOTICE:  PASS: catalog_items_rollback_backup row count matches pre-rollback live count
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:118: NOTICE:  PASS: catalog_audit_rollback_backup row count matches pre-rollback live count
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:123: NOTICE:  PASS: super_vouchers.catalog_product_key column dropped
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:124: NOTICE:  PASS: catalog_products table dropped
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:126: NOTICE:  PASS: single FOR ALL policy restored
+ probe_assert 
+--------------
+ 
+(1 row)
+
+psql:test/catalog-security/proofs/05_rollback_safety.sql:128: NOTICE:  PASS: split per-command policies gone
+ probe_assert 
+--------------
+ 
+(1 row)
+
+SET
+SET
+psql:test/catalog-security/proofs/05_rollback_safety.sql:134: NOTICE:  PASS: post-rollback: owner CAN now set is_global directly (gap reopened, confirmed non-silent consequence)
+ probe_assert 
+--------------
+ 
+(1 row)
+
+RESET
+psql:test/catalog-security/proofs/05_rollback_safety.sql:141: NOTICE:  PASS: post-rollback dry-run probe also left no side effect
+ probe_assert 
+--------------
+ 
+(1 row)
+
+ALL ROLLBACK SAFETY PROOFS PASSED
+exit=0
