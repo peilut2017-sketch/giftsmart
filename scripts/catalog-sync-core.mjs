@@ -47,6 +47,19 @@ export const SOURCES = [
     parse: parseSwishPlusHtml,
   },
   {
+    // Union of the two official Swish Perfect pages (consumer 56478 and
+    // business 103980), deduped by exact name. All parts must fetch and parse,
+    // otherwise nothing is posted. The union does not prove that every name is
+    // honored for every holder; the app shows a caveat under Perfect cards.
+    id: 'swish_perfect',
+    productKey: 'perfect_union',
+    sourceKey: 'swish-perfect-union-56478-103980',
+    parts: [
+      { url: 'https://swish.co.il/home/all-gifts-giftcard/product-56478', parse: (raw) => parseSwishPlusHtml(raw, 56478) },
+      { url: 'https://swish.co.il/business/all-gifts-giftcard/product-103980', parse: (raw) => parseSwishPlusHtml(raw, 103980) },
+    ],
+  },
+  {
     id: 'gifta',
     productKey: 'gifta',
     sourceKey: 'gifta-rashatot-mechabdot',
@@ -81,8 +94,48 @@ async function fetchAllPages(source, fetchText) {
   throw new Error('too_many_pages')
 }
 
+// Multi-page union source: every part is fetched and parsed on its own; any
+// failure skips the whole source. Items are merged by exact canonical name
+// (first occurrence wins, aliases are unioned).
+async function syncParts(source, { fetchText, post, now = () => new Date() }) {
+  const byName = new Map()
+  for (const part of source.parts) {
+    let res
+    try {
+      res = await fetchText(part.url)
+    } catch (e) {
+      return { source: source.id, outcome: 'skipped', reason: 'fetch_error' }
+    }
+    if (res.status !== 200) return { source: source.id, outcome: 'skipped', reason: `http_${res.status}` }
+    if (looksLikeChallengePage(res.text)) return { source: source.id, outcome: 'skipped', reason: 'bot_challenge_page' }
+    const plan = planIngestFromParseResult(part.parse(res.text))
+    if (!plan.shouldApply) return { source: source.id, outcome: 'skipped', reason: plan.skippedReason }
+    for (const it of plan.items) {
+      const prev = byName.get(it.canonical_name)
+      if (!prev) byName.set(it.canonical_name, { ...it, aliases: [...it.aliases] })
+      else prev.aliases = [...new Set([...prev.aliases, ...it.aliases])]
+    }
+  }
+  const out = await post({
+    schema_version: 1,
+    product_key: source.productKey,
+    fetched_at: now().toISOString(),
+    source_identity: { source_key: source.sourceKey },
+    items: [...byName.values()].map(({ source_item_id, ...rest }) => rest),
+  })
+  const applied = out.status === 200
+  return {
+    source: source.id,
+    outcome: applied ? 'applied' : 'rejected',
+    http: out.status,
+    reason: applied ? undefined : (out.body && (out.body.reject_reason || out.body.error)) || 'unknown',
+    item_count: out.body && out.body.item_count,
+  }
+}
+
 // fetchText(url) -> { status, text }; post(payload) -> { status, body }
 export async function syncOne(source, { fetchText, post, now = () => new Date() }) {
+  if (source.parts) return syncParts(source, { fetchText, post, now })
   let res
   try {
     res = source.pageParam ? await fetchAllPages(source, fetchText) : await fetchText(source.url)
