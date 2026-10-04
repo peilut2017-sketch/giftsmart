@@ -135,3 +135,13 @@ export function csvCell(value: unknown): string {
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
   return `"${s.replace(/"/g, '""')}"`
 }
+
+// Catalog products whose store list is a union of several issuer pages (or
+// otherwise not proven to apply to every holder). Matching vouchers get a short
+// fixed caveat under the card in search and in-store results. Keyed on the
+// catalog product, so no schema change is needed.
+const CAVEAT_PRODUCT_KEYS = new Set(['perfect_union'])
+
+export function catalogCaveatKey(sv?: { catalog_product_key?: string | null } | null): 'catalog.caveat.verify' | null {
+  return sv?.catalog_product_key && CAVEAT_PRODUCT_KEYS.has(sv.catalog_product_key) ? 'catalog.caveat.verify' : null
+}
