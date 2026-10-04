@@ -134,13 +134,26 @@ export function parseBuymeAll(rawJson: string, expectedSupplierId = 13438757): P
 // (this covers both "no chain-shaped objects at all" and "some exist but
 // none for this product" — both mean "nothing usable for this product".)
 export function parseSwishPlusHtml(rawHtml: string, expectedCategoryNumber = 105379): ParseResult {
-  const recovered = unescapeOuterLayer(rawHtml)
-  const data = tryParseEmbeddedJson(recovered)
-  if (data === undefined) {
-    return { ok: false, reason: 'embedded_json_unparsable' }
+  // Real page shape (checked against the live page 2026-10-04): a Next.js
+  // flight payload, i.e. many self.__next_f.push([1,"<JS string>"]) chunks
+  // inside a full HTML document. Decode those string literals, join them (a
+  // value can be split across chunks) and pull out each "chainsByWallet"
+  // array. With no such chunks, fall back to the bare escaped-fragment path.
+  let candidates: ChainCandidate[]
+  const flight = decodeNextFlightText(rawHtml)
+  if (flight !== null) {
+    if (flight.error) return { ok: false, reason: flight.error }
+    const arrays = extractChainsByWalletArrays(flight.text)
+    if (arrays === undefined) return { ok: false, reason: 'embedded_json_unparsable' }
+    candidates = collectChainCandidates(arrays)
+  } else {
+    const recovered = unescapeOuterLayer(rawHtml)
+    const data = tryParseEmbeddedJson(recovered)
+    if (data === undefined) {
+      return { ok: false, reason: 'embedded_json_unparsable' }
+    }
+    candidates = collectChainCandidates(data)
   }
-
-  const candidates = collectChainCandidates(data)
 
   const seenIds = new Set<string>()
   const items: ParsedCatalogItem[] = []
@@ -193,6 +206,59 @@ export function unescapeOuterLayer(s: string): string {
       continue
     }
     out += c
+  }
+  return out
+}
+
+// Returns null when the document has no __next_f push chunks at all. error
+// is set when a chunk exists but cannot be decoded: skipping it could drop
+// part of the list, so that is a parse failure, not a smaller list.
+export function decodeNextFlightText(html: string): { text: string; error?: string } | null {
+  const re = /self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g
+  let text = ''
+  let found = 0
+  for (const m of html.matchAll(re)) {
+    found++
+    try {
+      text += JSON.parse(m[1]) as string
+    } catch {
+      return { text: '', error: 'next_flight_chunk_undecodable' }
+    }
+  }
+  return found === 0 ? null : { text }
+}
+
+// Finds every "chainsByWallet":[ ... ] array in decoded flight text and
+// JSON.parses it with string-aware bracket matching. undefined = an array was
+// found but is not valid JSON; [] = none exist.
+export function extractChainsByWalletArrays(text: string): unknown[] | undefined {
+  const marker = '"chainsByWallet":'
+  const out: unknown[] = []
+  let from = 0
+  for (;;) {
+    const at = text.indexOf(marker, from)
+    if (at === -1) break
+    const start = at + marker.length
+    if (text[start] !== '[') { from = start; continue }
+    let depth = 0
+    let inStr = false
+    let end = -1
+    for (let i = start; i < text.length; i++) {
+      const c = text[i]
+      if (inStr) {
+        if (c === '\\') i++
+        else if (c === '"') inStr = false
+      } else if (c === '"') inStr = true
+      else if (c === '[') depth++
+      else if (c === ']') { depth--; if (depth === 0) { end = i; break } }
+    }
+    if (end === -1) return undefined
+    try {
+      out.push(JSON.parse(text.slice(start, end + 1)))
+    } catch {
+      return undefined
+    }
+    from = end + 1
   }
   return out
 }
@@ -295,10 +361,10 @@ function decodeHtmlEntities(s: string): string {
   return s
     .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(parseInt(dec, 10)))
-    .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&') // last, so &amp;lt; decodes once (to &lt;), not twice
 }
