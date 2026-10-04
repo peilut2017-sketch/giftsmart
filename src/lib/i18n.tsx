@@ -830,6 +830,7 @@ const translations: Record<string, string> = {
   'stats.export.success': 'הקובץ יוצא בהצלחה!',
   'stats.export.success.en': 'File exported successfully!',
   'stats.export.error': 'שגיאה בייצוא',
+  'stats.export.error.en': 'Export error',
   'stats.export.encrypted.warning': 'שוברים מוצפנים לא יכללו בייצוא — הכספת סגורה',
   'stats.export.encrypted.warning.en': 'Encrypted vouchers excluded from export — vault is locked',
   'stats.export.summary': 'סיכום',
@@ -1678,6 +1679,7 @@ const translations: Record<string, string> = {
   'admin.broadcast.delete.title': 'מחיקת הודעה',
   'admin.broadcast.delete.title.en': 'Delete broadcast',
   'admin.broadcast.delete.message': 'האם למחוק את ההודעה?',
+  'admin.broadcast.delete.message.en': 'Delete this broadcast?',
   'admin.push.sent': 'התראת פוש נשלחה',
   'admin.push.sent.en': 'Push notification sent',
   'admin.push.required': 'כותרת ותוכן נדרשים',
@@ -2481,6 +2483,7 @@ const translations: Record<string, string> = {
   'voucher.calendar.cta': 'פתח ביומן גוגל',
   'voucher.calendar.cta.en': 'Open in Google Calendar',
   'voucher.calendar.skip': 'דלג',
+  'voucher.calendar.skip.en': 'Skip',
   'voucher.calendar.days.label': 'ימים לפני פקיעה',
   'voucher.calendar.days.label.en': 'Days before expiry',
   'settings.calendar.enabled': 'הצע תזכורת ביומן גוגל בעת הוספת שובר',
@@ -3104,6 +3107,7 @@ const translations: Record<string, string> = {
   'recovery.verify.title': 'רגע של אימות',
   'recovery.verify.title.en': 'Quick Verification',
   'recovery.verify.subtitle': 'כדי לוודא שהקוד באמת נשמר אצלך — הקלד את הקבוצות המסומנות למטה:',
+  'recovery.verify.subtitle.en': 'To make sure you really saved the code — type the marked groups below:',
   'recovery.group2': 'קבוצה שנייה',
   'recovery.group2.en': 'Second group',
   'recovery.group5': 'קבוצה חמישית',
@@ -3764,6 +3768,7 @@ const translations: Record<string, string> = {
   'deals.submit.deal_title.ph.en': 'e.g. 20% off your entire purchase for Visa Cal members',
   'deals.submit.promo.ph': 'קוד פרומו (אם יש)',
   'deals.submit.promo.ph.en': 'Promo code (if any)',
+  'deals.submit.image': 'תמונת הפרסום',
   'deals.submit.image.en': 'Deal image',
   'deals.optional': '(אופציונלי)',
   'deals.optional.en': '(optional)',
@@ -3875,4 +3880,4 @@ export function useT() {
 
 export function useLocale() {
   return useContext(LocaleContext)
-      }
+}
