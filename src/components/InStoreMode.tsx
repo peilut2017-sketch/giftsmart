@@ -7,7 +7,7 @@ import type { Voucher, SuperVoucher } from '../types'
 import toast from 'react-hot-toast'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
-import { getDaysUntilExpiry, formatDate, formatCurrency, voucherMatchesQuery } from '../utils/helpers'
+import { getDaysUntilExpiry, formatDate, formatCurrency, voucherMatchesQuery, catalogCaveatKey } from '../utils/helpers'
 import { useModalHistory } from '../hooks/useModalHistory'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
@@ -132,6 +132,10 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
     })
   }, [vouchers, superVouchers, search, decryptedMap])
 
+  const caveatFor = (v: Voucher) => {
+    const k = catalogCaveatKey(superVouchers.find(s => s.id === v.super_voucher_id))
+    return k ? t(k) : null
+  }
   const directVouchers = sortGroup(filtered.filter(v => !v.super_voucher_id))
   const superGroupVouchers = sortGroup(filtered.filter(v => !!v.super_voucher_id))
 
@@ -289,6 +293,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
                 onNavigate={() => onNavigate(v.id)}
                 onRequestUnlock={() => setShowVaultUnlock(true)}
                 updating={updating === v.id}
+                caveat={caveatFor(v)}
               />
             ))}
             {superGroupVouchers.length > 0 && (
@@ -307,6 +312,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
                 onNavigate={() => onNavigate(v.id)}
                 onRequestUnlock={() => setShowVaultUnlock(true)}
                 updating={updating === v.id}
+                caveat={caveatFor(v)}
               />
             ))}
           </>
@@ -339,7 +345,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
   )
 }
 
-function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill, onUpdate, onToggleBarcode, onNavigate, onRequestUnlock, updating }: {
+function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill, onUpdate, onToggleBarcode, onNavigate, onRequestUnlock, updating, caveat }: {
   voucher: Voucher
   payment: string
   barcodeOpen: boolean
@@ -350,6 +356,7 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
   onNavigate: () => void
   onRequestUnlock: () => void
   updating: boolean
+  caveat?: string | null
 }) {
   const { t } = useT()
   const { decryptedMap, isVaultUnlocked } = useE2EE()
@@ -464,6 +471,10 @@ function VoucherRow({ voucher: v, payment, barcodeOpen, onPaymentChange, onFill,
           <Icon name="north_east" size={14} />
         </button>
       </div>
+
+      {caveat && (
+        <p className="px-3 pb-2 -mt-1 text-[11px] leading-snug text-text3" data-testid="catalog-caveat">{caveat}</p>
+      )}
 
       {/* Barcode panel — tapping the barcode copies the code too */}
       {barcodeOpen && !isLocked && (
