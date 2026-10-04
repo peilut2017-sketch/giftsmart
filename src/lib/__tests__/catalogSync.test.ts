@@ -91,7 +91,7 @@ describe('catalog sync core', () => {
     expect(looksLikeChallengePage('x'.repeat(5000) + 'Just a moment')).toBe(false)
   })
   it('registers the sources with the source_keys used by the SQL proofs', () => {
-    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'buyme-brands-13438880', 'style-restaurants-wp-rest', 'swish-product-105379', 'gifta-rashatot-mechabdot'])
+    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'buyme-brands-13438880', 'style-restaurants-wp-rest', 'swish-product-105379', 'swish-perfect-union-56478-103980', 'gifta-rashatot-mechabdot'])
   })
   it('parses Style REST posts: decodes entities, dedupes, skips unpublished', () => {
     const raw = JSON.stringify([
@@ -119,6 +119,18 @@ describe('catalog sync core', () => {
     expect(cut).toMatchObject({ outcome: 'skipped', reason: 'fetch_error' })
     const bad = await syncOne(src, { fetchText: async (u: string) => (u.endsWith('page=1') ? { status: 200, text: page(1, 2) } : { status: 400, text: '{}' }), post })
     expect(bad).toMatchObject({ outcome: 'skipped', reason: 'http_400' })
+    expect(posted.length).toBe(1)
+  })
+  it('unions multi-part sources by exact name and skips everything when one part fails', async () => {
+    const mk = (names: string[]) => () => ({ ok: true, items: names.map(n => ({ canonical_name: n, aliases: [] })) })
+    const src = { id: 'u', productKey: 'u_k', sourceKey: 'u-s', parts: [{ url: 'https://x/a', parse: mk(['a', 'b']) }, { url: 'https://x/b', parse: mk(['b', 'c']) }] }
+    const posted: { items: { canonical_name: string }[] }[] = []
+    const post = async (p: { items: { canonical_name: string }[] }) => { posted.push(p); return { status: 200, body: { item_count: p.items.length } } }
+    const ok = await syncOne(src, { fetchText: async () => ({ status: 200, text: 'x' }), post })
+    expect(ok).toMatchObject({ outcome: 'applied', item_count: 3 })
+    expect(posted[0].items.map(i => i.canonical_name)).toEqual(['a', 'b', 'c'])
+    const bad = await syncOne(src, { fetchText: async (u: string) => (u.endsWith('/b') ? { status: 503, text: '' } : { status: 200, text: 'x' }), post })
+    expect(bad).toMatchObject({ outcome: 'skipped', reason: 'http_503' })
     expect(posted.length).toBe(1)
   })
 })
