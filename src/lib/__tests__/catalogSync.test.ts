@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 // @ts-expect-error plain .mjs module without types
 import { syncOne, syncAll, SOURCES, looksLikeChallengePage } from '../../../scripts/catalog-sync-core.mjs'
-import { parseSwishPlusHtml, decodeNextFlightText, parseGiftaHtml } from '../catalogSourceParsers'
+import { parseSwishPlusHtml, decodeNextFlightText, parseGiftaHtml, parseStyleRestaurants } from '../catalogSourceParsers'
 
 // Builds a page in the REAL Swish shape: a full HTML document whose data sits
 // in self.__next_f.push([1,"<js string>"]) chunks (checked against the live
@@ -90,7 +90,35 @@ describe('catalog sync core', () => {
     expect(looksLikeChallengePage('<title>Just a moment...</title>')).toBe(true)
     expect(looksLikeChallengePage('x'.repeat(5000) + 'Just a moment')).toBe(false)
   })
-  it('registers the three sources with the source_keys used by the SQL proofs', () => {
-    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'buyme-brands-13438880', 'swish-product-105379', 'gifta-rashatot-mechabdot'])
+  it('registers the sources with the source_keys used by the SQL proofs', () => {
+    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'buyme-brands-13438880', 'style-restaurants-wp-rest', 'swish-product-105379', 'gifta-rashatot-mechabdot'])
+  })
+  it('parses Style REST posts: decodes entities, dedupes, skips unpublished', () => {
+    const raw = JSON.stringify([
+      { id: 1, status: 'publish', title: { rendered: 'Pop&#038;Pope' } },
+      { id: 2, status: 'publish', title: { rendered: 'JEMS &quot;x&quot; &#8211; y' } },
+      { id: 3, status: 'publish', title: { rendered: 'Pop&#038;Pope' } },
+      { id: 4, status: 'draft', title: { rendered: 'Hidden' } },
+    ])
+    const r = parseStyleRestaurants(raw)
+    expect(r).toEqual({ ok: true, items: [
+      { canonical_name: 'Pop&Pope', aliases: [], source_item_id: '1' },
+      { canonical_name: 'JEMS "x" - y', aliases: [], source_item_id: '2' },
+    ] })
+    expect(parseStyleRestaurants('{"code":"rest_post_invalid_page_number"}')).toMatchObject({ ok: false })
+    expect(parseStyleRestaurants('[{"a":1}]')).toMatchObject({ ok: false })
+  })
+  it('merges paged sources and refuses a silent cut-off', async () => {
+    const page = (n: number, c: number) => JSON.stringify(Array.from({ length: c }, (_, i) => ({ id: n * 1000 + i, status: 'publish', title: { rendered: `r${n}-${i}` } })))
+    const src = { id: 's', productKey: 'k', sourceKey: 's', url: 'https://x/api?per_page=2', pageParam: 'page', pageSize: 2, maxPages: 3, parse: parseStyleRestaurants }
+    const posted: { items: unknown[] }[] = []
+    const post = async (p: { items: unknown[] }) => { posted.push(p); return { status: 200, body: { item_count: p.items.length } } }
+    const ok = await syncOne(src, { fetchText: async (u: string) => ({ status: 200, text: u.endsWith('page=1') ? page(1, 2) : page(2, 1) }), post })
+    expect(ok).toMatchObject({ outcome: 'applied', item_count: 3 })
+    const cut = await syncOne(src, { fetchText: async (u: string) => ({ status: 200, text: page(Number(u.slice(-1)), 2) }), post })
+    expect(cut).toMatchObject({ outcome: 'skipped', reason: 'fetch_error' })
+    const bad = await syncOne(src, { fetchText: async (u: string) => (u.endsWith('page=1') ? { status: 200, text: page(1, 2) } : { status: 400, text: '{}' }), post })
+    expect(bad).toMatchObject({ outcome: 'skipped', reason: 'http_400' })
+    expect(posted.length).toBe(1)
   })
 })
