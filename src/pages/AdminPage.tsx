@@ -103,6 +103,7 @@ export default function AdminPage() {
   const [editingWalletName, setEditingWalletName] = useState(false)
   const [newWalletName, setNewWalletName] = useState(walletName)
   const [editingSV, setEditingSV] = useState<SuperVoucher | null>(null)
+  const [savingSV, setSavingSV] = useState(false)
   const [showAddSV, setShowAddSV] = useState(false)
   const [svName, setSvName] = useState('')
   const [svStores, setSvStores] = useState('')
@@ -1218,7 +1219,8 @@ export default function AdminPage() {
     await addSuperVoucher({
       name: svName,
       description: svDesc,
-      stores: svStores.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
+      stores: [],
+      stores_manual: svStores.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
       is_global: svGlobal,
       balance_check_url: svBalanceUrl.trim() || undefined,
     })
@@ -1230,7 +1232,7 @@ export default function AdminPage() {
   async function handleQuickAddSV(name: string, stores: string[]) {
     const alreadyExists = superVouchers.some(sv => sv.name === name)
     if (alreadyExists) return toast(t('admin.sv.already.exists', { name }), { icon: 'ℹ️' })
-    await addSuperVoucher({ name, stores, is_global: true })
+    await addSuperVoucher({ name, stores: [], stores_manual: stores, is_global: true })
     toast.success(t('admin.sv.quick.added', { name }))
   }
 
@@ -1900,8 +1902,8 @@ export default function AdminPage() {
                       className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300"
                     />
                     <textarea
-                      value={editingSV.stores.join('\n')}
-                      onChange={e => setEditingSV({ ...editingSV, stores: e.target.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean) })}
+                      value={(editingSV.stores_manual ?? []).join('\n')}
+                      onChange={e => setEditingSV({ ...editingSV, stores_manual: e.target.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean) })}
                       rows={3}
                       className="w-full px-3 py-2 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                     />
@@ -1950,8 +1952,26 @@ export default function AdminPage() {
                       גלובלי
                     </label>
                     <div className="flex gap-2">
-                      <button onClick={() => { updateSuperVoucher(sv.id, editingSV); setEditingSV(null); toast.success('עודכן') }} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-sm">שמור</button>
-                      <button onClick={() => setEditingSV(null)} className="flex-1 bg-gray-100 py-2 rounded-xl text-sm">ביטול</button>
+                      <button
+                        disabled={savingSV}
+                        onClick={async () => {
+                          setSavingSV(true)
+                          try {
+                            await updateSuperVoucher(sv.id, editingSV)
+                            setEditingSV(null)
+                            toast.success('עודכן')
+                          } catch {
+                            // updateSuperVoucher already toasted the error — keep
+                            // the draft open so the edit isn't silently lost.
+                          } finally {
+                            setSavingSV(false)
+                          }
+                        }}
+                        className="flex-1 bg-green-500 text-white py-2 rounded-xl text-sm disabled:opacity-50"
+                      >
+                        {savingSV ? '...' : 'שמור'}
+                      </button>
+                      <button onClick={() => setEditingSV(null)} disabled={savingSV} className="flex-1 bg-gray-100 py-2 rounded-xl text-sm disabled:opacity-50">ביטול</button>
                     </div>
                   </div>
                 ) : (
@@ -1964,7 +1984,23 @@ export default function AdminPage() {
                       <p className="text-xs text-gray-400 mt-0.5">{sv.stores.length} חנויות</p>
                     </div>
                     <div className="flex gap-1">
-                      <button onClick={() => setEditingSV(sv)} className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50">
+                      <button
+                        onClick={() => setEditingSV({
+                          ...sv,
+                          // Normalize once, on entering edit mode: for a row
+                          // never explicitly edited since this migration
+                          // (stores_manual still null), a NOT-catalog-linked
+                          // row's manual list IS its current `stores` — fall
+                          // back to that so a no-op save can't erase it. A
+                          // catalog-linked row's manual list is empty until
+                          // the admin actually types something; never fall
+                          // back to the merged `stores` there, or a no-op
+                          // save would permanently absorb the catalog's
+                          // businesses into stores_manual.
+                          stores_manual: sv.stores_manual ?? (sv.catalog_product_key ? [] : sv.stores),
+                        })}
+                        className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50"
+                      >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleDeleteSV(sv.id, sv.name)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50">

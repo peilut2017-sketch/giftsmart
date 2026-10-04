@@ -44,10 +44,14 @@ export interface SuperVoucher {
   wallet_id: string
   name: string
   description?: string
-  stores: string[] // store names
+  stores: string[] // effective display list — manual ∪ catalog, kept in sync server-side
   logo_url?: string
   is_global?: boolean
   balance_check_url?: string
+  catalog_product_key?: string | null
+  stores_manual?: string[] | null // admin-edited list only; never the catalog side
+  stores_catalog_version?: number | null
+  search_terms?: string[] // stores ∪ aliases, search-only — never shown as "member businesses"
   created_at: string
   updated_at: string
 }

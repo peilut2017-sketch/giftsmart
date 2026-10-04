@@ -178,7 +178,8 @@ export default function SearchPage() {
           const directMatch = voucherMatchesQuery(v, q, { resolveCode })
           const superMatch = !directMatch && sv && (
             sv.name.toLowerCase().includes(q) ||
-            sv.stores.some(s => s.toLowerCase().includes(q))
+            sv.stores.some(s => s.toLowerCase().includes(q)) ||
+            (sv.search_terms ?? []).some(s => s.toLowerCase().includes(q))
           )
           return { v, score: directMatch ? 0 : superMatch ? 1 : -1 }
         })

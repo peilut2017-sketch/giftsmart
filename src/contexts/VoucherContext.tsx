@@ -41,6 +41,9 @@ interface VoucherContextType {
   addSuperVoucher: (sv: Omit<SuperVoucher, 'id' | 'wallet_id' | 'created_at' | 'updated_at'>) => Promise<void>
   updateSuperVoucher: (id: string, data: Partial<SuperVoucher>) => Promise<void>
   deleteSuperVoucher: (id: string) => Promise<void>
+  previewCatalogLink: (superVoucherId: string, productKey: string) => Promise<{ current_stores: string[]; catalog_stores: string[]; would_add: string[]; would_remove: string[] } | null>
+  linkCatalogProduct: (superVoucherId: string, productKey: string, manualExtras: string[]) => Promise<void>
+  unlinkCatalogProduct: (superVoucherId: string) => Promise<void>
   addCategory: (name: string, emoji?: string) => Promise<void>
   inviteMember: (email: string) => Promise<'added' | 'not_found'>
   removeMember: (userId: string) => Promise<void>
@@ -856,20 +859,79 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
     return fake
   }
 
+  // Admin-only writes go through SECURITY DEFINER RPCs (not a direct table
+  // write) — the RPC checks profiles.is_admin server-side and is the only
+  // path allowed to set is_global/catalog_product_key. `stores` itself is
+  // never sent — a trigger recomputes it server-side from stores_manual (+
+  // any linked catalog product) on every write, so it can't drift out of
+  // sync, and the caller can never accidentally turn today's merged
+  // display list into tomorrow's "manual" list by omission: stores_manual
+  // defaults to an empty array, never to `.stores`.
   async function addSuperVoucher(sv: Omit<SuperVoucher, 'id' | 'wallet_id' | 'created_at' | 'updated_at'>) {
-    if (!walletId) return
-    const { data } = await supabase.from('super_vouchers').insert({ ...sv, wallet_id: walletId }).select().single()
-    if (data) setSuperVouchers(prev => [...prev, data])
+    if (!walletId) throw new Error(translate('ctx.not.logged.in'))
+    const { data, error } = await supabase.rpc('admin_upsert_super_voucher', {
+      p_id: null,
+      p_wallet_id: walletId,
+      p_name: sv.name,
+      p_stores_manual: sv.stores_manual ?? [],
+      p_balance_check_url: sv.balance_check_url ?? null,
+      p_is_global: sv.is_global ?? false,
+      p_description: sv.description ?? null,
+    })
+    if (error) { toast.error(translate('ctx.update.failed')); throw error }
+    const row = (Array.isArray(data) ? data[0] : data) as SuperVoucher
+    if (row) setSuperVouchers(prev => [...prev, row])
   }
 
   async function updateSuperVoucher(id: string, data: Partial<SuperVoucher>) {
-    await supabase.from('super_vouchers').update(data).eq('id', id)
-    setSuperVouchers(prev => prev.map(sv => sv.id === id ? { ...sv, ...data } : sv))
+    const { data: row, error } = await supabase.rpc('admin_upsert_super_voucher', {
+      p_id: id,
+      p_wallet_id: null,
+      p_name: data.name,
+      p_stores_manual: data.stores_manual ?? [],
+      p_balance_check_url: data.balance_check_url ?? null,
+      p_is_global: data.is_global,
+      p_description: data.description ?? null,
+    })
+    if (error) { toast.error(translate('ctx.update.failed')); throw error }
+    const updated = (Array.isArray(row) ? row[0] : row) as SuperVoucher
+    if (updated) setSuperVouchers(prev => prev.map(sv => sv.id === id ? updated : sv))
   }
 
   async function deleteSuperVoucher(id: string) {
-    await supabase.from('super_vouchers').delete().eq('id', id)
+    const { error } = await supabase.rpc('admin_delete_super_voucher', { p_id: id })
+    if (error) { toast.error(translate('ctx.update.failed')); throw error }
     setSuperVouchers(prev => prev.filter(sv => sv.id !== id))
+  }
+
+  async function previewCatalogLink(superVoucherId: string, productKey: string) {
+    const { data, error } = await supabase.rpc('admin_preview_catalog_link', {
+      p_super_voucher_id: superVoucherId,
+      p_product_key: productKey,
+    })
+    if (error) { toast.error(translate('ctx.update.failed')); throw error }
+    const row = Array.isArray(data) ? data[0] : data
+    return row ?? null
+  }
+
+  async function linkCatalogProduct(superVoucherId: string, productKey: string, manualExtras: string[]) {
+    const { data, error } = await supabase.rpc('admin_link_catalog_product', {
+      p_super_voucher_id: superVoucherId,
+      p_product_key: productKey,
+      p_manual_extras: manualExtras,
+    })
+    if (error) { toast.error(translate('ctx.update.failed')); throw error }
+    const row = (Array.isArray(data) ? data[0] : data) as SuperVoucher
+    if (row) setSuperVouchers(prev => prev.map(sv => sv.id === superVoucherId ? row : sv))
+  }
+
+  async function unlinkCatalogProduct(superVoucherId: string) {
+    const { data, error } = await supabase.rpc('admin_unlink_catalog_product', {
+      p_super_voucher_id: superVoucherId,
+    })
+    if (error) { toast.error(translate('ctx.update.failed')); throw error }
+    const row = (Array.isArray(data) ? data[0] : data) as SuperVoucher
+    if (row) setSuperVouchers(prev => prev.map(sv => sv.id === superVoucherId ? row : sv))
   }
 
   async function addCategory(name: string, emoji = '🏷️') {
@@ -1134,7 +1196,8 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
       pendingOpsCount: pendingOps.length + vouchers.filter(v => v.id.startsWith('local-')).length,
       addVoucher, updateVoucher, deleteVoucher, archiveVoucher, unarchiveVoucher,
       archiveExpired, syncToCloud, addStore, addSuperVoucher, updateSuperVoucher,
-      deleteSuperVoucher, addCategory, inviteMember, removeMember,
+      deleteSuperVoucher, previewCatalogLink, linkCatalogProduct, unlinkCatalogProduct,
+      addCategory, inviteMember, removeMember,
       updateWalletName, refreshVouchers, createShareToken, deleteShareToken, getShareTokens,
       shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance,
       getActivityLog, getVoucherActivityLog, logAction,

@@ -1,0 +1,29 @@
+name: Catalog sync
+
+# Inert until the owner explicitly activates it: the repo variable
+# CATALOG_SYNC_ENABLED must be 'true' for EVERY trigger, including manual
+# dispatch, and secrets INGEST_URL and INGEST_SECRET must exist. Scheduled
+# workflows only run from the default branch.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: ${{ vars.CATALOG_SYNC_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fetch, parse and post each source
+        run: node scripts/catalog-sync.mjs
+        env:
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_SECRET: ${{ secrets.INGEST_SECRET }}

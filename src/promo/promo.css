@@ -1,0 +1,109 @@
+/* Promo page — fully self-contained (does not import the app's index.css). */
+
+@font-face {
+  font-family: 'Heebo Promo';
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url('./fonts/heebo-hebrew-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F;
+}
+@font-face {
+  font-family: 'Heebo Promo';
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url('./fonts/heebo-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #promo-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0e1312;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.promo-viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.promo-stage {
+  position: absolute;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  transform-origin: 0 0;
+  font-family: 'Heebo Promo', 'Heebo', 'Assistant', 'Rubik', system-ui, sans-serif;
+  background: #f8fafc;
+  color: #0f1c1a;
+  user-select: none;
+  contain: strict;
+}
+
+/* ── Player controls (never part of the video frame) ─────────────────── */
+.promo-controls {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(14, 19, 18, 0.72);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: 600 13px/1 system-ui, sans-serif;
+  direction: ltr;
+  z-index: 10;
+  transition: opacity 300ms cubic-bezier(0.23, 1, 0.32, 1);
+  width: min(460px, calc(100vw - 32px));
+}
+.promo-controls[data-hidden='true'] { opacity: 0; pointer-events: none; }
+
+.promo-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  transition: background 150ms, transform 150ms;
+}
+.promo-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.promo-btn:active { transform: scale(0.96); }
+.promo-btn--primary { background: #22c55e; color: #05230f; }
+.promo-btn--primary:hover { background: #4ade80; }
+.promo-btn:focus-visible { outline: 2px solid #4ade80; outline-offset: 2px; }
+
+.promo-scrub {
+  flex: 1;
+  min-width: 60px;
+  accent-color: #22c55e;
+  cursor: pointer;
+}
+.promo-time {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+  min-width: 74px;
+  text-align: right;
+}

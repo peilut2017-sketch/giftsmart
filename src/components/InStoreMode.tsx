@@ -127,7 +127,7 @@ export default function InStoreMode({ vouchers, superVouchers, onUpdate, onNavig
       // the decrypted code) plus the super-voucher's member store names.
       return voucherMatchesQuery(v, q, {
         resolveCode: () => v.is_e2ee ? (decryptedMap.get(v.id)?.code ?? '') : v.code,
-        extraHaystack: sv ? [sv.name, ...sv.stores].join(' ') : undefined,
+        extraHaystack: sv ? [sv.name, ...sv.stores, ...(sv.search_terms ?? [])].join(' ') : undefined,
       })
     })
   }, [vouchers, superVouchers, search, decryptedMap])
