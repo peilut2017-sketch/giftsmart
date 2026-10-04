@@ -19,6 +19,15 @@ export const SOURCES = [
     parse: parseBuymeAll,
   },
   {
+    // Same JSON feed as BUYME ALL, different supplier. The supplier id is
+    // checked by the parser, so a wrong or swapped feed is rejected.
+    id: 'buyme_mix',
+    productKey: 'buyme_mix',
+    sourceKey: 'buyme-brands-13438880',
+    url: 'https://buyme.co.il/brands/13438880/options',
+    parse: (raw) => parseBuymeAll(raw, 13438880),
+  },
+  {
     id: 'swish',
     productKey: 'swish_plus',
     sourceKey: 'swish-product-105379',
