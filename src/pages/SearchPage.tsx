@@ -8,7 +8,7 @@ import { useMarketplace } from '../contexts/MarketplaceContext'
 import { useE2EE } from '../contexts/E2EEContext'
 import { useT } from '../lib/i18n'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, formatDate, getDaysUntilExpiry, voucherMatchesQuery } from '../utils/helpers'
+import { formatCurrency, formatDate, getDaysUntilExpiry, voucherMatchesQuery, catalogCaveatKey } from '../utils/helpers'
 import VoucherCard from '../components/VoucherCard'
 import VoucherForm from '../components/VoucherForm'
 import InStoreMode from '../components/InStoreMode'
@@ -584,6 +584,9 @@ export default function SearchPage() {
                           onSelect={() => toggleSelect(v.id)}
                           rowMode={viewMode === 'rows'}
                         />
+                        {catalogCaveatKey(sv) && (
+                          <p className="px-3 pt-1 pb-1 text-[11px] leading-snug text-text3" data-testid="catalog-caveat">{t(catalogCaveatKey(sv)!)}</p>
+                        )}
                       </motion.div>
                     )
                   })}
@@ -756,4 +759,4 @@ export default function SearchPage() {
       )}
     </div>
   )
-}
+                            }
