@@ -91,7 +91,7 @@ describe('catalog sync core', () => {
     expect(looksLikeChallengePage('x'.repeat(5000) + 'Just a moment')).toBe(false)
   })
   it('registers the sources with the source_keys used by the SQL proofs', () => {
-    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'buyme-brands-13438880', 'style-restaurants-wp-rest', 'swish-product-105379', 'swish-perfect-union-56478-103980', 'gifta-rashatot-mechabdot'])
+    expect(SOURCES.map((s: { sourceKey: string }) => s.sourceKey)).toEqual(['buyme-brands-13438757', 'buyme-brands-13438880', 'style-restaurants-wp-rest', 'swish-product-105379', 'swish-perfect-union-56478-103980', 'htzone-voucher-zone-4', 'gifta-rashatot-mechabdot'])
   })
   it('parses Style REST posts: decodes entities, dedupes, skips unpublished', () => {
     const raw = JSON.stringify([
