@@ -829,7 +829,6 @@ const translations: Record<string, string> = {
   'stats.this.month.en': 'This Month',
   'stats.export.success': 'הקובץ יוצא בהצלחה!',
   'stats.export.success.en': 'File exported successfully!',
-  'stats.export.error': 'שגיאה בייצוא',
   'instore.direct.vouchers.en': 'Direct Vouchers',
   'instore.super.vouchers': 'שוברי-על',
   'instore.super.vouchers.en': 'Super Vouchers',
