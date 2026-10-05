@@ -9,6 +9,7 @@ import type { Voucher, SuperVoucher, Category, Store } from '../types'
 import { DEFAULT_CATEGORIES } from '../types'
 import { sendInviteEmail } from '../lib/emailService'
 import { getExpiryStatus } from '../utils/helpers'
+import { findSuperVoucherByName } from '../lib/superVoucherMatch'
 
 export interface VoucherShare {
   id: string
@@ -621,9 +622,7 @@ export function VoucherProvider({ children }: { children: ReactNode }) {
 
     // Check for super voucher match
     let superVoucherId: string | undefined
-    const matchingSV = superVouchers.find(sv =>
-      sv.name.toLowerCase() === v.store_name.toLowerCase()
-    )
+    const matchingSV = findSuperVoucherByName(superVouchers, v.store_name)
     if (matchingSV) superVoucherId = matchingSV.id
 
     const payload: Record<string, any> = {
@@ -1212,4 +1211,4 @@ export function useVouchers() {
   const ctx = useContext(VoucherContext)
   if (!ctx) throw new Error('useVouchers must be used within VoucherProvider')
   return ctx
-}
+      }
