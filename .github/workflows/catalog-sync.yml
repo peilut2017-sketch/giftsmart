@@ -2,8 +2,13 @@ name: Catalog sync
 
 # Inert until the owner explicitly activates it: the repo variable
 # CATALOG_SYNC_ENABLED must be 'true' for EVERY trigger, including manual
-# dispatch, and secrets INGEST_URL and INGEST_SECRET must exist. Scheduled
-# workflows only run from the default branch.
+# dispatch, and secret INGEST_SECRET must exist. Scheduled workflows only run
+# from the default branch.
+#
+# The sources (BUYME, Swish) refuse GitHub runner IPs (HTTP 403, seen 2026-10-05),
+# so the runner no longer fetches them. It only triggers the catalog-refresh Edge
+# Function in Supabase, which fetches, parses, applies the same guards and posts
+# to ingest-catalog. The job goes red if any source is not applied.
 on:
   schedule:
     - cron: '17 3 * * *'
@@ -16,14 +21,27 @@ jobs:
   sync:
     if: ${{ vars.CATALOG_SYNC_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Fetch, parse and post each source
-        run: node scripts/catalog-sync.mjs
+      - name: Refresh each source through catalog-refresh
         env:
-          INGEST_URL: ${{ secrets.INGEST_URL }}
           INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
+          # Public anon key (already in the site bundle); only satisfies the function's JWT gate.
+          ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5YmptZGJlZ3BhaXF6c3Nub3NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDMwOTAsImV4cCI6MjA4OTE3OTA5MH0.6g4lgEHR6O-UIm7h7LjKMzTfClDpWHUhrzBpeS4gHlg
+          URL: https://qybjmdbegpaiqzssnosr.supabase.co/functions/v1/catalog-refresh
+        run: |
+          fail=0
+          for s in buyme buyme_mix style swish swish_perfect giftzone; do
+            ok=0
+            for attempt in 1 2 3; do
+              code=$(curl -sS -m 120 -o out.json -w '%{http_code}' -X POST "$URL" \
+                -H "Authorization: Bearer $ANON_KEY" -H "apikey: $ANON_KEY" \
+                -H "X-Ingest-Secret: $INGEST_SECRET" -H 'Content-Type: application/json' \
+                -d "{\"source\":\"$s\",\"dry_run\":false}") || code=000
+              echo "$s attempt $attempt http $code: $(head -c 300 out.json)"
+              if [ "$code" = 200 ] && grep -q '"outcome":"applied"' out.json; then ok=1; break; fi
+              sleep 20
+            done
+            [ $ok = 1 ] || fail=1
+          done
+          exit $fail
