@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, useMotionValue, useVelocity, useTransform, animate } from 'framer-motion'
 import { useT } from '../lib/i18n'
 import Icon from './ui/Icon'
+import { haptic } from '../lib/haptics'
 
 const SPRING = { type: 'spring' as const, stiffness: 460, damping: 40, mass: 0.75 }
 const REDUCED_MOTION = { duration: 0 }
@@ -11,10 +12,10 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
-/** Short, light tap feedback (Vibration API — Android Chrome only; iOS Safari doesn't
-    expose haptics to web content at all, so this silently no-ops there). */
+/** Short, light tap feedback — the Taptic Engine inside the iOS app shell, the Vibration
+    API on Android; a silent no-op in browsers that expose neither (see lib/haptics.ts). */
 function tapHaptic() {
-  try { navigator.vibrate?.(8) } catch {}
+  haptic('light')
 }
 
 /**

@@ -12,11 +12,13 @@ import Icon from '../components/ui/Icon'
 import VaultSetupSheet from '../components/VaultSetupSheet'
 import { MenuItem, SL } from '../components/settings/SettingsUI'
 import { APP_VERSION } from '../lib/version'
+import { useViewTransitionNavigate } from '../hooks/useViewTransitionNavigate'
 
 interface CategoryDef { key: string; icon: string; title: string; desc: string; path: string; keywords: string }
 
 export default function SettingsPage() {
   const navigate = useNavigate()
+  const { goTo } = useViewTransitionNavigate()
   const { user, profile, isAdmin, isAnonymous } = useAuth()
   const { isPro, proExpiryDate, openUpgradeSheet } = useSubscription()
   const { vouchers, archivedVouchers, isOnline, pendingOpsCount } = useVouchers()
@@ -219,7 +221,8 @@ export default function SettingsPage() {
           {filteredCategories.map(c => (
             <button
               key={c.key}
-              onClick={() => navigate(c.path)}
+              data-vt-id={`s:${c.path}`}
+              onClick={() => c.path.startsWith('/settings/') ? goTo(c.path, { id: `s:${c.path}` }) : navigate(c.path)}
               className="w-full flex items-center gap-3 bg-surface rounded-card shadow-card p-4 text-start hover:opacity-90 transition"
             >
               <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center shrink-0">

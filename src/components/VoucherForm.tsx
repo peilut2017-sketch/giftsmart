@@ -25,6 +25,7 @@ import type { Html5Qrcode } from 'html5-qrcode'
 import { supabase } from '../lib/supabase'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
+import { haptic } from '../lib/haptics'
 
 // Wizard step ids (add mode only; edit mode renders everything at once)
 const STEP_STORE = 1
@@ -559,6 +560,7 @@ export default function VoucherForm({ voucher, onClose, onSave }: Props) {
         _storeUsed: (voucher && used > 0) ? (storeUsedInput.trim() || null) : undefined,
       }
       const saved = await onSave(v) as unknown as (Voucher | undefined)
+      haptic('success')
       if (isEdit) onClose()
       else { setSavedSummary({ id: saved?.id, store: storeName, balance: newBalance }); setStep(STEP_SUCCESS) }
     } catch {

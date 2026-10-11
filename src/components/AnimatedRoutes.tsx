@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { EASE_DRAWER } from '../lib/motion'
+import { isViewTransitionActive } from '../lib/viewTransition'
 
 // Tab order (RTL layout: rightmost = index 0).
 // Market/Discounts/Archive/Admin are no longer top-level nav tabs — they're reached
@@ -24,7 +25,11 @@ function tabIndex(pathname: string): number {
   return -1 // non-tab route → deep push
 }
 
-type NavMode = 'deep' | 'fwd' | 'back' | 'none'
+// 'vt' = the browser's View Transition is animating this navigation (see
+// lib/viewTransition.ts). It snapshots the old and new page itself, so framer must not
+// also slide/fade them: the entering page appears in its final state and the outgoing one
+// is removed immediately (zero-length exit), leaving the morph to the browser.
+type NavMode = 'deep' | 'fwd' | 'back' | 'none' | 'vt'
 
 // Tab-to-tab keeps a directional cue but travels only 24% of the width in 240ms —
 // this fires dozens of times a day, so it must whisper, not perform. A subtle 2px
@@ -33,8 +38,8 @@ type NavMode = 'deep' | 'fwd' | 'back' | 'none'
 // and full transform strings keep the animation compositable.
 const variants = {
   enter: (nav: NavMode) =>
-    nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(0.97)', filter: 'blur(0px)' }
-    : nav === 'none' ? { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' }
+    nav === 'vt' || nav === 'none' ? { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' }
+    : nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(0.97)', filter: 'blur(0px)' }
     : { opacity: 0, transform: `translateX(${nav === 'fwd' ? '-24%' : '24%'}) scale(1)`, filter: 'blur(2px)' },
   center: {
     opacity: 1,
@@ -47,7 +52,11 @@ const variants = {
     transitionEnd: { transform: 'none', filter: 'none' },
   },
   exit: (nav: NavMode) =>
-    nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(1.01)', filter: 'blur(0px)' }
+    // No target values at all: an exit that animates nothing finishes in a microtask, so
+    // the outgoing page is unmounted inside the browser's update-callback window. Any real
+    // animation would wait on framer's rAF loop, which Chromium suspends during that window.
+    nav === 'vt' ? { transition: { duration: 0 } }
+    : nav === 'deep' ? { opacity: 0, transform: 'translateX(0%) scale(1.01)', filter: 'blur(0px)' }
     : nav === 'none' ? { opacity: 1, transform: 'translateX(0%) scale(1)', filter: 'blur(0px)' }
     : { opacity: 0, transform: `translateX(${nav === 'fwd' ? '12%' : '-12%'}) scale(1)`, filter: 'blur(2px)' },
 }
@@ -69,7 +78,8 @@ export default function AnimatedRoutes({ children }: Props) {
 
   // RTL: higher tab index is further left on screen, so "forward" enters from the left.
   const nav: NavMode =
-    currentIndex === -1 || prevIndex === -1 ? 'deep'
+    isViewTransitionActive() ? 'vt'
+    : currentIndex === -1 || prevIndex === -1 ? 'deep'
     : currentIndex > prevIndex ? 'fwd'
     : currentIndex < prevIndex ? 'back'
     : 'none'
@@ -95,8 +105,8 @@ export default function AnimatedRoutes({ children }: Props) {
   // A spring here previously let the entering and exiting pages settle at slightly
   // different times, which read as a stutter — a single eased tween keeps both pages
   // in lockstep.
-  const transition = reducedMotion
-    ? { type: 'tween' as const, duration: 0.01 }
+  const transition = reducedMotion || nav === 'vt'
+    ? { type: 'tween' as const, duration: nav === 'vt' ? 0 : 0.01 }
     : { type: 'tween' as const, duration: nav === 'deep' ? 0.28 : 0.24, ease: EASE_DRAWER }
 
   return (

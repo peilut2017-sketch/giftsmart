@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom'
 import { formatCurrency, formatDate, getStoreInitials, voucherMatchesQuery } from '../utils/helpers'
 import Icon from '../components/ui/Icon'
 import toast from 'react-hot-toast'
+import PullToRefresh from '../components/PullToRefresh'
+import { useViewTransitionNavigate } from '../hooks/useViewTransitionNavigate'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
@@ -17,7 +19,8 @@ type SortKey = 'added' | 'store' | 'balance' | 'expiry'
 
 export default function ArchivePage() {
   const navigate = useNavigate()
-  const { archivedVouchers, unarchiveVoucher, deleteVoucher, loading } = useVouchers()
+  const { goTo } = useViewTransitionNavigate()
+  const { archivedVouchers, unarchiveVoucher, deleteVoucher, loading, refreshVouchers } = useVouchers()
   const { isVaultUnlocked, decryptedMap } = useE2EE()
   const { t } = useT()
   usePageView('archive')
@@ -93,6 +96,7 @@ export default function ArchivePage() {
 
   return (
     <div className="flex-1 bg-bg">
+      <PullToRefresh onRefresh={refreshVouchers} />
       <AnimatePresence>
         {confirm && (
           <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
@@ -164,6 +168,7 @@ export default function ArchivePage() {
             {sortedFiltered.map(v => (
               <motion.div
                 key={v.id}
+                data-vt-id={`v:${v.id}`}
                 layout
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 0.8, scale: 1 }}
@@ -178,7 +183,7 @@ export default function ArchivePage() {
                       an ARIA button is invalid (breaks keyboard/screen-reader traversal). */}
                   <button
                     type="button"
-                    onClick={() => navigate(`/checkout/${v.id}`)}
+                    onClick={() => goTo(`/checkout/${v.id}`, { id: `v:${v.id}` })}
                     className="flex items-center flex-1 min-w-0 gap-3 text-start rounded-lg -m-1 p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-bg text-text3 font-extrabold">

@@ -34,7 +34,7 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
     : ''
 
   return (
-    <button onClick={onClick} className="w-full text-right gs-tap bg-surface rounded-card shadow-card overflow-hidden relative block border-none cursor-pointer">
+    <button data-vt-id={`l:${listing.id}`} onClick={onClick} className="w-full text-right gs-tap bg-surface rounded-card shadow-card overflow-hidden relative block border-none cursor-pointer">
       {/* Top color bar */}
       <div style={{ height: 4, background: `linear-gradient(90deg, ${color}, ${color}88)` }} />
 

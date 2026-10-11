@@ -18,6 +18,8 @@ import { usePageView } from '../hooks/usePageView'
 import { useUndoableDelete } from '../hooks/useUndoableDelete'
 import type { Voucher, DiscountDeal } from '../types'
 import toast from 'react-hot-toast'
+import PullToRefresh from '../components/PullToRefresh'
+import { useViewTransitionNavigate } from '../hooks/useViewTransitionNavigate'
 
 type SortKey = 'expiry' | 'balance' | 'store' | 'added'
 type FilterTab = 'all' | 'expiring' | 'shared' | 'shared_with_me'
@@ -36,10 +38,11 @@ const EXPIRY_FILTER_DAYS = 30
  */
 export default function SearchPage() {
   const navigate = useNavigate()
+  const { goTo } = useViewTransitionNavigate()
   const location = useLocation()
   const { t } = useT()
   usePageView('search')
-  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, loading, updateVoucher, deleteVoucher, archiveVoucher } = useVouchers()
+  const { vouchers, archivedVouchers, superVouchers, sharedWithMe, loading, updateVoucher, deleteVoucher, archiveVoucher, refreshVouchers } = useVouchers()
   const { listings } = useMarketplace()
   const { decryptedMap } = useE2EE()
 
@@ -326,6 +329,7 @@ export default function SearchPage() {
 
   return (
     <div className="flex-1 bg-bg">
+      <PullToRefresh onRefresh={refreshVouchers} />
       <AnimatePresence>
         {confirm && (
           <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
@@ -575,7 +579,7 @@ export default function SearchPage() {
                         <VoucherCard
                           voucher={v}
                           superVoucherName={sv?.name}
-                          onClick={() => navigate(`/checkout/${v.id}`)}
+                          onClick={() => goTo(`/checkout/${v.id}`, { id: `v:${v.id}` })}
                           onEdit={() => { setEditingVoucher(v); setShowForm(true) }}
                           onDelete={() => requestDelete(v.id)}
                           onArchive={() => requestArchive(v.id)}
@@ -610,7 +614,7 @@ export default function SearchPage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   {searchedArchived.map(v => (
-                    <button key={v.id} onClick={() => navigate(`/checkout/${v.id}`)} className="flex items-center gap-3 text-right w-full opacity-60 bg-surface rounded-card shadow-card p-3">
+                    <button key={v.id} data-vt-id={`v:${v.id}`} onClick={() => goTo(`/checkout/${v.id}`, { id: `v:${v.id}` })} className="flex items-center gap-3 text-right w-full opacity-60 bg-surface rounded-card shadow-card p-3">
                       <div className="w-9 h-9 rounded-xl bg-bg flex items-center justify-center flex-shrink-0 text-text2 font-bold text-sm">
                         {(v.store_name || '?')[0].toUpperCase()}
                       </div>
@@ -636,7 +640,7 @@ export default function SearchPage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   {searchedListings.map(l => (
-                    <button key={l.id} onClick={() => navigate(`/market/listing/${l.id}`)} className="flex items-center gap-3 text-right w-full bg-surface rounded-card shadow-card p-3">
+                    <button key={l.id} data-vt-id={`l:${l.id}`} onClick={() => goTo(`/market/listing/${l.id}`, { id: `l:${l.id}` })} className="flex items-center gap-3 text-right w-full bg-surface rounded-card shadow-card p-3">
                       <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 text-blue-600 font-bold text-sm">
                         {(l.store_name || '?')[0].toUpperCase()}
                       </div>

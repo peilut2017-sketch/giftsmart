@@ -22,6 +22,8 @@ import Button from '../components/ui/Button'
 import { useE2EE } from '../contexts/E2EEContext'
 import { isEncryptedField } from '../lib/e2ee'
 import { useT } from '../lib/i18n'
+import { haptic } from '../lib/haptics'
+import { useViewTransitionNavigate } from '../hooks/useViewTransitionNavigate'
 
 // Share/gift links use the canonical app domain (VITE_APP_URL) rather than
 // window.location.origin — on a preview deploy the origin-based gift link failed
@@ -84,6 +86,7 @@ export default function CheckoutPage() {
   const { t, dir } = useT()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { goBack } = useViewTransitionNavigate()
   const { user, profile } = useAuth()
   const { vouchers, archivedVouchers, superVouchers, sharedWithMe, updateVoucher, deleteVoucher, archiveVoucher, isOnline, createShareToken, deleteShareToken, getShareTokens, shareVoucherWithUser, getVoucherShares, unshareVoucher, updateSharedVoucherBalance, getVoucherActivityLog, createGift, cancelGift, getPendingGifts, refreshVouchers } = useVouchers()
   const { limits, openUpgradeSheet } = useSubscription()
@@ -302,6 +305,7 @@ export default function CheckoutPage() {
     const ok = await navigator.clipboard.writeText(codeToCopy).then(() => true).catch(() => false)
     if (!ok) { toast.error(t('checkout.copy.failed')); return }
     setCopied(true)
+    haptic('success')
     toast.success(t('checkout.code.copied'))
     setTimeout(() => setCopied(false), 2000)
   }
@@ -942,7 +946,7 @@ export default function CheckoutPage() {
           {/* Inner row mirrors the app column (max-w-2xl) so on desktop the back/menu
               buttons sit at the edges of the content, not the edges of the window. */}
           <div className="max-w-2xl mx-auto h-full flex items-center justify-between px-3">
-            <button onClick={() => navigate(-1)} aria-label={t('checkout.back')} className="w-9 h-9 rounded-xl flex items-center justify-center transition" style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}>
+            <button onClick={goBack} aria-label={t('checkout.back')} className="w-9 h-9 rounded-xl flex items-center justify-center transition" style={!headerScrolled ? { background: 'rgba(255,255,255,0.22)' } : undefined}>
               <Icon name="arrow_forward" size={20} color={headerScrolled ? 'var(--c-text)' : '#fff'} className="dir-flip" />
             </button>
             <h1 className={`text-base font-bold truncate max-w-[55%] transition-colors ${headerScrolled ? 'text-text' : 'text-white'}`}>{sv?.name || voucher.store_name}</h1>
@@ -1016,7 +1020,7 @@ export default function CheckoutPage() {
           document.body,
         )}
 
-        <div style={{
+        <div data-vt-hero={`v:${voucher.id}`} style={{
           background: isExpired
             ? 'linear-gradient(160deg, #94a3b8dd 0%, #64748b99 100%)'
             : `linear-gradient(160deg, ${catColor}dd 0%, ${catColor}99 100%)`,
@@ -1164,7 +1168,7 @@ export default function CheckoutPage() {
                 {codeRenderFailed && effectiveCode && (
                   <div className="mb-4 px-4 py-6 rounded-2xl bg-bg border border-border">
                     <p className="text-xs text-text3 mb-2">{t('checkout.barcode.failed')}</p>
-                    <span className="font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">{effectiveCode}</span>
+                    <span className="selectable font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">{effectiveCode}</span>
                   </div>
                 )}
                 {/* A CODE128 barcode already prints its own digits under the bars — showing
@@ -1172,7 +1176,7 @@ export default function CheckoutPage() {
                     print text themselves) need this line. Never fall back to voucher.code
                     (raw ciphertext for a failed E2EE decrypt). */}
                 {isAlpha && !codeRenderFailed && effectiveCode && (
-                  <span className="font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">
+                  <span className="selectable font-mono text-2xl font-bold tracking-widest text-text break-all" dir="ltr">
                     {effectiveCode}
                   </span>
                 )}

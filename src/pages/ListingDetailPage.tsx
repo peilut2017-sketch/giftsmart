@@ -1,3 +1,4 @@
+import { useViewTransitionNavigate } from '../hooks/useViewTransitionNavigate'
 import { useState, useEffect } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
@@ -386,6 +387,7 @@ function BuyModal({
 export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { goBack } = useViewTransitionNavigate()
   const { user } = useAuth()
   const { listings, fetchListings, canUseMarketplace } = useMarketplace()
   const { t } = useT()
@@ -476,7 +478,7 @@ export default function ListingDetailPage() {
       {/* Header */}
       <div className="bg-surface border-b border-border sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-bg text-text2">
+          <button onClick={goBack} className="p-2 rounded-full bg-bg text-text2">
             <Icon name="arrow_forward" size={20} className="dir-flip" />
           </button>
           <h1 className="font-bold text-lg flex-1 text-text">{listing.store_name}</h1>
@@ -501,7 +503,7 @@ export default function ListingDetailPage() {
 
       <div className="p-4 space-y-4 pb-40">
         {/* Main info card */}
-        <div className="bg-surface rounded-card shadow-card p-5 space-y-4">
+        <div data-vt-hero={`l:${listing.id}`} className="bg-surface rounded-card shadow-card p-5 space-y-4">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-3xl font-bold text-primary">₪{displayPrice}</p>
