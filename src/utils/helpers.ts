@@ -160,6 +160,6 @@ const catalogCaveatTranslations: Record<string, string> = {
   "catalog.caveat.azrieli_time.en": "Only participating businesses inside Azrieli malls, not every branch of a chain. Check the branch and issuer terms before redemption.",
   "catalog.caveat.tav_plus": "רשימה חלקית מעלון 8.10.2026, ללא סנכרון אוטומטי: כמה לוגואים בחוויות ובפנאי לא זוהו בוודאות. תנאי סניפים, אונליין, אאוטלט וסוג הכרטיס עשויים להשתנות. יש לבדוק מול המנפיק שהשובר מכובד בבית העסק.",
   "catalog.caveat.tav_plus.en": "Partial reviewed list from the 8 Oct 2026 leaflet, not automatically synced: some experience and leisure logos could not be identified reliably. Branch, online, outlet and card-type restrictions apply. Verify acceptance with the issuer.",
-  "catalog.caveat.leumi_bonus": "רשימת הלוגואים נבדקה לפי עלון 6.10.2026, ללא סנכרון אוטומטי. זהו תו לאומי בונוס, לא כל הטבות לאומי. יש לבדוק מול המנפיק את הסניפים וההגבלות לכל רשת.",
-  "catalog.caveat.leumi_bonus.en": "Logo list reviewed from the 6 Oct 2026 leaflet, not automatically synced. This is the Leumi Bonus voucher, not all Leumi benefits. Verify branch and chain restrictions with the issuer."
+  "catalog.caveat.leumi_bonus": "רשימה חלקית מלוגואים בעלון 6.10.2026, ללא סנכרון אוטומטי; יש אי-התאמות מול קובץ התנאים. זהו תו לאומי בונוס, לא כל הטבות לאומי. יש לבדוק מול המנפיק את הסניפים וההגבלות לכל רשת.",
+  "catalog.caveat.leumi_bonus.en": "Partial logo list reviewed from the 6 Oct 2026 leaflet, not automatically synced; the conditions file differs in some entries. This is the Leumi Bonus voucher, not all Leumi benefits. Verify branch and chain restrictions with the issuer."
 }
