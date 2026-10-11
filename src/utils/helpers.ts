@@ -140,8 +140,26 @@ export function csvCell(value: unknown): string {
 // otherwise not proven to apply to every holder). Matching vouchers get a short
 // fixed caveat under the card in search and in-store results. Keyed on the
 // catalog product, so no schema change is needed.
-const CAVEAT_PRODUCT_KEYS = new Set(['perfect_union'])
+const CAVEAT_PRODUCT_KEYS = new Set(['perfect_union', 'isracard_giftcard', 'isracard_shopping', 'azrieli_time', 'tav_plus', 'leumi_bonus'])
 
-export function catalogCaveatKey(sv?: { catalog_product_key?: string | null } | null): 'catalog.caveat.verify' | null {
-  return sv?.catalog_product_key && CAVEAT_PRODUCT_KEYS.has(sv.catalog_product_key) ? 'catalog.caveat.verify' : null
+export function catalogCaveatKey(sv?: { catalog_product_key?: string | null } | null): string | null {
+  const key = sv?.catalog_product_key
+  if (!key || !CAVEAT_PRODUCT_KEYS.has(key)) return null
+  if (key === 'perfect_union') return 'catalog.caveat.verify'
+  const k = `catalog.caveat.${key}`
+  return `${catalogCaveatTranslations[k]} / ${catalogCaveatTranslations[k + '.en']}`
+}
+
+// Issuer-specific caveats for the approved additional voucher products.
+const catalogCaveatTranslations: Record<string, string> = {
+  "catalog.caveat.isracard_giftcard": "הרשימה נבדקה ב-11.10.2026 ואינה מסונכרנת אוטומטית. ישראכרט מציג סימוני אונליין אך מציין בתנאים מימוש בסניפים פיזיים בלבד. יש לבדוק מול המנפיק את סוג הכרטיס, הסניף והאפשרות למימוש באונליין.",
+  "catalog.caveat.isracard_giftcard.en": "Reviewed 11 Oct 2026, not automatically synced. The issuer shows online labels but its terms say physical branches only. Check your card type, participating branch and online eligibility with the issuer.",
+  "catalog.caveat.isracard_shopping": "הרשימה נבדקה ב-11.10.2026 ואינה מסונכרנת אוטומטית. זהו GiftCard Shopping, לא GiftCard הרגיל או הדיגיטלי. יש לבדוק מול המנפיק את הסניפים והמימוש באונליין לפי הכרטיס שברשותך.",
+  "catalog.caveat.isracard_shopping.en": "Reviewed 11 Oct 2026, not automatically synced. This is GiftCard Shopping, not the ordinary or digital GiftCard. Verify participating branches and online use for your own card with the issuer.",
+  "catalog.caveat.azrieli_time": "מכובד רק בבתי העסק המשתתפים שבקניוני עזריאלי, ולא בכל סניפי הרשת. יש לבדוק את הסניף ואת תנאי המנפיק לפני המימוש.",
+  "catalog.caveat.azrieli_time.en": "Only participating businesses inside Azrieli malls, not every branch of a chain. Check the branch and issuer terms before redemption.",
+  "catalog.caveat.tav_plus": "רשימה חלקית מעלון 8.10.2026, ללא סנכרון אוטומטי: כמה לוגואים בחוויות ובפנאי לא זוהו בוודאות. תנאי סניפים, אונליין, אאוטלט וסוג הכרטיס עשויים להשתנות. יש לבדוק מול המנפיק שהשובר מכובד בבית העסק.",
+  "catalog.caveat.tav_plus.en": "Partial reviewed list from the 8 Oct 2026 leaflet, not automatically synced: some experience and leisure logos could not be identified reliably. Branch, online, outlet and card-type restrictions apply. Verify acceptance with the issuer.",
+  "catalog.caveat.leumi_bonus": "רשימה חלקית מלוגואים בעלון 6.10.2026, ללא סנכרון אוטומטי; יש אי-התאמות מול קובץ התנאים. זהו תו לאומי בונוס, לא כל הטבות לאומי. יש לבדוק מול המנפיק את הסניפים וההגבלות לכל רשת.",
+  "catalog.caveat.leumi_bonus.en": "Partial logo list reviewed from the 6 Oct 2026 leaflet, not automatically synced; the conditions file differs in some entries. This is the Leumi Bonus voucher, not all Leumi benefits. Verify branch and chain restrictions with the issuer."
 }
