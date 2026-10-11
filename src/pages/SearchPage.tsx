@@ -95,6 +95,18 @@ export default function SearchPage() {
       setShowFilters(true)
     }
   }, [location.state])
+  // The search button on Home arrives with `focusSearch`: land in an active search —
+  // field focused, keyboard up — instead of just opening the browse list. Waits out the
+  // route transition (focusing a field that is still sliding in scrolls the page), then
+  // drops the flag from history state so going back to this page later doesn't re-focus.
+  useEffect(() => {
+    if (!(location.state as { focusSearch?: boolean } | null)?.focusSearch) return
+    const timer = setTimeout(() => {
+      searchInputRef.current?.focus({ preventScroll: true })
+      navigate(location.pathname, { replace: true, state: null })
+    }, 320)
+    return () => clearTimeout(timer)
+  }, [location.state]) // eslint-disable-line react-hooks/exhaustive-deps
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('hpViewMode') as ViewMode) || 'grid')
   const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('hpSortDir') as SortDir) || 'desc')
 

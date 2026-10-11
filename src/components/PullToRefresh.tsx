@@ -74,6 +74,11 @@ export default function PullToRefresh({ onRefresh, disabled = false }: {
 
     function hide() { paint(-48, 0, 0, true) }
 
+    function stopTracking() {
+      tracking = false
+      document.documentElement.style.overscrollBehaviorY = ''
+    }
+
     function onStart(e: TouchEvent) {
       if (refreshing || e.touches.length !== 1) return
       // Only from the very top, and never under a modal or a scroll-locked page.
@@ -84,6 +89,8 @@ export default function PullToRefresh({ onRefresh, disabled = false }: {
       tracking = true
       pulling = false
       armed = false
+      // Keep Chrome's own pull-to-reload out of this one gesture (see index.css).
+      document.documentElement.style.overscrollBehaviorY = 'contain'
       startX = e.touches[0].clientX
       startY = e.touches[0].clientY
     }
@@ -94,8 +101,8 @@ export default function PullToRefresh({ onRefresh, disabled = false }: {
       const dy = e.touches[0].clientY - startY
       if (!pulling) {
         // Dead zone first; a mostly-horizontal drag is a card swipe, so let it go.
-        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) { tracking = false; return }
-        if (dy < 8) { if (dy < -8) tracking = false; return }
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) { stopTracking(); return }
+        if (dy < 8) { if (dy < -8) stopTracking(); return }
         pulling = true
       }
       // Rising friction: the further you drag, the less the indicator follows.
@@ -110,6 +117,7 @@ export default function PullToRefresh({ onRefresh, disabled = false }: {
     async function onEnd() {
       if (!tracking) return
       tracking = false
+      document.documentElement.style.overscrollBehaviorY = ''
       if (!pulling) return
       pulling = false
       if (pull < THRESHOLD) { hide(); return }
@@ -136,6 +144,7 @@ export default function PullToRefresh({ onRefresh, disabled = false }: {
     window.addEventListener('touchend', onEnd, { passive: true })
     window.addEventListener('touchcancel', onEnd, { passive: true })
     return () => {
+      document.documentElement.style.overscrollBehaviorY = ''
       window.removeEventListener('touchstart', onStart)
       window.removeEventListener('touchmove', onMove)
       window.removeEventListener('touchend', onEnd)

@@ -52,7 +52,7 @@
      white pill instead of glass. The floor keeps labels legible; the slider still moves
      the result visibly between "clear" and "frosted". */
   --nav-glass-opacity: 0.16;
-  --nav-tint:        min(1, calc(0.2 + var(--nav-glass-opacity) * 1.3));
+  --nav-tint:        min(1, calc(0.4 + var(--nav-glass-opacity) * 1.3));
   --nav-sheen:       0.38;
   --nav-brightness:  0.97;
   --nav-bg-rgb:      246,249,248;
@@ -93,7 +93,7 @@
   --shadow-card:     0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.4);
   --shadow-fab:      0 4px 20px rgba(34,197,94,0.35);
   --shadow-nav:      0 -1px 0 rgba(255,255,255,0.06);
-  --nav-tint:         min(1, calc(0.3 + var(--nav-glass-opacity) * 1.1));
+  --nav-tint:         min(1, calc(0.42 + var(--nav-glass-opacity) * 1.1));
   --nav-sheen:        0.1;
   --nav-brightness:   1;
   --nav-bg-rgb:       30,30,35;
@@ -454,6 +454,15 @@ body {
   opacity: 1;
 }
 
+/* A browser or device that can't blur what's behind (some Android builds, battery
+   saver) would show the page through a thin tint, unreadable. Without blur the tint has
+   to carry the contrast on its own. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bottom-nav::before {
+    background: rgba(var(--nav-bg-rgb), 0.94);
+  }
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .bottom-nav::before {
     backdrop-filter: none;
@@ -523,9 +532,10 @@ button, [role="button"], [role="tab"], [role="switch"], nav, summary, a,
   user-select: text;
   -webkit-touch-callout: default;
 }
-/* `contain` (not `none`): stops Chrome's native pull-to-reload and scroll-chaining so the
-   in-app pull-to-refresh can own that gesture, but keeps iOS's elastic bounce. */
-html, body { overscroll-behavior-y: contain; }
+/* Chrome's native pull-to-reload is suppressed only WHILE the in-app pull-to-refresh is
+   tracking a pull (PullToRefresh sets overscroll-behavior-y on <html> for the gesture) —
+   not globally. A permanent rule here sat on the document's scroller for every touch on
+   every page, which is a poor trade for a gesture that only matters at the very top. */
 
 /* Modal scroll */
 .modal-scroll {

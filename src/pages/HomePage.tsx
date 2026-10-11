@@ -233,7 +233,7 @@ export default function HomePage() {
         {/* Quick jump to search — replaced the vault shield here (vault lock/unlock
             still lives in Settings → Privacy, and unlock prompts appear where needed) */}
         <button
-          onClick={() => navigate('/search')}
+          onClick={() => navigate('/search', { state: { focusSearch: true } })}
           className="w-10 h-10 rounded-full flex items-center justify-center"
           style={{ background: 'var(--c-bg)' }}
           aria-label={t('nav.search')}
