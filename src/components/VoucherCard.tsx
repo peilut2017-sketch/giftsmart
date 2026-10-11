@@ -264,6 +264,7 @@ export default function VoucherCard({
   if (rowMode) {
     return (
       <div
+        data-vt-id={`v:${voucher.id}`}
         className={`relative voucher-card overflow-hidden ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''}`}
         style={{ borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)' }}
       >
@@ -361,6 +362,7 @@ export default function VoucherCard({
   return (
     <div
       data-guide="voucher-card"
+      data-vt-id={`v:${voucher.id}`}
       className={`relative voucher-card overflow-hidden ${isSelected ? 'ring-2 ring-green-500 ring-offset-1' : ''}`}
       style={{ borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-card)' }}
     >

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useT } from '../lib/i18n'
 import { EASE_OUT } from '../lib/motion'
+import { haptic } from '../lib/haptics'
 
 interface Props {
   title: string
@@ -108,7 +109,7 @@ export default function ConfirmDialog({
             {cancelLabel ?? t('app.cancel')}
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => { haptic(danger ? 'heavy' : 'light'); onConfirm() }}
             className={`flex-1 py-3 rounded-2xl font-medium text-sm text-white transition-colors focus-visible:outline-none focus-visible:ring-2 ${
               danger
                 ? 'bg-error hover:brightness-110 focus-visible:ring-error/50'

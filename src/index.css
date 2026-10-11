@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+/* The Heebo stylesheet is loaded from <head> in index.html (preconnect + <link>), not
+   via @import here: an @import is only discovered after this CSS file has downloaded
+   and parsed, which delayed the first text paint behind a second round trip. */
 /* Icons are Material Symbols rendered as inline SVGs (see src/components/ui/Icon.tsx),
    not a webfont — the font+ligature approach (and later the self-hosted-font variant of
    it) kept breaking in production for reasons invisible from a curl/build-only sandbox:
@@ -43,18 +45,24 @@
   --nav-card-margin: 16px;
   --nav-card-height: 72px;
   /* User-adjustable nav glass transparency — see BottomNav.tsx, which reads/writes
-     gs_nav_glass_opacity from localStorage and applies it here on :root. 0.15 = barely
-     tinted glass, 1 = fully opaque. Default (0.16) lands right at the Liquid-Glass spec's
-     reference alpha for light mode; the dark-mode background scales it up (see
-     [data-theme="dark"] .bottom-nav below) since the same alpha reads much fainter on a
-     near-black tint than on a white one. */
+     gs_nav_glass_opacity from localStorage and applies it here on :root. 0.15 = the most
+     see-through the slider goes, 1 = fully opaque. --nav-tint maps it onto the actual
+     fill alpha: with the bare slider value (0.16) the bar was a near-invisible film, so
+     labels vanished over any busy card and, on a pale page, the nav read as a flat
+     white pill instead of glass. The floor keeps labels legible; the slider still moves
+     the result visibly between "clear" and "frosted". */
   --nav-glass-opacity: 0.16;
-  --nav-bg-rgb:      255,255,255;
-  --nav-border:      rgba(255,255,255,.25);
-  --nav-shadow-outer: 0 12px 40px rgba(0,0,0,.12);
-  --nav-pill-bg:      rgba(255,255,255,.22);
-  --nav-pill-border:  rgba(255,255,255,.4);
-  --nav-pill-shadow:  inset 0 1px 0 rgba(255,255,255,.5), 0 2px 10px rgba(0,0,0,.10);
+  --nav-tint:        min(1, calc(0.2 + var(--nav-glass-opacity) * 1.3));
+  --nav-sheen:       0.38;
+  --nav-brightness:  0.97;
+  --nav-bg-rgb:      246,249,248;
+  --nav-border:      rgba(255,255,255,.55);
+  --nav-edge-top:    rgba(255,255,255,.85);
+  --nav-edge-bottom: rgba(15,28,26,.08);
+  --nav-shadow-outer: 0 10px 32px rgba(15,28,26,.16), 0 2px 6px rgba(15,28,26,.08);
+  --nav-pill-bg:      linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.28));
+  --nav-pill-border:  rgba(255,255,255,.7);
+  --nav-pill-shadow:  inset 0 1px 0 rgba(255,255,255,.9), 0 2px 10px rgba(15,28,26,.12);
   /* Total vertical space the floating nav card occupies from the screen's bottom edge —
      what page content should pad/position above to clear it. Bottom offset is the LARGER
      of the fixed margin or the safe-area inset (not additive), matching how the nav
@@ -85,12 +93,17 @@
   --shadow-card:     0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.4);
   --shadow-fab:      0 4px 20px rgba(34,197,94,0.35);
   --shadow-nav:      0 -1px 0 rgba(255,255,255,0.06);
+  --nav-tint:         min(1, calc(0.3 + var(--nav-glass-opacity) * 1.1));
+  --nav-sheen:        0.1;
+  --nav-brightness:   1;
   --nav-bg-rgb:       30,30,35;
-  --nav-border:       rgba(255,255,255,.08);
-  --nav-shadow-outer: 0 16px 48px rgba(0,0,0,.35);
-  --nav-pill-bg:      rgba(255,255,255,.14);
-  --nav-pill-border:  rgba(255,255,255,.16);
-  --nav-pill-shadow:  inset 0 1px 0 rgba(255,255,255,.18), 0 2px 10px rgba(0,0,0,.35);
+  --nav-border:       rgba(255,255,255,.14);
+  --nav-edge-top:     rgba(255,255,255,.22);
+  --nav-edge-bottom:  rgba(0,0,0,.4);
+  --nav-shadow-outer: 0 16px 48px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.3);
+  --nav-pill-bg:      linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+  --nav-pill-border:  rgba(255,255,255,.2);
+  --nav-pill-shadow:  inset 0 1px 0 rgba(255,255,255,.25), 0 2px 10px rgba(0,0,0,.35);
 }
 
 /* Legal documents (privacy / terms) — Tailwind's preflight strips list and
@@ -333,6 +346,22 @@ body {
   border-radius: 8px;
 }
 
+/* ── Shared-element page transitions (lib/viewTransition.ts) ──────
+   The tapped card ("vt-hero") grows into the detail page's hero and shrinks back; the rest
+   of the page crossfades underneath. Same drawer curve as sheets and route pushes so the
+   whole app moves with one voice. Literal curve: the ::view-transition tree doesn't
+   reliably resolve var() on every engine. Reduced motion never starts a view transition
+   (viewTransitionsSupported() checks it), so no override is needed here. */
+::view-transition-group(vt-hero) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 /* Tap press effect — the app-wide press recipe: scale(0.97) over 160ms ease-out */
 .gs-tap { transition: transform 160ms var(--ease-out), opacity 160ms var(--ease-out); cursor: pointer; }
 .gs-tap:active { transform: scale(0.97); opacity: 0.88; }
@@ -361,7 +390,16 @@ body {
    whichever is larger of the fixed margin or the safe-area inset (not both stacked), so
    it sits right at the home-indicator boundary on notched phones instead of floating an
    extra 16px above it. Capped to 560px and centered so it stays a capsule (not a
-   full-width bar) on wider viewports. */
+   full-width bar) on wider viewports.
+
+   The glass itself lives on ::before, NOT on .bottom-nav. The sliding selection pill is a
+   descendant with its own backdrop-filter, and in Chromium (desktop, Android) an element
+   with backdrop-filter is a "backdrop root": anything nested inside it only blurs what the
+   parent itself paints, never the page behind. With the glass on .bottom-nav the pill
+   showed sharp, unblurred card text instead of frosted glass — WebKit (iPhone) doesn't
+   have that restriction, which is why it only looked wrong off-iPhone. Keeping the glass
+   on a sibling layer makes the pill and the bar both sample the real page everywhere.
+   No overflow:hidden on the nav — it would clip the raised "+" FAB. */
 .bottom-nav {
   position: fixed;
   bottom: max(var(--nav-card-margin), env(safe-area-inset-bottom));
@@ -372,62 +410,52 @@ body {
   z-index: 50;
   height: var(--nav-card-height);
   border-radius: 999px;
-  /* Tint alpha is user-adjustable (Settings → Appearance); rgb triplet swaps per theme. */
-  background: rgba(var(--nav-bg-rgb), var(--nav-glass-opacity));
-  /* 20px is the ceiling for a blur that composites while the page scrolls under it —
-     heavier radii jank visibly on mobile Safari. */
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid var(--nav-border);
-  box-shadow: var(--nav-shadow-outer), inset 0 1px 0 rgba(255,255,255,.25);
-  /* No overflow:hidden — that clipped the raised "+" FAB (a child of this element,
-     positioned to poke above the capsule) to this box's own rounded rect. The glass
-     background/highlight/scroll-overlay layers below are pseudo-elements with their own
-     border-radius, so they stay clipped to the capsule shape without it. */
-}
-[data-theme="dark"] .bottom-nav {
-  /* Same alpha reads far fainter against near-black — scale it up so the default slider
-     position still lands close to the spec's dark-mode reference alpha (~.35). */
-  background: rgba(var(--nav-bg-rgb), min(1, calc(var(--nav-glass-opacity) * 2.2)));
-  box-shadow: var(--nav-shadow-outer), inset 0 1px 0 rgba(255,255,255,.10);
 }
 
-/* The material reads more opaque while scrolling down (see the scroll listener in
-   BottomNav.tsx); returns on scroll up. Opacity-only on a pseudo-element — a positional
-   nudge here would be decorative motion on an action that fires dozens of times a day. */
-.bottom-nav[data-scrolled="true"]::after {
-  opacity: 0.95;
-}
-
-/* Very soft top-area highlight — a hint of reflected light, not a visible line. */
+/* Layer 1 — the frosted material: blur + saturation of whatever scrolls underneath, a
+   tint whose strength follows the Settings → Appearance slider, a faint top sheen and
+   lit/shaded edges so it reads as a thick pane of glass rather than a white pill. */
 .bottom-nav::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,.06) 0%, rgba(255,255,255,0) 70%);
   pointer-events: none;
-}
-[data-theme="dark"] .bottom-nav::before {
-  background: radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,.04) 0%, rgba(255,255,255,0) 70%);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,var(--nav-sheen)) 0%, rgba(255,255,255,0) 60%),
+    rgba(var(--nav-bg-rgb), var(--nav-tint));
+  /* 24px is about the ceiling for a blur that composites while the page scrolls under it
+     without janking mobile GPUs. */
+  backdrop-filter: blur(24px) saturate(190%) brightness(var(--nav-brightness));
+  -webkit-backdrop-filter: blur(24px) saturate(190%) brightness(var(--nav-brightness));
+  border: 1px solid var(--nav-border);
+  box-shadow:
+    var(--nav-shadow-outer),
+    inset 0 1px 0 var(--nav-edge-top),
+    inset 0 -1px 0 var(--nav-edge-bottom);
 }
 
-/* Scroll-reactive opacity layer — sits behind the tab content (z-index:1 in
-   BottomNav.tsx), fades in via `opacity` (not a background-color transition, which
-   custom-property-driven rgba() values can't animate smoothly). */
+/* Layer 2 — a gentle extra veil while scrolling down (see the scroll listener in
+   BottomNav.tsx) so labels stay legible over busy content. This used to be the solid
+   surface colour at 95% opacity, which turned the glass into a flat white bar exactly
+   when content is moving underneath it. Opacity-only: a positional nudge would be
+   decorative motion on an action that fires dozens of times a day. */
 .bottom-nav::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--c-surface);
+  background: rgba(var(--nav-bg-rgb), 0.3);
   opacity: 0;
   transition: opacity 250ms ease;
   pointer-events: none;
 }
+.bottom-nav[data-scrolled="true"]::after {
+  opacity: 1;
+}
 
 @media (prefers-reduced-transparency: reduce) {
-  .bottom-nav {
+  .bottom-nav::before {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     background: var(--c-surface);
@@ -435,7 +463,7 @@ body {
 }
 
 @media (prefers-contrast: more) {
-  .bottom-nav {
+  .bottom-nav::before {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     background: var(--c-surface);
@@ -477,6 +505,27 @@ html, body {
   overflow-x: hidden;
   touch-action: manipulation;
 }
+
+/* ── App-like touch behaviour ─────────────────────────────────────
+   Without these a phone treats the UI like a web page: every tap flashes the browser's
+   grey highlight, a long-press or double-tap selects a button's label or pops the
+   callout menu, and a pull at the top reloads the whole page. */
+* { -webkit-tap-highlight-color: transparent; }
+button, [role="button"], [role="tab"], [role="switch"], nav, summary, a,
+.gs-tap, .voucher-card {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* Opt back in where people really do copy: voucher codes, links, fields. */
+.selectable, input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* `contain` (not `none`): stops Chrome's native pull-to-reload and scroll-chaining so the
+   in-app pull-to-refresh can own that gesture, but keeps iOS's elastic bounce. */
+html, body { overscroll-behavior-y: contain; }
 
 /* Modal scroll */
 .modal-scroll {

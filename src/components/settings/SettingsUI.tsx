@@ -1,18 +1,21 @@
 import type React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import Icon from '../ui/Icon'
 import { useT } from '../../lib/i18n'
+import { haptic } from '../../lib/haptics'
+import { useViewTransitionNavigate } from '../../hooks/useViewTransitionNavigate'
 
 /** Shared header for every settings sub-page — back button + title, normal flow (not
     fixed/sticky; these are short simple pages so a header that scrolls away with the
     rest of the content is fine, and avoids the app's known position:sticky/fixed pitfalls
     that only matter for long, complex pages like Checkout). */
 export function SettingsSubHeader({ title, action }: { title: string; action?: React.ReactNode }) {
-  const navigate = useNavigate()
+  const { goBack } = useViewTransitionNavigate()
+  const { pathname } = useLocation()
   const { t } = useT()
   return (
-    <div className="bg-surface border-b border-border px-4 py-3 flex items-center gap-3">
-      <button onClick={() => navigate(-1)} aria-label={t('app.back')} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-bg">
+    <div data-vt-hero={`s:${pathname}`} className="bg-surface border-b border-border px-4 py-3 flex items-center gap-3">
+      <button onClick={goBack} aria-label={t('app.back')} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-bg">
         <Icon name="arrow_forward" size={22} color="var(--c-text)" className="dir-flip" />
       </button>
       <h1 className="text-base font-bold text-text flex-1 min-w-0 truncate">{title}</h1>
@@ -65,7 +68,7 @@ export function Switch({ checked, onChange, size = 'md', ariaLabel, disabled = f
       aria-checked={checked}
       aria-label={ariaLabel}
       disabled={disabled}
-      onClick={() => { if (!disabled) onChange(!checked) }}
+      onClick={() => { if (!disabled) { haptic('light'); onChange(!checked) } }}
       className={`relative ${track} rounded-full transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${checked ? 'bg-primary' : 'bg-border'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       {/* Inline #fff so the dark-mode .bg-white override never turns the thumb dark */}

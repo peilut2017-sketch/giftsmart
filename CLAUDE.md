@@ -118,6 +118,14 @@ Two independent OCR paths behind the "scan photo" button in `VoucherForm.tsx`, g
 - **Everyone (free, unlimited)** — `src/lib/ocr.ts`'s `scanVoucherImageLocally`: Tesseract.js runs entirely client-side (WASM), no server call and no per-scan cost. The raw OCR text is run through the same free-text field extractor used for pasted SMS/email (`src/utils/smsExtractor.ts`'s `extractFromSMS`), including matching against the user's saved store list.
 - **Pro only** — `src/lib/gemini.ts`'s `analyzeVoucherImage`: calls the `analyze-voucher` Supabase Edge Function (Gemini Vision, a paid API call), meaningfully more accurate on a hard photo (glare, an angle, an unusual font, a busy background).
 
+### App-feel layer (touch, haptics, pull-to-refresh, shared-element transitions)
+
+- **Touch basics** live in `src/index.css`: no tap-highlight flash, `user-select: none` on controls (opt back in with the `.selectable` class — voucher codes use it), `overscroll-behavior-y: contain` so Chrome's native pull-to-reload can't fire.
+- **Haptics:** call `haptic('light' | 'success' | 'warning' | 'heavy')` from `src/lib/haptics.ts`. It uses `@capacitor/haptics` inside the iOS shell, the Vibration API on Android, and silently no-ops elsewhere. After pulling this change run `npm run ios:sync` (and `pod install`) on a Mac so the native plugin is linked.
+- **Pull-to-refresh:** render `<PullToRefresh onRefresh={...} />` once inside a page that scrolls the window. It draws only a floating indicator (no wrapper/transform, so fixed modals keep working). Currently on Home, Vouchers, Archive and Marketplace.
+- **Card → detail transitions** (`src/lib/viewTransition.ts`, `useViewTransitionNavigate`): put `data-vt-id="v:<id>"` (or `l:<id>`, `s:<path>`) on the card, `data-vt-hero="<same id>"` on the detail page's hero, and navigate with `goTo(path, { id })` / `goBack()`. Needs no router data-mode. Falls back to the framer route transition when View Transitions are unsupported or motion is reduced. Gotchas that cost time: (1) Chromium runs **no rAF callbacks** while the transition's update callback is pending, so anything it waits on must use timers/microtasks — hence `AnimatedRoutes`' `'vt'` mode with an exit that animates nothing; (2) a `view-transition-name` element is a backdrop root, so never name an ancestor of a `backdrop-filter` element; (3) lazy routes are preloaded (`routePreload.ts`) so the new page isn't captured as a Suspense spinner.
+- **Bottom nav glass:** the frosted material is the `::before` layer of `.bottom-nav`, not the nav itself. The sliding pill has its own `backdrop-filter`, and in Chromium a backdrop-filter nested inside another one only blurs its parent, never the page — which is why the nav looked flat white off iPhone.
+
 ### Subscription / limits
 
 Free plan: 25 vouchers, 5 shared, basic (Tesseract) photo scan — unlimited, 7-day activity history, no export, no push.

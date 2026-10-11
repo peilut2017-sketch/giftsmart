@@ -58,6 +58,8 @@ const translations: Record<string, string> = {
   // ── Bottom Nav ─────────────────────────────────────────────────
   'nav.home': 'בית',
   'nav.home.en': 'Home',
+  'ptr.label': 'מרענן…',
+  'ptr.label.en': 'Refreshing…',
   'nav.wallet': 'ארנק',
   'nav.wallet.en': 'Wallet',
   'nav.search': 'שוברים',

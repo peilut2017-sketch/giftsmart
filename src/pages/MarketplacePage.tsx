@@ -12,6 +12,8 @@ import ChatModal from '../components/ChatModal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Icon from '../components/ui/Icon'
 import toast from 'react-hot-toast'
+import PullToRefresh from '../components/PullToRefresh'
+import { useViewTransitionNavigate } from '../hooks/useViewTransitionNavigate'
 import { usePageView } from '../hooks/usePageView'
 import ErrorRetry from '../components/marketplace/ErrorRetry'
 import RateModal from '../components/marketplace/RateModal'
@@ -27,6 +29,7 @@ import type { SellerProfileRow } from '../components/marketplace/shared'
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MarketplacePage() {
   const navigate = useNavigate()
+  const { goTo } = useViewTransitionNavigate()
   const location = useLocation()
   const { isAdmin, user, profile } = useAuth()
   const { logAction } = useVouchers()
@@ -252,6 +255,7 @@ export default function MarketplacePage() {
 
   return (
     <div className="flex-1 bg-bg" dir="rtl">
+      <PullToRefresh onRefresh={() => Promise.all([invalidateAndRefetch('listings'), invalidateAndRefetch('myListings'), invalidateAndRefetch('myPurchases')])} />
       <AnimatePresence>
       {confirmState && (
         <ConfirmDialog
@@ -391,7 +395,7 @@ export default function MarketplacePage() {
                   <ListingCard
                     key={l.id}
                     listing={l}
-                    onClick={() => navigate(`/market/listing/${l.id}`)}
+                    onClick={() => goTo(`/market/listing/${l.id}`, { id: `l:${l.id}` })}
                   />
                 ))
               )}

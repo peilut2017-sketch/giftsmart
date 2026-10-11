@@ -17,6 +17,8 @@ import { usePageView } from '../hooks/usePageView'
 import { useCountUp } from '../hooks/useCountUp'
 import { useNotificationsFeed } from '../hooks/useNotificationsFeed'
 import ConfirmDialog from '../components/ConfirmDialog'
+import PullToRefresh from '../components/PullToRefresh'
+import { useViewTransitionNavigate } from '../hooks/useViewTransitionNavigate'
 
 const RECENT_COUNT = 4
 const TOP_CATEGORIES_COUNT = 8
@@ -28,6 +30,7 @@ const TOP_CATEGORIES_COUNT = 8
  */
 export default function HomePage() {
   const navigate = useNavigate()
+  const { goTo } = useViewTransitionNavigate()
   const { t } = useT()
   usePageView('home')
   const { user } = useAuth()
@@ -167,6 +170,7 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 bg-bg">
+      <PullToRefresh onRefresh={() => Promise.all([refreshVouchers(), fetchRecentDeals()])} />
       <AnimatePresence>
         {confirm && (
           <ConfirmDialog title={confirm.title} message={confirm.message} danger onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
@@ -325,7 +329,7 @@ export default function HomePage() {
               const pct = v.amount > 0 ? Math.min(100, Math.round((v.balance / v.amount) * 100)) : 0
               const status = getExpiryStatus(v.expiry_date)
               return (
-                <button key={v.id} onClick={() => navigate(`/checkout/${v.id}`)} className="w-full text-right bg-surface rounded-card shadow-card p-3.5 flex gap-3 items-center">
+                <button key={v.id} data-vt-id={`v:${v.id}`} onClick={() => goTo(`/checkout/${v.id}`, { id: `v:${v.id}` })} className="w-full text-right bg-surface rounded-card shadow-card p-3.5 flex gap-3 items-center">
                   <div
                     className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0"
                     style={{ background: getCategoryColor(v.categories[0] || 'אחר') }}
