@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../utils/helpers'
@@ -31,10 +31,15 @@ export default function SettingsAboutPage() {
   const [supportBody, setSupportBody] = useState('')
   const [supportCategory, setSupportCategory] = useState('general')
   const [sendingSupport, setSendingSupport] = useState(false)
+  // Deep link from the notifications feed: ?msg=<messageId>&reply=<replyId> opens the
+  // conversation and scrolls to (and briefly highlights) the admin's answer.
+  const [searchParams] = useSearchParams()
+  const deepMsg = searchParams.get('msg')
+  const deepReply = searchParams.get('reply')
   const [myMessages, setMyMessages] = useState<SupportMessage[]>([])
-  const [showMyMessages, setShowMyMessages] = useState(false)
+  const [showMyMessages, setShowMyMessages] = useState(Boolean(deepMsg))
   const [supportSent, setSupportSent] = useState(false)
-  const [expandedMessageId, setExpandedMessageId] = useState<string | null>(null)
+  const [expandedMessageId, setExpandedMessageId] = useState<string | null>(deepMsg)
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
   const [sendingUserReply, setSendingUserReply] = useState<string | null>(null)
 
@@ -71,15 +76,48 @@ export default function SettingsAboutPage() {
     return () => { supabase.removeChannel(channel) }
   }, [user])
 
-  async function loadMyMessages() {
+  async function fetchMyMessages(): Promise<SupportMessage[] | null> {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
-    if (!data) return
-    const withReplies = await Promise.all(data.map(async msg => {
+    if (!data) return null
+    return Promise.all(data.map(async msg => {
       const { data: replies } = await supabase.rpc('get_message_replies', { p_message_id: msg.id })
-      return { ...msg, replies: replies || [] }
+      return { ...msg, replies: replies || [] } as SupportMessage
     }))
-    setMyMessages(withReplies)
   }
+
+  async function loadMyMessages() {
+    const list = await fetchMyMessages()
+    if (list) setMyMessages(list)
+  }
+
+  useEffect(() => {
+    if (!deepMsg || !user) return
+    // The list and the expanded row are already open (initial state); just load them.
+    let cancelled = false
+    void fetchMyMessages().then(list => {
+      if (cancelled) return
+      if (list) setMyMessages(list)
+      void supabase.rpc('user_mark_message_read', { p_message_id: deepMsg })
+    })
+    return () => { cancelled = true }
+  }, [deepMsg, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Once the conversation is open and rendered, bring the target into view.
+  useEffect(() => {
+    if (!deepMsg || expandedMessageId !== deepMsg) return
+    const target = document.getElementById(deepReply ? `support-reply-${deepReply}` : `support-msg-${deepMsg}`)
+    if (!target) return
+    // After the row's expand render has laid out; 'nearest' scrolls both the inner
+    // message list and the page only as far as needed.
+    const timer = setTimeout(() => target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80)
+    // Flash the answer's bubble — plain class toggling, no state, so the highlight
+    // doesn't re-render the list.
+    const bubble = deepReply ? target.firstElementChild : null
+    const flash = ['ring-2', 'ring-primary', 'shadow-lg']
+    bubble?.classList.add(...flash)
+    const off = setTimeout(() => bubble?.classList.remove(...flash), 2800)
+    return () => { clearTimeout(timer); clearTimeout(off); bubble?.classList.remove(...flash) }
+  }, [deepMsg, deepReply, expandedMessageId, myMessages])
 
   async function sendSupportMessage() {
     if (!supportSubject.trim() || !supportBody.trim()) return toast.error(t('about.support.required'))
@@ -162,7 +200,7 @@ export default function SettingsAboutPage() {
                         const hasReplies = (m.replies?.length ?? 0) > 0
                         const hasAdminReply = m.admin_reply || m.replies?.some(r => r.sender === 'admin')
                         return (
-                          <div key={m.id} className="px-4 py-3">
+                          <div key={m.id} id={`support-msg-${m.id}`} className="px-4 py-3">
                             <button className="w-full text-right" onClick={() => { setExpandedMessageId(isExpanded ? null : m.id); if (!isExpanded) { void supabase.rpc('user_mark_message_read', { p_message_id: m.id }) } }}>
                               <div className="flex items-start justify-between gap-2">
                                 <p className="text-sm font-medium text-text">{m.subject}</p>
@@ -184,8 +222,8 @@ export default function SettingsAboutPage() {
                                 </div>
                                 {hasReplies ? (
                                   m.replies!.map(r => (
-                                    <div key={r.id} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                      <div className={`rounded-2xl px-3 py-2 max-w-[85%] ${r.sender === 'user' ? 'bg-primary text-white rounded-tl-sm' : 'bg-bg text-text rounded-tr-sm'}`}>
+                                    <div key={r.id} id={`support-reply-${r.id}`} className={`flex ${r.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                      <div className={`rounded-2xl px-3 py-2 max-w-[85%] transition-shadow duration-500 ${r.sender === 'user' ? 'bg-primary text-white rounded-tl-sm' : 'bg-bg text-text rounded-tr-sm'}`}>
                                         {r.sender === 'admin' && <p className="text-[10px] font-semibold text-primary mb-0.5">{t('about.support')}</p>}
                                         <p className="text-xs">{r.body}</p>
                                         <p className={`text-[10px] mt-0.5 ${r.sender === 'user' ? 'text-white/70' : 'text-text3'}`}>{formatDate(r.created_at)}</p>

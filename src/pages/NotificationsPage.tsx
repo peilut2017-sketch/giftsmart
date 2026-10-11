@@ -11,6 +11,7 @@ import { SettingsSubHeader, Spinner } from '../components/settings/SettingsUI'
 import { usePageView } from '../hooks/usePageView'
 import { useNotificationsFeed, type NotificationItem } from '../hooks/useNotificationsFeed'
 import { FLICK_VELOCITY } from '../lib/motion'
+import PullToRefresh from '../components/PullToRefresh'
 
 const DISMISS_THRESHOLD = 90
 
@@ -147,6 +148,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="flex-1 bg-bg">
+      <PullToRefresh onRefresh={refresh} />
       <SettingsSubHeader
         title={t('notifications.title')}
         action={!loading && unseenCount > 0 ? (

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { getExpiryStatus, getExpiryLabel, formatCurrency } from '../utils/helpers'
 import { useT } from '../lib/i18n'
 import type { DiscountDeal } from '../types'
+import { sinceSignup } from '../utils/notificationFilters'
 
 const LOW_BALANCE_THRESHOLD = 0.15
 const CACHE_TTL_MS = 60_000
@@ -47,11 +48,17 @@ function writeIdSet(key: string, ids: Set<string>) {
   localStorage.setItem(key, JSON.stringify([...ids]))
 }
 
-async function fetchRaw(): Promise<NotificationItem[]> {
-  const [pushRes, broadcastRes, supportRes, dealsRes, sharedRes] = await Promise.all([
+async function fetchRaw(userId: string): Promise<NotificationItem[]> {
+  const [pushRes, broadcastRes, supportRes, adminRepliesRes, dealsRes, sharedRes] = await Promise.all([
     supabase.from('push_broadcasts').select('id, title, body, created_at').order('created_at', { ascending: false }).limit(20),
     supabase.from('admin_broadcasts').select('id, subject, body, created_at').order('created_at', { ascending: false }).limit(20),
-    supabase.from('support_messages').select('id, subject, admin_reply, replied_at').not('admin_reply', 'is', null).order('replied_at', { ascending: false }).limit(20),
+    // Scoped to this user explicitly: an admin account's RLS lets it read EVERY user's
+    // support rows, and without the filter their feed would show other people's replies.
+    supabase.from('support_messages').select('id, subject, admin_reply, replied_at').eq('user_id', userId).not('admin_reply', 'is', null).order('replied_at', { ascending: false }).limit(20),
+    // Every admin reply in a support thread is its own notification. support_messages
+    // only keeps the LATEST reply (admin_reply), so a second answer on the same
+    // conversation used to overwrite the first and never looked new.
+    supabase.from('support_message_replies').select('id, message_id, body, created_at, support_messages!inner(subject, user_id)').eq('sender', 'admin').eq('support_messages.user_id', userId).order('created_at', { ascending: false }).limit(50),
     supabase.rpc('get_recent_deals', { p_limit: 30 }),
     // Balance updates made by share partners / shared links / gift links.
     // Previously these existed only as a live realtime toast — anyone not in
@@ -73,10 +80,25 @@ async function fetchRaw(): Promise<NotificationItem[]> {
       title: b.subject, desc: b.body, timestamp: b.created_at,
     })
   }
+  // Thread replies first; a legacy message whose only answer is the admin_reply column
+  // (no thread rows) still gets its own item. Both open the conversation in About,
+  // scrolled to the reply (see the msg/reply params read by SettingsAboutPage).
+  const threadedMessageIds = new Set<string>()
+  type AdminReplyRow = { id: string; message_id: string; body: string; created_at: string; support_messages: { subject: string } | { subject: string }[] | null }
+  for (const r of (adminRepliesRes.data || []) as unknown as AdminReplyRow[]) {
+    const sm = Array.isArray(r.support_messages) ? r.support_messages[0] : r.support_messages
+    threadedMessageIds.add(r.message_id)
+    items.push({
+      id: `support-reply-${r.id}`, type: 'support', icon: 'chat', iconColor: 'var(--c-primary)', iconBg: 'var(--c-primary-light)',
+      title: sm?.subject ?? '', desc: r.body, timestamp: r.created_at,
+      path: `/settings/about?msg=${r.message_id}&reply=${r.id}`,
+    })
+  }
   for (const m of (supportRes.data || []) as any[]) {
+    if (threadedMessageIds.has(m.id)) continue
     items.push({
       id: `support-${m.id}`, type: 'support', icon: 'chat', iconColor: 'var(--c-primary)', iconBg: 'var(--c-primary-light)',
-      title: m.subject, desc: m.admin_reply, timestamp: m.replied_at, path: '/settings/about',
+      title: m.subject, desc: m.admin_reply, timestamp: m.replied_at, path: `/settings/about?msg=${m.id}`,
     })
   }
   const deals = ((dealsRes.data || []) as DiscountDeal[]).filter(d => d.is_my_club)
@@ -129,7 +151,7 @@ export function useNotificationsFeed() {
       }
       // A different user's inflight fetch must not be reused
       if (!inflight || (rawCache && rawCache.userId !== uid)) {
-        inflight = fetchRaw().finally(() => { inflight = null })
+        inflight = fetchRaw(uid).finally(() => { inflight = null })
       }
       try {
         const items = await inflight
@@ -174,10 +196,14 @@ export function useNotificationsFeed() {
         })
       }
     }
-    return [...rawItems, ...utilization, ...expiry]
+    // A new account must not inherit history from before it existed: broadcasts, deals
+    // and updates older than the signup date are dropped. (utilization / expiry are
+    // live warnings about the user's own vouchers, not events, so they are exempt.)
+    const sinceSignupItems = sinceSignup(rawItems, user?.created_at)
+    return [...sinceSignupItems, ...utilization, ...expiry]
       .filter(i => !dismissed.has(i.id))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-  }, [rawItems, vouchers, dismissed, t])
+  }, [rawItems, vouchers, dismissed, t, user?.created_at])
 
   // Snapshot "unseen at load" once per (user, item-set) — not on every render.
   if (user && initialUnseenRef.current === null && !loading) {

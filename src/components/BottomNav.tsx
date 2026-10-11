@@ -269,8 +269,6 @@ export default function BottomNav() {
               borderBottomLeftRadius: blr,
               borderBottomRightRadius: brr,
               background: 'var(--nav-pill-bg)',
-              backdropFilter: 'blur(20px) saturate(160%)',
-              WebkitBackdropFilter: 'blur(20px) saturate(160%)',
               boxShadow: 'var(--nav-pill-shadow)',
               border: '1px solid var(--nav-pill-border)',
               pointerEvents: 'none',
