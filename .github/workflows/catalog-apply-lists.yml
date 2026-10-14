@@ -1,0 +1,108 @@
+name: Catalog apply reviewed list
+
+# Manual only. Applies one reviewed merchant list to one existing catalog
+# product through the existing ingest-catalog function (same guards as the
+# daily sync: minimum count, removal ratio, atomic snapshot). No schedule.
+# add_only never removes anything. mirror removes only when approve_removals
+# is 'yes'; otherwise removals are held and the current names are kept.
+on:
+  workflow_dispatch:
+    inputs:
+      product_key:
+        description: 'azrieli_time | isracard_giftcard | isracard_shopping | tav_plus | leumi_bonus'
+        required: true
+      names_json:
+        description: 'JSON array of merchant names (reviewed, certain names only)'
+        required: true
+      mode:
+        description: 'add_only or mirror'
+        required: true
+        default: 'add_only'
+      approve_removals:
+        description: "Type 'yes' only after the owner approved the removals"
+        required: false
+        default: 'no'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-apply-lists
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Compare and apply
+        env:
+          INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
+          PRODUCT_KEY: ${{ inputs.product_key }}
+          NAMES_JSON: ${{ inputs.names_json }}
+          MODE: ${{ inputs.mode }}
+          APPROVE: ${{ inputs.approve_removals }}
+          BASE: https://qybjmdbegpaiqzssnosr.supabase.co
+          # Public anon key, already in the site bundle; only satisfies the JWT gate.
+          ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5YmptZGJlZ3BhaXF6c3Nub3NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDMwOTAsImV4cCI6MjA4OTE3OTA5MH0.6g4lgEHR6O-UIm7h7LjKMzTfClDpWHUhrzBpeS4gHlg
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, unicodedata, urllib.request, datetime
+          SRC = {
+            'azrieli_time': 'buyme-brands-398383',
+            'isracard_giftcard': 'isracard-reviewed-full-20261011',
+            'isracard_shopping': 'isracard-shopping-reviewed-full-20261011',
+            'tav_plus': 'tavplus-reviewed-20261008',
+            'leumi_bonus': 'leumi-bonus-reviewed-20261006',
+          }
+          key = os.environ['PRODUCT_KEY']; mode = os.environ['MODE']
+          if key not in SRC or mode not in ('add_only', 'mirror'):
+              sys.exit('bad product_key or mode')
+          names = json.loads(os.environ['NAMES_JSON'])
+          if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+              sys.exit('names_json must be an array of strings')
+          norm = lambda s: re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', s)).strip().casefold()
+          anon = os.environ['ANON_KEY']
+          req = urllib.request.Request(
+              os.environ['BASE'] + '/rest/v1/super_vouchers?select=stores&catalog_product_key=eq.' + key,
+              headers={'apikey': anon, 'Authorization': 'Bearer ' + anon})
+          rows = json.load(urllib.request.urlopen(req, timeout=60))
+          if len(rows) != 1:
+              sys.exit('expected exactly one definition, got %d' % len(rows))
+          current = rows[0]['stores']
+          cur = {norm(n): n for n in current}
+          new = {norm(n): n.strip() for n in names if n.strip()}
+          adds = [new[k] for k in new if k not in cur]
+          removes = [cur[k] for k in cur if k not in new]
+          print('current', len(current), 'proposed', len(new))
+          print('ADDS', json.dumps(adds, ensure_ascii=False))
+          print('REMOVES', json.dumps(removes, ensure_ascii=False))
+          final = list(current)
+          if adds:
+              final += adds
+          if mode == 'mirror' and removes:
+              if os.environ['APPROVE'] == 'yes':
+                  rm = {norm(n) for n in removes}
+                  final = [n for n in final if norm(n) not in rm]
+                  print('removals approved and applied:', len(removes))
+              else:
+                  print('removals HELD (not approved):', len(removes))
+          if not adds and not (mode == 'mirror' and removes and os.environ['APPROVE'] == 'yes'):
+              print('no change to apply'); sys.exit(0)
+          body = json.dumps({
+              'schema_version': 1, 'product_key': key,
+              'fetched_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'source_identity': {'source_key': SRC[key]},
+              'items': [{'canonical_name': n} for n in final]}).encode()
+          r = urllib.request.Request(
+              os.environ['BASE'] + '/functions/v1/ingest-catalog', data=body, method='POST',
+              headers={'Content-Type': 'application/json', 'apikey': anon, 'Authorization': 'Bearer ' + anon,
+                       'X-Ingest-Secret': os.environ['INGEST_SECRET']})
+          try:
+              resp = urllib.request.urlopen(r, timeout=120); out = resp.read().decode(); code = resp.status
+          except urllib.error.HTTPError as e:
+              out = e.read().decode(); code = e.code
+          print('ingest http', code, out[:400])
+          if code != 200 or '"applied"' not in out:
+              sys.exit(1)
+          PY
