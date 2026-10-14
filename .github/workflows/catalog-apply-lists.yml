@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       product_key:
-        description: 'azrieli_time | isracard_giftcard | isracard_shopping | tav_plus | leumi_bonus'
+        description: 'azrieli_time | isracard_giftcard | isracard_shopping | tav_plus | leumi_bonus | gifta'
         required: true
       names_json:
         description: 'JSON array of merchant names (reviewed, certain names only)'
@@ -54,6 +54,7 @@ jobs:
             'isracard_shopping': 'isracard-shopping-reviewed-full-20261011',
             'tav_plus': 'tavplus-reviewed-20261008',
             'leumi_bonus': 'leumi-bonus-reviewed-20261006',
+            'gifta': 'gifta-rashatot-mechabdot',
           }
           key = os.environ['PRODUCT_KEY']; mode = os.environ['MODE']
           if key not in SRC or mode not in ('add_only', 'mirror'):
